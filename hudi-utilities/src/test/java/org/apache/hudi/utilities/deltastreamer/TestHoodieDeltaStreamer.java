@@ -670,15 +670,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> continuousModeArgs() {
     return Stream.of(
-        Arguments.of("AVRO", "EIGHT"),
-        Arguments.of("SPARK", "EIGHT"),
+        Arguments.of("AVRO", "NINE"),
+        Arguments.of("SPARK", "NINE"),
         Arguments.of("AVRO", "SIX")
     );
   }
 
   private static Stream<Arguments> continuousModeMorArgs() {
     return Stream.of(
-        Arguments.of("AVRO", "EIGHT"),
+        Arguments.of("AVRO", "NINE"),
         Arguments.of("AVRO", "SIX")
     );
   }
