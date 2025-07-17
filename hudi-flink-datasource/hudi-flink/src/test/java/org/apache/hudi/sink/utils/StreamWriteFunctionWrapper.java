@@ -57,6 +57,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -72,8 +73,9 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
-  private final StreamWriteOperatorCoordinator coordinator;
+  private StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
+  private final TreeMap<Long, byte[]> coordinatorStateStore;
 
   /**
    * Function that converts row data to HoodieRecord.
@@ -124,6 +126,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.bucketAssignFunctionContext = new MockBucketAssignFunctionContext();
     this.stateInitializationContext = new MockStateInitializationContext();
+    this.coordinatorStateStore = new TreeMap<>();
     this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
     this.streamConfig = new StreamConfig(conf);
     streamConfig.setOperatorID(new OperatorID());
@@ -135,6 +138,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void openFunction() throws Exception {
+    resetCoordinatorToCheckpoint();
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
     toHoodieFunction = new RowDataToHoodieFunction<>(rowType, conf);
@@ -193,7 +197,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void checkpointFunction(long checkpointId) throws Exception {
     // checkpoint the coordinator first
-    this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
+    checkpointCoordinator(checkpointId);
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       bootstrapOperator.snapshotState(null);
     }
@@ -201,6 +205,21 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     writeFunction.snapshotState(new MockFunctionSnapshotContext(checkpointId));
     stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
+  }
+
+  private void checkpointCoordinator(long checkpointId) throws Exception {
+    CompletableFuture<byte[]> completableFuture = new CompletableFuture<>();
+    // checkpoint the coordinator first
+    this.coordinator.checkpointCoordinator(checkpointId, completableFuture);
+    this.coordinatorStateStore.put(checkpointId, completableFuture.get());
+  }
+
+  private void resetCoordinatorToCheckpoint() {
+    if (coordinatorStateStore.isEmpty()) {
+      return;
+    }
+    Map.Entry<Long, byte[]> latestState = this.coordinatorStateStore.lastEntry();
+    this.coordinator.resetToCheckpoint(latestState.getKey(), latestState.getValue());
   }
 
   public void endInput() {
@@ -227,6 +246,15 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void coordinatorFails() throws Exception {
     this.coordinator.close();
+    resetCoordinatorToCheckpoint();
+    this.coordinator.start();
+    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+  }
+
+  public void restartCoordinator() throws Exception {
+    this.coordinator.close();
+    this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
+    resetCoordinatorToCheckpoint();
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
   }
