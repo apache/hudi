@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload
 import org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -32,11 +32,15 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConf
 class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
 
   // TODO(HUDI-8938): add "mor,6,true", "mor,6,false" after the fix
-  Seq("cow,9,true", "cow,9,false", "cow,6,true", "cow,6,false",
-    "mor,9,true", "mor,9,false").foreach { args =>
+  Seq("cow,current,true", "cow,current,false", "cow,6,true", "cow,6,false",
+    "mor,current,true", "mor,current,false").foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
-    val tableVersion = argList(1)
+    val tableVersion = if (argList(1).equals("current")) {
+      String.valueOf(HoodieTableVersion.current().versionCode())
+    } else {
+      argList(1)
+    }
     val setRecordMergeConfigs = argList(2).toBoolean
     val storage = HoodieTestUtils.getDefaultStorage
     val mergeConfigClause = if (setRecordMergeConfigs) {
@@ -44,7 +48,7 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
         // Table version 6
         s", payloadClass = '${classOf[DefaultHoodieRecordPayload].getName}'"
       } else {
-        // Current table version (8)
+        // Current table version
         ", hoodie.record.merge.mode = 'EVENT_TIME_ORDERING'"
       }
     } else {
@@ -63,7 +67,7 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
       )
     } else {
       Map(
-        HoodieTableConfig.VERSION.key -> "9",
+        HoodieTableConfig.VERSION.key -> String.valueOf(HoodieTableVersion.current().versionCode()),
         HoodieTableConfig.PRECOMBINE_FIELD.key -> "ts",
         HoodieTableConfig.RECORD_MERGE_MODE.key -> EVENT_TIME_ORDERING.name(),
         HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,

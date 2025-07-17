@@ -670,15 +670,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> continuousModeArgs() {
     return Stream.of(
-        Arguments.of("AVRO", "NINE"),
-        Arguments.of("SPARK", "NINE"),
+        Arguments.of("AVRO", "CURRENT"),
+        Arguments.of("SPARK", "CURRENT"),
         Arguments.of("AVRO", "SIX")
     );
   }
 
   private static Stream<Arguments> continuousModeMorArgs() {
     return Stream.of(
-        Arguments.of("AVRO", "NINE"),
+        Arguments.of("AVRO", "CURRENT"),
         Arguments.of("AVRO", "SIX")
     );
   }
@@ -709,8 +709,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
-  public void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "NINE");
+  void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "CURRENT");
   }
 
   @Timeout(600)
@@ -775,7 +775,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
     // validate table version matches
     HoodieTableMetaClient hudiTblMetaClient = HoodieTableMetaClient.builder().setBasePath(cfg.targetBasePath).setConf(context.getStorageConf()).build();
-    assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
+    if (writeTableVersion.equals("CURRENT")) {
+      assertEquals(HoodieTableVersion.current(), hudiTblMetaClient.getTableConfig().getTableVersion());
+    } else {
+      assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
+    }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
