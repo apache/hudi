@@ -36,6 +36,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
@@ -44,6 +46,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABL
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.PartialUpdateMode.IGNORE_MARKERS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -84,6 +87,10 @@ class TestEightToNineUpgradeHandler {
       assertEquals(
           COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
           propertiesToAdd.get(RECORD_MERGE_STRATEGY_ID));
+      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      assertEquals(
+          COMMIT_TIME_ORDERING.name(),
+          propertiesToAdd.get(RECORD_MERGE_MODE));
       assertFalse(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
     }
   }
@@ -117,6 +124,10 @@ class TestEightToNineUpgradeHandler {
       assertEquals(
           EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
           propertiesToAdd.get(RECORD_MERGE_STRATEGY_ID));
+      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      assertEquals(
+          EVENT_TIME_ORDERING.name(),
+          propertiesToAdd.get(RECORD_MERGE_MODE));
       assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
       assertEquals(
           IGNORE_MARKERS.name(),
@@ -151,6 +162,10 @@ class TestEightToNineUpgradeHandler {
       assertEquals(
           EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
           propertiesToAdd.get(RECORD_MERGE_STRATEGY_ID));
+      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      assertEquals(
+          EVENT_TIME_ORDERING.name(),
+          propertiesToAdd.get(RECORD_MERGE_MODE));
       assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
       assertEquals(
           PartialUpdateMode.IGNORE_DEFAULTS.name(),
@@ -185,6 +200,10 @@ class TestEightToNineUpgradeHandler {
       assertEquals(
           COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
           propertiesToAdd.get(RECORD_MERGE_STRATEGY_ID));
+      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      assertEquals(
+          COMMIT_TIME_ORDERING.name(),
+          propertiesToAdd.get(RECORD_MERGE_MODE));
       assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
       assertEquals(
           PartialUpdateMode.IGNORE_DEFAULTS.name(),
