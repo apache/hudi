@@ -60,7 +60,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
 
@@ -270,7 +269,7 @@ public abstract class HoodieReaderContext<T> {
     }
     Schema actualDataSchema = getActualDataSchema(dataSchema, filePathEither, storage);
     Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(actualDataSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
-    if (Objects.equals(actualRequriredSchema, requiredSchema)) {
+    if (AvroSchemaUtils.areSchemasEqualIgnoreNullable(actualRequriredSchema, requiredSchema)) {
       return getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, requiredSchema, storage);
     }
     UnaryOperator<T> projection = projectRecord(actualRequriredSchema, requiredSchema);
