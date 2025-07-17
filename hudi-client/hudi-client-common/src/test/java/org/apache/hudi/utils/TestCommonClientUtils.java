@@ -99,9 +99,6 @@ public class TestCommonClientUtils {
             Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true),
             Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, true),
             Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
-
-            // Rule 4: otherwise disallowed - table > writer (except special case above)
-            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
             Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, true),
             Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SEVEN, true),
             Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true)
