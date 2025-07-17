@@ -1326,52 +1326,29 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   public void extendSchemaBeforeEvolution(SchemaEvolutionConfigs configs) {
     List<Schema.Type> baseFields = new ArrayList<>();
     baseFields.add(Schema.Type.INT);
-    if (configs.intToLongSupport) {
-      baseFields.add(Schema.Type.INT);
-    }
-    if (configs.intToFloatSupport) {
-      baseFields.add(Schema.Type.INT);
-    }
-    if (configs.intToDoubleSupport) {
-      baseFields.add(Schema.Type.INT);
-    }
-    if (configs.intToStringSupport) {
-      baseFields.add(Schema.Type.INT);
-    }
+    addIf(configs.intToLongSupport, baseFields, Schema.Type.INT);
+    addIf(configs.intToFloatSupport, baseFields, Schema.Type.INT);
+    addIf(configs.intToDoubleSupport, baseFields, Schema.Type.INT);
+    addIf(configs.intToStringSupport, baseFields, Schema.Type.INT);
 
     baseFields.add(Schema.Type.LONG);
-    if (configs.longToFloatSupport) {
-      baseFields.add(Schema.Type.LONG);
-    }
-    if (configs.longToDoubleSupport) {
-      baseFields.add(Schema.Type.LONG);
-    }
-    if (configs.longToStringSupport) {
-      baseFields.add(Schema.Type.LONG);
-    }
+    addIf(configs.longToFloatSupport, baseFields, Schema.Type.LONG);
+    addIf(configs.longToDoubleSupport, baseFields, Schema.Type.LONG);
+    addIf(configs.longToStringSupport, baseFields, Schema.Type.LONG);
 
     baseFields.add(Schema.Type.FLOAT);
-    if (configs.floatToDoubleSupport) {
-      baseFields.add(Schema.Type.FLOAT);
-    }
-    if (configs.floatToStringSupport) {
-      baseFields.add(Schema.Type.FLOAT);
-    }
+    addIf(configs.floatToDoubleSupport, baseFields, Schema.Type.FLOAT);
+    addIf(configs.floatToStringSupport, baseFields, Schema.Type.FLOAT);
 
     baseFields.add(Schema.Type.DOUBLE);
-    if (configs.doubleToStringSupport) {
-      baseFields.add(Schema.Type.DOUBLE);
-    }
+    addIf(configs.doubleToStringSupport, baseFields, Schema.Type.DOUBLE);
 
     baseFields.add(Schema.Type.STRING);
-    if (configs.stringToBytesSupport) {
-      baseFields.add(Schema.Type.STRING);
-    }
+    addIf(configs.stringToBytesSupport, baseFields, Schema.Type.STRING);
 
     baseFields.add(Schema.Type.BYTES);
-    if (configs.bytesToStringSupport) {
-      baseFields.add(Schema.Type.BYTES);
-    }
+    addIf(configs.bytesToStringSupport, baseFields, Schema.Type.BYTES);
+
     this.extendedSchema = Option.of(generateExtendedSchema(configs, baseFields));
   }
 
@@ -1382,58 +1359,39 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   public void extendSchemaAfterEvolution(SchemaEvolutionConfigs configs) {
     List<Schema.Type> baseFields = new ArrayList<>();
     baseFields.add(Schema.Type.INT);
-    if (configs.intToLongSupport) {
-      baseFields.add(Schema.Type.LONG);
-    }
-    if (configs.intToFloatSupport) {
-      baseFields.add(Schema.Type.FLOAT);
-    }
-    if (configs.intToDoubleSupport) {
-      baseFields.add(Schema.Type.DOUBLE);
-    }
-    if (configs.intToStringSupport) {
-      baseFields.add(Schema.Type.STRING);
-    }
+    addIf(configs.intToLongSupport, baseFields, Schema.Type.LONG);
+    addIf(configs.intToFloatSupport, baseFields, Schema.Type.FLOAT);
+    addIf(configs.intToDoubleSupport, baseFields, Schema.Type.DOUBLE);
+    addIf(configs.intToStringSupport, baseFields, Schema.Type.STRING);
 
     baseFields.add(Schema.Type.LONG);
-    if (configs.longToFloatSupport) {
-      baseFields.add(Schema.Type.FLOAT);
-    }
-    if (configs.longToDoubleSupport) {
-      baseFields.add(Schema.Type.DOUBLE);
-    }
-    if (configs.longToStringSupport) {
-      baseFields.add(Schema.Type.STRING);
-    }
+    addIf(configs.longToFloatSupport, baseFields, Schema.Type.FLOAT);
+    addIf(configs.longToDoubleSupport, baseFields, Schema.Type.DOUBLE);
+    addIf(configs.longToStringSupport, baseFields, Schema.Type.STRING);
 
     baseFields.add(Schema.Type.FLOAT);
-    if (configs.floatToDoubleSupport) {
-      baseFields.add(Schema.Type.DOUBLE);
-    }
-    if (configs.floatToStringSupport) {
-      baseFields.add(Schema.Type.STRING);
-    }
+    addIf(configs.floatToDoubleSupport, baseFields, Schema.Type.DOUBLE);
+    addIf(configs.floatToStringSupport, baseFields, Schema.Type.STRING);
 
     baseFields.add(Schema.Type.DOUBLE);
-    if (configs.doubleToStringSupport) {
-      baseFields.add(Schema.Type.STRING);
-    }
+    addIf(configs.doubleToStringSupport, baseFields, Schema.Type.STRING);
 
     baseFields.add(Schema.Type.STRING);
-    if (configs.stringToBytesSupport) {
-      baseFields.add(Schema.Type.BYTES);
-    }
+    addIf(configs.stringToBytesSupport, baseFields, Schema.Type.BYTES);
 
     baseFields.add(Schema.Type.BYTES);
-    if (configs.bytesToStringSupport) {
-      baseFields.add(Schema.Type.STRING);
-    }
+    addIf(configs.bytesToStringSupport, baseFields, Schema.Type.STRING);
 
-    if (configs.addNewFieldSupport) {
-      baseFields.add(Schema.Type.BOOLEAN);
-    }
+    // extra field if we are testing adding new fields
+    addIf(configs.addNewFieldSupport, baseFields, Schema.Type.BOOLEAN);
 
     this.extendedSchema = Option.of(generateExtendedSchema(configs, baseFields));
+  }
+
+  private static void addIf(boolean condition, List<Schema.Type> list, Schema.Type type) {
+    if (condition) {
+      list.add(type);
+    }
   }
 
   private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields) {

@@ -244,7 +244,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords, firstIndexedRecords);
+          firstIndexedRecords);
 
       // Evolve schema
       dataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
@@ -257,7 +257,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords, mergedRecords);
+          mergedRecords);
     }
   }
 
@@ -279,18 +279,17 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords, firstIndexedRecords);
+          firstIndexedRecords);
 
       // Write a log file with schema A
       List<HoodieRecord> secondRecords = dataGen.generateUniqueUpdates("002", 5);
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, dataGen.getExtendedSchema());
       commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
       List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
-      List<Pair<String, IndexedRecord>> unmergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords, unmergedRecords);
+          mergedRecords);
 
       // Evolve schema
       dataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
@@ -300,11 +299,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, dataGen.getExtendedSchema());
       commitToTable(thirdRecords, INSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
       mergedRecords = CollectionUtils.combine(mergedRecords, thirdIndexedRecords);
-      unmergedRecords = CollectionUtils.combine(unmergedRecords, thirdIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
+          // use -1 to prevent validation of numlogfiles because one fg has a log file but the other doesn't
           true, -1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords, unmergedRecords);
+          mergedRecords);
     }
   }
 
@@ -327,18 +326,17 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords, firstIndexedRecords);
+          firstIndexedRecords);
 
       // Write log file with schema A
       List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 50);
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
-      List<Pair<String, IndexedRecord>> unmergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords, unmergedRecords);
+          mergedRecords);
 
       // Evolve schema
       baseFileDataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
@@ -348,11 +346,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(thirdRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       mergedRecords = mergeIndexedRecordLists(thirdIndexedRecords, mergedRecords);
-      unmergedRecords = CollectionUtils.combine(unmergedRecords, thirdIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 2, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords, unmergedRecords);
+          mergedRecords);
     }
   }
 
@@ -375,7 +372,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords, firstIndexedRecords);
+          firstIndexedRecords);
 
       //Evolve schema
       baseFileDataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
@@ -385,22 +382,20 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
-      List<Pair<String, IndexedRecord>> unmergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords, unmergedRecords);
+          mergedRecords);
 
       // Write another log file with schema B
       List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates("003", 50);
       List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, baseFileDataGen.getExtendedSchema());
       commitToTable(thirdRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
       mergedRecords = mergeIndexedRecordLists(thirdIndexedRecords, mergedRecords);
-      unmergedRecords = CollectionUtils.combine(unmergedRecords, thirdIndexedRecords);
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 2, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords, unmergedRecords);
+          mergedRecords);
     }
   }
 
@@ -496,8 +491,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                                     boolean containsBaseFile,
                                                                     int expectedLogFileNum,
                                                                     RecordMergeMode recordMergeMode,
-                                                                    List<Pair<String, IndexedRecord>> expectedRecords,
-                                                                    List<Pair<String, IndexedRecord>> expectedUnmergedRecords) throws Exception {
+                                                                    List<Pair<String, IndexedRecord>> expectedRecords) throws Exception {
     Set<String> metaCols = new HashSet<>(HoodieRecord.HOODIE_META_COLUMNS);
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
     TableSchemaResolver resolver = new TableSchemaResolver(metaClient);

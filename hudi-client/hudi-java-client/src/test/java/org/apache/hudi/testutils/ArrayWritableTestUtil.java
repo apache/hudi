@@ -196,27 +196,31 @@ public class ArrayWritableTestUtil {
     switch (schema.getType()) {
       case RECORD: {
         assertInstanceOf(ArrayWritable.class, writable);
-        assertEquals(schema.getFields().size(), ((ArrayWritable) writable).get().length);
+        ArrayWritable arrayWritable = (ArrayWritable) writable;
+        assertEquals(schema.getFields().size(), arrayWritable.get().length);
         for (Schema.Field field : schema.getFields()) {
-          assertArrayWritableMatchesSchema(field.schema(), ((ArrayWritable) writable).get()[field.pos()]);
+          assertArrayWritableMatchesSchema(field.schema(), arrayWritable.get()[field.pos()]);
         }
         break;
       }
       case ARRAY: {
         assertInstanceOf(ArrayWritable.class, writable);
-        for (int i = 0; i < ((ArrayWritable) writable).get().length; i++) {
-          assertArrayWritableMatchesSchema(schema.getElementType(), ((ArrayWritable) writable).get()[i]);
+        ArrayWritable arrayWritable = (ArrayWritable) writable;
+        for (int i = 0; i < arrayWritable.get().length; i++) {
+          assertArrayWritableMatchesSchema(schema.getElementType(), arrayWritable.get()[i]);
         }
         break;
       }
       case MAP: {
         assertInstanceOf(ArrayWritable.class, writable);
-        for (int i = 0; i < ((ArrayWritable) writable).get().length; i++) {
-          Writable expectedKV = ((ArrayWritable) writable).get()[i];
+        ArrayWritable arrayWritable = (ArrayWritable) writable;
+        for (int i = 0; i < arrayWritable.get().length; i++) {
+          Writable expectedKV = arrayWritable.get()[i];
           assertInstanceOf(ArrayWritable.class, expectedKV);
-          assertEquals(2, ((ArrayWritable) expectedKV).get().length);
-          assertNotNull(((ArrayWritable) expectedKV).get()[0]);
-          assertArrayWritableMatchesSchema(schema.getValueType(), ((ArrayWritable) expectedKV).get()[1]);
+          ArrayWritable kv = (ArrayWritable) expectedKV;
+          assertEquals(2, kv.get().length);
+          assertNotNull(kv.get()[0]);
+          assertArrayWritableMatchesSchema(schema.getValueType(), kv.get()[1]);
         }
         break;
       }
