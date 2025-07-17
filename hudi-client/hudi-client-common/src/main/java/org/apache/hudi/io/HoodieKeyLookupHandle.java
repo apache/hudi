@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -49,8 +50,8 @@ public class HoodieKeyLookupHandle<T, I, K, O> extends HoodieReadHandle<T, I, K,
   private long totalKeysChecked;
 
   public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                               Pair<String, String> partitionPathFileIDPair) {
-    super(config, hoodieTable, partitionPathFileIDPair);
+                               Pair<String, String> partitionPathFileIDPair, Option<String> instantTime) {
+    super(config, instantTime, hoodieTable, partitionPathFileIDPair);
     this.candidateRecordKeys = new ArrayList<>();
     this.totalKeysChecked = 0;
     this.bloomFilter = getBloomFilter();
