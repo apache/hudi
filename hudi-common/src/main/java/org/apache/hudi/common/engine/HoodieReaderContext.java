@@ -265,7 +265,7 @@ public abstract class HoodieReaderContext<T> {
    */
   private ClosableIterator<T> getFileRecordIterator(Either<StoragePath, StoragePathInfo> filePathEither, long start, long length,
                                                     Option<Schema> dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
-    if (isMetadataTable()) {
+    if (isMetadataTable() || getSchemaHandler().getInternalSchemaOpt().isPresent()) {
       return getFileRecordIteratorInternal(filePathEither, start, length, dataSchema.get(), requiredSchema, storage);
     }
     Schema actualDataSchema = getActualDataSchema(dataSchema, filePathEither, storage);
