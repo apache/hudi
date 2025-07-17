@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieValidationException;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
@@ -40,8 +41,10 @@ public class RowDataKeyGens {
     if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
       return RowDataKeyGen.instance(conf, rowType);
     } else {
-      assert taskId != null;
-      assert instantTime != null;
+      if (null == taskId || null == instantTime) {
+        throw new HoodieValidationException(
+            String.format("'taskId' and 'instantTime' cannot be null to use AutoRowDataKeyGen. 'taskId' = %s, 'instantTime' = %s", taskId, instantTime));
+      }
       return AutoRowDataKeyGen.instance(conf, rowType, taskId, instantTime);
     }
   }
