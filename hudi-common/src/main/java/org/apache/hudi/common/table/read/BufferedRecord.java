@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 
@@ -41,12 +42,12 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  */
 public class BufferedRecord<T> implements Serializable {
   private final String recordKey;
-  private final Comparable orderingValue;
+  private final Lazy<Comparable> orderingValue;
   private T record;
   private final Integer schemaId;
   private final boolean isDelete;
 
-  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
+  public BufferedRecord(String recordKey, Lazy<Comparable> orderingValue, T record, Integer schemaId, boolean isDelete) {
     this.recordKey = recordKey;
     this.orderingValue = orderingValue;
     this.record = record;
@@ -64,18 +65,18 @@ public class BufferedRecord<T> implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Failed to get isDelete from record.", e);
     }
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props), record.getData(), schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, Lazy.lazily(() -> record.getOrderingValue(schema, props)), record.getData(), schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, HoodieReaderContext<T> readerContext, Option<String> orderingFieldName, boolean isDelete) {
     String recordKey = readerContext.getRecordKey(record, schema);
     Integer schemaId = readerContext.encodeAvroSchema(schema);
-    Comparable orderingValue = readerContext.getOrderingValue(record, schema, orderingFieldName);
+    Lazy<Comparable> orderingValue = Lazy.lazily(() -> readerContext.getOrderingValue(record, schema, orderingFieldName));
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue) {
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
+  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue, Integer schemaId) {
+    return new BufferedRecord<>(deleteRecord.getRecordKey(), Lazy.eagerly(orderingValue), null, schemaId, true);
   }
 
   public String getRecordKey() {
@@ -83,7 +84,7 @@ public class BufferedRecord<T> implements Serializable {
   }
 
   public Comparable getOrderingValue() {
-    return orderingValue;
+    return orderingValue.get();
   }
 
   public T getRecord() {
