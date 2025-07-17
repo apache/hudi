@@ -248,6 +248,22 @@ public class StreamerUtil {
     return properties;
   }
 
+  public static void initTableFromClientIfNecessary(Configuration conf) {
+    // Since Flink 2.0, the adaptive execution for batch job will generate job graph incrementally
+    // for multiple stages (FLIP-469). And the write coordinator is initialized along with write
+    // operator in the final stage, so hudi table should be initialized if necessary during the plan
+    // compilation phase when adaptive execution is enabled.
+    if (OptionsResolver.isIncrementalJobGraph(conf)
+        || OptionsResolver.isPartitionLevelSimpleBucketIndex(conf)) {
+      // init table, create if not exists.
+      try {
+        StreamerUtil.initTableIfNotExists(conf);
+      } catch (IOException e) {
+        throw new HoodieException("Failed to initialize table.", e);
+      }
+    }
+  }
+
   /**
    * Initialize the table if it does not exist.
    *

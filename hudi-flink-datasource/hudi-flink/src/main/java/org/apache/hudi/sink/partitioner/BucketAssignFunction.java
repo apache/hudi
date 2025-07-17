@@ -108,7 +108,10 @@ public class BucketAssignFunction
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, true);
+    // not load fs view storage config for incremental job graph, since embedded timeline server
+    // is started in write coordinator which is started after bucket assigner operator finished
+    boolean loadFsViewStorageConfig = !OptionsResolver.isIncrementalJobGraph(conf);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, loadFsViewStorageConfig);
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHadoopConf(this.conf)),
         new FlinkTaskContextSupplier(getRuntimeContext()));

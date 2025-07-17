@@ -45,6 +45,7 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Schema;
@@ -2570,6 +2571,25 @@ public class ITTestHoodieDataSource {
     // reading from the earliest
     List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  @Test
+  void testBatchInsertWithAdaptiveSchedulerDisabled() {
+    // set scheduler type as Default to disable adaptive scheduler
+    batchTableEnv.getConfig().getConfiguration().set(
+        JobManagerOptions.SCHEDULER, JobManagerOptions.SchedulerType.Default);
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
+        .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:00.001','par1')";
+    execInsertSql(batchTableEnv, insertInto);
+
+    List<Row> rows = CollectionUtil.iteratorToList(batchTableEnv.executeSql("select * from t1").collect());
+    assertRowsEquals(rows, TestData.DATA_SET_SINGLE_INSERT);
   }
 
   // -------------------------------------------------------------------------
