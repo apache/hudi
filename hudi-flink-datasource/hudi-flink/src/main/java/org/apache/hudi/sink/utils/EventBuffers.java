@@ -20,13 +20,17 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+
+import org.apache.flink.configuration.Configuration;
 
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -45,8 +49,10 @@ public class EventBuffers implements Serializable {
     this.commitGuardOption = commitGuardOption;
   }
 
-  public static EventBuffers getInstance(Option<CommitGuard> commitGuardOption) {
-    return new EventBuffers(new ConcurrentHashMap<>(), commitGuardOption);
+  public static EventBuffers getInstance(Configuration conf) {
+    final Option<CommitGuard> commitGuardOpt = OptionsResolver.isBlockingInstantGeneration(conf)
+        ? Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))) : Option.empty();
+    return new EventBuffers(new ConcurrentSkipListMap<>(), commitGuardOpt);
   }
 
   /**
@@ -69,6 +75,10 @@ public class EventBuffers implements Serializable {
       eventBuffer[event.getTaskID()] = event;
     }
     return eventBuffer;
+  }
+
+  public void addEventsToBuffer(Map<Long, Pair<String, WriteMetadataEvent[]>> events) {
+    this.eventBuffers.putAll(events);
   }
 
   /**
@@ -118,6 +128,12 @@ public class EventBuffers implements Serializable {
     this.eventBuffers.put(checkpointId, Pair.of(instantTime, new WriteMetadataEvent[parallelism]));
   }
 
+  public void awaitAllInstantsToCompleteIfNecessary() {
+    if (this.commitGuardOption.isPresent() && nonEmpty()) {
+      this.commitGuardOption.get().blockFor(getPendingInstants());
+    }
+  }
+
   public void reset(long checkpointId) {
     this.eventBuffers.remove(checkpointId);
     this.commitGuardOption.ifPresent(CommitGuard::unblock);
@@ -131,5 +147,14 @@ public class EventBuffers implements Serializable {
 
   public String getPendingInstants() {
     return this.eventBuffers.values().stream().map(Pair::getKey).collect(Collectors.joining(","));
+  }
+
+  /**
+   * Get write metadata events where there exists no event sent by eager flushing from writers.
+   */
+  public Map<Long, Pair<String, WriteMetadataEvent[]>> getAllCompletedEvents() {
+    return this.eventBuffers.entrySet().stream()
+        .filter(entry -> Arrays.stream(entry.getValue().getRight()).allMatch(event -> event == null || event.isLastBatch()))
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 }

@@ -221,6 +221,38 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         .end();
   }
 
+  @Test
+  public void testRecommitAfterCoordinatorRestart() throws Exception {
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_PART1)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent(1, "par1")
+        .consume(TestData.DATA_SET_PART3)
+        .checkpoint(2)
+        // both ckp-1 and ckp-2 are not committing
+        .assertNextEvent(1, "par2")
+        // then simulating restarting job manually, coordinator will reset to ckp-2
+        // and recommit write metadata for ckp-1
+        .restartCoordinator()
+        .subTaskFails(0, 0)
+        // subtask will resend the write metadata event during initialize state
+        // and coordinator will recommit data for ckp-2
+        .assertNextEvent()
+        // insert another batch of data.
+        .consume(TestData.DATA_SET_PART4)
+        .checkpoint(3)
+        .assertNextEvent(1, "par2")
+        // write metadata will be committed for ckp-3
+        .checkpointComplete(3)
+        // there should be 3 rows and 2 partitions
+        .checkWrittenData(expected, 2)
+        .end();
+  }
+
   @Override
   protected Map<String, String> getExpectedBeforeCheckpointComplete() {
     return EXPECTED1;
