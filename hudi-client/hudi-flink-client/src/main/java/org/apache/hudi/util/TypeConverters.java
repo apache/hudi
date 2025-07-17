@@ -19,7 +19,6 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.data.ArrayData;

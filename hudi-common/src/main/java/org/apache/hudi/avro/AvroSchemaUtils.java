@@ -20,6 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
@@ -383,10 +384,14 @@ public class AvroSchemaUtils {
     if (Objects.equals(schema1, schema2)) {
       return true;
     }
+    if (schema1 == null || schema2 == null) {
+      return false;
+    }
     return areSchemasPrettyMuchEqualInternal(resolveNullableSchema(schema1), resolveNullableSchema(schema2));
   }
 
-  private static boolean areSchemasPrettyMuchEqualInternal(Schema schema1, Schema schema2) {
+  @VisibleForTesting
+  static boolean areSchemasPrettyMuchEqualInternal(Schema schema1, Schema schema2) {
     if (Objects.equals(schema1, schema2)) {
       return true;
     }
@@ -425,7 +430,8 @@ public class AvroSchemaUtils {
     }
   }
 
-  private static boolean areSchemaPrimitivesPrettyMuchEqual(Schema schema1, Schema schema2) {
+  @VisibleForTesting
+  static boolean areSchemaPrimitivesPrettyMuchEqual(Schema schema1, Schema schema2) {
     if (!areLogicalTypesPrettyMuchEqual(schema1.getLogicalType(), schema2.getLogicalType())) {
       return false;
     }
@@ -459,8 +465,6 @@ public class AvroSchemaUtils {
     }
     return false;
   }
-
-
 
   public static Schema pruneDataSchemaResolveNullable(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
     Schema prunedDataSchema = pruneDataSchema(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), excludeFields);
