@@ -162,12 +162,12 @@ class TestBaseSparkInternalRowReaderContext {
     }
 
     @Override
-    public ClosableIterator<InternalRow> getFileRecordIterator(StoragePath filePath,
-                                                               long start,
-                                                               long length,
-                                                               Schema dataSchema,
-                                                               Schema requiredSchema,
-                                                               HoodieStorage storage) throws IOException {
+    public Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException {
+      return SCHEMA;
+    }
+
+    @Override
+    protected ClosableIterator<InternalRow> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
       return null;
     }
 
