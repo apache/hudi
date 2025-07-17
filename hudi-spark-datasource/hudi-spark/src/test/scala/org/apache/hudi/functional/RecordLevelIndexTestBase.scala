@@ -21,14 +21,14 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
-
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
-import scala.collection.{mutable, JavaConverters}
+import scala.collection.{JavaConverters, mutable}
 import scala.collection.JavaConverters._
 import scala.util.Using
 
@@ -64,24 +64,25 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   val commonOptsWithSecondaryIndexSITest: Map[String, String] = commonOptsNewTableSITest ++ secondaryIndexOpts
 
   protected def doWriteAndValidateDataAndRecordIndex(hudiOpts: Map[String, String],
-                                                   operation: String,
-                                                   saveMode: SaveMode,
-                                                   validate: Boolean = true,
-                                                   numUpdates: Int = 1,
-                                                   onlyUpdates: Boolean = false): DataFrame = {
+                                                     operation: String,
+                                                     saveMode: SaveMode,
+                                                     validate: Boolean = true,
+                                                     numUpdates: Int = 1,
+                                                     onlyUpdates: Boolean = false,
+                                                     schemaStr: String = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA): DataFrame = {
     var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime()
-      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, numUpdates))
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, numUpdates, schemaStr))
       if (!onlyUpdates) {
-        records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 1)))
+        records.addAll(recordsToStrings(dataGen.generateInsertsAsPerSchema(instantTime, 1, schemaStr)))
       }
       latestBatch = records.asScala
     } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
-      latestBatch = recordsToStrings(dataGen.generateInsertsForPartition(
-        getInstantTime(), 5, dataGen.getPartitionPaths.last)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInsertsForPartitionPerSchema(
+        getInstantTime(), 5, dataGen.getPartitionPaths.last, schemaStr)).asScala
     } else {
-      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInsertsAsPerSchema(getInstantTime(), 5, schemaStr)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()

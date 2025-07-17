@@ -20,6 +20,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
@@ -40,6 +41,7 @@ import java.util.Map;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -77,7 +79,7 @@ class TestNineToEightDowngradeHandler {
       assertEquals(2, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(2, propertiesToChange.getLeft().size());
       assertEquals(
           PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
@@ -97,10 +99,13 @@ class TestNineToEightDowngradeHandler {
       assertEquals(2, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(2, propertiesToChange.getLeft().size());
       assertEquals(
           PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+      assertEquals(
+          RecordMergeMode.CUSTOM.name(),
+          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
     }
   }
 
@@ -117,10 +122,13 @@ class TestNineToEightDowngradeHandler {
       assertEquals(2, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(2, propertiesToChange.getLeft().size());
       assertEquals(
           PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+      assertEquals(
+          RecordMergeMode.CUSTOM.name(),
+          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
     }
   }
 
@@ -137,10 +145,13 @@ class TestNineToEightDowngradeHandler {
       assertEquals(2, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(2, propertiesToChange.getLeft().size());
       assertEquals(
           PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+      assertEquals(
+          RecordMergeMode.CUSTOM.name(),
+          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
     }
   }
 
