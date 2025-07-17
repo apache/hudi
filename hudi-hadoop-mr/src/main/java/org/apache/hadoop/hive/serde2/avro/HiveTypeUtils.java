@@ -43,7 +43,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 
 /**
  * Convert an Avro Schema to a Hive TypeInfo
- * Taken from https://github.com/apache/hive/blob/01cc7ca672320447b20bc9883e2598d9fb34fc10/serde/src/java/org/apache/hadoop/hive/serde2/avro/SchemaToTypeInfo.java
+ * Taken from https://github.com/apache/hive/blob/rel/release-2.3.4/serde/src/java/org/apache/hadoop/hive/serde2/avro/SchemaToTypeInfo.java
  */
 public class HiveTypeUtils {
   // Conversion of Avro primitive types to Hive primitive types
@@ -158,7 +158,7 @@ public class HiveTypeUtils {
         && AvroSerDe.CHAR_TYPE_NAME.equalsIgnoreCase(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
       int maxLength = 0;
       try {
-        maxLength = HiveSerdeAvroUtils.getIntFromSchema(schema, AvroSerDe.AVRO_PROP_MAX_LENGTH);
+        maxLength = getIntFromSchema(schema, AvroSerDe.AVRO_PROP_MAX_LENGTH);
       } catch (Exception ex) {
         throw new AvroSerdeException("Failed to obtain maxLength value from file schema: " + schema, ex);
       }
@@ -169,7 +169,7 @@ public class HiveTypeUtils {
         .equalsIgnoreCase(schema.getProp(AvroSerDe.AVRO_PROP_LOGICAL_TYPE))) {
       int maxLength = 0;
       try {
-        maxLength = HiveSerdeAvroUtils.getIntFromSchema(schema, AvroSerDe.AVRO_PROP_MAX_LENGTH);
+        maxLength = getIntFromSchema(schema, AvroSerDe.AVRO_PROP_MAX_LENGTH);
       } catch (Exception ex) {
         throw new AvroSerdeException("Failed to obtain maxLength value from file schema: " + schema, ex);
       }
@@ -193,6 +193,7 @@ public class HiveTypeUtils {
     return cs == null || cs.length() == 0;
   }
 
+  // added this from StringUtils
   private static boolean isNumeric(final CharSequence cs) {
     if (isEmpty(cs)) {
       return false;
@@ -206,6 +207,7 @@ public class HiveTypeUtils {
     return true;
   }
 
+  // added this from hive latest
   private static int getIntValue(Object obj) {
     int value = 0;
     if (obj instanceof Integer) {
@@ -216,13 +218,26 @@ public class HiveTypeUtils {
     return value;
   }
 
+  // added this from AvroSerdeUtils in hive latest
+  public static int getIntFromSchema(Schema schema, String name) {
+    Object obj = schema.getObjectProp(name);
+    if (obj instanceof String) {
+      return Integer.parseInt((String) obj);
+    } else if (obj instanceof Integer) {
+      return (int) obj;
+    } else {
+      throw new IllegalArgumentException("Expect integer or string value from property " + name
+          + " but found type " + obj.getClass().getName());
+    }
+  }
+
   private static TypeInfo generateTypeInfoWorker(Schema schema,
                                                  Set<Schema> seenSchemas) throws AvroSerdeException {
     // Avro requires NULLable types to be defined as unions of some type T
     // and NULL.  This is annoying and we're going to hide it from the user.
-    if (HiveSerdeAvroUtils.isNullableType(schema)) {
+    if (AvroSerdeUtils.isNullableType(schema)) {
       return generateTypeInfo(
-          HiveSerdeAvroUtils.getOtherTypeFromNullableType(schema), seenSchemas);
+          AvroSerdeUtils.getOtherTypeFromNullableType(schema), seenSchemas);
     }
 
     Schema.Type type = schema.getType();
