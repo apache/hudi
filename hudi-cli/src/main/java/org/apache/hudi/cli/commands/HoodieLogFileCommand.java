@@ -258,7 +258,6 @@ public class HoodieLogFileCommand {
         });
       }
     } else {
-
       for (String logFile : logFilePaths) {
         Schema writerSchema = TableSchemaResolver.readSchemaFromLogFile(
             client.getStorage(), new StoragePath(logFile));
