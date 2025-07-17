@@ -91,7 +91,6 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
       this.insertRecordsWritten = readStats.getNumInserts();
       this.updatedRecordsWritten = readStats.getNumUpdates();
       this.recordsDeleted = readStats.getNumDeletes();
-      this.recordsWritten = readStats.getNumInserts() + readStats.getNumUpdates();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize file group reader for " + fileSlice, e);
     }
