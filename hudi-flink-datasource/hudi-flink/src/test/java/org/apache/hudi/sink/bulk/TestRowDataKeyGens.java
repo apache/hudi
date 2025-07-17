@@ -21,10 +21,12 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -36,6 +38,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.sql.Timestamp;
+import java.util.Collections;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
@@ -44,12 +47,13 @@ import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTI
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertLinesMatch;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for {@link RowDataKeyGen}.
  */
-public class TestRowDataKeyGen {
+public class TestRowDataKeyGens {
   @Test
   void testSimpleKeyAndPartition() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
@@ -224,7 +228,34 @@ public class TestRowDataKeyGen {
     final RowDataKeyGen keyGen2 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
 
     assertThat(keyGen2.getRecordKey(rowData1), is("uuid:id1,ts:1675841687000"));
-
   }
 
+  @Test
+  void testAutoKeyGenRecordKey() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    // without record keys AutoRowDataKeyGen will be used, which expects taskId and instantTime parameters for instantiation
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "");
+
+    int taskId = 1;
+    String instantTime = "20250716145212986";
+    final AutoRowDataKeyGen autoKeyGen = (AutoRowDataKeyGen) RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
+    assertThat(autoKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(0)), is(instantTime + "_" + taskId + "_0"));
+    assertThat(autoKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(1)), is(instantTime + "_" + taskId + "_1"));
+  }
+
+  @Test
+  void testAutoKeyGenNotAllowNulls() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    // without record keys AutoRowDataKeyGen will be used, which expects taskId and instantTime parameters for instantiation
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "");
+
+    HoodieValidationException exNullInstant =
+        assertThrows(HoodieValidationException.class, () -> RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, 1, null));
+    assertLinesMatch(Collections.singletonList("'taskId' and 'instantTime' cannot be null to use AutoRowDataKeyGen. 'taskId' = 1, 'instantTime' = null"),
+        Collections.singletonList(exNullInstant.getMessage()));
+    HoodieValidationException exNullTask =
+        assertThrows(HoodieValidationException.class, () -> RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, null, "20250716145212986"));
+    assertLinesMatch(Collections.singletonList("'taskId' and 'instantTime' cannot be null to use AutoRowDataKeyGen. 'taskId' = null, 'instantTime' = 20250716145212986"),
+        Collections.singletonList(exNullTask.getMessage()));
+  }
 }
