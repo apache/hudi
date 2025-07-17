@@ -525,9 +525,7 @@ public class TestAvroSchemaUtils {
     s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
     assertFalse(AvroSchemaUtils.areSchemaPrimitivesPrettyMuchEqual(s1, s2));
   }
-
-  // === ENUM Tests ===
-
+  
   @Test
   void testAreSchemasPrettyMuchEqualEnums() {
     Schema s1 = Schema.createEnum("E", null, null, Arrays.asList("A", "B", "C"));

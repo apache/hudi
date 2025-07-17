@@ -275,13 +275,11 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   override def getDataFileSchema(filePath: StoragePath, storage: HoodieStorage): Schema = {
     val configuration = storageConfiguration.asInstanceOf[StorageConfiguration[Configuration]].unwrap()
     if (configuration.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS) == null) {
-      // Overriding default treatment of repeated groups in Parquet
       configuration.set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, "false")
     }
     val path = HadoopFSUtils.convertToHadoopPath(filePath)
     val readOptions = HadoopReadOptions.builder(configuration, path)
       .withMetadataFilter(ParquetMetadataConverter.SKIP_ROW_GROUPS).build
-    // Use try-with-resources to ensure fd is closed.
     val inputFile = HadoopInputFile.fromPath(path, configuration)
     try {
       val fileReader = ParquetFileReader.open(inputFile, readOptions)
