@@ -23,7 +23,6 @@ import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 
 import java.util.Collections;
@@ -35,6 +34,7 @@ import java.util.function.Supplier;
  */
 public class FlinkReaderContextFactory implements ReaderContextFactory<RowData> {
   private final HoodieTableMetaClient metaClient;
+  private InternalSchemaManager internalSchemaManager;
 
   public FlinkReaderContextFactory(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
@@ -42,9 +42,15 @@ public class FlinkReaderContextFactory implements ReaderContextFactory<RowData> 
 
   @Override
   public HoodieReaderContext<RowData> getContext() {
-    Supplier<InternalSchemaManager> internalSchemaManager = () -> InternalSchemaManager.get(metaClient.getStorageConf().unwrapAs(Configuration.class), metaClient);
-
-    return new FlinkRowDataReaderContext(metaClient.getStorageConf(), internalSchemaManager,
-        Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
+    Supplier<InternalSchemaManager> internalSchemaManagerSupplier = () -> {
+      // CAUTION: instantiate internalSchemaManager lazily here since it may not be needed for FG reader,
+      // e.g., schema evolution for log files in FG reader do not use internalSchemaManager.
+      if (internalSchemaManager == null) {
+        internalSchemaManager = InternalSchemaManager.get(metaClient.getStorageConf(), metaClient);
+      }
+      return internalSchemaManager;
+    };
+    return new FlinkRowDataReaderContext(
+        metaClient.getStorageConf(), internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
   }
 }

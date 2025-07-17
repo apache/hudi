@@ -198,12 +198,12 @@ public class TestConsistentBucketIndex extends HoodieSparkClientTestHarness {
   @MethodSource("configParams")
   public void testWriteDataWithCompaction(boolean populateMetaFields, boolean partitioned) throws Exception {
     setUp(populateMetaFields, partitioned);
-    writeData(writeClient.createNewInstantTime(), 200, true);
+    writeData(WriteClientTestUtils.createNewInstantTime(), 200, true);
     config.setValue(INLINE_COMPACT_NUM_DELTA_COMMITS, "1");
     config.setValue(INLINE_COMPACT_TRIGGER_STRATEGY, CompactionTriggerStrategy.NUM_COMMITS.name());
     String compactionTime = (String) writeClient.scheduleCompaction(Option.empty()).get();
     Assertions.assertEquals(200, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
-    writeData(writeClient.createNewInstantTime(), 200, true);
+    writeData(WriteClientTestUtils.createNewInstantTime(), 200, true);
     Assertions.assertEquals(400, readRecordsNum(dataGen.getPartitionPaths(), populateMetaFields));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(compactionTime);
     writeClient.commitCompaction(compactionTime, compactionMetadata, Option.empty());

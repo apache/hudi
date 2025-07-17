@@ -840,7 +840,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
+      .withDocumentation("Whether to enable incremental table service. "
+          + "So far Clustering and Compaction support incremental processing.");
+
+  public static final ConfigProperty<Boolean> TRACK_EVENT_TIME_WATERMARK = ConfigProperty
+      .key("hoodie.write.track.event.time.watermark")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Records event time watermark metadata in commit metadata when enabled");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -1223,7 +1231,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE.defaultValue();
-
   /**
    * Use Spark engine by default.
    */

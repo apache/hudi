@@ -110,13 +110,13 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    String instantTime1 = client.createNewInstantTime();
+    String instantTime1 = WriteClientTestUtils.createNewInstantTime();
     createCommitWithInserts(cfg, client, "000", instantTime1, 200);
     validInstants.add(instantTime1);
     // Create 2 commits with upserts
-    String instantTime2 = client.createNewInstantTime();
+    String instantTime2 = WriteClientTestUtils.createNewInstantTime();
     createCommitWithUpserts(cfg, client, instantTime1, "000", instantTime2, 100);
-    String instantTime3 = client.createNewInstantTime();
+    String instantTime3 = WriteClientTestUtils.createNewInstantTime();
     createCommitWithUpserts(cfg, client, instantTime2, "000", instantTime3, 100);
     validInstants.add(instantTime2);
     validInstants.add(instantTime3);
@@ -124,7 +124,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
     SparkRDDWriteClient<?> client2 = getHoodieWriteClient(cfg);
     // Create upserts, schedule cleaning, schedule compaction in parallel
-    String instant4 = client.createNewInstantTime();
+    String instant4 = WriteClientTestUtils.createNewInstantTime();
     Future future1 = executors.submit(() -> {
       int numRecords = 100;
       String commitTimeBetweenPrevAndNew = instantTime2;
@@ -157,7 +157,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     String instant5 = future2.get();
     String instant6 = future3.get();
     // Create inserts, run cleaning, run compaction in parallel
-    String instant7 = client.createNewInstantTime();
+    String instant7 = WriteClientTestUtils.createNewInstantTime();
     future1 = executors.submit(() -> {
       int numRecords = 100;
       try {
@@ -216,17 +216,17 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
             .build()).withProperties(properties).build();
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
     // Create the first commit
-    String instant1 = client1.createNewInstantTime();
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
     createCommitWithInserts(cfg, client1, "000", instant1, 200);
     // Start another inflight commit
-    String instant2 = client1.createNewInstantTime();
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
     int numRecords = 100;
 
     JavaRDD<WriteStatus> result1 = updateBatch(cfg, client1, instant2, instant1,
         Option.of(Arrays.asList(instant1)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2, true, INSTANT_GENERATOR, true);
     // Start and finish another commit while the previous writer for commit 003 is running
-    String instant3 = client1.createNewInstantTime();
+    String instant3 = WriteClientTestUtils.createNewInstantTime();
     SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
     JavaRDD<WriteStatus> result2 = updateBatch(cfg, client2, instant3, instant1,
         Option.of(Arrays.asList(instant1)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
