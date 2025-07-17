@@ -159,7 +159,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieMergeHandle<T, ?, ?, ?> mergeHandle = HoodieMergeHandleFactory.create(writeConfig,
-        instantTime, table, getFileSliceFromOperation(operation, writeConfig.getBasePath()), operation, taskContextSupplier, hoodieReaderContext, maxInstantTime, getEngineRecordType());
+        instantTime, table, getFileSliceFromOperation(operation, writeConfig.getBasePath(), WriteOperationType.COMPACT), operation, taskContextSupplier,
+        hoodieReaderContext, maxInstantTime, getEngineRecordType());
     mergeHandle.doMerge();
     return mergeHandle.close();
   }
@@ -172,12 +173,12 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                       TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty());
     FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, getFileSliceFromOperation(operation,
-        writeConfig.getBasePath()), operation,  taskContextSupplier, readerContext);
+        writeConfig.getBasePath(), WriteOperationType.LOG_COMPACT), operation,  taskContextSupplier, readerContext);
     appendHandle.doAppend();
     return appendHandle.close();
   }
 
-  private FileSlice getFileSliceFromOperation(CompactionOperation operation, String basePath) {
+  private FileSlice getFileSliceFromOperation(CompactionOperation operation, String basePath, WriteOperationType operationType) {
     Option<HoodieBaseFile> baseFileOpt =
         operation.getBaseFile(basePath, operation.getPartitionPath());
     List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->
@@ -187,7 +188,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     return new FileSlice(
         operation.getFileGroupId(),
         operation.getBaseInstantTime(),
-        baseFileOpt.isPresent() ? baseFileOpt.get() : null,
+        operationType == WriteOperationType.LOG_COMPACT || baseFileOpt.isEmpty() ? null : baseFileOpt.get(),
         logFiles);
   }
 
