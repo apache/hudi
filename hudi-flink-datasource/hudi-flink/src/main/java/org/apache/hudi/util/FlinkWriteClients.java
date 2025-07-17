@@ -74,27 +74,6 @@ public class FlinkWriteClients {
     final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig);
     writeClient.setOperationType(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
     // create the filesystem view storage properties for client
-    initViewStorageProperties(conf, writeConfig);
-    return writeClient;
-  }
-
-  /**
-   * Initialize the 'view_storage_conf' meta file.
-   *
-   * <p>This expects to be used by the driver, the client can then send requests for files view.
-   */
-  public static void initViewStorageProperties(Configuration conf) throws IOException {
-    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
-    initViewStorageProperties(conf, writeConfig);
-  }
-
-  /**
-   * Initialize the 'view_storage_conf' meta file.
-   *
-   * <p>This expects to be used by the driver, the client can then send requests for files view.
-   */
-  public static void initViewStorageProperties(Configuration conf, HoodieWriteConfig writeConfig) throws IOException {
-    // create the filesystem view storage properties for client
     final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
     // rebuild the view storage config with simplified options.
     FileSystemViewStorageConfig rebuilt = FileSystemViewStorageConfig.newBuilder()
@@ -109,6 +88,7 @@ public class FlinkWriteClients {
         .withRemoteTimelineClientRetryExceptions(viewStorageConfig.getRemoteTimelineClientRetryExceptions())
         .build();
     ViewStorageProperties.createProperties(conf.get(FlinkOptions.PATH), rebuilt, conf);
+    return writeClient;
   }
 
   /**
@@ -143,6 +123,18 @@ public class FlinkWriteClients {
   @SuppressWarnings("rawtypes")
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext) {
     return createWriteClient(conf, runtimeContext, true);
+  }
+
+  /**
+   * Creates the Flink write client.
+   *
+   * <p>This expects to be used by client, set flag {@code loadFsViewStorageConfig} to use
+   * remote filesystem view storage config, or an in-memory filesystem view storage is used.
+   */
+  public static HoodieFlinkWriteClient createWriteClient(Configuration conf, boolean enableEmbeddedTimelineService, boolean loadFsViewStorageConfig) {
+    HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf));
+    HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, enableEmbeddedTimelineService, loadFsViewStorageConfig);
+    return new HoodieFlinkWriteClient<>(context, writeConfig);
   }
 
   /**

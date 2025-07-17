@@ -44,15 +44,9 @@ import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.HoodieFlinkIOFactory;
 
-import org.apache.flink.FlinkVersion;
-import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.ExecutionOptions;
-import org.apache.flink.configuration.JobManagerOptions;
-import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.configuration.SchedulerExecutionMode;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -68,39 +62,11 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_
  */
 public class OptionsResolver {
 
-  private static final String FLINK2_VERSION = "2.0";
-
-  /**
-   * Returns whether the current running Flink version is 2.0 or higher.
-   */
-  public static boolean isFlink2() {
-    return FlinkVersion.current().toString().compareTo(FLINK2_VERSION) >= 0;
-  }
-
   /**
    * Returns whether the current runtime mode is adaptive batch execution.
    */
-  public static boolean isAdaptiveBatchExecution(ReadableConfig conf) {
-    return conf.get(ExecutionOptions.RUNTIME_MODE) == RuntimeExecutionMode.BATCH
-        && getSchedulerType(conf) == JobManagerOptions.SchedulerType.AdaptiveBatch;
-  }
-
-  /**
-   * Get the scheduler type for the flink job.
-   *
-   * <p>NOTE: referred from Flink {@code DefaultSlotPoolServiceSchedulerFactory#getSchedulerType}.
-   */
-  private static JobManagerOptions.SchedulerType getSchedulerType(ReadableConfig configuration) {
-    if (configuration.get(JobManagerOptions.SCHEDULER_MODE) == SchedulerExecutionMode.REACTIVE
-          || configuration.get(JobManagerOptions.SCHEDULER) == JobManagerOptions.SchedulerType.Adaptive) {
-      // overwrite
-      return JobManagerOptions.SchedulerType.AdaptiveBatch;
-    } else {
-      boolean isDynamicGraph = configuration.getOptional(JobManagerOptions.SCHEDULER).orElse(
-          JobManagerOptions.SchedulerType.AdaptiveBatch) == JobManagerOptions.SchedulerType.AdaptiveBatch;
-      return configuration.getOptional(JobManagerOptions.SCHEDULER).orElse(
-          isDynamicGraph ? JobManagerOptions.SchedulerType.AdaptiveBatch : JobManagerOptions.SchedulerType.Default);
-    }
+  public static boolean isIncrementalJobGraph(Configuration conf) {
+    return conf.get(FlinkOptions.WRITE_INCREMENTAL_JOB_GRAPH_GENERATION);
   }
 
   /**

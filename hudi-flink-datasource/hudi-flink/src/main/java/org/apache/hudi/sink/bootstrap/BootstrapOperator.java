@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -142,10 +143,13 @@ public class BootstrapOperator
     }
 
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
-    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, false);
+    // not load fs view storage config for incremental job graph, since embedded timeline server
+    // is started in write coordinator which is started after bootstrap.
+    boolean loadFsViewStorageConfig = !OptionsResolver.isIncrementalJobGraph(conf);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, loadFsViewStorageConfig);
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
-    this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
+    this.metaClient = StreamerUtil.createMetaClient(conf, hadoopConf);
     this.internalSchemaManager = InternalSchemaManager.get(hoodieTable.getStorageConf(), metaClient);
 
     preLoadIndexRecords();

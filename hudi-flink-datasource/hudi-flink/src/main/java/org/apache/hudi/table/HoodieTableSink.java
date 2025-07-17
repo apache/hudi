@@ -30,7 +30,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.DataModificationInfos;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -45,7 +44,6 @@ import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -86,23 +84,12 @@ public class HoodieTableSink implements
       OptionsInference.setupSinkTasks(conf, dataStream.getExecutionConfig().getParallelism());
       // set up client id
       OptionsInference.setupClientId(conf);
+      // set up flink runtime configurations.
+      OptionsInference.setupRuntimeConfigs(conf, dataStream.getExecutionEnvironment().getConfiguration());
+      // initialize table, create if not exists.
+      StreamerUtil.initTableFromClientIfNecessary(conf);
       // set up index related configs
       OptionsInference.setupIndexConfigs(conf);
-
-      // Since Flink 2.0, the adaptive execution for batch job will generate job graph incrementally
-      // for multiple stages (FLIP-469). And the write coordinator is initialized along with write
-      // operator in the final stage, so hudi table should be initialized if necessary during the plan
-      // compilation phase when adaptive execution is enabled.
-      if (OptionsResolver.isFlink2()
-          && OptionsResolver.isAdaptiveBatchExecution(dataStream.getExecutionEnvironment().getConfiguration())) {
-        // init table, create if not exists.
-        try {
-          StreamerUtil.initTableIfNotExists(this.conf);
-          FlinkWriteClients.initViewStorageProperties(conf);
-        } catch (IOException e) {
-          throw new HoodieException("Failed to initialize table.", e);
-        }
-      }
 
       RowType rowType = (RowType) schema.toSinkRowDataType().notNull().getLogicalType();
 
