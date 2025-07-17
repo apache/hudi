@@ -69,7 +69,7 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
       case ROW:
         return createRowProjection(fromType, toType, renamedColumns, fieldNameStack);
       default:
-        if (fromType.equals(toType)) {
+        if (fromType.equals(toType) || fromType.getTypeRoot().equals(toType.getTypeRoot())) {
           return TypeConverters.NOOP_CONVERTER;
         } else {
           // return TypeConverter directly for non-composite type

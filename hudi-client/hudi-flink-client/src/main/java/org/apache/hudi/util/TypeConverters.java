@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.data.ArrayData;
@@ -53,7 +54,10 @@ import static org.apache.flink.table.types.logical.LogicalTypeRoot.FLOAT;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.INTEGER;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.MAP;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.ROW;
+import static org.apache.flink.table.types.logical.LogicalTypeRoot.VARBINARY;
 import static org.apache.flink.table.types.logical.LogicalTypeRoot.VARCHAR;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
  * Tool class used to perform supported casts from a {@link LogicalType} to another
@@ -81,6 +85,20 @@ public class TypeConverters {
     LogicalTypeRoot to = toType.getTypeRoot();
 
     switch (to) {
+      case VARBINARY: {
+        if (from == VARCHAR) {
+          return new TypeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object convert(Object val) {
+              return getUTF8Bytes(val.toString());
+            }
+          };
+        }
+        break;
+      }
+
       case BIGINT: {
         if (from == INTEGER) {
           return new TypeConverter() {
@@ -199,6 +217,16 @@ public class TypeConverters {
             @Override
             public Object convert(Object val) {
               return new BinaryStringData(LocalDate.ofEpochDay(((Integer) val).longValue()).toString());
+            }
+          };
+        }
+        if (from == VARBINARY) {
+          return new TypeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object convert(Object val) {
+              return new BinaryStringData(fromUTF8Bytes((byte[]) val));
             }
           };
         }

@@ -176,12 +176,9 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Override
   public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
     HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
-    configs.nestedSupport = false;
     configs.arraySupport = false;
     configs.mapSupport = false;
     configs.anyArraySupport = false;
-    configs.stringToBytesSupport = false;
-    configs.bytesToStringSupport = false;
     return configs;
   }
 
