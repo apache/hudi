@@ -21,6 +21,7 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.client.model.HoodieFlinkInternalRowTypeInfo;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -204,6 +205,12 @@ public class Pipelines {
       DataStream<RowData> dataStream) {
     if (OptionsResolver.isBucketIndexType(conf)) {
       throw new HoodieNotSupportedException("Bucket index supports only upsert operation. Please, use upsert operation or switch to another index type.");
+    }
+
+    Option<Partitioner> insertPartitioner = OptionsResolver.getInsertPartitioner(conf);
+    if (insertPartitioner.isPresent()) {
+      RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+      dataStream = dataStream.partitionCustom(insertPartitioner.get(), rowDataKeyGen::getHoodieKey);
     }
 
     WriteOperatorFactory<RowData> operatorFactory = AppendWriteOperator.getFactory(conf, rowType);
