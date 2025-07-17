@@ -40,6 +40,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -378,14 +379,14 @@ public class AvroSchemaUtils {
     return newSchema;
   }
 
-  public static boolean areSchemasEqualIgnoreNullable(Schema schema1, Schema schema2) {
+  public static boolean areSchemasPrettyMuchEqual(Schema schema1, Schema schema2) {
     if (Objects.equals(schema1, schema2)) {
       return true;
     }
-    return areSchemasEqualIgnoreNullableInternal(resolveNullableSchema(schema1), resolveNullableSchema(schema2));
+    return areSchemasPrettyMuchEqualInternal(resolveNullableSchema(schema1), resolveNullableSchema(schema2));
   }
 
-  private static boolean areSchemasEqualIgnoreNullableInternal(Schema schema1, Schema schema2) {
+  private static boolean areSchemasPrettyMuchEqualInternal(Schema schema1, Schema schema2) {
     if (Objects.equals(schema1, schema2)) {
       return true;
     }
@@ -400,7 +401,7 @@ public class AvroSchemaUtils {
           return false;
         }
         for (int i = 0; i < fields1.size(); i++) {
-          if (!areSchemasEqualIgnoreNullable(fields1.get(i).schema(), fields2.get(i).schema())) {
+          if (!areSchemasPrettyMuchEqual(fields1.get(i).schema(), fields2.get(i).schema())) {
             return false;
           }
         }
@@ -410,31 +411,42 @@ public class AvroSchemaUtils {
         if (schema2.getType() != Schema.Type.ARRAY) {
           return false;
         }
-        return areSchemasEqualIgnoreNullable(schema1.getElementType(), schema2.getElementType());
+        return areSchemasPrettyMuchEqual(schema1.getElementType(), schema2.getElementType());
 
       case MAP:
         if (schema2.getType() != Schema.Type.MAP) {
           return false;
         }
-        return areSchemasEqualIgnoreNullable(schema1.getValueType(), schema2.getValueType());
+        return areSchemasPrettyMuchEqual(schema1.getValueType(), schema2.getValueType());
       case UNION:
         throw new IllegalArgumentException("Union schemas are not supported besides nullable");
       default:
-        return areSchemasEqualIgnoreNullablePrimitives(schema1, schema2);
+        return areSchemaPrimitivesPrettyMuchEqual(schema1, schema2);
     }
   }
 
-  private static boolean areSchemasEqualIgnoreNullablePrimitives(Schema schema1, Schema schema2) {
-    if (!areLogicalTypesEqualIgnoreNullable(schema1.getLogicalType(), schema2.getLogicalType())) {
+  private static boolean areSchemaPrimitivesPrettyMuchEqual(Schema schema1, Schema schema2) {
+    if (!areLogicalTypesPrettyMuchEqual(schema1.getLogicalType(), schema2.getLogicalType())) {
       return false;
     }
     if (Objects.requireNonNull(schema1.getType()) == Schema.Type.FIXED) {
       return schema2.getType() == Schema.Type.FIXED
           && schema1.getFixedSize() == schema2.getFixedSize();
     }
+    if (Objects.requireNonNull(schema1.getType()) == Schema.Type.ENUM) {
+      return schema2.getType() == Schema.Type.ENUM
+          && areEnumSymbolsPrettyMuchEqual(schema1.getEnumSymbols(), schema2.getEnumSymbols());
+    }
     return Objects.equals(schema1.getType(), schema2.getType());
   }
-  private static boolean areLogicalTypesEqualIgnoreNullable(LogicalType logicalType1, LogicalType logicalType2) {
+
+  private static boolean areEnumSymbolsPrettyMuchEqual(List<String> enumSymbols1, List<String> enumSymbols2) {
+    Set<String> set1 = new HashSet<>(enumSymbols1);
+    Set<String> set2 = new HashSet<>(enumSymbols2);
+    return set2.containsAll(set1) || set1.containsAll(set2);
+  }
+
+  private static boolean areLogicalTypesPrettyMuchEqual(LogicalType logicalType1, LogicalType logicalType2) {
     if (Objects.equals(logicalType1, logicalType2)) {
       return true;
     }

@@ -143,7 +143,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   public Option<UnaryOperator<T>> getOutputConverter() {
-    if (!AvroSchemaUtils.areSchemasEqualIgnoreNullable(requiredSchema, requestedSchema)) {
+    if (!AvroSchemaUtils.areSchemasPrettyMuchEqual(requiredSchema, requestedSchema)) {
       return Option.of(readerContext.projectRecord(requiredSchema, requestedSchema));
     }
     return Option.empty();

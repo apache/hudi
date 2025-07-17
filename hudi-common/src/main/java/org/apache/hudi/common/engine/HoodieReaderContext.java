@@ -269,7 +269,7 @@ public abstract class HoodieReaderContext<T> {
     }
     Schema actualDataSchema = getActualDataSchema(dataSchema, filePathEither, storage);
     Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(actualDataSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
-    if (AvroSchemaUtils.areSchemasEqualIgnoreNullable(actualRequriredSchema, requiredSchema)) {
+    if (AvroSchemaUtils.areSchemasPrettyMuchEqual(actualRequriredSchema, requiredSchema)) {
       return getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, requiredSchema, storage);
     }
     UnaryOperator<T> projection = projectRecord(actualRequriredSchema, requiredSchema);
