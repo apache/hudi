@@ -147,7 +147,6 @@
     <flink1.17.version>1.17.1</flink1.17.version>
     <flink.version>${flink2.0.version}</flink.version>
     <hudi.flink.module>hudi-flink2.0.x</hudi.flink.module>
-    <hudi.flink.common.module>hudi-flink2-common</hudi.flink.common.module>
     <flink.bundle.version>2.0</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
     <flink.avro.version>1.11.4</flink.avro.version>
@@ -2561,7 +2560,6 @@
       <properties>
         <flink.version>${flink2.0.version}</flink.version>
         <hudi.flink.module>hudi-flink2.0.x</hudi.flink.module>
-        <hudi.flink.common.module>hudi-flink2-common</hudi.flink.common.module>
         <flink.bundle.version>2.0</flink.bundle.version>
         <!-- check kafka version -->
         <flink.connector.kafka.version>4.0.0-2.0</flink.connector.kafka.version>
@@ -2571,7 +2569,6 @@
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
       </properties>
       <modules>
-        <module>hudi-flink-datasource/hudi-flink2-common</module>
         <module>hudi-flink-datasource/hudi-flink2.0.x</module>
       </modules>
       <activation>
@@ -2586,7 +2583,6 @@
       <properties>
         <flink.version>${flink1.20.version}</flink.version>
         <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
-        <hudi.flink.common.module>hudi-flink1-common</hudi.flink.common.module>
         <flink.bundle.version>1.20</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
@@ -2596,7 +2592,6 @@
       </properties>
       <modules>
         <module>hudi-flink-datasource/hudi-flink1.20.x</module>
-        <module>hudi-flink-datasource/hudi-flink1-common</module>
       </modules>
       <activation>
         <property>
@@ -2609,7 +2604,6 @@
       <properties>
         <flink.version>${flink1.19.version}</flink.version>
         <hudi.flink.module>hudi-flink1.19.x</hudi.flink.module>
-        <hudi.flink.common.module>hudi-flink1-common</hudi.flink.common.module>
         <flink.bundle.version>1.19</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
@@ -2619,7 +2613,6 @@
       </properties>
       <modules>
         <module>hudi-flink-datasource/hudi-flink1.19.x</module>
-        <module>hudi-flink-datasource/hudi-flink1-common</module>
       </modules>
       <activation>
         <property>
@@ -2632,7 +2625,6 @@
       <properties>
         <flink.version>${flink1.18.version}</flink.version>
         <hudi.flink.module>hudi-flink1.18.x</hudi.flink.module>
-        <hudi.flink.common.module>hudi-flink1-common</hudi.flink.common.module>
         <flink.bundle.version>1.18</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
@@ -2642,7 +2634,6 @@
       </properties>
       <modules>
         <module>hudi-flink-datasource/hudi-flink1.18.x</module>
-        <module>hudi-flink-datasource/hudi-flink1-common</module>
       </modules>
       <activation>
         <property>
@@ -2655,7 +2646,6 @@
       <properties>
         <flink.version>${flink1.17.version}</flink.version>
         <hudi.flink.module>hudi-flink1.17.x</hudi.flink.module>
-        <hudi.flink.common.module>hudi-flink1-common</hudi.flink.common.module>
         <flink.bundle.version>1.17</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
@@ -2665,7 +2655,6 @@
       </properties>
       <modules>
         <module>hudi-flink-datasource/hudi-flink1.17.x</module>
-        <module>hudi-flink-datasource/hudi-flink1-common</module>
       </modules>
       <activation>
         <property>

@@ -59,11 +59,6 @@
             <version>${hadoop.version}</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-flink1-common</artifactId>
-            <version>${project.version}</version>
-        </dependency>
 
         <!-- Flink -->
         <dependency>
@@ -82,6 +77,12 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-table-api-java-bridge</artifactId>
             <version>${flink1.18.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>${flink.connector.kafka.artifactId}</artifactId>
+            <version>${flink.connector.kafka.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
