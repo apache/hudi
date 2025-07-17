@@ -21,7 +21,6 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -38,7 +37,6 @@ import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
@@ -76,34 +74,19 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static final Set<String> PRELOADED_META_INFO_KEYS = new HashSet<>(
       Arrays.asList(KEY_MIN_RECORD, KEY_MAX_RECORD, SCHEMA_KEY));
 
-  private final Option<StoragePath> path;
+  private final HFileReaderFactory readerFactory;
+  private final StoragePath path;
   // In-memory cache for meta info
   private final Map<String, byte[]> metaInfoMap;
   private final Lazy<Schema> schema;
-  private HFileReaderFactory readerFactory;
   private boolean isMetaInfoLoaded = false;
   private long numKeyValueEntries = -1L;
 
-  public HoodieNativeAvroHFileReader(HoodieStorage storage, TypedProperties props, StoragePath path, Option<Schema> schemaOption) {
-    this(storage, props, Option.of(path), Option.empty(), schemaOption);
-  }
-
-  public HoodieNativeAvroHFileReader(HoodieStorage storage, TypedProperties props, byte[] content, Option<Schema> schemaOption) {
-    this(storage, props, Option.empty(), Option.of(content), schemaOption);
-  }
-
-  private HoodieNativeAvroHFileReader(HoodieStorage storage,
-                                      TypedProperties props,
-                                      Option<StoragePath> path,
-                                      Option<byte[]> content,
-                                      Option<Schema> schemaOption) {
+  public HoodieNativeAvroHFileReader(HFileReaderFactory readerFactory, StoragePath path, Option<Schema> schemaOption) {
+    this.readerFactory = readerFactory;
     this.path = path;
     this.metaInfoMap = new HashMap<>();
     this.schema = schemaOption.map(Lazy::eagerly).orElseGet(() -> Lazy.lazily(this::fetchSchema));
-    HFileReaderFactory.Builder builder = HFileReaderFactory.newBuilder().withStorage(storage).withProps(props);
-    path.ifPresent(builder::withPath);
-    content.ifPresent(builder::withContent);
-    this.readerFactory = builder.build();
   }
 
   @Override
