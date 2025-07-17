@@ -239,10 +239,12 @@ public class ITTestHoodieFlinkCompactor {
       if (upgrade) {
         metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
         HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
-        new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.NINE, "none");
+        new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(),
+            FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.current(), "none");
       } else {
-        metaClient.getTableConfig().setTableVersion(HoodieTableVersion.NINE);
-        new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.SIX, "none");
+        metaClient.getTableConfig().setTableVersion(HoodieTableVersion.current());
+        new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(),
+            FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.SIX, "none");
         // set table version
         conf.setString("hoodie.write.table.version", "6");
       }

@@ -75,7 +75,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
     metaClient = getLatestMetaClient(true)
 
     // assert table version is eight and the partition fields in table config has partition type
-    assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig.getTableVersion)
+    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
     assertEquals(classOf[OverwriteWithLatestAvroPayload].getName, metaClient.getTableConfig.getPayloadClass)
 
@@ -97,7 +97,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       validate = false)
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig.getTableVersion)
+    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
 
     // After upgrade, based on the payload and table type, the merge mode is updated accordingly.
