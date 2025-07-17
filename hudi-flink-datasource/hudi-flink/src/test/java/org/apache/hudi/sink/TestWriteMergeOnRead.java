@@ -201,6 +201,30 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         .end();
   }
 
+  @Test
+  public void testRecommitAfterCoordinatorRestart() throws Exception {
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_PART1)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent(1, "par1")
+        .consume(TestData.DATA_SET_PART3)
+        .checkpoint(2)
+        .assertNextEvent(1, "par2")
+        .restartCoordinator()
+        .subTaskFails(0, 0)
+        .assertNextEvent()
+        .consume(TestData.DATA_SET_PART4)
+        .checkpoint(3)
+        .assertNextEvent(1, "par2")
+        .checkpointComplete(3)
+        .checkWrittenData(expected, 2)
+        .end();
+  }
+
   @Override
   protected Map<String, String> getExpectedBeforeCheckpointComplete() {
     return EXPECTED1;

@@ -115,6 +115,12 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- Kryo -->
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo-shaded</artifactId>
+        </dependency>
+
         <!-- Flink -->
         <dependency>
             <groupId>org.apache.flink</groupId>
