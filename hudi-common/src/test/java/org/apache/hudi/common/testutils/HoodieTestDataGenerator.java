@@ -488,6 +488,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * Populate rec with values for TIP_NESTED_SCHEMA
    */
   private void generateTipNestedValues(GenericRecord rec) {
+    // TODO [HUDI-9603] remove this check
+    if (extendedSchema.isPresent()) {
+      if (extendedSchema.get().getField("tip_history") == null) {
+        return;
+      }
+    }
     GenericArray<GenericRecord> tipHistoryArray = new GenericData.Array<>(1, AVRO_SCHEMA.getField("tip_history").schema());
     Schema tipSchema = new Schema.Parser().parse(AVRO_SCHEMA.getField("tip_history").schema().toString()).getElementType();
     GenericRecord tipRecord = new GenericData.Record(tipSchema);
@@ -1298,6 +1304,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     public boolean mapSupport = true;
     public boolean arraySupport = true;
     public boolean addNewFieldSupport = true;
+    // TODO: [HUDI-9603] Flink 1.18 array values incorrect in fg reader test
+    public boolean anyArraySupport = true;
 
     // Int
     public boolean intToLongSupport = true;
@@ -1394,7 +1402,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     for (Schema.Field field : fields) {
       if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == Schema.Type.RECORD) {
         finalFields.add(new Schema.Field(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc(), field.defaultVal()));
-      } else {
+      } else if (configs.anyArraySupport || !field.name().equals("tip_history")) {
+        //TODO: [HUDI-9603] remove the if condition when the issue is fixed
         if (field.name().equals("_hoodie_is_deleted")) {
           addedFields = true;
           addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);

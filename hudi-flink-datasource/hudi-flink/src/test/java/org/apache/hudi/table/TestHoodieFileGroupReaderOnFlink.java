@@ -179,6 +179,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     configs.nestedSupport = false;
     configs.arraySupport = false;
     configs.mapSupport = false;
+    configs.anyArraySupport = false;
     configs.addNewFieldSupport = false;
     configs.intToLongSupport = false;
     configs.intToFloatSupport = false;

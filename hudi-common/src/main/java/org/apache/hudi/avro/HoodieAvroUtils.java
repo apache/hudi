@@ -1382,35 +1382,42 @@ public class HoodieAvroUtils {
    * It is just trying to find if the reader expects a number to be promoted to string, as quick as possible.
    */
   public static boolean recordNeedsRewriteForExtendedAvroTypePromotion(Schema writerSchema, Schema readerSchema) {
+    return recordNeedsRewriteForAvro(writerSchema, readerSchema, true);
+  }
+
+  public static boolean recordNeedsRewriteForAvroDataBlock(Schema writerSchema, Schema readerSchema) {
+    return recordNeedsRewriteForAvro(writerSchema, readerSchema, false);
+  }
+
+  private static boolean recordNeedsRewriteForAvro(Schema writerSchema, Schema readerSchema, boolean supportMissingFields) {
     if (writerSchema.equals(readerSchema)) {
       return false;
     }
     switch (readerSchema.getType()) {
       case RECORD:
-        Map<String, Schema.Field> writerFields = new HashMap<>();
-        for (Schema.Field field : writerSchema.getFields()) {
-          writerFields.put(field.name(), field);
-        }
         for (Schema.Field field : readerSchema.getFields()) {
-          if (writerFields.containsKey(field.name())) {
-            if (recordNeedsRewriteForExtendedAvroTypePromotion(writerFields.get(field.name()).schema(), field.schema())) {
+          Schema.Field writerField = writerSchema.getField(field.name());
+          if (writerField == null) {
+            if (!supportMissingFields) {
               return true;
             }
+          } else if (recordNeedsRewriteForAvro(writerField.schema(), field.schema(), supportMissingFields)) {
+            return true;
           }
         }
         return false;
       case ARRAY:
         if (writerSchema.getType().equals(ARRAY)) {
-          return recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema.getElementType(), readerSchema.getElementType());
+          return recordNeedsRewriteForAvro(writerSchema.getElementType(), readerSchema.getElementType(), supportMissingFields);
         }
         return false;
       case MAP:
         if (writerSchema.getType().equals(MAP)) {
-          return recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema.getValueType(), readerSchema.getValueType());
+          return recordNeedsRewriteForAvro(writerSchema.getValueType(), readerSchema.getValueType(), supportMissingFields);
         }
         return false;
       case UNION:
-        return recordNeedsRewriteForExtendedAvroTypePromotion(getActualSchemaFromUnion(writerSchema, null), getActualSchemaFromUnion(readerSchema, null));
+        return recordNeedsRewriteForAvro(getActualSchemaFromUnion(writerSchema, null), getActualSchemaFromUnion(readerSchema, null), supportMissingFields);
       case ENUM:
         return needsRewriteToString(writerSchema, true);
       case STRING:
