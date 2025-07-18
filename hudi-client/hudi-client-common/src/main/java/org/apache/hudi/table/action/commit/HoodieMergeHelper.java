@@ -35,7 +35,7 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -74,7 +74,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
   @Override
   public void runMerge(HoodieTable<?, ?, ?, ?> table,
-                       HoodieMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException {
+                       HoodieWriteMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException {
     HoodieWriteConfig writeConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 

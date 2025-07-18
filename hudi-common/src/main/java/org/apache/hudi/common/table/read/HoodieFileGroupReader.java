@@ -121,7 +121,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
-    this.logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    this.logFiles = getLogFilesFromFileSlice(fileSlice);
     this.props = props;
     this.start = start;
     this.length = length;
@@ -160,6 +160,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         props, hoodieBaseFileOption, this.logFiles.isEmpty(),
         isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput);
     this.allowInflightInstants = allowInflightInstants;
+  }
+
+  public static List<HoodieLogFile> getLogFilesFromFileSlice(FileSlice fileSlice) {
+    return fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
   }
 
   /**

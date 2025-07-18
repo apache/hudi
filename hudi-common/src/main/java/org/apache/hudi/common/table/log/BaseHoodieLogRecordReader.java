@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -133,7 +133,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
-  protected FileGroupRecordBuffer<T> recordBuffer;
+  protected HoodieFileGroupRecordBuffer<T> recordBuffer;
   // Allows to consider inflight instants while merging log records
   protected boolean allowInflightInstants;
   // table version for compatibility
@@ -142,7 +142,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected BaseHoodieLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient, HoodieStorage storage, List<String> logFilePaths,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan, Option<String> partitionNameOverride,
-                                      Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan, FileGroupRecordBuffer<T> recordBuffer,
+                                      Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan, HoodieFileGroupRecordBuffer<T> recordBuffer,
                                       boolean allowInflightInstants) {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler() != null ? readerContext.getSchemaHandler().getRequiredSchema() : null;

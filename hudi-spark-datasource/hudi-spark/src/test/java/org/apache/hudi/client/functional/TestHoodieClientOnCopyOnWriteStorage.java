@@ -78,7 +78,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -467,9 +467,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
       HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath);
 
-      HoodieMergeHandle handle = null;
+      HoodieWriteMergeHandle handle = null;
       try {
-        handle = new HoodieMergeHandle(config, instantTime, table, new HashMap<>(),
+        handle = new HoodieWriteMergeHandle(config, instantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())));
@@ -490,7 +490,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         final String newInstantTime = "006";
         config.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
         HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
-        handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+        handle = new HoodieWriteMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
             partitionPath, FSUtils.getFileId(baseFile.getFileName()), baseFile, new SparkTaskContextSupplier(),
             config.populateMetaFields() ? Option.empty() :
                 Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(config.getProps())));

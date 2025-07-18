@@ -22,8 +22,8 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -66,7 +66,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient metaClient, HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
                                       int bufferSize, Option<InstantRange> instantRange, boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionName, Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan,
-                                      FileGroupRecordBuffer<T> recordBuffer, boolean allowInflightInstants) {
+                                      HoodieFileGroupRecordBuffer<T> recordBuffer, boolean allowInflightInstants) {
     super(readerContext, metaClient, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
         forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer, allowInflightInstants);
 
@@ -174,7 +174,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
 
-    private FileGroupRecordBuffer<T> recordBuffer;
+    private HoodieFileGroupRecordBuffer<T> recordBuffer;
     private boolean allowInflightInstants = false;
     private HoodieTableMetaClient metaClient;
 
@@ -244,7 +244,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
-    public Builder<T> withRecordBuffer(FileGroupRecordBuffer<T> recordBuffer) {
+    public Builder<T> withRecordBuffer(HoodieFileGroupRecordBuffer<T> recordBuffer) {
       this.recordBuffer = recordBuffer;
       return this;
     }
