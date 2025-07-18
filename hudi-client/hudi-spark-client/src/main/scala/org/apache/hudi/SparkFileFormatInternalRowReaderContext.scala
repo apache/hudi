@@ -169,7 +169,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         HoodieAvroUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
-      val dataProjection = if (getHasLogFiles && getShouldMergeUseRecordPosition) {
+      val dataProjection = if (getShouldMergeUseRecordPosition) {
         getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       } else {
         getBootstrapProjection(dataRequiredSchema,

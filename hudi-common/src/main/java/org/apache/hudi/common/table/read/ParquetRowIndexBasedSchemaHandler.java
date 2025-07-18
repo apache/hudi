@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
@@ -38,34 +39,37 @@ import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNest
 import static org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME;
 
 /**
- * This class is responsible for handling the schema for the file group reader that supports positional merge.
+ * This class is responsible for handling the schema for the file group reader that supports row index based positional merge.
  */
-public class PositionBasedSchemaHandler<T> extends FileGroupReaderSchemaHandler<T> {
-  public PositionBasedSchemaHandler(HoodieReaderContext<T> readerContext,
-                                    Schema dataSchema,
-                                    Schema requestedSchema,
-                                    Option<InternalSchema> internalSchemaOpt,
-                                    HoodieTableConfig hoodieTableConfig,
-                                    TypedProperties properties) {
+public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaHandler<T> {
+  public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
+                                           Schema dataSchema,
+                                           Schema requestedSchema,
+                                           Option<InternalSchema> internalSchemaOpt,
+                                           HoodieTableConfig hoodieTableConfig,
+                                           TypedProperties properties) {
     super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
+    if (!readerContext.supportsParquetRowIndex()) {
+      throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
+    }
   }
 
   @Override
   protected Schema prepareRequiredSchema() {
     Schema preMergeSchema = super.prepareRequiredSchema();
-    return readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles()
+    return readerContext.getShouldMergeUseRecordPosition()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;
   }
 
   @Override
   protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
-    return internalSchemaOpt.map(PositionBasedSchemaHandler::addPositionalMergeCol);
+    return internalSchemaOpt.map(ParquetRowIndexBasedSchemaHandler::addPositionalMergeCol);
   }
 
   @Override
   protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
-    if (!(readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles())) {
+    if (!readerContext.getShouldMergeUseRecordPosition()) {
       return super.doPruneInternalSchema(requiredSchema, internalSchema);
     }
 
@@ -82,20 +86,24 @@ public class PositionBasedSchemaHandler<T> extends FileGroupReaderSchemaHandler<
   @Override
   public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
     Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
-    if (readerContext.supportsParquetRowIndex()) {
-      if (!dataAndMetaCols.getLeft().isEmpty() && !dataAndMetaCols.getRight().isEmpty()) {
+    if (readerContext.getNeedsBootstrapMerge() || readerContext.getShouldMergeUseRecordPosition()) {
+      if (!dataAndMetaCols.getLeft().isEmpty()) {
         dataAndMetaCols.getLeft().add(getPositionalMergeField());
+      }
+      if (!dataAndMetaCols.getRight().isEmpty()) {
         dataAndMetaCols.getRight().add(getPositionalMergeField());
       }
     }
     return dataAndMetaCols;
   }
 
-  private static Schema addPositionalMergeCol(Schema input) {
+  @VisibleForTesting
+  static Schema addPositionalMergeCol(Schema input) {
     return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
   }
 
-  private static Schema.Field getPositionalMergeField() {
+  @VisibleForTesting
+  static Schema.Field getPositionalMergeField() {
     return new Schema.Field(ROW_INDEX_TEMPORARY_COLUMN_NAME,
         Schema.create(Schema.Type.LONG), "", -1L);
   }
