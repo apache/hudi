@@ -67,7 +67,7 @@ import java.util.function.Supplier;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.recordNeedsRewriteForAvroDataBlock;
+import static org.apache.hudi.avro.HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -187,7 +187,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.dis.readInt();
       }
 
-      if (recordNeedsRewriteForAvroDataBlock(writerSchema, readerSchema)) {
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema)) {
         this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
         this.promotedSchema = Option.of(readerSchema);
       } else {
@@ -272,7 +272,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.inputStream.readInt();
       }
 
-      if (recordNeedsRewriteForAvroDataBlock(writerSchema, readerSchema)) {
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema)) {
         this.reader = new GenericDatumReader<>(writerSchema, writerSchema);
         this.promotedSchema = Option.of(readerSchema);
       } else {
