@@ -79,8 +79,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunctionAdapter<Hoodi
     try {
       // not load fs view storage config for incremental job graph, since embedded timeline server
       // is started in write coordinator which is started after bucket assigner operator finished
-      boolean loadFsViewStorageConfig = !OptionsResolver.isIncrementalJobGraph(config);
-      this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext(), loadFsViewStorageConfig);
+      this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext(), !OptionsResolver.isIncrementalJobGraph(config));
       this.partitionToIdentifier = new HashMap<>();
       this.lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
     } catch (Throwable e) {

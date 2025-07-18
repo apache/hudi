@@ -110,8 +110,7 @@ public class BucketAssignFunction
     super.open(parameters);
     // not load fs view storage config for incremental job graph, since embedded timeline server
     // is started in write coordinator which is started after bucket assigner operator finished
-    boolean loadFsViewStorageConfig = !OptionsResolver.isIncrementalJobGraph(conf);
-    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, loadFsViewStorageConfig);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, !OptionsResolver.isIncrementalJobGraph(conf));
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHadoopConf(this.conf)),
         new FlinkTaskContextSupplier(getRuntimeContext()));
