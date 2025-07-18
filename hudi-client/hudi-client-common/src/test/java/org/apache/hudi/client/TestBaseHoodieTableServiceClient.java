@@ -258,7 +258,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     @Override
-    public String createNewInstantTime(boolean shouldLock) {
+    public String createNewInstantTime() {
       return instantTimes.next();
     }
 

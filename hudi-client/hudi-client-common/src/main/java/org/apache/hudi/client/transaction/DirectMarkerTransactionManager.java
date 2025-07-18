@@ -42,7 +42,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
   private final String filePath;
 
   public DirectMarkerTransactionManager(HoodieWriteConfig config, HoodieStorage storage, String partitionPath, String fileId) {
-    super(new LockManager(config, storage, createUpdatedLockProps(config, partitionPath, fileId)), config, storage.getConf());
+    super(new LockManager(config, storage, createUpdatedLockProps(config, partitionPath, fileId)), config);
     this.filePath = partitionPath + "/" + fileId;
   }
 

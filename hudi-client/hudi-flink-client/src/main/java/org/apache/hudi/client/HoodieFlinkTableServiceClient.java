@@ -91,7 +91,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
       writeTableMetadata(table, compactionCommitTime, metadata);
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
-      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata, txnManager.createCompletionInstant());
+      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata, txnManager.generateInstantTime());
     } finally {
       this.txnManager.endStateChange(Option.of(compactionInstant));
     }
@@ -142,7 +142,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           clusteringInstant,
           metadata,
           table.getActiveTimeline(),
-          txnManager.createCompletionInstant(),
+          txnManager.generateInstantTime(),
           completedInstant -> table.getMetaClient().getTableFormat().commit(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
     } catch (HoodieIOException e) {
       throw new HoodieClusteringException(
