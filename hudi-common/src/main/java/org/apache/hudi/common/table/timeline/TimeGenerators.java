@@ -32,7 +32,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 public class TimeGenerators {
 
   public static TimeGenerator getTimeGenerator(HoodieTimeGeneratorConfig timeGeneratorConfig) {
-    ValidationUtils.checkState(timeGeneratorConfig.contains(BASE_PATH), "Option [" + BASE_PATH.key() + "] is required");
+    ValidationUtils.checkState(timeGeneratorConfig.contains(BASE_PATH), () -> "Option [" + BASE_PATH.key() + "] is required");
     return getNewTimeGenerator(timeGeneratorConfig);
   }
 
