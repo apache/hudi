@@ -124,6 +124,20 @@
         <category label="Community" term="Community"/>
     </entry>
     <entry>
+        <title type="html"><![CDATA[How PayU built a secure enterprise AI assistant using Amazon Bedrock]]></title>
+        <id>https://hudi.apache.org/cn/blog/2025/07/15/PayU-built-a-secure-enterprise-AI-assistant</id>
+        <link href="https://hudi.apache.org/cn/blog/2025/07/15/PayU-built-a-secure-enterprise-AI-assistant"/>
+        <updated>2025-07-15T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aws.amazon.com/blogs/machine-learning/how-payu-built-a-secure-enterprise-ai-assistant-using-amazon-bedrock/">here</a></span>]]></content>
+        <author>
+            <name>Deepesh Dhapola, Mudit Chopra, Rahmat Khan, Rahul Ghosh, Saikat Dey, and Sandeep Kumar Veerlapati</name>
+        </author>
+        <category label="blog" term="blog"/>
+        <category label="Apache Hudi" term="Apache Hudi"/>
+        <category label="AWS" term="AWS"/>
+    </entry>
+    <entry>
         <title type="html"><![CDATA[Building a RAG-based AI Recommender (Part 1/2)]]></title>
         <id>https://hudi.apache.org/cn/blog/2025/07/10/building-a-rag-based-ai-recommender</id>
         <link href="https://hudi.apache.org/cn/blog/2025/07/10/building-a-rag-based-ai-recommender"/>
@@ -809,21 +823,5 @@
         <category label="apache hudi" term="apache hudi"/>
         <category label="aws" term="aws"/>
         <category label="databricks" term="databricks"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[From Transactional Bottlenecks to Lightning-Fast Analytics]]></title>
-        <id>https://hudi.apache.org/cn/blog/2025/03/13/lightning-fast-analytics</id>
-        <link href="https://hudi.apache.org/cn/blog/2025/03/13/lightning-fast-analytics"/>
-        <updated>2025-03-13T00:00:00.000Z</updated>
-        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
-        <content type="html"><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aakashsankritya.medium.com/from-transactional-bottlenecks-to-lightning-fast-analytics-74e0d3fff1c0">here</a></span>]]></content>
-        <author>
-            <name>Akash Sankritya</name>
-        </author>
-        <category label="blog" term="blog"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="kafka" term="kafka"/>
-        <category label="debezium" term="debezium"/>
-        <category label="S3" term="S3"/>
     </entry>
 </feed>

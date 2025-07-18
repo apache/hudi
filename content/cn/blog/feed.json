@@ -21,6 +21,22 @@
             ]
         },
         {
+            "id": "https://hudi.apache.org/cn/blog/2025/07/15/PayU-built-a-secure-enterprise-AI-assistant",
+            "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://aws.amazon.com/blogs/machine-learning/how-payu-built-a-secure-enterprise-ai-assistant-using-amazon-bedrock/\">here</a></span>",
+            "url": "https://hudi.apache.org/cn/blog/2025/07/15/PayU-built-a-secure-enterprise-AI-assistant",
+            "title": "How PayU built a secure enterprise AI assistant using Amazon Bedrock",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2025-07-15T00:00:00.000Z",
+            "author": {
+                "name": "Deepesh Dhapola, Mudit Chopra, Rahmat Khan, Rahul Ghosh, Saikat Dey, and Sandeep Kumar Veerlapati"
+            },
+            "tags": [
+                "blog",
+                "Apache Hudi",
+                "AWS"
+            ]
+        },
+        {
             "id": "https://hudi.apache.org/cn/blog/2025/07/10/building-a-rag-based-ai-recommender",
             "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://blog.datumagic.ai/p/building-a-rag-based-ai-recommender\">here</a></span>",
             "url": "https://hudi.apache.org/cn/blog/2025/07/10/building-a-rag-based-ai-recommender",
@@ -354,24 +370,6 @@
                 "apache hudi",
                 "aws",
                 "databricks"
-            ]
-        },
-        {
-            "id": "https://hudi.apache.org/cn/blog/2025/03/13/lightning-fast-analytics",
-            "content_html": "<span>Redirecting... please wait!! <!-- -->or click <a href=\"https://aakashsankritya.medium.com/from-transactional-bottlenecks-to-lightning-fast-analytics-74e0d3fff1c0\">here</a></span>",
-            "url": "https://hudi.apache.org/cn/blog/2025/03/13/lightning-fast-analytics",
-            "title": "From Transactional Bottlenecks to Lightning-Fast Analytics",
-            "summary": "Redirecting... please wait!!",
-            "date_modified": "2025-03-13T00:00:00.000Z",
-            "author": {
-                "name": "Akash Sankritya"
-            },
-            "tags": [
-                "blog",
-                "apache hudi",
-                "kafka",
-                "debezium",
-                "S3"
             ]
         }
     ]

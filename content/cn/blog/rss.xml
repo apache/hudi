@@ -122,6 +122,17 @@
             <category>Community</category>
         </item>
         <item>
+            <title><![CDATA[How PayU built a secure enterprise AI assistant using Amazon Bedrock]]></title>
+            <link>https://hudi.apache.org/cn/blog/2025/07/15/PayU-built-a-secure-enterprise-AI-assistant</link>
+            <guid>https://hudi.apache.org/cn/blog/2025/07/15/PayU-built-a-secure-enterprise-AI-assistant</guid>
+            <pubDate>Tue, 15 Jul 2025 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aws.amazon.com/blogs/machine-learning/how-payu-built-a-secure-enterprise-ai-assistant-using-amazon-bedrock/">here</a></span>]]></content:encoded>
+            <category>blog</category>
+            <category>Apache Hudi</category>
+            <category>AWS</category>
+        </item>
+        <item>
             <title><![CDATA[Building a RAG-based AI Recommender (Part 1/2)]]></title>
             <link>https://hudi.apache.org/cn/blog/2025/07/10/building-a-rag-based-ai-recommender</link>
             <guid>https://hudi.apache.org/cn/blog/2025/07/10/building-a-rag-based-ai-recommender</guid>
@@ -753,19 +764,6 @@
             <category>apache hudi</category>
             <category>aws</category>
             <category>databricks</category>
-        </item>
-        <item>
-            <title><![CDATA[From Transactional Bottlenecks to Lightning-Fast Analytics]]></title>
-            <link>https://hudi.apache.org/cn/blog/2025/03/13/lightning-fast-analytics</link>
-            <guid>https://hudi.apache.org/cn/blog/2025/03/13/lightning-fast-analytics</guid>
-            <pubDate>Thu, 13 Mar 2025 00:00:00 GMT</pubDate>
-            <description><![CDATA[Redirecting... please wait!!]]></description>
-            <content:encoded><![CDATA[<span>Redirecting... please wait!! <!-- -->or click <a href="https://aakashsankritya.medium.com/from-transactional-bottlenecks-to-lightning-fast-analytics-74e0d3fff1c0">here</a></span>]]></content:encoded>
-            <category>blog</category>
-            <category>apache hudi</category>
-            <category>kafka</category>
-            <category>debezium</category>
-            <category>S3</category>
         </item>
     </channel>
 </rss>
