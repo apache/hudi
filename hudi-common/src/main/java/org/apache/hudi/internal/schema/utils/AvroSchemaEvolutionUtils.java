@@ -21,7 +21,8 @@ package org.apache.hudi.internal.schema.utils;
 import org.apache.avro.Schema;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -35,6 +36,8 @@ import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverte
  * Utility methods to support evolve old avro schema based on a given schema.
  */
 public class AvroSchemaEvolutionUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaEvolutionUtils.class);
 
   /**
    * Support reconcile from a new avroSchema.
@@ -64,7 +67,8 @@ public class AvroSchemaEvolutionUtils {
         .stream()
         .filter(f -> colNamesFromOldSchema.contains(f) && !inComingInternalSchema.findType(f).equals(oldTableSchema.findType(f)))
         .collect(Collectors.toList());
-    if (colNamesFromIncoming.size() == colNamesFromOldSchema.size() && diffFromOldSchema.size() == 0 && typeChangeColumns.isEmpty()) {
+    if (colNamesFromIncoming.size() == colNamesFromOldSchema.size() && diffFromOldSchema.isEmpty() && typeChangeColumns.isEmpty()) {
+      LOG.info("Returning Old table Schema only from Reconcile Method");
       return oldTableSchema;
     }
 
@@ -108,7 +112,13 @@ public class AvroSchemaEvolutionUtils {
       typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
     });
 
-    return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
+    InternalSchema evolvedSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
+    // If evolvedSchema is exactly the same as the oldSchema, except the version number, return the old schema
+    if (evolvedSchema.equalsIgnoringVersion(oldTableSchema)) {
+      LOG.warn("Returning Old table Schema only from Reconcile Method");
+      return oldTableSchema;
+    }
+    return evolvedSchema;
   }
 
   /**
