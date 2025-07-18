@@ -153,7 +153,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
     try {
       this.txnManager.beginStateChange(Option.of(restoreInflightInstant), Option.empty());
       writeTableMetadata(restoreMetadata);
-      table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata), txnManager.createCompletionInstant());
+      table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata), txnManager.generateInstantTime());
     } finally {
       this.txnManager.endStateChange(Option.of(restoreInflightInstant));
     }

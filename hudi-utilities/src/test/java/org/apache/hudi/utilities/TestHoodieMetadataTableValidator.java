@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -45,9 +44,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerators;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -615,18 +611,14 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
     when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
 
-    TimeGenerator timeGenerator = TimeGenerators
-        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
-            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
-
     StoragePath baseStoragePath = new StoragePath(basePath);
 
     if (testFailureCase) {
       // 3rd partition which is additional in MDT should have creation time before last instant in timeline.
 
-      String partition3CreationTime = TimelineUtils.generateInstantTime(true, timeGenerator);
+      String partition3CreationTime = WriteClientTestUtils.createNewInstantTime();
       Thread.sleep(100);
-      String lastIntantCreationTime = TimelineUtils.generateInstantTime(true, timeGenerator);
+      String lastIntantCreationTime = WriteClientTestUtils.createNewInstantTime();
 
       HoodieInstant lastInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, lastIntantCreationTime);
       when(completedTimeline.lastInstant()).thenReturn(Option.of(lastInstant));
@@ -637,11 +629,10 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       });
     } else {
       // 3rd partition creation time is > last completed instant
-      HoodieInstant lastInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
-          TimelineUtils.generateInstantTime(true, timeGenerator));
+      HoodieInstant lastInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, WriteClientTestUtils.createNewInstantTime());
       when(completedTimeline.lastInstant()).thenReturn(Option.of(lastInstant));
       Thread.sleep(100);
-      validator.setPartitionCreationTime(Option.of(TimelineUtils.generateInstantTime(true, timeGenerator)));
+      validator.setPartitionCreationTime(Option.of(WriteClientTestUtils.createNewInstantTime()));
 
       // validate that all 3 partitions are returned
       assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
@@ -834,14 +825,11 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.basePath = basePath;
     config.validateLatestFileSlices = true;
     config.validateAllFileGroups = true;
-    TimeGenerator timeGenerator = TimeGenerators
-        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
-            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
     MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
     Map<String, Set<String>> committedFilesMap = new HashMap<>();
-    String baseInstantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
-    String logInstantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
-    String newInstantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
+    String baseInstantTime = WriteClientTestUtils.createNewInstantTime();
+    String logInstantTime = WriteClientTestUtils.createNewInstantTime();
+    String newInstantTime = WriteClientTestUtils.createNewInstantTime();
 
     // Empty log file set
     assertEquals(Pair.of(false, ""), validator.hasCommittedLogFiles(
@@ -1084,17 +1072,14 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       config.basePath = basePath;
       config.validateLatestFileSlices = true;
       config.validateAllFileGroups = true;
-      TimeGenerator timeGenerator = TimeGenerators
-          .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
-              HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
       MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
-      int listSize = oversizeList ? 500 : 50;
-      String partition = "partition10";
-      String label = "metadata item";
+    int listSize = oversizeList ? 500 : 50;
+    String partition = "partition10";
+    String label = "metadata item";
 
       // Base file list
       Pair<List<FileSlice>, List<FileSlice>> filelistPair =
-          generateTwoEqualFileSliceList(listSize, timeGenerator);
+          generateTwoEqualFileSliceList(listSize);
       List<FileSlice> listMdt = filelistPair.getLeft();
       List<FileSlice> listFs = filelistPair.getRight();
       // Equal case
@@ -1102,9 +1087,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
           validator.validateFileSlices(listMdt, listFs, partition, metaClient, label));
       // Size mismatch
       listFs.add(generateRandomFileSlice(
-          TimelineUtils.generateInstantTime(true, timeGenerator),
-          TimelineUtils.generateInstantTime(true, timeGenerator),
-          TimelineUtils.generateInstantTime(true, timeGenerator)).getLeft());
+          WriteClientTestUtils.createNewInstantTime(),
+          WriteClientTestUtils.createNewInstantTime(),
+          WriteClientTestUtils.createNewInstantTime()).getLeft());
       assertEquals(
           oversizeList,
           toStringWithThreshold(listMdt, Integer.MAX_VALUE).length() > logDetailMaxLength);
@@ -1129,7 +1114,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       FileSlice originalFileSlice = listMdt.get(i);
       FileSlice mismatchFileSlice = new FileSlice(
           originalFileSlice.getFileGroupId(),
-          TimelineUtils.generateInstantTime(true, timeGenerator),
+          WriteClientTestUtils.createNewInstantTime(),
           originalFileSlice.getBaseFile().get(),
           originalFileSlice.getLogFiles().collect(Collectors.toList()));
       listMdt.set(i, mismatchFileSlice);
@@ -1196,13 +1181,12 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
             .collect(Collectors.toList()));
   }
 
-  Pair<List<FileSlice>, List<FileSlice>> generateTwoEqualFileSliceList(int size,
-                                                                       TimeGenerator timeGenerator) {
+  Pair<List<FileSlice>, List<FileSlice>> generateTwoEqualFileSliceList(int size) {
     List<FileSlice> list1 = new ArrayList<>();
     List<FileSlice> list2 = new ArrayList<>();
-    String baseInstantTime = TimelineUtils.generateInstantTime(true, timeGenerator);
-    String logInstantTime1 = TimelineUtils.generateInstantTime(true, timeGenerator);
-    String logInstantTime2 = TimelineUtils.generateInstantTime(true, timeGenerator);
+    String baseInstantTime = WriteClientTestUtils.createNewInstantTime();
+    String logInstantTime1 = WriteClientTestUtils.createNewInstantTime();
+    String logInstantTime2 = WriteClientTestUtils.createNewInstantTime();
     IntStream.range(0, size).forEach(i -> {
       Pair<FileSlice, FileSlice> pair =
           generateRandomFileSlice(baseInstantTime, logInstantTime1, logInstantTime2);
@@ -1534,15 +1518,12 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
 
     // Generate two unequal lists to trigger validation error
-    TimeGenerator timeGenerator = TimeGenerators
-        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
-            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
-    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(500, timeGenerator);
+    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(500);
     List<FileSlice> listMdt = filelistPair.getLeft();
     List<FileSlice> listFs = new ArrayList<>(filelistPair.getRight());
-    listFs.add(generateRandomFileSlice(TimelineUtils.generateInstantTime(true, timeGenerator),
-        TimelineUtils.generateInstantTime(true, timeGenerator),
-        TimelineUtils.generateInstantTime(true, timeGenerator)).getLeft());
+    listFs.add(generateRandomFileSlice(WriteClientTestUtils.createNewInstantTime(),
+        WriteClientTestUtils.createNewInstantTime(),
+        WriteClientTestUtils.createNewInstantTime()).getLeft());
 
     // Verify default behavior (100,000 chars)
     MockHoodieMetadataTableValidator finalValidator = validator;
@@ -1644,9 +1625,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     List<FileSlice> fsFileSlices = new ArrayList<>();
     
     // Generate 20 file slices for MDT and 15 for FS to ensure they're different
-    TimeGenerator timeGenerator = TimeGenerators
-        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
-            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
     for (int i = 0; i < 20; i++) {
       String fileId = UUID.randomUUID().toString();
 

@@ -1613,7 +1613,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   String createRestoreInstantTime() {
-    return writeClient.createNewInstantTime(false);
+    return writeClient.createNewInstantTime();
   }
 
   /**
