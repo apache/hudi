@@ -21,7 +21,6 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.transaction.lock.NoopLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
@@ -199,9 +198,6 @@ public class UpgradeDowngradeUtils {
       // NOTE: at this stage rollback should use the current writer version and disable auto upgrade/downgrade
       TypedProperties properties = new TypedProperties();
       properties.putAll(config.getProps());
-      // TimeGenerators are cached and re-used based on table base path. Since here we are changing the lock configurations, avoiding the cache use
-      // for upgrade code block.
-      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(), "false");
       // override w/ NoopLock Provider to avoid re-entrant locking. already upgrade is happening within the table level lock.
       // Below we do trigger rollback and compaction which might again try to acquire the lock. So, here we are explicitly overriding to
       // NoopLockProvider for just the upgrade code block.

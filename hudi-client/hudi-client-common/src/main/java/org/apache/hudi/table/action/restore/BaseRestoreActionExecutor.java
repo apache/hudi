@@ -156,7 +156,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       writeTableMetadata(restoreMetadata);
       TableFormatCompletionAction formatCompletionAction = restoreCompletedInstant -> table.getMetaClient().getTableFormat()
           .restore(restoreCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
-      table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata), txnManager.createCompletionInstant(), formatCompletionAction);
+      table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata), txnManager.generateInstantTime(), formatCompletionAction);
     } finally {
       this.txnManager.endStateChange(Option.of(restoreInflightInstant));
     }

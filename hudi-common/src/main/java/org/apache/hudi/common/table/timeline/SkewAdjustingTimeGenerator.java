@@ -20,51 +20,25 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StorageConfiguration;
-
-import java.util.function.Consumer;
 
 /**
  * Time generator that ensures all clocks pass an expected max clock skew to ensure TrueTime semantics.
  */
-public class SkewAdjustingTimeGenerator extends TimeGeneratorBase {
+public class SkewAdjustingTimeGenerator implements TimeGenerator {
   private final long maxExpectedClockSkewMs;
 
-  public SkewAdjustingTimeGenerator(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf) {
-    super(config, storageConf);
+  public SkewAdjustingTimeGenerator(HoodieTimeGeneratorConfig config) {
     this.maxExpectedClockSkewMs = config.getMaxExpectedClockSkewMs();
   }
 
   @Override
-  public long generateTime(boolean skipLocking) {
+  public long generateTime() {
     try {
-      if (!skipLocking) {
-        lock();
-      }
       long ts = System.currentTimeMillis();
       Thread.sleep(maxExpectedClockSkewMs);
       return ts;
     } catch (InterruptedException e) {
       throw new HoodieException("Interrupted when get the current time", e);
-    } finally {
-      if (!skipLocking) {
-        unlock();
-      }
-    }
-  }
-
-  @Override
-  public void consumeTime(boolean skipLocking, Consumer<Long> func) {
-    try {
-      if (!skipLocking) {
-        lock();
-      }
-      long currentTimeMillis = generateTime(true);
-      func.accept(currentTimeMillis);
-    } finally {
-      if (!skipLocking) {
-        unlock();
-      }
     }
   }
 }
