@@ -19,9 +19,11 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -30,6 +32,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJavaTestBase<IndexedRecord> {
   private static final StorageConfiguration<?> STORAGE_CONFIGURATION = new HadoopStorageConfiguration(false);
@@ -48,5 +51,17 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
   @Override
   public void assertRecordsEqual(Schema schema, IndexedRecord expected, IndexedRecord actual) {
     assertEquals(expected, actual);
+  }
+
+  @Override
+  public void assertRecordMatchesSchema(Schema schema, IndexedRecord record) {
+    assertTrue(ConvertingGenericData.INSTANCE.validate(schema, record));
+  }
+
+  @Override
+  public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
+    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
+    configs.addNewFieldSupport = false;
+    return configs;
   }
 }

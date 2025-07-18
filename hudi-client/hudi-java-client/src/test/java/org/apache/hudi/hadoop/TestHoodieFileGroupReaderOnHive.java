@@ -38,8 +38,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.hive.serde2.SerDeException;
+import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
-import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.AfterAll;
@@ -47,7 +48,7 @@ import org.junit.jupiter.api.BeforeAll;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getStoredPartitionFieldNames;
@@ -105,23 +106,53 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     ArrayWritableTestUtil.assertArrayWritableEqual(schema, expected, actual, false);
   }
 
+  @Override
+  public void assertRecordMatchesSchema(Schema schema, ArrayWritable record) {
+    ArrayWritableTestUtil.assertArrayWritableMatchesSchema(schema, record);
+  }
+
+  @Override
+  public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
+    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
+    configs.nestedSupport = false;
+    configs.arraySupport = false;
+    configs.mapSupport = false;
+    configs.addNewFieldSupport = false;
+    configs.intToLongSupport = false;
+    configs.intToFloatSupport = false;
+    configs.intToDoubleSupport = false;
+    configs.intToStringSupport = false;
+    configs.longToFloatSupport = false;
+    configs.longToDoubleSupport = false;
+    configs.longToStringSupport = false;
+    configs.floatToDoubleSupport = false;
+    configs.floatToStringSupport = false;
+    configs.doubleToStringSupport = false;
+    configs.stringToBytesSupport = false;
+    configs.bytesToStringSupport = false;
+    return configs;
+  }
+
   private void setupJobconf(JobConf jobConf, Schema schema) {
     List<Schema.Field> fields = schema.getFields();
     setHiveColumnNameProps(fields, jobConf, USE_FAKE_PARTITION);
-    List<TypeInfo> types = TypeInfoUtils.getTypeInfosFromTypeString(HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
-    Map<String, String> typeMappings = HoodieTestDataGenerator.AVRO_SCHEMA.getFields().stream().collect(Collectors.toMap(Schema.Field::name, field -> types.get(field.pos()).getTypeName()));
-    String columnTypes = fields.stream().map(field -> typeMappings.getOrDefault(field.name(), "string")).collect(Collectors.joining(","));
-    jobConf.set("columns.types", columnTypes + ",string");
+    try {
+      String columnTypes = HiveTypeUtils.generateColumnTypes(schema).stream().map(TypeInfo::getTypeName).collect(Collectors.joining(","));
+      jobConf.set("columns.types", columnTypes + ",string");
+    } catch (SerDeException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private void setHiveColumnNameProps(List<Schema.Field> fields, JobConf jobConf, boolean isPartitioned) {
-    String names = fields.stream().map(Schema.Field::name).collect(Collectors.joining(","));
+    String names = fields.stream().map(Schema.Field::name).map(s -> s.toLowerCase(Locale.ROOT)).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
 
-    String hiveOrderedColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase(PARTITION_COLUMN))
-        .map(Schema.Field::name).collect(Collectors.joining(","));
+    String hiveOrderedColumnNames = fields.stream().map(Schema.Field::name)
+        .filter(name -> !name.equalsIgnoreCase(PARTITION_COLUMN))
+        .map(s -> s.toLowerCase(Locale.ROOT)).collect(Collectors.joining(","));
     if (isPartitioned) {
       hiveOrderedColumnNames += "," + PARTITION_COLUMN;
       jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, PARTITION_COLUMN);
