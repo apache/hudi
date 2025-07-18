@@ -36,9 +36,10 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
-import org.apache.hudi.common.table.read.PositionBasedSchemaHandler;
+import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -135,8 +136,9 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
     } else {
       ctx.setRecordMerger(Option.empty());
     }
-    ctx.setSchemaHandler(new PositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
-        Option.empty(), metaClient.getTableConfig(), new TypedProperties()));
+    ctx.setSchemaHandler(HoodieSparkUtils.gteqSpark3_5()
+        ? new ParquetRowIndexBasedSchemaHandler<>(ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig(), new TypedProperties())
+        : new FileGroupReaderSchemaHandler<>(ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig(), new TypedProperties()));
     TypedProperties props = new TypedProperties();
     props.put("hoodie.write.record.merge.mode", mergeMode.name());
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
