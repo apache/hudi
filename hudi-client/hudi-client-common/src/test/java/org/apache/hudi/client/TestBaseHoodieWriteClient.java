@@ -130,10 +130,10 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     TransactionManager transactionManager = new TransactionManager(lockManager, true, timeGenerator);
 
     Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS).plusSeconds(1);
-    when(timeGenerator.generateTime(true)).thenReturn(now.toEpochMilli());
+    when(timeGenerator.generateTime()).thenReturn(now.toEpochMilli());
     HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
-    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient, transactionManager, timeGenerator);
+    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient, transactionManager);
 
     String instantTime = writeClient.startCommit("commit");
 
@@ -144,7 +144,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     InOrder inOrder = Mockito.inOrder(lockManager, timeGenerator);
     inOrder.verify(lockManager).lock();
-    inOrder.verify(timeGenerator).generateTime(true);
+    inOrder.verify(timeGenerator).generateTime();
     inOrder.verify(lockManager).unlock();
   }
 
@@ -159,8 +159,8 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     }
 
     public TestWriteClient(HoodieWriteConfig writeConfig, HoodieTable<String, String, String, String> table, Option<EmbeddedTimelineService> timelineService,
-                           BaseHoodieTableServiceClient<String, String, String> tableServiceClient, TransactionManager transactionManager, TimeGenerator timeGenerator) {
-      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, null, transactionManager, timeGenerator);
+                           BaseHoodieTableServiceClient<String, String, String> tableServiceClient, TransactionManager transactionManager) {
+      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, null, transactionManager);
       this.table = table;
       this.tableServiceClient = tableServiceClient;
     }

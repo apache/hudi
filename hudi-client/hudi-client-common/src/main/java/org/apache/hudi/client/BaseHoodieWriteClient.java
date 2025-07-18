@@ -50,7 +50,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -178,9 +177,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                         HoodieWriteConfig writeConfig,
                         Option<EmbeddedTimelineService> timelineService,
                         SupportsUpgradeDowngrade upgradeDowngradeHelper,
-                        TransactionManager transactionManager,
-                        TimeGenerator timeGenerator) {
-    super(context, writeConfig, timelineService, transactionManager, timeGenerator);
+                        TransactionManager transactionManager) {
+    super(context, writeConfig, timelineService, transactionManager);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
@@ -269,7 +267,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (extraPreCommitFunc.isPresent()) {
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
-      commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable, txnManager.createCompletionInstant());
+      commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable, txnManager.generateInstantTime());
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed {}", instantTime);
     } catch (IOException e) {

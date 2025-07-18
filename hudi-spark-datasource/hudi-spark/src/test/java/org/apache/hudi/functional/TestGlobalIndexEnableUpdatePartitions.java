@@ -29,9 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerators;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
@@ -174,7 +171,6 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
   public void testRollbacksWithPartitionUpdate(HoodieTableType tableType, IndexType indexType, boolean isUpsert) throws IOException {
     final Class<?> payloadClass = DefaultHoodieRecordPayload.class;
     HoodieWriteConfig writeConfig = getWriteConfig(payloadClass, indexType);
-    TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig(), storageConf());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
     final int totalRecords = 8;
     final String p1 = "p1";
@@ -185,15 +181,13 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       // 1st batch: inserts
-      String commitTimeAtEpoch0 = TimelineUtils.generateInstantTime(false, timeGenerator);
-      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch0);
+      String commitTimeAtEpoch0 = client.startCommit();
       List<WriteStatus> writeStatusList = client.upsert(jsc().parallelize(insertsAtEpoch0, 2), commitTimeAtEpoch0).collect();
       client.commit(commitTimeAtEpoch0, jsc().parallelize(writeStatusList));
       assertNoWriteErrors(writeStatusList);
 
       // 2nd batch: update 4 records from p1 to p2
-      String commitTimeAtEpoch5 = TimelineUtils.generateInstantTime(false, timeGenerator);
-      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch5);
+      String commitTimeAtEpoch5 = client.startCommit();
       if (isUpsert) {
         client.commit(commitTimeAtEpoch5, client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5));
         readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
@@ -210,8 +204,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       // re-ingest same batch
-      String commitTimeAtEpoch10 = TimelineUtils.generateInstantTime(false, timeGenerator);
-      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch10);
+      String commitTimeAtEpoch10 = client.startCommit();
       if (isUpsert) {
         client.commit(commitTimeAtEpoch10, client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch10));
         // this also tests snapshot query. We had a bug where MOR snapshot was ignoring rollbacks while determining last instant while reading log records.
@@ -227,18 +220,16 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       // update 4 of them from p2 to p3.
       // delete test:
       // update 4 of them to p3. these are treated as new inserts since they are deleted. no changes should be seen wrt p2.
-      String commitTimeAtEpoch15 = TimelineUtils.generateInstantTime(false, timeGenerator);
+      String commitTimeAtEpoch15 = client.startCommit();
       List<HoodieRecord> updatesAtEpoch15 = getUpdates(updatesAtEpoch5, p3, 15, payloadClass);
-      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch15);
       client.commit(commitTimeAtEpoch15, client.upsert(jsc().parallelize(updatesAtEpoch15, 2), commitTimeAtEpoch15));
       // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieFileGroupReader.
       readTableAndValidate(metaClient, new int[] {4, 5, 6, 7}, p1, 0);
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p3, 15);
 
       // lets move 2 of them back to p1
-      String commitTimeAtEpoch20 = TimelineUtils.generateInstantTime(false, timeGenerator);
+      String commitTimeAtEpoch20 = client.startCommit();
       List<HoodieRecord> updatesAtEpoch20 = getUpdates(updatesAtEpoch5.subList(0, 2), p1, 20, payloadClass);
-      WriteClientTestUtils.startCommitWithTime(client, commitTimeAtEpoch20);
       client.commit(commitTimeAtEpoch20, client.upsert(jsc().parallelize(updatesAtEpoch20, 1), commitTimeAtEpoch20));
       // for the same bug pointed out earlier, (ignoring rollbacks while determining last instant while reading log records), this tests the HoodieFileGroupReader.
       Map<String, Long> expectedTsMap = new HashMap<>();

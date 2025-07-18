@@ -291,7 +291,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
 
   @Override
   String createRestoreInstantTime() {
-    return createRestoreTimestamp(getWriteClient().createNewInstantTime(false));
+    return createRestoreTimestamp(getWriteClient().createNewInstantTime());
   }
 
   /**

@@ -20,14 +20,13 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,11 +49,11 @@ public class TransactionManager implements Serializable, AutoCloseable {
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
   public TransactionManager(HoodieWriteConfig config, HoodieStorage storage) {
-    this(new LockManager(config, storage), config, storage.getConf());
+    this(new LockManager(config, storage), config);
   }
 
-  protected TransactionManager(LockManager lockManager, HoodieWriteConfig writeConfig, StorageConfiguration<?> storageConf) {
-    this(lockManager, writeConfig.isLockRequired(), TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig(), storageConf));
+  protected TransactionManager(LockManager lockManager, HoodieWriteConfig writeConfig) {
+    this(lockManager, writeConfig.isLockRequired(), TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig()));
   }
 
   public TransactionManager(LockManager lockManager, boolean isLockRequired, TimeGenerator timeGenerator) {
@@ -63,11 +62,11 @@ public class TransactionManager implements Serializable, AutoCloseable {
     this.timeGenerator = timeGenerator;
   }
 
-  public String createCompletionInstant() {
+  public String generateInstantTime() {
     if (!hasLock && isLockRequired) {
-      throw new HoodieLockException("Cannot create completion instant without acquiring a lock first.");
+      throw new HoodieLockException("Cannot create instant without acquiring a lock first.");
     }
-    return TimelineUtils.generateInstantTime(false, timeGenerator);
+    return HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L);
   }
 
   /**
@@ -120,7 +119,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
     if (requiresLock && isLockRequired()) {
       acquireLock();
     }
-    String requestedInstant = providedInstantTime.orElseGet(() -> TimelineUtils.generateInstantTime(false, timeGenerator));
+    String requestedInstant = providedInstantTime.orElseGet(() -> HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L));
     try {
       if (lastCompletedActionInstant.isEmpty()) {
         LOG.info("State change starting for {}", changeActionInstant);
