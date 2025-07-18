@@ -225,7 +225,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       writeTableMetadata(metadata, inflightInstant.requestedTime());
       TableFormatCompletionAction formatCompletionAction = completedInstant -> table.getMetaClient().getTableFormat()
           .clean(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
-      HoodieInstant completedInstant = table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant, Option.of(metadata), txnManager.createCompletionInstant());
+      HoodieInstant completedInstant = table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant, Option.of(metadata), txnManager.generateInstantTime());
       // FIXME-vc: this is an one off..
       formatCompletionAction.execute(completedInstant);
       LOG.info("Marked clean started on {} as complete", inflightInstant.requestedTime());
