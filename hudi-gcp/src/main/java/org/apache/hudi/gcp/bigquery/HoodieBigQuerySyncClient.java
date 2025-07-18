@@ -49,12 +49,12 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID;
 
 public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
@@ -62,6 +62,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
   protected final BigQuerySyncConfig config;
   private final String projectId;
+  private final String billingProjectId;
   private final String datasetName;
   private transient BigQuery bigquery;
 
@@ -69,6 +70,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     super(config);
     this.config = config;
     this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.billingProjectId = config.getString(BIGQUERY_SYNC_BILLING_PROJECT_ID);
     this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
     this.createBigQueryConnection();
   }
@@ -78,6 +80,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     super(config);
     this.config = config;
     this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
+    this.billingProjectId = config.getStringOrDefault(BIGQUERY_SYNC_BILLING_PROJECT_ID, this.projectId);
     this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
     this.bigquery = bigquery;
   }
@@ -118,7 +121,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(query)
           .setUseLegacySql(false)
           .build();
-      JobId jobId = JobId.of(UUID.randomUUID().toString());
+      JobId jobId = JobId.newBuilder().setProject(billingProjectId).setRandomJob().build();
       Job queryJob = bigquery.create(JobInfo.newBuilder(queryConfig).setJobId(jobId).build());
 
       queryJob = queryJob.waitFor();

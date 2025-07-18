@@ -50,6 +50,7 @@ public class TestHoodieFileGroup {
       fileGroup.addBaseFile(baseFile);
     }
     assertEquals(2, fileGroup.getAllFileSlices().count());
+    assertEquals(2, fileGroup.getAllFileSlicesBeforeOn("002").count());
     assertTrue(!fileGroup.getAllFileSlices().anyMatch(s -> s.getBaseInstantTime().equals("002")));
     assertEquals(3, fileGroup.getAllFileSlicesIncludingInflight().count());
     assertTrue(fileGroup.getLatestFileSlice().get().getBaseInstantTime().equals("001"));
