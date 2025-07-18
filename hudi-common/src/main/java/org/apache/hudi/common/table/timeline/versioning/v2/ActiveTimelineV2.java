@@ -519,8 +519,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     transitionPendingState(fromInstant, toInstant, metadata, false);
   }
 
-  protected <T> HoodieInstant transitionStateToComplete(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata,
-                                               String completionTime) {
+  protected <T> HoodieInstant transitionStateToComplete(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata, String completionTime) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     String fromInstantFileName = instantFileNameGenerator.getFileName(fromInstant);
     try {
@@ -543,7 +542,8 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
         // Ensures old state exists in timeline
         ValidationUtils.checkArgument(
             metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)),
-            "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
+            () -> "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
+        createCompleteFileInMetaPath(toInstant, metadata, completionTime);
         return new HoodieInstant(toInstant.getState(), toInstant.getAction(), toInstant.requestedTime(), completionTime, instantComparator.requestedTimeOrderedComparator());
       }
     } catch (IOException e) {

@@ -190,7 +190,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
       // Ensure layout version passed in config is not lower than the one seen in hoodie.properties
       checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
-          "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
+          () -> "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
               + ") than the one passed in config (" + layoutVersion.get() + ")");
     } else if (layoutVersion.isEmpty() && tableConfigVersion.isEmpty()) {
       throw new TableNotFoundException("Table does not exist");
@@ -201,9 +201,9 @@ public class HoodieTableMetaClient implements Serializable {
     this.timelinePath = timelineLayout.getTimelinePathProvider().getTimelinePath(tableConfig, this.basePath);
     this.timelineHistoryPath = timelineLayout.getTimelinePathProvider().getTimelineHistoryPath(tableConfig, this.basePath);
     this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
-    LOG.info("Finished Loading Table of type " + tableType + "(version=" + timelineLayoutVersion + ") from " + basePath);
+    LOG.info("Finished Loading Table of type {} (version={}) from {}", tableType, timelineLayoutVersion, basePath);
     if (loadActiveTimelineOnLoad) {
-      LOG.info("Loading Active commit timeline for " + basePath);
+      LOG.info("Loading Active commit timeline for {}", basePath);
       getActiveTimeline();
     }
   }
