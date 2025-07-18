@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -44,6 +45,8 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -213,5 +216,36 @@ public class UpgradeDowngradeUtils {
     } catch (Exception e) {
       throw new HoodieException(e);
     }
+  }
+
+  // If the metadata table is enabled for the data table, and
+  // existing metadata table is behind the data table, then delete it.
+  public static void checkAndHandleMetadataTable(HoodieEngineContext context,
+                                                 HoodieTable table,
+                                                 HoodieWriteConfig config,
+                                                 HoodieTableMetaClient metaClient) {
+    if (!table.isMetadataTable()
+        && config.isMetadataTableEnabled()
+        && isMetadataTableBehindDataTable(config, metaClient)) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+    }
+  }
+
+  public static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config,
+                                                       HoodieTableMetaClient metaClient) {
+    // if metadata table does not exist, then it is not behind
+    if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
+      return false;
+    }
+    // get last commit instant in data table and metadata table
+    HoodieInstant lastCommitInstantInDataTable = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance())
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()))
+        .build();
+    HoodieInstant lastCommitInstantInMetadataTable = metadataTableMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    // if last commit instant in data table is greater than the last commit instant in metadata table, then metadata table is behind
+    return lastCommitInstantInDataTable != null && lastCommitInstantInMetadataTable != null
+        && InstantComparison.compareTimestamps(lastCommitInstantInMetadataTable.requestedTime(), InstantComparison.LESSER_THAN, lastCommitInstantInDataTable.requestedTime());
   }
 }
