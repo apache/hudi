@@ -18,12 +18,14 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -39,18 +41,18 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
-import org.apache.hudi.metadata.HoodieMetadataLogRecordReader;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
@@ -67,6 +69,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -472,19 +475,13 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     }
 
     // Verify the log files honor the key deduplication and virtual keys config
-    List<HoodieLogFile> logFiles = fileSlices.get(0).getLogFiles().map(logFile -> {
-      return logFile;
-    }).collect(Collectors.toList());
-
-    List<String> logFilePaths = logFiles.stream().map(logFile -> {
-      return logFile.getPath().toString();
-    }).collect(Collectors.toList());
+    List<HoodieLogFile> logFiles = fileSlices.get(0).getLogFiles().collect(Collectors.toList());
 
     // Verify the on-disk raw records before they get materialized
     verifyMetadataRawRecords(table, logFiles);
 
     // Verify the in-memory materialized and merged records
-    verifyMetadataMergedRecords(metadataMetaClient, logFilePaths, latestCommitTimestamp);
+    verifyMetadataMergedRecords(metadataMetaClient, logFiles, latestCommitTimestamp);
   }
 
   /**
@@ -534,27 +531,31 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    * payload fully materialized.
    *
    * @param metadataMetaClient    - Metadata table meta client
-   * @param logFilePaths          - Metadata table log file paths
+   * @param logFiles              - Metadata table log files
    * @param latestCommitTimestamp - Latest commit timestamp
    */
-  private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<String> logFilePaths, String latestCommitTimestamp) {
+  private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<HoodieLogFile> logFiles, String latestCommitTimestamp) {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-    HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder()
-        .withStorage(metadataMetaClient.getStorage())
-        .withBasePath(metadataMetaClient.getBasePath())
-        .withLogFilePaths(logFilePaths)
-        .withLatestInstantTime(latestCommitTimestamp)
-        .withPartition(FILES.getPartitionPath())
-        .withReaderSchema(schema)
-        .withMaxMemorySizeInBytes(100000L)
-        .withBufferSize(4096)
-        .withSpillableMapBasePath(tempDir.toString())
-        .withDiskMapType(ExternalSpillableMap.DiskMapType.BITCASK)
+    HoodieAvroReaderContext readerContext = new HoodieAvroReaderContext(metadataMetaClient.getStorageConf(), metadataMetaClient.getTableConfig(), Option.empty(), Option.empty());
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metadataMetaClient)
+        .withLogFiles(logFiles.stream())
+        .withBaseFileOption(Option.empty())
+        .withPartitionPath(FILES.getPartitionPath())
+        .withLatestCommitTime(latestCommitTimestamp)
+        .withRequestedSchema(schema)
+        .withDataSchema(schema)
+        .withProps(new TypedProperties())
         .build();
 
-    for (HoodieRecord<?> entry : logRecordReader.getRecords()) {
-      assertFalse(entry.getRecordKey().isEmpty());
-      assertEquals(entry.getKey().getRecordKey(), entry.getRecordKey());
+    try (ClosableIterator<HoodieRecord<IndexedRecord>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
+      iter.forEachRemaining(entry -> {
+        assertFalse(entry.getRecordKey().isEmpty());
+        assertEquals(entry.getKey().getRecordKey(), entry.getRecordKey());
+      });
+    } catch (IOException ex) {
+      throw new UncheckedIOException(ex);
     }
   }
 

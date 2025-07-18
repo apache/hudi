@@ -709,11 +709,6 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
                                    Option<Schema> writerSchemaOpt, String latestCommitTimestamp) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       // read log file records without merging
-      FileSlice fileSlice = new FileSlice(partition, baseInstantTime, fileId);
-      logFilePaths.forEach(logFilePath -> {
-        HoodieLogFile logFile = new HoodieLogFile(logFilePath);
-        fileSlice.addLogFile(logFile);
-      });
       TypedProperties properties = new TypedProperties();
       // configure un-merged log file reader
       HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient).getContext();
@@ -722,7 +717,9 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           .withDataSchema(writerSchemaOpt.get())
           .withRequestedSchema(writerSchemaOpt.get())
           .withEmitDelete(true)
-          .withFileSlice(fileSlice)
+          .withPartitionPath(partition)
+          .withLogFiles(logFilePaths.stream().map(HoodieLogFile::new))
+          .withBaseFileOption(Option.empty())
           .withLatestCommitTime(latestCommitTimestamp)
           .withHoodieTableMetaClient(datasetMetaClient)
           .withProps(properties)
