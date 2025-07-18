@@ -73,7 +73,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param instant Instant to be saved.
    * @param metadata metadata to write into the instant file
    * @param completionTime the completion time for the instant.
-   * @param <T>
+   * @param <T> type of the metadata persisted to the timeline
    */
   <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime);
 
@@ -84,7 +84,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param metadata metadata to write into the instant file
    * @param completionTime the completion time for the instant.
    * @param tableFormatCompletionAction functional interface to perform table format specific completion actions.
-   * @param <T>
+   * @param <T> type of the metadata persisted to the timeline
    */
   <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime, TableFormatCompletionAction tableFormatCompletionAction);
 
@@ -203,8 +203,9 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Log Compaction State from inflight to Committed.
    *
-   * @param inflightInstant Inflight instant
-   * @param metadata        metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the log-compaction
    * @return commit instant
    */
   HoodieInstant transitionLogCompactionInflightToComplete(HoodieInstant inflightInstant, HoodieCommitMetadata metadata, String completionInstant);
@@ -216,8 +217,9 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Clean State from inflight to Committed.
    *
-   * @param inflightInstant Inflight instant
-   * @param metadata        metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the clean
    * @return commit instant
    */
   HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, String completionInstant);
@@ -236,8 +238,9 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition Rollback State from inflight to Committed.
    *
-   * @param inflightInstant Inflight instant
-   * @param metadata        metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the rollback
    * @return commit instant
    */
   HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, String completionInstant);
@@ -282,8 +285,9 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition replace inflight to Committed.
    *
-   * @param inflightInstant Inflight instant
-   * @param metadata        metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the replace commit
    * @return commit instant
    */
   HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant);
@@ -294,8 +298,9 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Transition cluster inflight to replace committed.
    *
-   * @param inflightInstant Inflight instant
-   * @param metadata        metadata to write into the instant file
+   * @param inflightInstant   Inflight instant
+   * @param metadata          metadata to write into the instant file
+   * @param completionInstant the completion time for the clustering
    * @return commit instant
    */
   HoodieInstant transitionClusterInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant);

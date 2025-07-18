@@ -141,14 +141,16 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
       table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
     });
-    LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + savepointToRestoreTimestamp);
+    LOG.info("Commits {} rollback is complete. Restored table to {}", instantsRolledBack, savepointToRestoreTimestamp);
     return restoreMetadata;
   }
 
   /**
    * Update metadata table if available. Any update to metadata table happens within data table lock.
+   * After metadata table is updated, the data table commit is marked as complete.
    *
    * @param restoreMetadata instance of {@link HoodieRestoreMetadata} to be applied to metadata.
+   * @param restoreInflightInstant the inflight instant to be saved as complete.
    */
   private void writeToMetadataAndCompleteCommit(HoodieRestoreMetadata restoreMetadata, HoodieInstant restoreInflightInstant) {
     try {
