@@ -141,7 +141,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(getConfig());) {
       HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
-      String compactionInstantTime = writeClient.createNewInstantTime();
+      String compactionInstantTime = WriteClientTestUtils.createNewInstantTime();
       assertThrows(HoodieNotSupportedException.class, () -> {
         table.scheduleCompaction(context, compactionInstantTime, Option.empty());
         table.compact(context, compactionInstantTime);
@@ -165,7 +165,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
-      String compactionInstantTime = writeClient.createNewInstantTime();
+      String compactionInstantTime = WriteClientTestUtils.createNewInstantTime();
       Option<HoodieCompactionPlan> plan = table.scheduleCompaction(context, compactionInstantTime, Option.empty());
       assertFalse(plan.isPresent(), "If there is nothing to compact, result will be empty");
 
@@ -269,8 +269,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         .build();
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
-      String newCommitTime = writeClient.createNewInstantTime();
-      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+      String newCommitTime = writeClient.startCommit();
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
@@ -279,12 +278,12 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // trigger 2 updates following with compaction
       for (int i = 1; i < 5; i += 2) {
         // Update all the 100 records
-        newCommitTime = writeClient.createNewInstantTime();
+        newCommitTime = WriteClientTestUtils.createNewInstantTime();
         updateRecords(config, newCommitTime, records);
 
         assertLogFilesNumEqualsTo(config, 1);
 
-        HoodieWriteMetadata result = compact(writeClient, writeClient.createNewInstantTime());
+        HoodieWriteMetadata result = compact(writeClient, WriteClientTestUtils.createNewInstantTime());
         verifyCompaction(result, 100L);
 
         // Verify compaction.requested, compaction.completed metrics counts.
@@ -322,15 +321,14 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         .withCompactionConfig(builder.build())
         .withMetricsConfig(getMetricsConfig()).build();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
-      String newCommitTime = writeClient.createNewInstantTime();
-      WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+      String newCommitTime = writeClient.startCommit();
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
       // update 1 time
-      newCommitTime = writeClient.createNewInstantTime();
+      newCommitTime = WriteClientTestUtils.createNewInstantTime();
       updateRecords(config, newCommitTime, records);
       assertLogFilesNumEqualsTo(config, 1);
 
@@ -375,7 +373,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
       prepareRecords(writeClient, config, partitions);
       prepareRecords(writeClient, config, partitions);
-      compact(writeClient, writeClient.createNewInstantTime());
+      compact(writeClient, WriteClientTestUtils.createNewInstantTime());
       HoodieCompactionPlan compactionPlan1 = getLatestCompactionPlan();
 
       List<String> affectedPartitions = compactionPlan1.getOperations().stream()
@@ -390,7 +388,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config2)) {
       prepareRecords(writeClient, config2, partitions2);
       prepareRecords(writeClient, config2, partitions2);
-      compact(writeClient, writeClient.createNewInstantTime());
+      compact(writeClient, WriteClientTestUtils.createNewInstantTime());
       HoodieCompactionPlan compactionPlan2 = getLatestCompactionPlan();
       List<String> affectedPartitions2 = compactionPlan2.getOperations().stream()
           .map(HoodieCompactionOperation::getPartitionPath).collect(Collectors.toList());
@@ -406,8 +404,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
   private void prepareRecords(SparkRDDWriteClient writeClient, HoodieWriteConfig config, String[] partitions) throws Exception {
     initTestDataGenerator(partitions);
-    String newCommitTime = writeClient.createNewInstantTime();
-    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+    String newCommitTime = writeClient.startCommit();
 
     // insert
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
@@ -415,7 +412,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
     writeClient.commit(newCommitTime, writeClient.insert(recordsRDD, newCommitTime));
 
     // update
-    newCommitTime = writeClient.createNewInstantTime();
+    newCommitTime = WriteClientTestUtils.createNewInstantTime();
     updateRecords(config, newCommitTime, records);
   }
 

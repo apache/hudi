@@ -114,7 +114,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
       engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
       HoodieCommonConfig.newBuilder.build,
-      (mc: HoodieTableMetaClient) => HoodieTableMetadata.create(engineContext, mc.getStorage, metadataConfig, basePath))
+      (mc: HoodieTableMetaClient) => metaClient.getTableFormat.getMetadataFactory.create(engineContext, mc.getStorage, metadataConfig, basePath))
     val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
     val orcFiles = fsView.getAllBaseFiles(DEFAULT_SECOND_PARTITION_PATH).filter(bf => bf.getFileName.endsWith("orc"))
     assertTrue(orcFiles.count() > 0)

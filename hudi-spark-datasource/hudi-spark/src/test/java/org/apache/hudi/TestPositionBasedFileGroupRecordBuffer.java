@@ -154,6 +154,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         ctx,
         metaClient,
         mergeMode,
+        metaClient.getTableConfig().getPartialUpdateMode(),
         baseFileInstantTime,
         props,
         readStats,

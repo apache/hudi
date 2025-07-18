@@ -50,13 +50,13 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withProperties(props).build();
     initMetaClient(getTableType(), props);
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      String firstInstant = client.createNewInstantTime();
+      String firstInstant = WriteClientTestUtils.createNewInstantTime();
       List<HoodieRecord> recordList = dataGen.generateInserts(firstInstant, 100);
       writeData(client, firstInstant, recordList);
-      String secondInstant = client.createNewInstantTime();
+      String secondInstant = WriteClientTestUtils.createNewInstantTime();
       writeData(client, secondInstant, dataGen.generateUpdates(secondInstant, 20));
       // Delete all records.
-      writeData(client, client.createNewInstantTime(), dataGen.generateDeletesFromExistingRecords(recordList));
+      writeData(client, WriteClientTestUtils.createNewInstantTime(), dataGen.generateDeletesFromExistingRecords(recordList));
       String clusteringInstantTime = (String) client.scheduleClustering(Option.empty()).get();
       client.cluster(clusteringInstantTime);
       metaClient.reloadActiveTimeline();

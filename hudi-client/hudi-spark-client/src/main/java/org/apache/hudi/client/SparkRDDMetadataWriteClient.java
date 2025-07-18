@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -66,11 +65,6 @@ public class SparkRDDMetadataWriteClient<T> extends SparkRDDWriteClient<T> {
   public SparkRDDMetadataWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                                      Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-  }
-
-  @Override
-  public String createNewInstantTime() {
-    return TimelineUtils.generateInstantTime(false, timeGenerator);
   }
 
   @Override

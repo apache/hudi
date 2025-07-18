@@ -28,7 +28,13 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.util.CommonClientUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.stream.Stream;
+
+import static org.apache.hudi.util.CommonClientUtils.isValidTableVersionWriteVersionPair;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -70,5 +76,49 @@ public class TestCommonClientUtils {
 
     // when:
     assertEquals("0-0-0", CommonClientUtils.generateWriteToken(taskContextSupplier));
+  }
+
+  @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")
+  @MethodSource("provideValidTableVersionWriteVersionPairs")
+  public void testValidTableVersionWriteVersionPairs(
+      HoodieTableVersion tableVersion, HoodieTableVersion writeVersion, boolean expectedResult) throws Exception {
+    boolean result = isValidTableVersionWriteVersionPair(tableVersion, writeVersion);
+    assertEquals(expectedResult, result);
+  }
+
+  private static Stream<Arguments> provideValidTableVersionWriteVersionPairs() {
+    return Stream.concat(
+        Stream.concat(
+            // Rule 1: writer > table version - always allowed
+            generateWriterGreaterThanTableCases(),
+            // Rule 2: same versions - always allowed  
+            generateSameVersionCases()
+        ),
+        Stream.of(
+            // Rule 3: special case - upgrade scenario (table > 6, table < 9, writer = 6)
+            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true),
+            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, true),
+
+            // Rule 4: otherwise disallowed - table > writer (except special case above)
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, false),
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, false),
+            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SEVEN, false)
+        )
+    );
+  }
+
+  private static Stream<Arguments> generateWriterGreaterThanTableCases() {
+    HoodieTableVersion[] allVersions = HoodieTableVersion.values();
+    return Stream.of(allVersions)
+        .flatMap(tableVersion -> 
+            Stream.of(allVersions)
+                .filter(writeVersion -> writeVersion.greaterThan(tableVersion))
+                .map(writeVersion -> Arguments.of(tableVersion, writeVersion, true))
+        );
+  }
+
+  private static Stream<Arguments> generateSameVersionCases() {
+    return Stream.of(HoodieTableVersion.values())
+        .map(version -> Arguments.of(version, version, true));
   }
 }

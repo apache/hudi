@@ -236,6 +236,9 @@ public class HoodieTestUtils {
     if (properties.containsKey("hoodie.write.table.version")) {
       builder.setTableVersion(Integer.parseInt(properties.getProperty("hoodie.write.table.version")));
     }
+    if (properties.containsKey(HoodieTableConfig.TABLE_FORMAT.key())) {
+      builder.setTableFormat(properties.getProperty(HoodieTableConfig.TABLE_FORMAT.key()));
+    }
 
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")

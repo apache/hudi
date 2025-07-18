@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -135,6 +136,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected FileGroupRecordBuffer<T> recordBuffer;
   // Allows to consider inflight instants while merging log records
   protected boolean allowInflightInstants;
+  // table version for compatibility
+  private final HoodieTableVersion tableVersion;
 
   protected BaseHoodieLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient, HoodieStorage storage, List<String> logFilePaths,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
@@ -185,6 +188,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.recordBuffer = recordBuffer;
     // When the allowInflightInstants flag is enabled, records written by inflight instants are also read
     this.allowInflightInstants = allowInflightInstants;
+    this.tableVersion = tableConfig.getTableVersion();
   }
 
   /**
@@ -213,9 +217,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
     totalLogBlocks = new AtomicLong(0);
     totalLogRecords = new AtomicLong(0);
     HoodieLogFormatReader logFormatReaderWrapper = null;
-    HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
-    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
-    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(storage,
@@ -241,13 +242,16 @@ public abstract class BaseHoodieLogRecordReader<T> {
         }
         totalLogBlocks.incrementAndGet();
         if (logBlock.isDataOrDeleteBlock()) {
+          if (this.tableVersion.lesserThan(HoodieTableVersion.EIGHT) && !allowInflightInstants) {
+            HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
+            if (commitsTimeline.filterInflights().containsInstant(instantTime)
+                || !commitsTimeline.filterCompletedInstants().containsOrBeforeTimelineStarts(instantTime)) {
+              // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+              continue;
+            }
+          }
           if (compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), GREATER_THAN, this.latestInstantTime)) {
             // Skip processing a data or delete block with the instant time greater than the latest instant time used by this log record reader
-            continue;
-          }
-          if (!allowInflightInstants
-              && (inflightInstantsTimeline.containsInstant(instantTime) || !completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime))) {
-            // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
             continue;
           }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
@@ -505,9 +509,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
     totalLogBlocks = new AtomicLong(0);
     totalLogRecords = new AtomicLong(0);
     HoodieLogFormatReader logFormatReaderWrapper = null;
-    HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
-    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
-    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(storage,
@@ -578,10 +579,13 @@ public abstract class BaseHoodieLogRecordReader<T> {
           continue;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
-          if (!allowInflightInstants
-              && (inflightInstantsTimeline.containsInstant(instantTime)) || !completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)) {
-            // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
-            continue;
+          if (this.tableVersion.lesserThan(HoodieTableVersion.EIGHT) && !allowInflightInstants) {
+            HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
+            if (commitsTimeline.filterInflights().containsInstant(instantTime)
+                || !commitsTimeline.filterCompletedInstants().containsOrBeforeTimelineStarts(instantTime)) {
+              // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+              continue;
+            }
           }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range

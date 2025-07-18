@@ -297,7 +297,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     // If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
     if (config.isMetadataTableEnabled() && table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), table.getStorage(), config.getMetadataConfig(), config.getBasePath())) {
+      try (HoodieTableMetadata tableMetadata = table.refreshAndGetTableMetadata()) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");
@@ -397,10 +397,10 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       // Therefore, the concurrency of deleting completed instants is temporarily disabled,
       // and instants are deleted in ascending order to prevent the occurrence of such holes.
       // See HUDI-7207 and #10325.
-      completedInstants.stream()
-          .forEach(instant -> activeTimeline.deleteInstantFileIfExists(instant));
+      completedInstants.stream().forEach(activeTimeline::deleteInstantFileIfExists);
     }
-
+    // Call Table Format archive to allow archiving in table format.
+    table.getMetaClient().getTableFormat().archive(() -> archivedInstants, table.getContext(), table.getMetaClient(), table.getViewManager());
     return true;
   }
 

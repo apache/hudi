@@ -160,7 +160,7 @@ public class IncrementalQueryAnalyzer {
    * @return An incremental query context including the instant time range info.
    */
   public QueryContext analyze() {
-    try (CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(this.metaClient)) {
+    try (CompletionTimeQueryView completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(this.metaClient)) {
       if (completionTimeQueryView.isEmptyTable()) {
         // no dataset committed in the table
         return QueryContext.EMPTY;

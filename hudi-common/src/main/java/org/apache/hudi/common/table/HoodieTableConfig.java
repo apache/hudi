@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.HoodieTableFormat;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -72,6 +74,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -114,6 +117,8 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
+  public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
+  public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -198,7 +203,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
-  
+
+  public static final ConfigProperty<String> TABLE_FORMAT = ConfigProperty
+      .key("hoodie.table.format")
+      .defaultValue(NativeTableFormat.TABLE_FORMAT)
+      .withDocumentation("Table format name used when writing to the table.");
+
   public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
       .defaultValue((RecordMergeMode) null,
@@ -303,6 +313,22 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
+
+  public static final ConfigProperty<PartialUpdateMode> PARTIAL_UPDATE_MODE = ConfigProperty
+      .key("hoodie.table.partial.update.mode")
+      .defaultValue(PartialUpdateMode.NONE)
+      .sinceVersion("1.1.0")
+      .withDocumentation("This property when set, will define how two versions of the record will be "
+          + "merged together where the later contains only partial set of values and not entire record.");
+
+  public static final ConfigProperty<String> MERGE_PROPERTIES = ConfigProperty
+      .key("hoodie.table.merge.properties")
+      .noDefaultValue()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'. "
+          + "Each (Ki, Vi) pair represents a property used during merge scenarios. "
+          + "Some merge mode might need some writer properties that are required for readers to function as expected. "
+          + "Hudi stores those properties here so readers can set them while reading.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -448,7 +474,7 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       if (needStore) {
         try (OutputStream outputStream = storage.create(propertyPath)) {
-          storeProperties(props, outputStream);
+          storeProperties(props, outputStream, propertyPath);
         }
       }
     } catch (IOException e) {
@@ -467,10 +493,11 @@ public class HoodieTableConfig extends HoodieConfig {
    *
    * @param props        - properties to be written
    * @param outputStream - output stream to which properties will be written
+   * @param propertyPath - Path of the file where properties would be stored
    * @return return the table checksum
    * @throws IOException
    */
-  private static String storeProperties(Properties props, OutputStream outputStream) throws IOException {
+  private static String storeProperties(Properties props, OutputStream outputStream, StoragePath propertyPath) throws IOException {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
@@ -481,6 +508,7 @@ public class HoodieTableConfig extends HoodieConfig {
       checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
       props.setProperty(TABLE_CHECKSUM.key(), checksum);
     }
+    LOG.info("Created properties file at " + propertyPath);
     return checksum;
   }
 
@@ -513,17 +541,17 @@ public class HoodieTableConfig extends HoodieConfig {
 
       // 2. backup the existing properties.
       try (OutputStream out = storage.create(backupCfgPath, false)) {
-        storeProperties(props, out);
+        storeProperties(props, out, backupCfgPath);
       }
 
       // 3. delete the properties file, reads will go to the backup, until we are done.
-      storage.deleteFile(cfgPath);
+      deleteFile(storage, cfgPath);
 
       // 4. Upsert and save back.
       String checksum;
       try (OutputStream out = storage.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
-        checksum = storeProperties(props, out);
+        checksum = storeProperties(props, out, cfgPath);
       }
 
       // 4. verify and remove backup.
@@ -533,16 +561,21 @@ public class HoodieTableConfig extends HoodieConfig {
         if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
           // subsequent writes will recover and update, reads will go to the backup until then
-          storage.deleteFile(cfgPath);
+          deleteFile(storage, cfgPath);
           throw new HoodieIOException("Checksum property missing or does not match.");
         }
       }
 
       // 5. delete the backup properties file
-      storage.deleteFile(backupCfgPath);
+      deleteFile(storage, backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
     }
+  }
+
+  private static void deleteFile(HoodieStorage storage, StoragePath cfgPath) throws IOException {
+    storage.deleteFile(cfgPath);
+    LOG.info("Deleted properties file at " + cfgPath);
   }
 
   /**
@@ -598,7 +631,7 @@ public class HoodieTableConfig extends HoodieConfig {
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
       dropInvalidConfigs(hoodieConfig);
-      storeProperties(hoodieConfig.getProps(), outputStream);
+      storeProperties(hoodieConfig.getProps(), outputStream, propertyPath);
     }
   }
 
@@ -718,6 +751,20 @@ public class HoodieTableConfig extends HoodieConfig {
     return contains(TIMELINE_LAYOUT_VERSION)
         ? Option.of(new TimelineLayoutVersion(getInt(TIMELINE_LAYOUT_VERSION)))
         : Option.empty();
+  }
+
+  public HoodieTableFormat getTableFormat(TimelineLayoutVersion layoutVersion) {
+    String tableFormat = getStringOrDefault(TABLE_FORMAT);
+    if (!tableFormat.equals(NativeTableFormat.TABLE_FORMAT)) {
+      ServiceLoader<HoodieTableFormat> loader = ServiceLoader.load(HoodieTableFormat.class);
+      for (HoodieTableFormat tableFormatImpl : loader) {
+        if (getString(TABLE_FORMAT).equals(tableFormatImpl.getName())) {
+          tableFormatImpl.init(props);
+          return tableFormatImpl;
+        }
+      }
+    }
+    return new NativeTableFormat(layoutVersion);
   }
 
   /**
@@ -853,6 +900,7 @@ public class HoodieTableConfig extends HoodieConfig {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
+
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
         || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
       // DefaultHoodieRecordPayload and EventTimeAvroPayload match with EVENT_TIME_ORDERING.
@@ -1047,6 +1095,15 @@ public class HoodieTableConfig extends HoodieConfig {
     return new HashSet<>(
         StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
             CONFIG_VALUES_DELIMITER));
+  }
+
+  public PartialUpdateMode getPartialUpdateMode() {
+    if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
+      return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
+    } else {
+      // For table version <= 8, partial update is not supported.
+      return PartialUpdateMode.NONE;
+    }
   }
 
   /**

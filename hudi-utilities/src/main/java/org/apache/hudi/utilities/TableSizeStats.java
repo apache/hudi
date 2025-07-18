@@ -278,7 +278,10 @@ public class TableSizeStats implements Serializable {
         .build();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
-    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
+    HoodieTableMetaClient metaClientLocal = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(storageConf.newInstance()).build();
+    HoodieTableMetadata tableMetadata = metaClientLocal.getTableFormat().getMetadataFactory().create(
         engineContext, new HoodieHadoopStorage(basePath, storageConf), metadataConfig, basePath);
 
     List<String> allPartitions = tableMetadata.getAllPartitionPaths();
@@ -313,9 +316,6 @@ public class TableSizeStats implements Serializable {
           || (endDate == null && (partitionDate.isEqual(startDate) || partitionDate.isAfter(startDate)))
           || (startDate == null && partitionDate.isBefore(endDate))
           || (startDate != null && endDate != null && ((partitionDate.isEqual(startDate) || partitionDate.isAfter(startDate)) && partitionDate.isBefore(endDate)))) {
-        HoodieTableMetaClient metaClientLocal = HoodieTableMetaClient.builder()
-            .setBasePath(basePath)
-            .setConf(storageConf.newInstance()).build();
         HoodieMetadataConfig metadataConfig1 = HoodieMetadataConfig.newBuilder()
             .enable(false)
             .build();

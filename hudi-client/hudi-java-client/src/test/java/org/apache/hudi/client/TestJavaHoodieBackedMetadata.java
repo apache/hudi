@@ -1948,7 +1948,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<WriteStatus> writeStatuses;
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true))) {
-      String[] commitTimestamps = {client.createNewInstantTime(), client.createNewInstantTime()};
+      String[] commitTimestamps = {WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime()};
 
       records = dataGen.generateInserts(commitTimestamps[0], 5);
       WriteClientTestUtils.startCommitWithTime(client, commitTimestamps[0]);
@@ -1976,8 +1976,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<WriteStatus> writeStatuses;
 
     try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, getWriteConfig(true, true))) {
-      String[] commitTimestamps = {client.createNewInstantTime(), client.createNewInstantTime(), client.createNewInstantTime(),
-          client.createNewInstantTime()};
+      String[] commitTimestamps = {WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime(),
+          WriteClientTestUtils.createNewInstantTime()};
 
       for (int i = 0; i < commitTimestamps.length; ++i) {
         records = dataGen.generateInserts(commitTimestamps[i], 5);
@@ -2837,7 +2837,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Metadata table has a fixed number of partitions
       // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
       // in the .hoodie folder.
-      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, storage, getMetadataTableBasePath(basePath), false);
+      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
       // check if the last instant is restore, then the metadata table should have only the partitions that are not deleted
       metaClient.reloadActiveTimeline().getReverseOrderedInstants().findFirst().ifPresent(instant -> {
         if (instant.getAction().equals(HoodieActiveTimeline.RESTORE_ACTION)) {

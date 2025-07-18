@@ -93,6 +93,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -780,7 +781,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       final String fileId = fileSlice.getFileId();
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
       Schema dataSchema = AvroSchemaCache.intern(HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
-      Schema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema() : dataSchema;
+      Schema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
+          : HoodieAvroUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
       HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
           .withReaderContext(readerContext)

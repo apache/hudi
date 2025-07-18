@@ -299,9 +299,11 @@ class HoodieSparkSqlWriterInternal {
           if (StringUtils.nonEmpty(hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)))
             hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
           else KeyGeneratorType.getKeyGeneratorClassName(hoodieConfig)
+        val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setTableVersion(tableVersion)
+          .setTableFormat(tableFormat)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
           .setBaseFileFormat(baseFileFormat)
@@ -326,6 +328,7 @@ class HoodieSparkSqlWriterInternal {
           .setRecordMergeStrategyId(recordMergeStrategyId)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setMultipleBaseFileFormatsEnabled(hoodieConfig.getBoolean(HoodieTableConfig.MULTIPLE_BASE_FILE_FORMATS_ENABLE))
+          .setTableFormat(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 
@@ -428,12 +431,13 @@ class HoodieSparkSqlWriterInternal {
             val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(hoodieConfig.getProps))
             val tableMetaClient = HoodieTableMetaClient.builder
               .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
-              .setBasePath(basePath.toString).build()
+              .setBasePath(basePath.toString)
+              .build()
             // Get list of partitions to delete
             val partitionsToDelete = if (parameters.contains(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
               java.util.Arrays.asList(resolvePartitionWildcards(java.util.Arrays.asList(partitionColsToDelete: _*).asScala.toList, jsc,
-                tableMetaClient.getStorage, hoodieConfig, basePath.toString): _*)
+                tableMetaClient.getStorage, hoodieConfig, basePath.toString, tableMetaClient): _*)
             } else {
               val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
@@ -597,13 +601,13 @@ class HoodieSparkSqlWriterInternal {
    * @return Pair of(boolean, table schema), where first entry will be true only if schema conversion is required.
    */
   private def resolvePartitionWildcards(partitions: List[String], jsc: JavaSparkContext,
-                                        storage: HoodieStorage, cfg: HoodieConfig, basePath: String): List[String] = {
+                                        storage: HoodieStorage, cfg: HoodieConfig, basePath: String, metaClient: HoodieTableMetaClient): List[String] = {
     //find out if any of the input partitions have wildcards
     //note:spark-sql may url-encode special characters (* -> %2A)
     var (wildcardPartitions, fullPartitions) = partitions.partition(partition => partition.matches(".*(\\*|%2A).*"))
 
     val allPartitions = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc): HoodieEngineContext,
-      storage, HoodieMetadataConfig.newBuilder().fromProperties(cfg.getProps).build(), basePath)
+      metaClient, HoodieMetadataConfig.newBuilder().fromProperties(cfg.getProps).build())
 
     if (fullPartitions.nonEmpty) {
       fullPartitions = fullPartitions.filter(partition => allPartitions.contains(partition))
@@ -756,12 +760,14 @@ class HoodieSparkSqlWriterInternal {
           HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
           String.valueOf(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue())
         ))
+        val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
 
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
           .setTableVersion(tableVersion)
+          .setTableFormat(tableFormat)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(payloadClass)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
