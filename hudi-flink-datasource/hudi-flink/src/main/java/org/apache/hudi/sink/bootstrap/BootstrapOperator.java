@@ -145,8 +145,8 @@ public class BootstrapOperator
     this.hadoopConf = HadoopConfigurations.getHadoopConf(this.conf);
     // not load fs view storage config for incremental job graph, since embedded timeline server
     // is started in write coordinator which is started after bootstrap.
-    boolean loadFsViewStorageConfig = !OptionsResolver.isIncrementalJobGraph(conf);
-    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, false, loadFsViewStorageConfig);
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(
+        this.conf, false, !OptionsResolver.isIncrementalJobGraph(conf));
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
     this.metaClient = StreamerUtil.createMetaClient(conf, hadoopConf);

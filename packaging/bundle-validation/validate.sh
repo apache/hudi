@@ -44,6 +44,8 @@ ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 ln -sf $JARS_DIR/hudi-cli-bundle*.jar $JARS_DIR/cli.jar
+# workaround for solving dependency conflict issues of Flink sql client (FLINK-33358)
+ln -sf $FLINK_HOME/opt/flink-sql-client*.jar $FLINK_HOME/lib/flink-sql-client.jar
 
 ##
 # Function to change Java runtime version by changing JAVA_HOME
