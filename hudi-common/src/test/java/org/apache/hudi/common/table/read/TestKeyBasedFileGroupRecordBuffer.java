@@ -253,8 +253,9 @@ class TestKeyBasedFileGroupRecordBuffer {
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
     TypedProperties props = new TypedProperties();
+    UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
     return new KeyBasedFileGroupRecordBuffer<>(
-        readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, readStats, orderingFieldName, false);
+        readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, readStats, orderingFieldName, updateProcessor);
   }
 
   private static List<IndexedRecord> getActualRecords(FileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer) throws IOException {

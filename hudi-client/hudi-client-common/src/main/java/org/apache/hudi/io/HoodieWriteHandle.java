@@ -332,7 +332,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     try {
       return record.toIndexedRecord(writerSchema, props).map(HoodieAvroIndexedRecord::getData);
     } catch (IOException e) {
-      LOG.error("Fail to get indexRecord from " + record, e);
+      LOG.error("Failed to convert to IndexedRecord", e);
       return Option.empty();
     }
   }
