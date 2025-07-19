@@ -1431,7 +1431,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
         finalFields.add(new Schema.Field(fieldPrefix + "Map", Schema.createMap(Schema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
       }
 
-      if (configs.arraySupport) {
+      if (configs.arraySupport && configs.anyArraySupport) {
         List<Schema.Field> arrayFields = new ArrayList<>(baseFields.size());
         addFieldsHelper(arrayFields, baseFields, fieldPrefix + "Array", !configs.supportBytesInArrayMap);
         finalFields.add(new Schema.Field(fieldPrefix + "Array", Schema.createArray(Schema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
