@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.adapter.TestHoodieCatalogs;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestTableEnvs;
 
@@ -191,8 +192,9 @@ public abstract class ITTestSchemaEvolutionBySQL {
         TableException.class,
         () -> tableEnv.executeSql(alterSql),
         "Should throw exception when the type update is not allowed ");
-    assertTrue(e.getCause() instanceof IllegalArgumentException);
-    assertTrue(e.getCause().getMessage().contains("cannot update origin type: string to a incompatibility type: int"));
+    assertTrue(e.getCause() instanceof SchemaCompatibilityException);
+    assertTrue(e.getCause().getMessage().contains("Cannot update column 'f_str' from type 'string' to incompatible type 'int'."),
+        e.getCause().getMessage());
   }
 
   @Test
