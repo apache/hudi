@@ -272,7 +272,7 @@ class TestKeyBasedFileGroupRecordBuffer {
     TypedProperties props = new TypedProperties();
     UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
     return new KeyBasedFileGroupRecordBuffer<>(
-        readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, readStats, orderingFieldName, updateProcessor);
+        readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, orderingFieldName, updateProcessor);
   }
 
   private static List<IndexedRecord> getActualRecords(FileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer) throws IOException {
