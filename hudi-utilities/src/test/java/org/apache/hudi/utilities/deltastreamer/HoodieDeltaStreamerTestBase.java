@@ -166,7 +166,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initTestServices(false, false, false);
+    UtilitiesTestBase.initTestServices(false, true, false);
     // basePath is defined in UtilitiesTestBase.initTestServices
     PARQUET_SOURCE_ROOT = basePath + "parquetFiles";
     ORC_SOURCE_ROOT = basePath + "orcFiles";
