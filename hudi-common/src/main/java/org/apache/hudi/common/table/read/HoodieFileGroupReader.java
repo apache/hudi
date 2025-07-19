@@ -574,7 +574,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-
     public HoodieFileGroupReader<T> build() {
       ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
       ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");

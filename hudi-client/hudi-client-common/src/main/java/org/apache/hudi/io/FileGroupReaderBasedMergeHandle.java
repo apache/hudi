@@ -120,10 +120,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    */
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                         TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile,
-                                         Option<BaseKeyGenerator> keyGeneratorOpt, HoodieReaderContext<T> readerContext,
-                                         String maxInstantTime, HoodieRecord.HoodieRecordType enginRecordType) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
+                                         TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
+                                         HoodieReaderContext<T> readerContext, String maxInstantTime,
+                                         HoodieRecord.HoodieRecordType enginRecordType) {
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.maxInstantTime = maxInstantTime;
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
