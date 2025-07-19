@@ -76,8 +76,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final HoodieReadStats readStats;
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
-  protected final boolean emitDelete;
   protected ClosableIterator<T> baseFileIterator;
+  protected UpdateProcessor<T> updateProcessor;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected T nextRecord;
   protected boolean enablePartialMerging = false;
@@ -93,8 +93,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   TypedProperties props,
                                   HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
-                                  boolean emitDelete) {
+                                  UpdateProcessor<T> updateProcessor) {
     this.readerContext = readerContext;
+    this.updateProcessor = updateProcessor;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateMode = partialUpdateMode;
@@ -122,7 +123,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     this.readStats = readStats;
-    this.emitDelete = emitDelete;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -219,8 +219,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
-    return records.values().iterator();
+  public ClosableIterator<BufferedRecord<T>> getLogRecordIterator() {
+    return new LogRecordIterator<>(this);
   }
 
   @Override
@@ -318,21 +318,8 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     if (logRecordInfo != null) {
       BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
       Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
-        // Updates
-        nextRecord = readerContext.seal(isDeleteAndRecord.getRight());
-        readStats.incrementNumUpdates();
-        return true;
-      } else if (emitDelete) {
-        // emit Deletes
-        nextRecord = readerContext.getDeleteRow(isDeleteAndRecord.getRight(), baseRecordInfo.getRecordKey());
-        readStats.incrementNumDeletes();
-        return nextRecord != null;
-      } else {
-        // not emit Deletes
-        readStats.incrementNumDeletes();
-        return false;
-      }
+      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, isDeleteAndRecord.getRight(), isDeleteAndRecord.getLeft());
+      return nextRecord != null;
     }
 
     // Inserts
@@ -352,18 +339,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
-      if (!nextRecordInfo.isDelete()) {
-        nextRecord = nextRecordInfo.getRecord();
-        readStats.incrementNumInserts();
+      nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo.getRecord(), nextRecordInfo.isDelete());
+      if (nextRecord != null) {
         return true;
-      } else if (emitDelete) {
-        nextRecord = readerContext.getDeleteRow(nextRecordInfo.getRecord(), nextRecordInfo.getRecordKey());
-        readStats.incrementNumDeletes();
-        if (nextRecord != null) {
-          return true;
-        }
-      } else {
-        readStats.incrementNumDeletes();
       }
     }
     return false;
@@ -393,5 +371,30 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
         ? DEFAULT_ORDERING_VALUE
         : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
+  }
+
+  private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
+    private final FileGroupRecordBuffer<T> fileGroupRecordBuffer;
+    private final Iterator<BufferedRecord<T>> logRecordIterator;
+
+    private LogRecordIterator(FileGroupRecordBuffer<T> fileGroupRecordBuffer) {
+      this.fileGroupRecordBuffer = fileGroupRecordBuffer;
+      this.logRecordIterator = fileGroupRecordBuffer.records.iterator();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return logRecordIterator.hasNext();
+    }
+
+    @Override
+    public BufferedRecord<T> next() {
+      return logRecordIterator.next();
+    }
+
+    @Override
+    public void close() {
+      fileGroupRecordBuffer.close();
+    }
   }
 }

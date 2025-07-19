@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -82,9 +83,11 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
 
 public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctionalTestHarness {
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF);
+  private final UpdateProcessor updateProcessor = mock(UpdateProcessor.class);
   private Schema avroSchema;
   private PositionBasedFileGroupRecordBuffer<InternalRow> buffer;
 
@@ -159,7 +162,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         props,
         readStats,
         Option.of("timestamp"),
-        false);
+        updateProcessor);
   }
 
   private void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> options) {
