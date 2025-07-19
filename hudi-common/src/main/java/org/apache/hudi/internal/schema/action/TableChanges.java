@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal.schema.action;
 
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
@@ -83,20 +84,21 @@ public class TableChanges {
      * @param name name of the column to update
      * @param newType new type for the column
      * @return this
-     * @throws IllegalArgumentException
+     * @throws SchemaCompatibilityException
      */
     public ColumnUpdateChange updateColumnType(String name, Type newType) {
       checkColModifyIsLegal(name);
       if (newType.isNestedType()) {
-        throw new IllegalArgumentException(String.format("only support update primitive type but find nest column: %s", name));
+        throw new SchemaCompatibilityException(String.format("Cannot update column '%s' to nested type '%s'.", name, newType));
       }
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
-        throw new IllegalArgumentException(String.format("cannot update a missing column: %s", name));
+        throw new SchemaCompatibilityException(String.format("Cannot update type for column '%s' because it does not exist in the schema", name));
       }
 
       if (!SchemaChangeUtils.isTypeUpdateAllow(field.type(), newType)) {
-        throw new IllegalArgumentException(String.format("cannot update origin type: %s to a incompatibility type: %s", field.type(), newType));
+        throw new SchemaCompatibilityException(String.format(
+            "Cannot update column '%s' from type '%s' to incompatible type '%s'.", name, field.type(), newType));
       }
 
       if (field.type().equals(newType)) {
@@ -119,13 +121,13 @@ public class TableChanges {
      * @param name name of the column to update
      * @param newDoc new documentation for the column
      * @return this
-     * @throws IllegalArgumentException
+     * @throws SchemaCompatibilityException
      */
     public ColumnUpdateChange updateColumnComment(String name, String newDoc) {
       checkColModifyIsLegal(name);
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
-        throw new IllegalArgumentException(String.format("cannot update a missing column: %s", name));
+        throw new SchemaCompatibilityException(String.format("Cannot update comment for column '%s' because it does not exist in the schema", name));
       }
       // consider null
       if (Objects.equals(field.doc(), newDoc)) {
@@ -148,19 +150,19 @@ public class TableChanges {
      * @param name name of the column to rename
      * @param newName new name for the column
      * @return this
-     * @throws IllegalArgumentException
+     * @throws SchemaCompatibilityException
      */
     public ColumnUpdateChange renameColumn(String name, String newName) {
       checkColModifyIsLegal(name);
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
-        throw new IllegalArgumentException(String.format("cannot update a missing column: %s", name));
+        throw new SchemaCompatibilityException(String.format("Cannot rename column '%s' because it does not exist in the schema", name));
       }
       if (newName == null || newName.isEmpty()) {
-        throw new IllegalArgumentException(String.format("cannot rename column: %s to empty", name));
+        throw new SchemaCompatibilityException(String.format("Cannot rename column '%s' to empty or null name. New name must be non-empty", name));
       }
       if (internalSchema.hasColumn(newName, caseSensitive)) {
-        throw new IllegalArgumentException(String.format("cannot rename column: %s to a existing name", name));
+        throw new SchemaCompatibilityException(String.format("Cannot rename column '%s' to '%s' because a column with name '%s' already exists in the schema", name, newName, newName));
       }
       // save update info
       Types.Field update = updates.get(field.fieldId());
@@ -179,7 +181,7 @@ public class TableChanges {
      * @param name name of the column to update
      * @param nullable nullable for updated name
      * @return this
-     * @throws IllegalArgumentException
+     * @throws SchemaCompatibilityException
      */
     public ColumnUpdateChange updateColumnNullability(String name, boolean nullable) {
       return updateColumnNullability(name, nullable, false);
@@ -189,14 +191,15 @@ public class TableChanges {
       checkColModifyIsLegal(name);
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
-        throw new IllegalArgumentException(String.format("cannot update a missing column: %s", name));
+        throw new SchemaCompatibilityException(String.format("Cannot update nullability for column '%s' because it does not exist in the schema", name));
       }
       if (field.isOptional() == nullable) {
         // do nothings
         return this;
       }
       if (field.isOptional() && !nullable && !force) {
-        throw new IllegalArgumentException("cannot update column Nullability: optional to required");
+        throw new SchemaCompatibilityException(String.format(
+            "Cannot change column '%s' from optional to required. This would break compatibility with existing data that may contain null values", name));
       }
       // save update info
       Types.Field update = updates.get(field.fieldId());
@@ -224,7 +227,7 @@ public class TableChanges {
       if (field != null) {
         return field.fieldId();
       } else {
-        throw new IllegalArgumentException(String.format("cannot find col id for given column fullName: %s", fullName));
+        throw new SchemaCompatibilityException(String.format("Cannot find column ID for column path '%s'. The column may not exist in the schema", fullName));
       }
     }
 
@@ -239,7 +242,7 @@ public class TableChanges {
 
   /** Deal with delete columns changes for table. */
   public static class ColumnDeleteChange extends TableChange.BaseColumnChange {
-    private final Set deletes = new HashSet<>();
+    private final Set<Integer> deletes = new HashSet<>();
 
     @Override
     public ColumnChangeID columnChangeId() {
@@ -268,7 +271,7 @@ public class TableChanges {
       checkColModifyIsLegal(name);
       Types.Field field = internalSchema.findField(name);
       if (field == null) {
-        throw new IllegalArgumentException(String.format("cannot delete missing columns: %s", name));
+        throw new SchemaCompatibilityException(String.format("Cannot delete column '%s' because it does not exist in the schema", name));
       }
       deletes.add(field.fieldId());
       return this;
@@ -335,25 +338,25 @@ public class TableChanges {
       if (!parent.isEmpty()) {
         Types.Field parentField = internalSchema.findField(parent);
         if (parentField == null) {
-          throw new HoodieSchemaException(String.format("cannot add column: %s which parent: %s is not exist", name, parent));
+          throw new HoodieSchemaException(String.format("Cannot add column '%s' because its parent column '%s' does not exist in the schema", name, parent));
         }
-        Type parentType = parentField.type();
         if (!(parentField.type() instanceof Types.RecordType)) {
-          throw new HoodieSchemaException("only support add nested columns to struct column");
+          throw new HoodieSchemaException(String.format(
+              "Cannot add nested column '%s' to parent '%s' of type '%s'. Nested columns can only be added to struct/record types", name, parent, parentField.type()));
         }
         parentId = parentField.fieldId();
         Types.Field newParentField = internalSchema.findField(parent + "."  + name);
         if (newParentField != null) {
-          throw new HoodieSchemaException(String.format("cannot add column: %s which already exist", name));
+          throw new HoodieSchemaException(String.format("Cannot add column '%s' to parent '%s' because the column already exists at path '%s'", name, parent, parent + "." + name));
         }
         fullName = parent + "." + name;
       } else {
         if (internalSchema.hasColumn(name, caseSensitive)) {
-          throw new HoodieSchemaException(String.format("cannot add column: %s which already exist", name));
+          throw new HoodieSchemaException(String.format("Cannot add column '%s' because it already exists in the schema", name));
         }
       }
       if (fullColName2Id.containsKey(fullName)) {
-        throw new HoodieSchemaException(String.format("cannot repeat add column: %s", name));
+        throw new HoodieSchemaException(String.format("Cannot add column '%s' multiple times. Column at path '%s' has already been added in this change set", name, fullName));
       }
       fullColName2Id.put(fullName, nextId);
       if (parentId != -1) {
