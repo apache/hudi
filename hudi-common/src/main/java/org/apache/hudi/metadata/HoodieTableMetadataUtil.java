@@ -1816,6 +1816,9 @@ public class HoodieTableMetadataUtil {
             || schema.getLogicalType() == LogicalTypes.timestampMillis()) {
           // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
           //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
+          if (schema.getLogicalType() == LogicalTypes.timestampMillis() && val instanceof Long) {
+            return ((Long) val) * 1000;
+          }
           return (Comparable<?>) val;
         }
         return castToLong(val);

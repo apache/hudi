@@ -670,6 +670,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testTimestampMillis() throws Exception {
+    if (zookeeperTestService != null) {
+      zookeeperTestService.stop();
+      zookeeperTestService = null;
+    }
     String tableBasePath = basePath + "/testTimestampMillis";
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
     // Insert data produced with Schema A, pass Schema A
@@ -680,6 +684,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
     cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source-timestamp-millis.avsc");
     cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
+
 
     new HoodieDeltaStreamer(cfg, jsc).sync();
     assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
@@ -689,11 +695,27 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         HoodieTestUtils.createMetaClient(storage, tableBasePath));
     Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
-    sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).createOrReplaceTempView("my_table");
-    // directly comparing with date resulted with count of 0. Seems like there might be a bug.
-    //eg sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count()
-    // returns 0
-    assertEquals(1000, sqlContext.sql("SELECT Year(current_ts) as year FROM my_table").filter("year > 1980").count());
+    assertEquals(1000, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
+
+    cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
+        PROPS_FILENAME_TEST_SOURCE, false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
+
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertRecordCount(1450, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+    tableSchemaResolver = new TableSchemaResolver(
+        HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+    assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
+    sqlContext.clearCache();
+    assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
   }
 
   private static Stream<Arguments> continuousModeArgs() {

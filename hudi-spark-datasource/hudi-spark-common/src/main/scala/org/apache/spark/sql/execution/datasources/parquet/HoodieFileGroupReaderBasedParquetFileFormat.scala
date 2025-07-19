@@ -32,6 +32,7 @@ import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
@@ -48,6 +49,7 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
+import java.util.Collections
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
@@ -70,7 +72,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                                                   isMOR: Boolean,
                                                   isBootstrap: Boolean,
                                                   isIncremental: Boolean,
-                                                  isCDC: Boolean,
+                                                  avroTableSchema: Schema,
                                                   validCommits: String,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
@@ -150,9 +152,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val fixedPartitionIndexes = fixedPartitionIndexesArr.toSet
 
     // schema that we want fg reader to output to us
+    val exclusionFields = Collections.singleton("op")
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
-    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
-    val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
+    val requestedAvroSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), exclusionFields)
+    val dataAvroSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), exclusionFields)
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult,
       spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))

@@ -297,7 +297,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       new HoodieFileGroupReaderBasedParquetFileFormat(basePath.toString,
         HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields, true, isBootstrap,
-        false, fileIndex.isInstanceOf[HoodieCDCFileIndex], validCommits, shouldUseRecordPosition, Seq.empty)
+        false, tableAvroSchema, validCommits, shouldUseRecordPosition, Seq.empty)
     }
   }
 
@@ -341,7 +341,7 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         basePath.toString, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields,
-        true, isBootstrap, true, fileIndex.isInstanceOf[HoodieCDCFileIndex],
+        true, isBootstrap, true, tableAvroSchema,
         validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     }
   }
@@ -373,7 +373,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
       new HoodieFileGroupReaderBasedParquetFileFormat(
         basePath.toString, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields,
-        false, isBootstrap, false, fileIndex.isInstanceOf[HoodieCDCFileIndex], validCommits,
+        false, isBootstrap, false, tableAvroSchema, validCommits,
         shouldUseRecordPosition, Seq.empty)
     }
   }
@@ -402,7 +402,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         basePath.toString, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, mandatoryFields,
-        false, isBootstrap, true, fileIndex.isInstanceOf[HoodieCDCFileIndex],
+        false, isBootstrap, true, tableAvroSchema,
         validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     }
   }

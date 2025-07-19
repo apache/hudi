@@ -29,9 +29,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -418,5 +422,137 @@ public class TestAvroSchemaUtils {
     assertThrows(HoodieAvroSchemaException.class, () -> AvroSchemaUtils.findNestedFieldType(sourceSchema, "long"));
     assertThrows(HoodieAvroSchemaException.class, () -> AvroSchemaUtils.findNestedFieldType(sourceSchema, "nested_record.bool"));
     assertThrows(HoodieAvroSchemaException.class, () -> AvroSchemaUtils.findNestedFieldType(sourceSchema, "non_present_field.also_not_present"));
+  }
+
+  private static Schema parse(String json) {
+    return new Schema.Parser().parse(json);
+  }
+
+  @Test
+  void testPruneRecordFields() {
+    String dataSchemaStr = "{ \"type\": \"record\", \"name\": \"Person\", \"fields\": ["
+        + "{ \"name\": \"name\", \"type\": \"string\" },"
+        + "{ \"name\": \"age\", \"type\": \"int\" },"
+        + "{ \"name\": \"email\", \"type\": [\"null\", \"string\"], \"default\": null }"
+        + "]}";
+
+    String requiredSchemaStr = "{ \"type\": \"record\", \"name\": \"Person\", \"fields\": ["
+        + "{ \"name\": \"name\", \"type\": \"string\" }"
+        + "]}";
+
+    Schema dataSchema = parse(dataSchemaStr);
+    Schema requiredSchema = parse(requiredSchemaStr);
+
+    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, Collections.emptySet());
+
+    assertEquals(1, pruned.getFields().size());
+    assertEquals("name", pruned.getFields().get(0).name());
+  }
+
+  @Test
+  void testPruningPreserveNullable() {
+    String dataSchemaStr = "{"
+        + "\"type\": \"record\","
+        + "\"name\": \"Container\","
+        + "\"fields\": ["
+        + "  {"
+        + "    \"name\": \"foo\","
+        + "    \"type\": [\"null\", {"
+        + "      \"type\": \"record\","
+        + "      \"name\": \"Foo\","
+        + "      \"fields\": ["
+        + "        {\"name\": \"field1\", \"type\": \"string\"},"
+        + "        {\"name\": \"field2\", \"type\": \"int\"}"
+        + "      ]"
+        + "    }],"
+        + "    \"default\": null"
+        + "  }"
+        + "]"
+        + "}";
+
+    String requiredFooStr = "{"
+        + "\"type\": \"record\","
+        + "\"name\": \"Foo\","
+        + "\"fields\": ["
+        + "  {\"name\": \"field1\", \"type\": \"string\"}"
+        + "]"
+        + "}";
+
+    Schema dataSchema = parse(dataSchemaStr);
+    Schema requiredSchema = parse(requiredFooStr);
+
+    Schema fooFieldSchema = dataSchema.getField("foo").schema();
+    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(fooFieldSchema, requiredSchema, Collections.emptySet());
+
+    assertEquals(Schema.Type.UNION, pruned.getType());
+
+    Schema prunedRecord = pruned.getTypes().stream()
+        .filter(s -> s.getType() == Schema.Type.RECORD)
+        .collect(Collectors.toList()).get(0);
+    assertNotNull(prunedRecord.getField("field1"));
+    assertNull(prunedRecord.getField("field2"));
+  }
+
+  @Test
+  void testArrayElementPruning() {
+    String dataSchemaStr = "{ \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\": \"Item\", \"fields\": ["
+        + "{\"name\": \"a\", \"type\": \"int\"}, {\"name\": \"b\", \"type\": \"string\"}"
+        + "]}}";
+
+    String requiredSchemaStr = "{ \"type\": \"array\", \"items\": { \"type\": \"record\", \"name\": \"Item\", \"fields\": ["
+        + "{\"name\": \"b\", \"type\": \"string\"}"
+        + "]}}";
+
+    Schema dataSchema = parse(dataSchemaStr);
+    Schema requiredSchema = parse(requiredSchemaStr);
+
+    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, Collections.emptySet());
+    Schema itemSchema = pruned.getElementType();
+
+    assertEquals(1, itemSchema.getFields().size());
+    assertEquals("b", itemSchema.getFields().get(0).name());
+  }
+
+  @Test
+  void testMapValuePruning() {
+    String dataSchemaStr = "{ \"type\": \"map\", \"values\": { \"type\": \"record\", \"name\": \"Entry\", \"fields\": ["
+        + "{\"name\": \"x\", \"type\": \"int\"}, {\"name\": \"y\", \"type\": \"string\"}"
+        + "]}}";
+
+    String requiredSchemaStr = "{ \"type\": \"map\", \"values\": { \"type\": \"record\", \"name\": \"Entry\", \"fields\": ["
+        + "{\"name\": \"y\", \"type\": \"string\"}"
+        + "]}}";
+
+    Schema dataSchema = parse(dataSchemaStr);
+    Schema requiredSchema = parse(requiredSchemaStr);
+
+    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, Collections.emptySet());
+    Schema valueSchema = pruned.getValueType();
+
+    assertEquals(1, valueSchema.getFields().size());
+    assertEquals("y", valueSchema.getFields().get(0).name());
+  }
+
+  @Test
+  void testPruningExcludedFieldIsPreservedIfMissingInDataSchema() {
+    String dataSchemaStr = "{ \"type\": \"record\", \"name\": \"Rec\", \"fields\": ["
+        + "{\"name\": \"existing\", \"type\": \"int\"}"
+        + "]}";
+
+    String requiredSchemaStr = "{ \"type\": \"record\", \"name\": \"Rec\", \"fields\": ["
+        + "{\"name\": \"existing\", \"type\": \"int\"},"
+        + "{\"name\": \"missing\", \"type\": \"string\", \"default\": \"default\"}"
+        + "]}";
+
+    Schema dataSchema = parse(dataSchemaStr);
+    Schema requiredSchema = parse(requiredSchemaStr);
+
+    Set<String> excludeFields = Collections.singleton("missing");
+
+    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, excludeFields);
+
+    assertEquals(2, pruned.getFields().size());
+    assertNotNull(pruned.getField("missing"));
+    assertEquals("string", pruned.getField("missing").schema().getType().getName());
   }
 }
