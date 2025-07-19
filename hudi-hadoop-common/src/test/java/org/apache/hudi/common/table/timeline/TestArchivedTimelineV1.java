@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -71,6 +72,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -417,6 +419,19 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
     validateInstantsLoaded(timeline, Arrays.asList("17", "21"), true);
 
     assertEquals(instants, timeline.getInstants());
+  }
+
+  @Test
+  void readLegacyArchivedTimelineWithNullFields() {
+    String samplePath = this.getClass().getClassLoader().getResource("archived_timeline").getPath();
+    metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(samplePath)
+        .setConf(getDefaultStorageConf())
+        .setLoadActiveTimelineOnLoad(false)
+        .build();
+    HoodieArchivedTimeline timeline = new ArchivedTimelineV1(metaClient);
+    timeline.loadCompletedInstantDetailsInMemory();
+    assertEquals(3, timeline.getInstants().size());
   }
 
   /**
