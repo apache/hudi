@@ -698,6 +698,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
       }
       // Done
       progress = 1.0f;
+      totalLogRecords.set(recordBuffer.getTotalLogRecords());
     } catch (IOException e) {
       LOG.error("Got IOException when reading log file", e);
       throw new HoodieIOException("IOException when reading log file ", e);

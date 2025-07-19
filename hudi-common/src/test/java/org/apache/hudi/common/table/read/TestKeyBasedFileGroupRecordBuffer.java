@@ -100,6 +100,9 @@ class TestKeyBasedFileGroupRecordBuffer {
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
     // delete for record3 is ignored due to event time ordering
     assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update), actualRecords);
+    assertEquals(0, readStats.getNumInserts());
+    assertEquals(0, readStats.getNumDeletes());
+    assertEquals(3, readStats.getNumUpdates());
   }
 
   @Test
@@ -132,6 +135,9 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
     assertEquals(Arrays.asList(testRecord2Update, testRecord3Update), actualRecords);
+    assertEquals(0, readStats.getNumInserts());
+    assertEquals(1, readStats.getNumDeletes());
+    assertEquals(2, readStats.getNumUpdates());
   }
 
   @Test
@@ -159,6 +165,9 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
     assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2EarlierUpdate), actualRecords);
+    assertEquals(0, readStats.getNumInserts());
+    assertEquals(1, readStats.getNumDeletes());
+    assertEquals(2, readStats.getNumUpdates());
   }
 
   @Test
@@ -192,6 +201,10 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
     assertEquals(Collections.singletonList(testRecord1), actualRecords);
+
+    assertEquals(0, readStats.getNumInserts());
+    assertEquals(3, readStats.getNumDeletes());
+    assertEquals(0, readStats.getNumUpdates());
   }
 
   @Test
@@ -225,6 +238,10 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
     assertEquals(Collections.singletonList(testRecord1), actualRecords);
+
+    assertEquals(0, readStats.getNumInserts());
+    assertEquals(3, readStats.getNumDeletes());
+    assertEquals(0, readStats.getNumUpdates());
   }
 
   private static GenericRecord createTestRecord(String recordKey, int counter, long ts) {
@@ -255,7 +272,7 @@ class TestKeyBasedFileGroupRecordBuffer {
     TypedProperties props = new TypedProperties();
     UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
     return new KeyBasedFileGroupRecordBuffer<>(
-        readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, readStats, orderingFieldName, updateProcessor);
+        readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, orderingFieldName, updateProcessor);
   }
 
   private static List<IndexedRecord> getActualRecords(FileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer) throws IOException {

@@ -77,7 +77,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
 
     List<TestRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
     assertEquals(Arrays.asList(testRecord1, testRecord2Update, testRecord4, testRecord5, testRecord6Update), actualRecords);
-    assertEquals(4, readStats.getNumInserts());
+    assertEquals(3, readStats.getNumInserts());
     assertEquals(1, readStats.getNumUpdates());
     assertEquals(1, readStats.getNumDeletes());
   }
@@ -129,7 +129,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
     TypedProperties props = new TypedProperties();
     UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
     return new SortedKeyBasedFileGroupRecordBuffer<>(
-        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), updateProcessor);
+        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, Option.empty(), updateProcessor);
   }
 
   private static List<TestRecord> getActualRecords(SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer) throws IOException {

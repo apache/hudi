@@ -297,7 +297,6 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
             updateProcessor
         );
@@ -312,7 +311,6 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
             updateProcessor
     );
@@ -336,7 +334,6 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
             updateProcessor
         );

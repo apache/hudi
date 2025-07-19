@@ -72,10 +72,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             PartialUpdateMode partialUpdateMode,
                                             String baseFileInstantTime,
                                             TypedProperties props,
-                                            HoodieReadStats readStats,
                                             Option<String> orderingFieldName,
                                             UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
