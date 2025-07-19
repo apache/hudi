@@ -99,6 +99,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final boolean allowInflightInstants;
   // Callback to run custom logic on updates to the base files for the file group
   private final Option<BaseFileUpdateCallback> fileGroupUpdateCallback;
+  private final boolean enableOptimizedLogBlockScan;
+  private List<String> validBlockInstants = Collections.emptyList();
 
   /**
    * Constructs an instance of the HoodieFileGroupReader.
@@ -113,18 +115,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       long start, long length, boolean shouldUseRecordPosition) {
     this(readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema,
         requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props, start, length,
-        shouldUseRecordPosition, false, false, false, Option.empty());
+        shouldUseRecordPosition, false, false, false, Option.empty(), false);
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 long start, long length, boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
-                                Option<BaseFileUpdateCallback> updateCallback) {
+                                Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan) {
     this.readerContext = readerContext;
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
+    this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
     this.logFiles = fileSlice.getLogFiles()
@@ -361,7 +364,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withRecordBuffer(recordBuffer)
         .withAllowInflightInstants(allowInflightInstants)
         .withMetaClient(metaClient)
+        .withOptimizedLogBlocksScan(enableOptimizedLogBlockScan)
         .build()) {
+      this.validBlockInstants = logRecordReader.getValidBlockInstants();
       readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
       readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());
       readStats.setTotalLogFilesCompacted(logRecordReader.getTotalLogFiles());
@@ -370,6 +375,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       readStats.setTotalCorruptLogBlock(logRecordReader.getTotalCorruptBlocks());
       readStats.setTotalRollbackBlocks(logRecordReader.getTotalRollbacks());
     }
+  }
+
+  public List<String> getValidBlockInstants() {
+    return validBlockInstants;
   }
 
   @Override
@@ -461,6 +470,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
     private boolean sortOutput = false;
+    private boolean enableOptimizedLogBlockScan = false;
     private Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
@@ -534,6 +544,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
+    public Builder<T> withEnableOptimizedLogBlockScan(boolean enableOptimizedLogBlockScan) {
+      this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
+      return this;
+    }
+
     /**
      * If true, the output of the merge will be sorted instead of appending log records to end of the iterator if they do not have matching keys in the base file.
      * This assumes that the base file is already sorted by key.
@@ -561,9 +576,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
 
       return new HoodieFileGroupReader<>(
-          readerContext, storage, tablePath, latestCommitTime, fileSlice,
-          dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
-          props, start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, fileGroupUpdateCallback);
+          readerContext, storage, tablePath, latestCommitTime, fileSlice, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props,
+          start, length, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, fileGroupUpdateCallback, enableOptimizedLogBlockScan);
     }
   }
 }
