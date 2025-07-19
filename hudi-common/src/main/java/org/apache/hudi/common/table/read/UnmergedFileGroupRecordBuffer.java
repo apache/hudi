@@ -39,7 +39,6 @@ import org.apache.avro.Schema;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Iterator;
 
 public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
@@ -52,9 +51,8 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       RecordMergeMode recordMergeMode,
       PartialUpdateMode partialUpdateMode,
       TypedProperties props,
-      HoodieReadStats readStats,
-      boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), emitDelete);
+      HoodieReadStats readStats) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), null);
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 
@@ -88,7 +86,7 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public Iterator<BufferedRecord<T>> getLogRecordIterator() {
+  public ClosableIterator<BufferedRecord<T>> getLogRecordIterator() {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
