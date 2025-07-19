@@ -34,6 +34,8 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFileReader;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -46,9 +48,11 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.deltacommit.BaseSparkDeltaCommitActionExecutor;
@@ -91,6 +95,7 @@ import static org.apache.hudi.common.model.HoodieWriteStat.NULL_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
@@ -484,8 +489,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     setUp(config.getProps());
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
-      String newCommitTime = "100";
-      LastCommit lastCommit = writeInsertUpdateAndDelete(newCommitTime, writeClient);
+      String firstCommitTime = "100";
+      LastCommit lastCommit = writeInsertUpdateAndDelete(firstCommitTime, writeClient);
 
       // Write them to corresponding avro logfiles
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -516,14 +521,15 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         String logCompactionInstantTime = writeClient.scheduleLogCompaction(Option.empty()).get().toString();
         HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.logCompact(logCompactionInstantTime, true);
         HoodieCommitMetadata compactionMetadata = metaClient.getActiveTimeline().readCommitMetadata(metaClient.getActiveTimeline().reload().getCommitsAndCompactionTimeline().lastInstant().get());
-        validateCompactionMetadata(compactionMetadata, lastCommit.finalUpdateTime, 90, 100, 0, 10);
+        validateCompactionMetadata(compactionMetadata, firstCommitTime, 80, 80, 0, 10);
+        validateLogCompactionMetadataHeaders(compactionMetadata, metaClient.getBasePath(), "102,101");
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);
         table = HoodieSparkTable.create(config, context(), metaClient);
         HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
 
-        assertTrue(compareTimestamps(timeline.lastInstant().get().requestedTime(), GREATER_THAN, newCommitTime),
+        assertTrue(compareTimestamps(timeline.lastInstant().get().requestedTime(), GREATER_THAN, lastCommit.finalDeleteTime),
             "Compaction commit should be > than last insert");
 
         for (String partitionPath : dataGen.getPartitionPaths()) {
@@ -619,6 +625,28 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     assertEquals(expectedTotalUpdatedRecords, totalUpdatedRecords);
     assertEquals(expectedTotalInsertedRecords, totalInsertedRecords);
     assertEquals(expectedTotalDeletedRecords, totalDeletedRecords);
+  }
+
+  private void validateLogCompactionMetadataHeaders(HoodieCommitMetadata compactionMetadata, StoragePath basePath, String expectedCompactedBlockTimes) {
+    compactionMetadata.getFileIdAndFullPaths(basePath).values().stream()
+        .map(StoragePath::new)
+        .filter(path -> FSUtils.isLogFile(path.getName()))
+        .forEach(logFilePath -> {
+          try {
+            HoodieLogFileReader reader = new HoodieLogFileReader(hoodieStorage(), new HoodieLogFile(logFilePath), AVRO_SCHEMA, 10000, false,
+                false, "_row_key", null);
+            Map<HoodieLogBlock.HeaderMetadataType, String> headers = Collections.emptyMap();
+            while (reader.hasNext()) {
+              // Get headers from the final block
+              headers = reader.next().getLogBlockHeader();
+            }
+            headers.containsKey(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME);
+            headers.containsKey(HoodieLogBlock.HeaderMetadataType.SCHEMA);
+            assertEquals(expectedCompactedBlockTimes, headers.get(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES));
+          } catch (IOException ex) {
+            throw new HoodieIOException("Failed reading logs", ex);
+          }
+        });
   }
 
   /**
