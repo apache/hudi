@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -53,8 +54,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -329,7 +332,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       String firstCommitTime = commitTime;
       HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
           .withIndexName("secondary_index_idx_rider")
-          .withIndexType("")
+          .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
+          .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), "secondary_index_idx_rider"))
           .withIndexFunction("")
           .withSourceFields(Collections.singletonList("rider"))
           .withIndexOptions(Collections.emptyMap())
