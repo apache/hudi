@@ -213,6 +213,21 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
+  public RowData constructEngineRecord(Schema schema, List<Object> values) {
+    List<Schema.Field> fields = schema.getFields();
+    if (fields.size() != values.size()) {
+      throw new IllegalArgumentException(
+          "Value count (" + values.size() + ") does not match field count (" + fields.size() + ")");
+    }
+
+    GenericRowData genericRowData = new GenericRowData(values.size());
+    for (int index = 0; index < fields.size(); index++) {
+      genericRowData.setField(index, values.get(index));
+    }
+    return toBinaryRow(schema, genericRowData);
+  }
+
+  @Override
   public Comparable getOrderingValue(
       RowData record,
       Schema schema,

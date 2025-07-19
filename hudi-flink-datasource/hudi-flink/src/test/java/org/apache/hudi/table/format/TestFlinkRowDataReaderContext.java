@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +118,65 @@ class TestFlinkRowDataReaderContext {
     assertEquals(5, result.getInt(0));
     assertTrue(result.isNullAt(1));
     assertTrue(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesList() {
+    List<Object> values = Arrays.asList(100, StringData.fromString("TestUser"), false);
+    RowData result = readerContext.constructEngineRecord(AVRO_SCHEMA, values);
+
+    assertEquals(100, result.getInt(0));
+    assertEquals("TestUser", result.getString(1).toString());
+    assertFalse(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesListWithNull() {
+    List<Object> values = Arrays.asList(200, null, true);
+    RowData result = readerContext.constructEngineRecord(AVRO_SCHEMA, values);
+
+    assertEquals(200, result.getInt(0));
+    assertTrue(result.isNullAt(1));
+    assertTrue(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesListMismatchSize() {
+    List<Object> values = Arrays.asList(300, "Incomplete");
+    // Should throw IllegalArgumentException when value count doesn't match field count
+    try {
+      readerContext.constructEngineRecord(AVRO_SCHEMA, values);
+      // If we reach here, the test should fail
+      assertTrue(false, "Expected IllegalArgumentException was not thrown");
+    } catch (IllegalArgumentException e) {
+      assertEquals("Value count (2) does not match field count (3)", e.getMessage());
+    }
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesListEmpty() {
+    List<Object> values = Arrays.asList();
+    // Should throw IllegalArgumentException when value count doesn't match field count
+    try {
+      readerContext.constructEngineRecord(AVRO_SCHEMA, values);
+      // If we reach here, the test should fail
+      assertTrue(false, "Expected IllegalArgumentException was not thrown");
+    } catch (IllegalArgumentException e) {
+      assertEquals("Value count (0) does not match field count (3)", e.getMessage());
+    }
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesListExcessValues() {
+    List<Object> values = Arrays.asList(400, StringData.fromString("Excess"), true, "ExtraValue");
+    // Should throw IllegalArgumentException when value count doesn't match field count
+    try {
+      readerContext.constructEngineRecord(AVRO_SCHEMA, values);
+      // If we reach here, the test should fail
+      assertTrue(false, "Expected IllegalArgumentException was not thrown");
+    } catch (IllegalArgumentException e) {
+      assertEquals("Value count (4) does not match field count (3)", e.getMessage());
+    }
   }
 
   private GenericRowData createBaseRow(int id, String name, boolean active) {

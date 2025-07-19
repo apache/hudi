@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
@@ -45,6 +46,7 @@ public class PartialUpdateStrategy<T> {
   private final HoodieReaderContext<T> readerContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
+  private final PartialMergingUtils<T> partialMergingUtils;
 
   public PartialUpdateStrategy(HoodieReaderContext<T> readerContext,
                                PartialUpdateMode partialUpdateMode,
@@ -52,6 +54,11 @@ public class PartialUpdateStrategy<T> {
     this.readerContext = readerContext;
     this.partialUpdateMode = partialUpdateMode;
     this.mergeProperties = parseMergeProperties(props);
+    if (partialUpdateMode == PartialUpdateMode.KEEP_VALUES) {
+      partialMergingUtils = new PartialMergingUtils<>();
+    } else {
+      partialMergingUtils = null;
+    }
   }
 
   /**
@@ -59,33 +66,62 @@ public class PartialUpdateStrategy<T> {
    * Note that {@param newRecord} refers to the record with higher commit time if COMMIT_TIME_ORDERING mode is used,
    * or higher event time if EVENT_TIME_ORDERING mode us used.
    */
-  BufferedRecord<T> partialMerge(BufferedRecord<T> newRecord,
-                                 BufferedRecord<T> oldRecord,
-                                 Schema newSchema,
-                                 Schema oldSchema,
-                                 boolean keepOldMetadataColumns) {
+  Pair<BufferedRecord<T>, Schema> partialMerge(BufferedRecord<T> newRecord,
+                                               BufferedRecord<T> oldRecord,
+                                               Schema newSchema,
+                                               Schema oldSchema,
+                                               Schema readerSchema,
+                                               boolean keepOldMetadataColumns,
+                                               boolean enablePartialMerging) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
     if (partialUpdateMode == PartialUpdateMode.NONE
         || null == oldRecord
         || newRecord.isDelete()
         || oldRecord.isDelete()) {
-      return newRecord;
+      return Pair.of(newRecord, newSchema);
     }
 
     switch (partialUpdateMode) {
-      case KEEP_VALUES:
       case FILL_DEFAULTS:
-        return newRecord;
+        return Pair.of(newRecord, newSchema);
+      case KEEP_VALUES:
+        if (!enablePartialMerging) {
+          return Pair.of(newRecord, newSchema);
+        }
+        return mergePartialRecords(
+            newRecord, oldRecord, newSchema, oldSchema, readerSchema, readerContext);
       case IGNORE_DEFAULTS:
-        return reconcileDefaultValues(
-            newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns);
+        return Pair.of(reconcileDefaultValues(
+            newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns),
+            newSchema);
       case IGNORE_MARKERS:
-        return reconcileMarkerValues(
-            newRecord, oldRecord, newSchema, oldSchema);
+        return Pair.of(reconcileMarkerValues(
+            newRecord, oldRecord, newSchema, oldSchema),
+            newSchema);
       default:
-        return newRecord;
+        return Pair.of(newRecord, newSchema);
     }
+  }
+
+  /**
+   * Combine old record and new record.
+   *
+   * @param newRecord              The newer record determined by the merge mode.
+   * @param oldRecord              The older record determined by the merge mode.
+   * @param newSchema              The schema of the newer record.
+   * @param oldSchema              The schema of the older record.
+   * @param readerSchema
+   * @return                       The resulting record after reconciling.
+   */
+  Pair<BufferedRecord<T>, Schema> mergePartialRecords(BufferedRecord<T> newRecord,
+                                                      BufferedRecord<T> oldRecord,
+                                                      Schema newSchema,
+                                                      Schema oldSchema,
+                                                      Schema readerSchema,
+                                                      HoodieReaderContext<T> readerContext) {
+    return partialMergingUtils.mergePartialRecords(
+        oldRecord, oldSchema, newRecord, newSchema, readerSchema, readerContext);
   }
 
   /**
@@ -94,7 +130,7 @@ public class PartialUpdateStrategy<T> {
    * @param newSchema              The schema of the newer record.
    * @param oldSchema              The schema of the older record.
    * @param keepOldMetadataColumns Keep the metadata columns from the older record.
-   * @return
+   * @return                       The resulting record after reconciling.
    */
   BufferedRecord<T> reconcileDefaultValues(BufferedRecord<T> newRecord,
                                            BufferedRecord<T> oldRecord,

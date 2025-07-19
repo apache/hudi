@@ -177,6 +177,21 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
+  public IndexedRecord constructEngineRecord(Schema schema, List<Object> values) {
+    List<Schema.Field> fields = schema.getFields();
+    if (fields.size() != values.size()) {
+      throw new IllegalArgumentException(
+          "Value count (" + values.size() + ") does not match field count (" + fields.size() + ")");
+    }
+
+    GenericData.Record record = new GenericData.Record(schema);
+    for (int i = 0; i < fields.size(); i++) {
+      record.put(i, values.get(i));
+    }
+    return record;
+  }
+
+  @Override
   public IndexedRecord seal(IndexedRecord record) {
     return record;
   }
