@@ -222,7 +222,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       );
       this.txnManager.beginStateChange(Option.of(inflightInstant), Option.empty());
       writeTableMetadata(metadata, inflightInstant.requestedTime());
-      table.getActiveTimeline().transitionCleanInflightToComplete(false, inflightInstant, Option.of(metadata));
+      table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant, Option.of(metadata), txnManager.generateInstantTime());
       LOG.info("Marked clean started on {} as complete", inflightInstant.requestedTime());
       return metadata;
     } finally {
