@@ -47,8 +47,8 @@ public class AutoRowDataKeyGen extends RowDataKeyGen {
   }
 
   public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
-    return new AutoRowDataKeyGen(taskId, instantTime, conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
-        rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING));
+    return new AutoRowDataKeyGen(taskId, instantTime, conf.get(FlinkOptions.PARTITION_PATH_FIELD),
+        rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING));
   }
 
   @Override

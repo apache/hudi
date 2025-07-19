@@ -63,7 +63,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @ValueSource(booleans = {true, false})
   public void testCheckpoint(boolean allowEmptyCommit) throws Exception {
     // reset the config option
-    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), allowEmptyCommit);
+    conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), allowEmptyCommit + "");
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)
         // no checkpoint, so the coordinator does not accept any events
@@ -83,7 +83,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testCheckpointFails() throws Exception {
     // reset the config option
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
     preparePipeline(conf)
         // no data written and triggers checkpoint fails,
         // then we should revert the start instant
@@ -101,7 +101,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   @Test
   public void testSubtaskFails() throws Exception {
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
     // open the function and ingest data
     preparePipeline()
         .checkpoint(1)
@@ -143,8 +143,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testAppendInsertAfterFailoverWithEmptyCheckpoint() throws Exception {
     // open the function and ingest data
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
-    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.set(FlinkOptions.OPERATION, "INSERT");
     preparePipeline()
         .assertEmptyDataFiles()
         // make an empty snapshot
@@ -168,8 +168,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   // Task level failed retry, we should reuse the unfinished Instant with INSERT operationType
   @Test
   public void testPartialFailover() throws Exception {
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
-    conf.setString(FlinkOptions.OPERATION, "INSERT");
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.OPERATION, "INSERT");
     // open the function and ingest data
     preparePipeline()
         // triggers subtask failure for multiple times to simulate partial failover, for partial over,
@@ -293,7 +293,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertDuplicates() throws Exception {
     // reset the config option
-    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    conf.set(FlinkOptions.PRE_COMBINE, true);
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT_DUPLICATES)
         .assertEmptyDataFiles()
@@ -351,7 +351,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
 
     Map<String, String> expected = getMiniBatchExpected();
 
@@ -375,8 +375,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
-    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    conf.set(FlinkOptions.PRE_COMBINE, true);
 
     Map<String, String> expected = new HashMap<>();
     expected.put("par1", "[id1,par1,id1,Danny,23,4,par1]");
@@ -400,7 +400,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   @Test
   public void testInsertAppendMode() throws Exception {
-    conf.setString(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.OPERATION, "insert");
     preparePipeline()
         // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)
@@ -451,10 +451,10 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertAsyncClustering() throws Exception {
     // reset the config option
-    conf.setString(FlinkOptions.OPERATION, "insert");
-    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
-    conf.setBoolean(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
-    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+    conf.set(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
 
     preparePipeline()
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)
@@ -504,7 +504,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testCommitOnEmptyBatch() throws Exception {
     // reset the config option
-    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), true);
+    conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "true");
 
     preparePipeline()
         .consume(TestData.DATA_SET_INSERT)
@@ -574,7 +574,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
 
     // reset the config option
-    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     validateIndexLoaded();
   }
 
@@ -605,9 +605,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
-    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1000L);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1000L);
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 128);
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
+    conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     TestHarness pipeline = preparePipeline(conf)
         .resetInstantTimeRequest(conf)
         .consume(TestData.DATA_SET_INSERT)
@@ -639,8 +639,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @EnumSource(value = WriteConcurrencyMode.class, names = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
   public void testWriteMultiWriterInvolved(WriteConcurrencyMode writeConcurrencyMode) throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode.name());
-    conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
-    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.PRE_COMBINE, true);
 
     if (OptionsResolver.isCowTable(conf) && OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
       validateNonBlockingConcurrencyControlConditions();
@@ -652,7 +652,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
           .assertNextEvent();
       // now start pipeline2 and commit the txn
       Configuration conf2 = conf.clone();
-      conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+      conf2.set(FlinkOptions.WRITE_CLIENT_ID, "2");
       TestHarness pipeline2 = preparePipeline(conf2)
           .consume(TestData.DATA_SET_INSERT_DUPLICATES)
           .assertDataFilesExists()
@@ -695,8 +695,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @EnumSource(value = WriteConcurrencyMode.class, names = {"OPTIMISTIC_CONCURRENCY_CONTROL", "NON_BLOCKING_CONCURRENCY_CONTROL"})
   public void testWriteMultiWriterPartialOverlapping(WriteConcurrencyMode writeConcurrencyMode) throws Exception {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), writeConcurrencyMode.name());
-    conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
-    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.PRE_COMBINE, true);
 
     if (OptionsResolver.isCowTable(conf) && OptionsResolver.isNonBlockingConcurrencyControl(conf)) {
       validateNonBlockingConcurrencyControlConditions();
@@ -711,7 +711,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
             .assertNextEvent();
         // now start pipeline2 and suspend the txn commit
         Configuration conf2 = conf.clone();
-        conf2.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+        conf2.set(FlinkOptions.WRITE_CLIENT_ID, "2");
         pipeline2 = preparePipeline(conf2)
             .consume(TestData.DATA_SET_INSERT_DUPLICATES)
             .assertDataFilesExists()
@@ -739,7 +739,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   @Test
   public void testReuseEmbeddedServer() throws IOException {
-    conf.setInteger("hoodie.filesystem.view.remote.timeout.secs", 500);
+    conf.setString("hoodie.filesystem.view.remote.timeout.secs", "500");
     conf.setString("hoodie.metadata.enable","true");
     conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false"); // HUDI-8814
 
