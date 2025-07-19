@@ -388,7 +388,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
             val iter = loadFileSliceWithKeys(currentCDCFileSplit.getAfterFileSlice.get())
             afterImageRecords.clear()
             iter.foreach { tuple =>
-              afterImageRecords.put(tuple._1, tuple._2.copy())
+              afterImageRecords.put(tuple._1, tuple._2)
             }
           }
 
