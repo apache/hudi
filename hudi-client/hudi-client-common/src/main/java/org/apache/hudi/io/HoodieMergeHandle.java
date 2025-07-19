@@ -65,5 +65,4 @@ public interface HoodieMergeHandle<T, I, K, O> {
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   List<WriteStatus> close();
-
 }

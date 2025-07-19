@@ -41,7 +41,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.hudi.config.HoodieWriteConfig.FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.COMPACT_MERGE_HANDLE_CLASS_NAME;
 
 /**
  * Factory class for instantiating the appropriate implementation of {@link HoodieMergeHandle}.
@@ -133,7 +133,7 @@ public class HoodieMergeHandleFactory {
     };
 
     return instantiateMergeHandle(
-        isFallbackEnabled, mergeHandleClass, FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME.defaultValue(), logContext, constructorParamTypes,
+        isFallbackEnabled, mergeHandleClass, COMPACT_MERGE_HANDLE_CLASS_NAME.defaultValue(), logContext, constructorParamTypes,
         config, instantTime, hoodieTable, fileSlice, operation, taskContextSupplier, readerContext, maxInstantTime, recordType);
   }
 

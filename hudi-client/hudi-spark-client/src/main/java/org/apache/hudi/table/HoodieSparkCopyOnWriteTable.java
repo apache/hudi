@@ -46,10 +46,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -242,33 +242,7 @@ public class HoodieSparkCopyOnWriteTable<T>
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
     HoodieMergeHandle mergeHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
-    return handleUpdateInternal(mergeHandle, instantTime, fileId);
-  }
-
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> mergeHandle, String instantTime,
-                                                             String fileId) throws IOException {
-    if (mergeHandle.getOldFilePath() == null) {
-      throw new HoodieUpsertException(
-          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
-    } else {
-      if (mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
-        Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
-        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
-            getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-            mergeHandle.getWriterSchema(), (Configuration) getStorageConf().unwrap());
-        mergeHandle.setPartitionFields(partitionFields);
-        mergeHandle.setPartitionValues(partitionValues);
-      }
-      mergeHandle.doMerge();
-    }
-
-    // TODO(vc): This needs to be revisited
-    if (mergeHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", "
-          + mergeHandle.getWriteStatuses());
-    }
-
-    return Collections.singletonList(mergeHandle.getWriteStatuses()).iterator();
+    return IOUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
@@ -282,8 +256,17 @@ public class HoodieSparkCopyOnWriteTable<T>
             + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
       }
     }
-    return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
+    HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
         dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+    if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
+      Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
+      Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
+          getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+          mergeHandle.getWriterSchema(), (Configuration) getStorageConf().unwrap());
+      mergeHandle.setPartitionFields(partitionFields);
+      mergeHandle.setPartitionValues(partitionValues);
+    }
+    return mergeHandle;
   }
 
   @Override

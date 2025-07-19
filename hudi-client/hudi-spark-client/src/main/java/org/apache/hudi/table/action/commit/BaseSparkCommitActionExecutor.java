@@ -50,6 +50,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -382,39 +383,21 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     // these are updates
     HoodieMergeHandle mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr);
-    return handleUpdateInternal(mergeHandle, fileId);
-  }
-
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> mergeHandle, String fileId)
-      throws IOException {
-    if (mergeHandle.getOldFilePath() == null) {
-      throw new HoodieUpsertException(
-          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
-    } else {
-      if (mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
-        Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
-        Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
-            table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
-            mergeHandle.getWriterSchema(), (Configuration) table.getStorageConf().unwrap());
-        mergeHandle.setPartitionFields(partitionFields);
-        mergeHandle.setPartitionValues(partitionValues);
-      }
-
-      mergeHandle.doMerge();
-    }
-
-    // TODO(vc): This needs to be revisited
-    if (mergeHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", "
-          + mergeHandle.getWriteStatuses());
-    }
-
-    return Collections.singletonList(mergeHandle.getWriteStatuses()).iterator();
+    return IOUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
+    HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
         taskContextSupplier, keyGeneratorOpt);
+    if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
+      Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
+      Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
+          table.getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+          mergeHandle.getWriterSchema(), (Configuration) table.getStorageConf().unwrap());
+      mergeHandle.setPartitionFields(partitionFields);
+      mergeHandle.setPartitionValues(partitionValues);
+    }
+    return mergeHandle;
   }
 
   @Override

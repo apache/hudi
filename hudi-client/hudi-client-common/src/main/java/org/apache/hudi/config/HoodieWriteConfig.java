@@ -859,12 +859,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("The merge handle class to use to concat the records from a base file with an iterator of incoming records.");
 
-  public static final ConfigProperty<String> FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME = ConfigProperty
-      .key("hoodie.compact.merge.handle.filegroup.reader.class")
+  public static final ConfigProperty<String> COMPACT_MERGE_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.compact.merge.handle.class")
       .defaultValue(FileGroupReaderBasedMergeHandle.class.getName())
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("Merge handle class that uses fg reader for compaction");
+      .withDocumentation("Merge handle class for compaction");
 
   public static final ConfigProperty<Boolean> MERGE_HANDLE_PERFORM_FALLBACK = ConfigProperty
       .key("hoodie.write.merge.handle.fallback")
@@ -1536,7 +1536,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getFileGroupReaderMergeHandleClassName() {
-    return getStringOrDefault(FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME);
+    return getStringOrDefault(COMPACT_MERGE_HANDLE_CLASS_NAME);
   }
 
   public int getFinalizeWriteParallelism() {
@@ -3452,7 +3452,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withFileGroupReaderMergeHandleClassName(String className) {
-      writeConfig.setValue(FILE_GROUP_READER_MERGE_HANDLE_CLASS_NAME, className);
+      writeConfig.setValue(COMPACT_MERGE_HANDLE_CLASS_NAME, className);
       return this;
     }
 

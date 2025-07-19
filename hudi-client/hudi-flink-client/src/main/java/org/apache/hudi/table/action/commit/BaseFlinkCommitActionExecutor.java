@@ -34,6 +34,7 @@ import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -196,26 +197,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
-    HoodieWriteMergeHandle<?, ?, ?, ?> mergeHandle = (HoodieWriteMergeHandle<?, ?, ?, ?>) this.writeHandle;
-    return handleUpdateInternal(mergeHandle, fileId);
-  }
-
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieWriteMergeHandle<?, ?, ?, ?> mergeHandle, String fileId)
-      throws IOException {
-    if (mergeHandle.getOldFilePath() == null) {
-      throw new HoodieUpsertException(
-          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
-    } else {
-      HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
-    }
-
-    // TODO(vc): This needs to be revisited
-    if (mergeHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", "
-          + mergeHandle.getWriteStatuses());
-    }
-
-    return Collections.singletonList(mergeHandle.getWriteStatuses()).iterator();
+    return IOUtils.runMerge(upsertHandle, instantTime, fileId);
   }
 
   @Override
