@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
@@ -131,7 +132,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
     } else if (payloadClass.equals(PartialUpdateAvroPayload.class.getName())
         || payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())
-        || payloadClass.equals(EventTimeAvroPayload.class.getName())) {
+        || payloadClass.equals(EventTimeAvroPayload.class.getName())
+        || payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
       tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
     }
@@ -140,6 +142,9 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
 
   private void upgradePartialUpdateModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                               HoodieTableConfig tableConfig) {
+    // Set partial update mode for all tables.
+    tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name());
+
     String payloadClass = tableConfig.getPayloadClass();
     if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
@@ -156,12 +161,15 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
 
   private void upgradeMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                             HoodieTableConfig tableConfig) {
+    // Set merge properties for all tables.
+    String mergeProperties = "";
+    tablePropsToAdd.put(MERGE_PROPERTIES, mergeProperties);
+
     String payloadClass = tableConfig.getPayloadClass();
     if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
     // Handle table configs.
-    String mergeProperties = tableConfig.getMergeProperties();
     if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
       String propertiesToAdd = DELETE_KEY + "=Op," + DELETE_MARKER + "=D";
       mergeProperties = StringUtils.isNullOrEmpty(mergeProperties)

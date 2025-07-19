@@ -52,8 +52,11 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailed
 /**
  * Version 8 is the placeholder version from 1.0.0 to 1.0.2.
  * Version 9 is the placeholder version >= 1.1.0.
- * The major change introduced in version 9 is two table configurations for payload deprecation.
+ * The major change introduced in version 9 is two table configurations for payload deprecation
+ * (PARTIAL_UPDATE_MODE, and MERGE_PROPERTIES).
  * During the downgrade, we remove these two table configurations.
+ * For the builtin payloads, their merge mode and payload class configurations
+ * are modified accordingly based in RFC-97.
  */
 public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override

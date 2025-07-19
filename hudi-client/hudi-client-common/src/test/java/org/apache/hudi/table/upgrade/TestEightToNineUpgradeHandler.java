@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -216,6 +217,36 @@ class TestEightToNineUpgradeHandler {
           propertiesToAdd,
           propertiesToRemove,
           PartialUpdateAvroPayload.class.getName());
+    }
+  }
+
+  // TODO: update the ordering fields after we support multi-ordering fields.
+  @Test
+  void testUpgradeWithMySqlDebeziumAvroPayload() {
+    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+              any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getPayloadClass()).thenReturn(MySqlDebeziumAvroPayload.class.getName());
+      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
+          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
+      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
+      assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
+      assertTrue(StringUtils.isNullOrEmpty(propertiesToAdd.get(MERGE_PROPERTIES)));
+      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      assertEquals(
+          EVENT_TIME_ORDERING.name(),
+          propertiesToAdd.get(RECORD_MERGE_MODE));
+      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
+      assertEquals(
+          PartialUpdateMode.NONE.name(),
+          propertiesToAdd.get(PARTIAL_UPDATE_MODE));
+      assertPayloadClassChange(
+          propertiesToAdd,
+          propertiesToRemove,
+          MySqlDebeziumAvroPayload.class.getName());
     }
   }
 
