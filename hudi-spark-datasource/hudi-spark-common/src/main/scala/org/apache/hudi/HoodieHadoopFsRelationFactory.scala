@@ -486,10 +486,8 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
                                                   override val options: Map[String, String],
                                                   override val schemaSpec: Option[StructType],
                                                   isBootstrap: Boolean,
-                                                  override val rangeType: RangeType = RangeType.OPEN_CLOSED)
-  extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap, rangeType) {
-  override val fileIndex = new HoodieCDCFileIndex(
-    sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, true, rangeType)
+                                                  rangeType: RangeType = RangeType.OPEN_CLOSED)
+  extends HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   private val hoodieCDCFileIndex = new HoodieCDCFileIndex(
     sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, rangeType)
