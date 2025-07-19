@@ -45,6 +45,7 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -250,14 +251,16 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
   private static class CDCCallback<T> implements BaseFileUpdateCallback<T> {
     private final HoodieCDCLogger cdcLogger;
     private final HoodieReaderContext<T> readerContext;
-    private final Option<UnaryOperator<T>> outputConverter;
-    private final Schema requestedSchema;
+    // Lazy is used because the schema handler within the reader context is not initialized until the FileGroupReader is fully constructed.
+    // This allows the values to be fetched at runtime when iterating through the records.
+    private final Lazy<Schema> requestedSchema;
+    private final Lazy<Option<UnaryOperator<T>>> outputConverter;
 
     CDCCallback(HoodieCDCLogger cdcLogger, HoodieReaderContext<T> readerContext) {
       this.cdcLogger = cdcLogger;
       this.readerContext = readerContext;
-      this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-      this.requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
+      this.outputConverter = Lazy.lazily(() -> readerContext.getSchemaHandler().getOutputConverter());
+      this.requestedSchema = Lazy.lazily(() -> readerContext.getSchemaHandler().getRequestedSchema());
     }
 
     @Override
@@ -279,8 +282,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
     }
 
     private GenericRecord convertOutput(T record) {
-      T convertedRecord = outputConverter.map(converter -> record == null ? null : converter.apply(record)).orElse(record);
-      return convertedRecord == null ? null : readerContext.convertToAvroRecord(convertedRecord, requestedSchema);
+      T convertedRecord = outputConverter.get().map(converter -> record == null ? null : converter.apply(record)).orElse(record);
+      return convertedRecord == null ? null : readerContext.convertToAvroRecord(convertedRecord, requestedSchema.get());
     }
   }
 }
