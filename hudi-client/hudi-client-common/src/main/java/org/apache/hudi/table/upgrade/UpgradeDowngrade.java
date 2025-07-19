@@ -166,7 +166,10 @@ public class UpgradeDowngrade {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
-        tablePropsToAdd.putAll(upgrade(fromVersion, nextVersion, instantTime));
+        Pair<Map<ConfigProperty, String>, List<ConfigProperty>> tablePropsToAddAndRemove =
+            upgrade(fromVersion, nextVersion, instantTime);
+        tablePropsToAdd.putAll(tablePropsToAddAndRemove.getLeft());
+        tablePropsToRemove.addAll(tablePropsToAddAndRemove.getRight());
         fromVersion = nextVersion;
       }
     } else {
@@ -230,7 +233,9 @@ public class UpgradeDowngrade {
     }
   }
 
-  protected Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
+  protected Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieTableVersion fromVersion,
+                                                                            HoodieTableVersion toVersion,
+                                                                            String instantTime) {
     if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
       return new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {

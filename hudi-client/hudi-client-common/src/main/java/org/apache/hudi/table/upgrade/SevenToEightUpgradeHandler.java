@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -59,6 +60,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,8 +84,10 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
   private static final Logger LOG = LoggerFactory.getLogger(SevenToEightUpgradeHandler.class);
 
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
-                                             String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
+                                                                         HoodieEngineContext context,
+                                                                         String instantTime,
+                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
@@ -91,7 +95,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     // If auto upgrade is disabled, set writer version to 6 and return
     if (!config.autoUpgrade()) {
       config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
-      return tablePropsToAdd;
+      return Pair.of(tablePropsToAdd, Collections.emptyList());
     }
 
     // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
@@ -140,7 +144,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
 
     upgradeToLSMTimeline(table, context, config);
 
-    return tablePropsToAdd;
+    return Pair.of(tablePropsToAdd, Collections.emptyList());
   }
 
   static void upgradePartitionFields(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {

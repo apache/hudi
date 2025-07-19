@@ -23,7 +23,9 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -39,8 +41,10 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,16 +77,23 @@ class TestNineToEightDowngradeHandler {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(3, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(2, propertiesToChange.getLeft().size());
+      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
+      assertEquals(3, propertiesToChange.getLeft().size());
+      assertEquals(
+          RecordMergeMode.CUSTOM.name(),
+          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
       assertEquals(
           PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+      assertEquals(
+          AWSDmsAvroPayload.class.getName(),
+          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
     }
   }
 
@@ -93,19 +104,24 @@ class TestNineToEightDowngradeHandler {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(
+          OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(3, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(2, propertiesToChange.getLeft().size());
+      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
+      assertEquals(3, propertiesToChange.getLeft().size());
+      assertEquals(
+          RecordMergeMode.CUSTOM.name(),
+          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
       assertEquals(
           PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
       assertEquals(
-          RecordMergeMode.CUSTOM.name(),
-          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
+          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
     }
   }
 
@@ -116,19 +132,65 @@ class TestNineToEightDowngradeHandler {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(PartialUpdateAvroPayload.class.getName());
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(PartialUpdateAvroPayload.class.getName());
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(3, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(2, propertiesToChange.getLeft().size());
+      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
+      assertEquals(3, propertiesToChange.getLeft().size());
+      assertEquals(
+          RecordMergeMode.CUSTOM.name(),
+          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
       assertEquals(
           PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
       assertEquals(
-          RecordMergeMode.CUSTOM.name(),
-          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
+          PartialUpdateAvroPayload.class.getName(),
+          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
+    }
+  }
+
+  @Test
+  void testDowngradeForOverwriteWithLatestAvroPayload() {
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+              any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(OverwriteWithLatestAvroPayload.class.getName());
+      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(3, propertiesToChange.getRight().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
+      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(
+          OverwriteWithLatestAvroPayload.class.getName(),
+          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
+    }
+  }
+
+  @Test
+  void testDowngradeForDefaultHoodieRecordPayload() {
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+              any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(3, propertiesToChange.getRight().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
+      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
+      assertEquals(1, propertiesToChange.getLeft().size());
+      assertEquals(
+          DefaultHoodieRecordPayload.class.getName(),
+          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
     }
   }
 
@@ -139,19 +201,22 @@ class TestNineToEightDowngradeHandler {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(PostgresDebeziumAvroPayload.class.getName());
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(PostgresDebeziumAvroPayload.class.getName());
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(2, propertiesToChange.getRight().size());
+      assertEquals(3, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(2, propertiesToChange.getLeft().size());
+      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
+      assertEquals(
+          RecordMergeMode.CUSTOM.name(),
+          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
       assertEquals(
           PAYLOAD_BASED_MERGE_STRATEGY_UUID,
           propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
       assertEquals(
-          RecordMergeMode.CUSTOM.name(),
-          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
+          PostgresDebeziumAvroPayload.class.getName(),
+          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
     }
   }
 
@@ -162,7 +227,7 @@ class TestNineToEightDowngradeHandler {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn("NonExistentPayloadClass");
+      when(tableConfig.getLegacyPayloadClass()).thenReturn("NonExistentPayloadClass");
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
       assertEquals(2, propertiesToChange.getRight().size());

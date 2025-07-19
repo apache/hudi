@@ -20,9 +20,11 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,9 +36,10 @@ import java.util.Map;
 public class SixToSevenUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
-                                             String instantTime,
-                                             SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    return Collections.emptyMap();
+  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
+                                                                         HoodieEngineContext context,
+                                                                         String instantTime,
+                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    return Pair.of(Collections.emptyMap(), Collections.emptyList());
   }
 }

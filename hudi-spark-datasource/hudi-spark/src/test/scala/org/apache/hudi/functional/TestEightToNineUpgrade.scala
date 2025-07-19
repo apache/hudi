@@ -90,6 +90,11 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
       schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_SPECIFIC_COLUMNS)
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
+    // Assert.
+    checkResult(partitionFields, payloadClass)
+  }
+
+  def checkResult(partitionFields: String, payloadClass: String): Unit = {
     assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig.getTableVersion)
     assertEquals(
       partitionFields,
