@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.storage.StoragePath;
@@ -35,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,12 +49,15 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
   private static final Logger LOG = LoggerFactory.getLogger(FiveToSixUpgradeHandler.class);
 
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
+                                                                         HoodieEngineContext context,
+                                                                         String instantTime,
+                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 
     deleteCompactionRequestedFileFromAuxiliaryFolder(table);
 
-    return Collections.emptyMap();
+    return Pair.of(Collections.emptyMap(), Collections.emptyList());
   }
 
   /**

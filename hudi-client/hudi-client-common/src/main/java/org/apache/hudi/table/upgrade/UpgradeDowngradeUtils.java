@@ -24,8 +24,16 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -60,7 +68,10 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -74,6 +85,15 @@ public class UpgradeDowngradeUtils {
       Pair.of(REPLACE_COMMIT_ACTION, CLUSTERING_ACTION)
   );
   static final Map<String, String> EIGHT_TO_SIX_TIMELINE_ACTION_MAP = CollectionUtils.reverseMap(SIX_TO_EIGHT_TIMELINE_ACTION_MAP);
+  static final Set<String> PAYLOAD_CLASSES_TO_HANDLE = new HashSet<>(Arrays.asList(
+      AWSDmsAvroPayload.class.getName(),
+      DefaultHoodieRecordPayload.class.getName(),
+      EventTimeAvroPayload.class.getName(),
+      MySqlDebeziumAvroPayload.class.getName(),
+      OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+      OverwriteWithLatestAvroPayload.class.getName(),
+      PartialUpdateAvroPayload.class.getName(),
+      PostgresDebeziumAvroPayload.class.getName()));
 
   /**
    * Utility method to run compaction for MOR table as part of downgrade step.
