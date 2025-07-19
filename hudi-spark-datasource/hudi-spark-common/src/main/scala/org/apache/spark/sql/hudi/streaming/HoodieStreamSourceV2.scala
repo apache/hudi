@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
@@ -28,10 +28,8 @@ import org.apache.hudi.common.table.log.InstantRange.RangeType
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Dataset, FileFormatUtilsForFileGroupReader, SQLContext}
+import org.apache.spark.sql.{DataFrame, FileFormatUtilsForFileGroupReader, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
@@ -56,8 +54,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
   private lazy val tableType = metaClient.getTableType
 
   private lazy val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
-    HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
-    !metaClient.isMetadataTable
+    HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean
 
   private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
@@ -138,7 +135,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
               sqlContext, metaClient, parameters ++ cdcOptions, None, false, rangeType).build()
           }
-          relationToDataFrame(relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
+          FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         } else {
           val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions, rangeType)
             .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
@@ -161,7 +158,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
             new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), false, rangeType)
               .build()
           }
-          relationToDataFrame(relation, schema)
+          FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, schema)
         } else {
           val rdd = tableType match {
             case HoodieTableType.COPY_ON_WRITE =>
@@ -180,12 +177,6 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
         }
       }
     }
-  }
-
-  private def relationToDataFrame(relation: HadoopFsRelation, requiredSchema: StructType): DataFrame = {
-    val logRel = LogicalRelation(relation, isStreaming = true)
-    val resolvedSchema = logRel.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
-    Dataset.ofRows(sqlContext.sparkSession, FileFormatUtilsForFileGroupReader.applyFiltersToPlan(logRel, requiredSchema, resolvedSchema, relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
   }
 
   private def getStartCompletionTimeAndRangeType(startOffset: HoodieSourceOffset): (String, RangeType) = {

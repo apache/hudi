@@ -247,24 +247,17 @@ class DefaultSource extends RelationProvider
     // does the checkpoint management based on the version.
     val targetTableVersion: Integer = Integer.parseInt(
       parameters.getOrElse(WRITE_TABLE_VERSION.key, WRITE_TABLE_VERSION.defaultValue.toString))
-    if (SparkConfigUtils.containsConfigProperty(parameters, STREAMING_READ_TABLE_VERSION)) {
-      val sourceTableVersion = Integer.parseInt(parameters(STREAMING_READ_TABLE_VERSION.key))
-      if (sourceTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
-        new HoodieStreamSourceV2(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
-      } else {
-        new HoodieStreamSourceV1(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
-      }
+    val readTableVersion = if (SparkConfigUtils.containsConfigProperty(parameters, STREAMING_READ_TABLE_VERSION)) {
+      Integer.parseInt(parameters(STREAMING_READ_TABLE_VERSION.key))
     } else {
-      val sourceTableVersion = metaClient.getTableConfig.getTableVersion.versionCode()
-      if (sourceTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
-        new HoodieStreamSourceV2(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
-      } else {
-        new HoodieStreamSourceV1(
-          sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
-      }
+      metaClient.getTableConfig.getTableVersion.versionCode()
+    }
+    if (readTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
+      new HoodieStreamSourceV2(
+        sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
+    } else {
+      new HoodieStreamSourceV1(
+        sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
     }
   }
 }
