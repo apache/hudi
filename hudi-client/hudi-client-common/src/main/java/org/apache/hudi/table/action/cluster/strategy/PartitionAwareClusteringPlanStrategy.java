@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -76,17 +77,31 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     long totalSizeSoFar = 0;
     boolean partialScheduled = false;
+    
+    // Only group by schema if schema evolution is disabled
+    // When schema evolution is disabled, files must have the same schema to be grouped together
+    boolean enableSchemaGrouping = !writeConfig.isFileStitchingBinaryCopySchemaEvolutionEnabled();
+    Integer currentGroupSchemaHash = null; // Track schema hash for current group
 
     for (FileSlice currentSlice : sortedFileSlices) {
       long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
-      // check if max size is reached and create new group, if needed.
-      if (totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
+      
+      // Get schema hash from the file only if schema grouping is enabled
+      Integer currentFileSchemaHash = enableSchemaGrouping ? getFileSchemaHash(currentSlice) : 0;
+      
+      // Check if we need to create a new group due to schema mismatch (only if schema grouping is enabled)
+      boolean schemaMismatch = enableSchemaGrouping && currentGroupSchemaHash != null && !currentGroupSchemaHash.equals(currentFileSchemaHash);
+      
+      // check if max size is reached OR (schema is different and schema grouping is enabled), and create new group if needed
+      if ((totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() || schemaMismatch) && !currentGroup.isEmpty()) {
         int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
         LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups
+            + (schemaMismatch ? " (schema change detected)" : ""));
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
         currentGroup = new ArrayList<>();
         totalSizeSoFar = 0;
+        currentGroupSchemaHash = null;
 
         // if fileSliceGroups's size reach the max group, stop loop
         if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
@@ -98,6 +113,10 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
       // Add to the current file-group
       currentGroup.add(currentSlice);
+      // Set schema hash for the group if not set and schema grouping is enabled
+      if (enableSchemaGrouping && currentGroupSchemaHash == null) {
+        currentGroupSchemaHash = currentFileSchemaHash;
+      }
       // assume each file group size is ~= parquet.max.file.size
       totalSizeSoFar += currentSize;
     }
@@ -239,5 +258,28 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
   protected int getNumberOfOutputFileGroups(long groupSize, long targetFileSize) {
     return (int) Math.ceil(groupSize / (double) targetFileSize);
+  }
+  
+  /**
+   * Get the schema hash for a file slice to enable schema-based grouping.
+   * @param fileSlice The file slice to get schema hash from
+   * @return Hash code of the schema for efficient comparison
+   */
+  private Integer getFileSchemaHash(FileSlice fileSlice) {
+    if (fileSlice.getBaseFile().isPresent()) {
+      String filePath = fileSlice.getBaseFile().get().getPath();
+      try {
+        // Use centralized ParquetUtils method to read schema hash
+        return ParquetUtils.readSchemaHash(
+            getHoodieTable().getStorage(),
+            new org.apache.hudi.storage.StoragePath(filePath));
+      } catch (Exception e) {
+        LOG.warn("Failed to read schema hash from file: " + filePath, e);
+        // Return a default hash if we can't read the schema
+        return 0;
+      }
+    }
+    // Return default hash for files without base file
+    return 0;
   }
 }
