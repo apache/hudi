@@ -888,3 +888,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-07-13 17:59:28] [release-v1.147.0] ---
 [ENG-28909][INTERNAL] Adding cancellation of clustering with empty replace commit (#1446)
 [AUDIT-1071]: Changelog for release-v1.146.0 (#1445)
+
+--- [2025-07-19 16:03:57] [release-v1.148.0] ---
+[ENG-29335][MINOR] NullPointerException when reading action state of old archived timelines (#1448)
+[AUDIT-1521]: Changelog for release-v1.147.0 (#1447)
