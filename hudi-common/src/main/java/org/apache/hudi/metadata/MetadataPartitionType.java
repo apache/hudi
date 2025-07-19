@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
@@ -226,6 +227,11 @@ public enum MetadataPartitionType {
       checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
       return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
+
+    @Override
+    public SerializableBiFunction<String, Integer, Integer> getFileGroupMappingFunction(HoodieIndexVersion indexVersion) {
+      return HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2));
+    }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
@@ -392,6 +398,15 @@ public enum MetadataPartitionType {
   }
 
   /**
+   * Returns the key to file group mapping function.
+   *
+   * @param indexVersion version of the index
+   */
+  public SerializableBiFunction<String, Integer, Integer> getFileGroupMappingFunction(HoodieIndexVersion indexVersion) {
+    return HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
+  }
+
+  /**
    * Merge old and new metadata payloads. By default, it returns the newer payload.
    * Implementations can override this method to merge the payloads depending on the partition type.
    */
@@ -457,9 +472,17 @@ public enum MetadataPartitionType {
         .collect(Collectors.toList());
   }
 
+  private static boolean partitionTypeMatchesPartitionPath(String partitionPath, String partitionType) {
+    return partitionPath.equals(partitionType) || partitionPath.startsWith(partitionType);
+  }
+
+  public boolean matchesPartitionPath(String partitionPath) {
+    return partitionTypeMatchesPartitionPath(partitionPath, getPartitionPath());
+  }
+
   public static MetadataPartitionType fromPartitionPath(String partitionPath) {
     for (MetadataPartitionType partitionType : getValidValues()) {
-      if (partitionPath.equals(partitionType.getPartitionPath()) || partitionPath.startsWith(partitionType.getPartitionPath())) {
+      if (partitionType.matchesPartitionPath(partitionPath)) {
         return partitionType;
       }
     }
