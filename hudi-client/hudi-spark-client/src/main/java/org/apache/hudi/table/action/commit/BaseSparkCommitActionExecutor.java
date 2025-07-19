@@ -390,8 +390,12 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
-    return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-        taskContextSupplier, keyGeneratorOpt);
+
+    return HoodieMergeHandleFactory.create(
+        operationType, config, instantTime, table, recordItr,
+        partitionPath, fileId, taskContextSupplier, keyGeneratorOpt,
+        Option.of(context.<T>getReaderContextFactory(table.getMetaClient()).getContext()),
+        Option.of(HoodieRecord.HoodieRecordType.SPARK));
   }
 
   @Override
