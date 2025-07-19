@@ -60,8 +60,6 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
 
   @Override
   public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
-    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
-    configs.addNewFieldSupport = false;
-    return configs;
+    return new HoodieTestDataGenerator.SchemaEvolutionConfigs();
   }
 }

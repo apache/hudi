@@ -34,6 +34,7 @@ import org.apache.avro.Schema;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME;
@@ -42,6 +43,8 @@ import static org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuff
  * This class is responsible for handling the schema for the file group reader that supports row index based positional merge.
  */
 public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaHandler<T> {
+
+  private static final Set<String> EXCLUDE_FIELDS = Collections.singleton(ROW_INDEX_TEMPORARY_COLUMN_NAME);
   public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
                                            Schema dataSchema,
                                            Schema requestedSchema,
@@ -65,6 +68,11 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   @Override
   protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
     return internalSchemaOpt.map(ParquetRowIndexBasedSchemaHandler::addPositionalMergeCol);
+  }
+
+  @Override
+  public Set<String> getPruneExcludeFields() {
+    return EXCLUDE_FIELDS;
   }
 
   @Override

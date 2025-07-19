@@ -310,9 +310,14 @@ public abstract class SchemaHandlerTestBase {
     public boolean supportsParquetRowIndex() {
       return this.supportsParquetRowIndex;
     }
+    
+    @Override
+    public Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException {
+      return DATA_SCHEMA;
+    }
 
     @Override
-    public ClosableIterator<String> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    protected ClosableIterator<String> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
       return null;
     }
 

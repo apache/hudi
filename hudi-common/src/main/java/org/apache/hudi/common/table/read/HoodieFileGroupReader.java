@@ -242,12 +242,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (baseFileStoragePathInfo != null) {
       recordIterator = readerContext.getFileRecordIterator(
           baseFileStoragePathInfo, start, length,
-          readerContext.getSchemaHandler().getTableSchema(),
+          readerContext.isMetadataTable() || readerContext.getSchemaHandler().internalSchemaOpt.isPresent() ? Option.of(readerContext.getSchemaHandler().getTableSchema()) : Option.empty(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     } else {
       recordIterator = readerContext.getFileRecordIterator(
           baseFile.getStoragePath(), start, length,
-          readerContext.getSchemaHandler().getTableSchema(),
+          readerContext.isMetadataTable() || readerContext.getSchemaHandler().internalSchemaOpt.isPresent() ? Option.of(readerContext.getSchemaHandler().getTableSchema()) : Option.empty(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
     return readerContext.getInstantRange().isPresent()
@@ -260,9 +260,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = readerContext.getSchemaHandler().getBootstrapRequiredFields();
     Pair<List<Schema.Field>, List<Schema.Field>> allFields = readerContext.getSchemaHandler().getBootstrapDataFields();
     Option<Pair<ClosableIterator<T>, Schema>> dataFileIterator =
-        makeBootstrapBaseFileIteratorHelper(requiredFields.getRight(), allFields.getRight(), dataFile);
+        makeBootstrapBaseFileIteratorHelper(requiredFields.getRight(), allFields.getRight(), dataFile, false);
     Option<Pair<ClosableIterator<T>, Schema>> skeletonFileIterator =
-        makeBootstrapBaseFileIteratorHelper(requiredFields.getLeft(), allFields.getLeft(), baseFile);
+        makeBootstrapBaseFileIteratorHelper(requiredFields.getLeft(), allFields.getLeft(), baseFile, true);
     if (!dataFileIterator.isPresent() && !skeletonFileIterator.isPresent()) {
       throw new IllegalStateException("should not be here if only partition cols are required");
     } else if (!dataFileIterator.isPresent()) {
@@ -302,7 +302,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   private Option<Pair<ClosableIterator<T>, Schema>> makeBootstrapBaseFileIteratorHelper(List<Schema.Field> requiredFields,
                                                                                         List<Schema.Field> allFields,
-                                                                                        BaseFile file) throws IOException {
+                                                                                        BaseFile file, boolean isSkeleton) throws IOException {
     if (requiredFields.isEmpty()) {
       return Option.empty();
     }
@@ -310,14 +310,18 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     StoragePathInfo fileStoragePathInfo = file.getPathInfo();
     if (fileStoragePathInfo != null) {
       return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
-          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+          isSkeleton || readerContext.getSchemaHandler().internalSchemaOpt.isPresent()
+              ? Option.of(readerContext.getSchemaHandler().createSchemaFromFields(allFields))
+              : Option.empty(), requiredSchema, storage), requiredSchema));
     } else {
       // If the base file length passed in is invalid, i.e., -1,
       // the file group reader fetches the length from the file system
       long fileLength = file.getFileLen() >= 0
           ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
       return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
-          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+          isSkeleton || readerContext.getSchemaHandler().internalSchemaOpt.isPresent()
+              ? Option.of(readerContext.getSchemaHandler().createSchemaFromFields(allFields))
+              : Option.empty(), requiredSchema, storage), requiredSchema));
     }
   }
 

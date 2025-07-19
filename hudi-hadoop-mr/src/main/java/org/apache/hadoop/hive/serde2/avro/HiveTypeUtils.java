@@ -235,9 +235,8 @@ public class HiveTypeUtils {
                                                  Set<Schema> seenSchemas) throws AvroSerdeException {
     // Avro requires NULLable types to be defined as unions of some type T
     // and NULL.  This is annoying and we're going to hide it from the user.
-    if (AvroSerdeUtils.isNullableType(schema)) {
-      return generateTypeInfo(
-          AvroSerdeUtils.getOtherTypeFromNullableType(schema), seenSchemas);
+    if (isNullableType(schema)) {
+      return generateTypeInfo(getOtherTypeFromNullableType(schema), seenSchemas);
     }
 
     Schema.Type type = schema.getType();
@@ -252,6 +251,41 @@ public class HiveTypeUtils {
       case UNION:  return generateUnionTypeInfo(schema, seenSchemas);
       case ENUM:   return generateEnumTypeInfo(schema);
       default:     throw new AvroSerdeException("Do not yet support: " + schema);
+    }
+  }
+
+  public static boolean isNullableType(Schema schema) {
+    if (!schema.getType().equals(Schema.Type.UNION)) {
+      return false;
+    }
+
+    List<Schema> itemSchemas = schema.getTypes();
+    if (itemSchemas.size() < 2) {
+      return false;
+    }
+
+    for (Schema itemSchema : itemSchemas) {
+      if (Schema.Type.NULL.equals(itemSchema.getType())) {
+        return true;
+      }
+    }
+
+    // [null, null] not allowed, so this check is ok.
+    return false;
+  }
+
+  public static Schema getOtherTypeFromNullableType(Schema schema) {
+    List<Schema> itemSchemas = new ArrayList<>();
+    for (Schema itemSchema : schema.getTypes()) {
+      if (!Schema.Type.NULL.equals(itemSchema.getType())) {
+        itemSchemas.add(itemSchema);
+      }
+    }
+
+    if (itemSchemas.size() > 1) {
+      return Schema.createUnion(itemSchemas);
+    } else {
+      return itemSchemas.get(0);
     }
   }
 

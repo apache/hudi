@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.avro.AvroSchemaCache;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -122,8 +123,12 @@ public class FileGroupReaderSchemaHandler<T> {
     return this.internalSchemaOpt;
   }
 
+  public Set<String> getPruneExcludeFields() {
+    return Collections.emptySet();
+  }
+
   public Option<UnaryOperator<T>> getOutputConverter() {
-    if (!requestedSchema.equals(requiredSchema)) {
+    if (!AvroSchemaUtils.areSchemasPrettyMuchEqual(requiredSchema, requestedSchema)) {
       return Option.of(readerContext.projectRecord(requiredSchema, requestedSchema));
     }
     return Option.empty();

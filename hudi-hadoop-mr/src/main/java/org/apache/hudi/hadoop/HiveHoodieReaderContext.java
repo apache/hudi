@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -52,6 +53,8 @@ import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
+import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
@@ -109,15 +112,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
     List<String> dataColumnNameList = dataSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).collect(Collectors.toList());
-    List<TypeInfo> dataColumnTypeList = dataColumnNameList.stream().map(fieldName -> {
-      TypeInfo type = columnTypeMap.get(fieldName);
-      if (type == null) {
-        throw new IllegalArgumentException("Field: " + fieldName + ", does not have a defined type");
-      }
-      return type;
-    }).collect(Collectors.toList());
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
-    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, dataColumnTypeList.stream().map(TypeInfo::getQualifiedName).collect(Collectors.joining(",")));
+    try {
+      jobConf.set(serdeConstants.LIST_COLUMN_TYPES, HiveTypeUtils.generateColumnTypes(dataSchema).stream().map(TypeInfo::getTypeName).collect(Collectors.joining(",")));
+    } catch (AvroSerdeException e) {
+      throw new RuntimeException(e);
+    }
     // don't replace `f -> f.name()` with lambda reference
     String readColNames = requiredSchema.getFields().stream().map(f -> f.name()).collect(Collectors.joining(","));
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNames);
@@ -126,13 +126,19 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema,
+  public Schema getDataFileSchema(StoragePath filePath, HoodieStorage storage) throws IOException {
+    return HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
+  }
+
+  @Override
+  protected ClosableIterator<ArrayWritable> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema,
                                                                Schema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(filePath, null, start, length, dataSchema, requiredSchema, storage);
   }
 
   @Override
-  public ClosableIterator<ArrayWritable> getFileRecordIterator(
+  protected ClosableIterator<ArrayWritable> doGetFileRecordIterator(
       StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, storage);
   }
@@ -278,7 +284,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         Writable[] skeletonWritable = skeletonFileIterator.next().get();
         Writable[] dataWritable = dataFileIterator.next().get();
         for (int i = 0; i < partitionFieldPositions.length; i++) {
-          if (dataWritable[partitionFieldPositions[i]] == null) {
+          if (dataWritable[partitionFieldPositions[i]] == null || dataWritable[partitionFieldPositions[i]] instanceof NullWritable) {
             dataWritable[partitionFieldPositions[i]] = convertedPartitionValues[i];
           }
         }
@@ -299,10 +305,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    if (!renamedColumns.isEmpty()) {
-      throw new IllegalStateException("Schema evolution is not supported in the filegroup reader for Hive currently");
-    }
-    return HoodieArrayWritableAvroUtils.projectRecord(from, to);
+    return record -> HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from, to, renamedColumns);
   }
 
   @Override
