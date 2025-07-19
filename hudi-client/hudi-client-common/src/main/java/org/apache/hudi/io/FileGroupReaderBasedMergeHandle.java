@@ -46,6 +46,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +58,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
@@ -98,7 +100,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
           config,
           hoodieTable.getMetaClient().getTableConfig(),
           partitionPath,
-          getStorage(),
+          storage,
           getWriterSchema(),
           createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
           IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config)));
@@ -176,7 +178,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
         .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
-        .withFileGroupUpdateCallback(cdcLogger.map(CDCCallback::new)).build()) {
+        .withFileGroupUpdateCallback(cdcLogger.map(logger -> new CDCCallback(logger, readerContext))).build()) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
@@ -245,26 +247,40 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieMergeHand
     }
   }
 
-  private static class CDCCallback implements BaseFileUpdateCallback {
+  private static class CDCCallback<T> implements BaseFileUpdateCallback<T> {
     private final HoodieCDCLogger cdcLogger;
+    private final HoodieReaderContext<T> readerContext;
+    private final Option<UnaryOperator<T>> outputConverter;
+    private final Schema requestedSchema;
 
-    public CDCCallback(HoodieCDCLogger cdcLogger) {
+    CDCCallback(HoodieCDCLogger cdcLogger, HoodieReaderContext<T> readerContext) {
       this.cdcLogger = cdcLogger;
+      this.readerContext = readerContext;
+      this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
+      this.requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
     }
 
     @Override
-    public void onUpdate(String recordKey, GenericRecord previousRecord, GenericRecord mergedRecord) {
-      cdcLogger.put(recordKey, previousRecord, Option.of(mergedRecord));
+    public void onUpdate(String recordKey, T previousRecord, T mergedRecord) {
+      cdcLogger.put(recordKey, convertOutput(previousRecord), Option.of(convertOutput(mergedRecord)));
+
     }
 
     @Override
-    public void onInsert(String recordKey, GenericRecord newRecord) {
-      cdcLogger.put(recordKey, null, Option.of(newRecord));
+    public void onInsert(String recordKey, T newRecord) {
+      cdcLogger.put(recordKey, null, Option.of(convertOutput(newRecord)));
+
     }
 
     @Override
-    public void onDelete(String recordKey, GenericRecord previousRecord) {
-      cdcLogger.put(recordKey, previousRecord, Option.empty());
+    public void onDelete(String recordKey, T previousRecord) {
+      cdcLogger.put(recordKey, convertOutput(previousRecord), Option.empty());
+
+    }
+
+    private GenericRecord convertOutput(T record) {
+      T convertedRecord = outputConverter.map(converter -> record == null ? null : converter.apply(record)).orElse(record);
+      return convertedRecord == null ? null : readerContext.convertToAvroRecord(convertedRecord, requestedSchema);
     }
   }
 }

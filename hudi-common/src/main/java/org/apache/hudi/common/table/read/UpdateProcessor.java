@@ -22,7 +22,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 
 import java.util.function.UnaryOperator;
 
@@ -36,11 +35,11 @@ public interface UpdateProcessor<T> {
    * Processes the update to the record. If the update should not be returned to the caller, the method should return null.
    * @param recordKey the key of the record being updated
    * @param previousRecord the previous version of the record, or null if there is no previous value
-   * @param currentRecord the current version of the record after merging with the existing record, if any exists
+   * @param mergedRecord the current version of the record after merging with the existing record, if any exists
    * @param isDelete a flag indicating whether the merge resulted in a delete operation
    * @return the processed record, or null if the record should not be returned to the caller
    */
-  T processUpdate(String recordKey, T previousRecord, T currentRecord, boolean isDelete);
+  T processUpdate(String recordKey, T previousRecord, T mergedRecord, boolean isDelete);
 
   static <T> UpdateProcessor<T> create(HoodieReadStats readStats, HoodieReaderContext<T> readerContext,
                                        boolean emitDeletes, Option<BaseFileUpdateCallback> updateCallback) {
@@ -68,11 +67,11 @@ public interface UpdateProcessor<T> {
     }
 
     @Override
-    public T processUpdate(String recordKey, T previousRecord, T currentRecord, boolean isDelete) {
+    public T processUpdate(String recordKey, T previousRecord, T mergedRecord, boolean isDelete) {
       if (isDelete) {
         readStats.incrementNumDeletes();
         if (emitDeletes) {
-          return readerContext.getDeleteRow(currentRecord, recordKey);
+          return readerContext.getDeleteRow(mergedRecord, recordKey);
         }
         return null;
       } else {
@@ -81,7 +80,7 @@ public interface UpdateProcessor<T> {
         } else {
           readStats.incrementNumInserts();
         }
-        return readerContext.seal(currentRecord);
+        return readerContext.seal(mergedRecord);
       }
     }
   }
@@ -91,7 +90,7 @@ public interface UpdateProcessor<T> {
    * @param <T> the engine specific record type
    */
   class CallbackProcessor<T> implements UpdateProcessor<T> {
-    private final BaseFileUpdateCallback callback;
+    private final BaseFileUpdateCallback<T> callback;
     private final UpdateProcessor<T> delegate;
     private final HoodieReaderContext<T> readerContext;
     private final Option<UnaryOperator<T>> outputConverter;
@@ -111,18 +110,13 @@ public interface UpdateProcessor<T> {
       T result = delegate.processUpdate(recordKey, previousRecord, currentRecord, isDelete);
 
       if (isDelete) {
-        callback.onDelete(recordKey, convertOutput(previousRecord));
+        callback.onDelete(recordKey, previousRecord);
       } else if (previousRecord != null && previousRecord != currentRecord) {
-        callback.onUpdate(recordKey, convertOutput(previousRecord), convertOutput(currentRecord));
+        callback.onUpdate(recordKey, previousRecord, currentRecord);
       } else {
-        callback.onInsert(recordKey, convertOutput(currentRecord));
+        callback.onInsert(recordKey, currentRecord);
       }
       return result;
-    }
-
-    private GenericRecord convertOutput(T record) {
-      T convertedRecord = outputConverter.map(converter -> record == null ? null : converter.apply(record)).orElse(record);
-      return convertedRecord == null ? null : readerContext.convertToAvroRecord(convertedRecord, requestedSchema);
     }
   }
 }

@@ -19,31 +19,29 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.avro.generic.GenericRecord;
-
 /**
  * Callback interface for handling updates to the base file of the file group.
  */
-public interface BaseFileUpdateCallback {
+public interface BaseFileUpdateCallback<T> {
   /**
    * Callback method to handle updates to a record already present in the base file.
    * @param recordKey the key of the record being updated
    * @param previousRecord the record in the base file before the update
    * @param mergedRecord the result of merging the previous and new records
    */
-  void onUpdate(String recordKey, GenericRecord previousRecord, GenericRecord mergedRecord);
+  void onUpdate(String recordKey, T previousRecord, T mergedRecord);
 
   /**
    * Callback method to handle insertion of a new record into the base file.
    * @param recordKey the key of the record being inserted
    * @param newRecord the new record being added to the base file
    */
-  void onInsert(String recordKey, GenericRecord newRecord);
+  void onInsert(String recordKey, T newRecord);
 
   /**
    * Callback method to handle deletion of a record from the base file.
    * @param recordKey the key of the record being deleted
    * @param previousRecord the record in the base file before deletion
    */
-  void onDelete(String recordKey, GenericRecord previousRecord);
+  void onDelete(String recordKey, T previousRecord);
 }
