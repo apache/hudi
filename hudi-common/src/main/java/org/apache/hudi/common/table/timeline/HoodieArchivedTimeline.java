@@ -261,8 +261,8 @@ public class HoodieArchivedTimeline extends HoodieDefaultTimeline implements Hoo
     final String instantTime = record.get(HoodiePartitionMetadata.COMMIT_TIME_KEY).toString();
     final String action = record.get(ACTION_TYPE_KEY).toString();
     final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
-    final HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
-        instantTime, stateTransitionTime);
+    final HoodieInstant.State actionState = Option.ofNullable(record.get(ACTION_STATE)).map(state -> HoodieInstant.State.valueOf(state.toString())).orElse(HoodieInstant.State.COMPLETED);
+    final HoodieInstant hoodieInstant = new HoodieInstant(actionState, action, instantTime, stateTransitionTime);
     if (timeRangeFilter != null && !timeRangeFilter.isInRange(hoodieInstant)) {
       return Option.empty();
     }

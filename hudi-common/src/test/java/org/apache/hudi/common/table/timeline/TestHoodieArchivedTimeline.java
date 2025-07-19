@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -49,6 +50,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
@@ -455,6 +457,19 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
         "commit metadata for ts=31 must be loaded");
     assertFalse(dupTimeline.getInstantDetails(fakeClean31).isPresent(),
         "clean metadata for ts=31 must NOT be loaded");
+  }
+
+  @Test
+  void readLegacyArchivedTimelineWithNullFields() {
+    String samplePath = this.getClass().getClassLoader().getResource("archived_timeline").getPath();
+    metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(samplePath)
+        .setConf(new Configuration(false))
+        .setLoadActiveTimelineOnLoad(false)
+        .build();
+    HoodieArchivedTimeline timeline = new HoodieArchivedTimeline(metaClient);
+    timeline.loadCompletedInstantDetailsInMemory();
+    assertEquals(3, timeline.getInstants().size());
   }
 
   /**
