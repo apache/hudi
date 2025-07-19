@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
-import org.apache.hudi.table.action.compact.LogCompactionExecutionHelper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,7 +54,7 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
     super(table, engineContext, writeConfig, executor);
     this.compactionStrategy = HoodieCompactionStrategy.newBuilder()
         .setStrategyParams(getStrategyParams())
-        .setCompactorClassName(LogCompactionExecutionHelper.class.getName())
+        .setCompactorClassName("org.apache.hudi.table.action.compact.LogCompactionExecutionHelper") // added for compatibility between releases
         .build();
   }
 
