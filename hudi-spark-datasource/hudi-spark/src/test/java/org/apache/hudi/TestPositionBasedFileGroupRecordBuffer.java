@@ -35,12 +35,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.HoodieReadStats;
-import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
+import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -152,7 +151,6 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
       writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), CustomPayloadForTesting.class.getName());
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
-    HoodieReadStats readStats = new HoodieReadStats();
     buffer = new PositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
@@ -160,7 +158,6 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         metaClient.getTableConfig().getPartialUpdateMode(),
         baseFileInstantTime,
         props,
-        readStats,
         Option.of("timestamp"),
         updateProcessor);
   }
