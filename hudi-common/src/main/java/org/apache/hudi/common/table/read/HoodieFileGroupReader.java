@@ -390,6 +390,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         nextRecord -> readerContext.getRecordKey(nextRecord, readerContext.getSchemaHandler().getRequestedSchema()));
   }
 
+  public ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException {
+    initRecordIterators();
+    return recordBuffer.getLogRecordIterator();
+  }
+
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
     private HoodieFileGroupReader<T> reader;
 

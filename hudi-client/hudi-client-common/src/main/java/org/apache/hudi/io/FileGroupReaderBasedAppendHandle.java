@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -83,9 +84,10 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
         .withLatestCommitTime(instantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields).withEnableOptimizedLogBlockScan(true)
         .withInternalSchema(internalSchemaOption).withProps(props).withEmitDelete(true)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords()).build()) {
-      recordItr = new CloseableMappingIterator<>(fileGroupReader.getClosableHoodieRecordIterator(), record -> {
-        record.setCurrentLocation(newRecordLocation);
-        return record;
+      recordItr = new CloseableMappingIterator<>(fileGroupReader.getLogRecordsOnly(), record -> {
+        HoodieRecord<T> hoodieRecord = readerContext.constructHoodieRecord(record);
+        hoodieRecord.setCurrentLocation(newRecordLocation);
+        return hoodieRecord;
       });
       header.put(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES,
           StringUtils.join(fileGroupReader.getValidBlockInstants(), ","));

@@ -328,7 +328,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   protected void initializeLogRecordIterator() {
-    logRecordIterator = records.values().iterator();
+    logRecordIterator = records.iterator();
   }
 
   protected boolean hasNextLogRecord() {
