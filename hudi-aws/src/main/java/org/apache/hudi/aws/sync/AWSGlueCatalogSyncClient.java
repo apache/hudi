@@ -521,7 +521,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
               .build();
 
       CreateTableResponse response = awsGlue.createTable(request).get();
-      tagResource(String.format(GLUE_TABLE_ARN_FORMAT, awsGlue.serviceClientConfiguration().region(), catalogId, databaseName, tableName));
       LOG.info("Created table {} : {}", tableId(databaseName, tableName), response);
     } catch (AlreadyExistsException e) {
       LOG.warn("Table {} already exists.", tableId(databaseName, tableName), e);

@@ -179,10 +179,6 @@ class TestAWSGlueSyncClient {
 
     CompletableFuture<DeleteTableResponse> deleteTableResponse = CompletableFuture.completedFuture(DeleteTableResponse.builder().build());
     Mockito.when(mockAwsGlue.deleteTable(any(DeleteTableRequest.class))).thenReturn(deleteTableResponse);
-    GlueServiceClientConfiguration mockConfig = mock(GlueServiceClientConfiguration.class);
-    when(mockAwsGlue.serviceClientConfiguration()).thenReturn(mockConfig);
-    when(mockConfig.region()).thenReturn(Region.US_EAST_1);
-
     awsGlueSyncClient.createOrReplaceTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
 
     verify(mockAwsGlue, times(2)).deleteTable(any(DeleteTableRequest.class));
@@ -205,10 +201,6 @@ class TestAWSGlueSyncClient {
     Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponse);
     CompletableFuture<CreateTableResponse> createTableResponse = CompletableFuture.completedFuture(CreateTableResponse.builder().build());
     Mockito.when(mockAwsGlue.createTable(any(CreateTableRequest.class))).thenReturn(createTableResponse);
-    GlueServiceClientConfiguration mockConfig = mock(GlueServiceClientConfiguration.class);
-    when(mockAwsGlue.serviceClientConfiguration()).thenReturn(mockConfig);
-    when(mockConfig.region()).thenReturn(Region.US_EAST_1);
-
     awsGlueSyncClient.createOrReplaceTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
     // Verify that awsGlue.createTable() is called
     verify(mockAwsGlue, times(1)).createTable(any(CreateTableRequest.class));
@@ -733,21 +725,14 @@ class TestAWSGlueSyncClient {
     String dbName = "test_db";
     clientWithTags.createDatabase(dbName);
 
-    // Verify tagResource was called twice (once for table, once for database)
+    // Verify tagResource was called once (only for database, table tagging was removed)
     ArgumentCaptor<TagResourceRequest> tagCaptor = ArgumentCaptor.forClass(TagResourceRequest.class);
-    verify(mockAwsGlue, times(2)).tagResource(tagCaptor.capture());
+    verify(mockAwsGlue, times(1)).tagResource(tagCaptor.capture());
     
     List<TagResourceRequest> tagRequests = tagCaptor.getAllValues();
     
-    // Verify table tagging
-    TagResourceRequest tableTagRequest = tagRequests.get(0);
-    assertTrue(tableTagRequest.resourceArn().contains("table"));
-    assertTrue(tableTagRequest.resourceArn().contains(tableName));
-    assertEquals("OneHouse", tableTagRequest.tagsToAdd().get("CostCenter"));
-    assertEquals("Production", tableTagRequest.tagsToAdd().get("Environment"));
-    
-    // Verify database tagging  
-    TagResourceRequest dbTagRequest = tagRequests.get(1);
+    // Verify database tagging (table tagging functionality was removed)
+    TagResourceRequest dbTagRequest = tagRequests.get(0);
     assertTrue(dbTagRequest.resourceArn().contains("database"));
     assertTrue(dbTagRequest.resourceArn().contains(dbName));
     assertEquals("OneHouse", dbTagRequest.tagsToAdd().get("CostCenter"));
