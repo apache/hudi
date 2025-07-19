@@ -30,10 +30,18 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConfig
 
 class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
-
-  // TODO(HUDI-8938): add "mor,6,true", "mor,6,false" after the fix
-  Seq("cow,current,true", "cow,current,false", "cow,6,true", "cow,6,false",
-    "mor,current,true", "mor,current,false").foreach { args =>
+  Seq(
+    "cow,current,true",
+    "cow,current,false",
+    "mor,current,true",
+    "mor,current,false",
+    "cow,8,true",
+    "mor,8,true",
+    "cow,6,true",
+    "cow,6,false",
+    "mor,6,true",
+    "mor,6,false"
+  ).foreach { args =>
     val argList = args.split(',')
     val tableType = argList(0)
     val tableVersion = if (argList(1).equals("current")) {

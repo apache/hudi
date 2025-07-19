@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for {@link StreamerUtil}.
  */
-public class TestStreamerUtil {
+class TestStreamerUtil {
 
   @TempDir
   File tempFile;

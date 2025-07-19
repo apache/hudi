@@ -40,10 +40,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestCommonClientUtils {
+class TestCommonClientUtils {
 
   @Test
-  public void testDisallowPartialUpdatesPreVersion8() {
+  void testDisallowPartialUpdatesPreVersion8() {
     // given:
     HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
     HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
@@ -56,7 +56,7 @@ public class TestCommonClientUtils {
   }
 
   @Test
-  public void testDisallowNBCCPreVersion8() {
+  void testDisallowNBCCPreVersion8() {
     // given:
     HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
     HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
@@ -101,7 +101,12 @@ public class TestCommonClientUtils {
             Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
             Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, true),
             Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SEVEN, true),
-            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true)
+            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true),
+            // Rule 4: disallowed scenarios
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE, false)
         )
     );
   }

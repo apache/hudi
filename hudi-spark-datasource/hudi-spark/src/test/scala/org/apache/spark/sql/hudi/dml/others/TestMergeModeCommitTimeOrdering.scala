@@ -279,8 +279,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
             storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
 
           // TODO(HUDI-8840): enable MERGE INTO with deletes
-          val shouldTestMergeIntoDelete = setRecordMergeConfigs &&
-            tableVersion.toInt == HoodieTableVersion.current().versionCode()
+          val shouldTestMergeIntoDelete = setRecordMergeConfigs && (tableVersion.toInt >= 8)
           // Merge operation - delete with higher, lower and equal ordering field value, all should take effect.
           if (shouldTestMergeIntoDelete) {
             spark.sql(
