@@ -27,7 +27,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -80,15 +79,6 @@ public class FileGroupReaderSchemaHandler<T> {
 
   protected final TypedProperties properties;
 
-  protected final Option<HoodieRecordMerger> recordMerger;
-
-  protected final boolean hasBootstrapBaseFile;
-  protected boolean needsBootstrapMerge;
-
-  protected final boolean needsMORMerge;
-
-  private final LocalAvroSchemaCache localAvroSchemaCache;
-
   private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
   private final boolean hasBuiltInDelete;
   private final int hoodieOperationPos;
@@ -101,9 +91,6 @@ public class FileGroupReaderSchemaHandler<T> {
                                       TypedProperties properties) {
     this.properties = properties;
     this.readerContext = readerContext;
-    this.hasBootstrapBaseFile = readerContext.getHasBootstrapBaseFile();
-    this.needsMORMerge = readerContext.getHasLogFiles();
-    this.recordMerger = readerContext.getRecordMerger();
     this.tableSchema = tableSchema;
     this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
     this.hoodieTableConfig = hoodieTableConfig;
@@ -114,8 +101,6 @@ public class FileGroupReaderSchemaHandler<T> {
     this.hoodieOperationPos = Option.ofNullable(requiredSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD)).map(Schema.Field::pos).orElse(-1);
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
-    readerContext.setNeedsBootstrapMerge(this.needsBootstrapMerge);
-    this.localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
   }
 
   public Schema getTableSchema() {
@@ -184,7 +169,8 @@ public class FileGroupReaderSchemaHandler<T> {
   @VisibleForTesting
   Schema generateRequiredSchema() {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
-    if (!needsMORMerge) {
+    //might need to change this if other queries than mor have mandatory fields
+    if (!readerContext.getHasLogFiles()) {
       if (hasInstantRange && !findNestedField(requestedSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).isPresent()) {
         List<Schema.Field> addedFields = new ArrayList<>();
         addedFields.add(getField(tableSchema, HoodieRecord.COMMIT_TIME_METADATA_FIELD));
@@ -194,14 +180,14 @@ public class FileGroupReaderSchemaHandler<T> {
     }
 
     if (hoodieTableConfig.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
-      if (!recordMerger.get().isProjectionCompatible()) {
+      if (!readerContext.getRecordMerger().get().isProjectionCompatible()) {
         return tableSchema;
       }
     }
 
     List<Schema.Field> addedFields = new ArrayList<>();
     for (String field : getMandatoryFieldsForMerging(
-        hoodieTableConfig, properties, tableSchema, recordMerger,
+        hoodieTableConfig, properties, tableSchema, readerContext.getRecordMerger(),
         hasBuiltInDelete, customDeleteMarkerKeyValue, hasInstantRange)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         addedFields.add(getField(tableSchema, field));
@@ -275,8 +261,9 @@ public class FileGroupReaderSchemaHandler<T> {
   protected Schema prepareRequiredSchema() {
     Schema preReorderRequiredSchema = generateRequiredSchema();
     Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(preReorderRequiredSchema);
-    this.needsBootstrapMerge = hasBootstrapBaseFile && !requiredFields.getLeft().isEmpty() && !requiredFields.getRight().isEmpty();
-    return needsBootstrapMerge
+    readerContext.setNeedsBootstrapMerge(readerContext.getHasBootstrapBaseFile()
+        && !requiredFields.getLeft().isEmpty() && !requiredFields.getRight().isEmpty());
+    return readerContext.getNeedsBootstrapMerge()
         ? createSchemaFromFields(Stream.concat(requiredFields.getLeft().stream(), requiredFields.getRight().stream()).collect(Collectors.toList()))
         : preReorderRequiredSchema;
   }
