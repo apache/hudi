@@ -31,7 +31,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConf
 class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
 
   Seq(
-    "cow,8,false,false", "cow,8,false,true", "cow,8,true,false",
+    "cow,9,false,false", "cow,8,false,true", "cow,9,true,false",
     "cow,6,true,false", "cow,6,true,true",
     "mor,8,false,false", "mor,8,false,true", "mor,8,true,false",
     "mor,6,true,true").foreach { args =>
@@ -48,7 +48,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
         // Table version 6
         s", payloadClass = '${classOf[OverwriteWithLatestAvroPayload].getName}'"
       } else {
-        // Current table version (8)
+        // Current table version (9)
         ", preCombineField = 'ts',\nhoodie.record.merge.mode = 'COMMIT_TIME_ORDERING'"
       }
     } else {
@@ -66,7 +66,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
         HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName)
     } else {
       Map(
-        HoodieTableConfig.VERSION.key -> "8",
+        HoodieTableConfig.VERSION.key -> "9",
         HoodieTableConfig.RECORD_MERGE_MODE.key -> COMMIT_TIME_ORDERING.name(),
         HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
         HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
@@ -276,7 +276,7 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
             storage, tmp.getCanonicalPath, expectedMergeConfigs, nonExistentConfigs)
 
           // TODO(HUDI-8840): enable MERGE INTO with deletes
-          val shouldTestMergeIntoDelete = setRecordMergeConfigs && tableVersion.toInt == 8
+          val shouldTestMergeIntoDelete = setRecordMergeConfigs && tableVersion.toInt == 9
           // Merge operation - delete with higher, lower and equal ordering field value, all should take effect.
           if (shouldTestMergeIntoDelete) {
             spark.sql(

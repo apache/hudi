@@ -670,15 +670,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> continuousModeArgs() {
     return Stream.of(
-        Arguments.of("AVRO", "EIGHT"),
-        Arguments.of("SPARK", "EIGHT"),
+        Arguments.of("AVRO", "NINE"),
+        Arguments.of("SPARK", "NINE"),
         Arguments.of("AVRO", "SIX")
     );
   }
 
   private static Stream<Arguments> continuousModeMorArgs() {
     return Stream.of(
-        Arguments.of("AVRO", "EIGHT"),
+        Arguments.of("AVRO", "NINE"),
         Arguments.of("AVRO", "SIX")
     );
   }
@@ -710,7 +710,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
   public void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "EIGHT");
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "NINE");
   }
 
   @Timeout(600)

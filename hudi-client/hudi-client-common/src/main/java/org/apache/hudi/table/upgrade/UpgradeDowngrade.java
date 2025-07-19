@@ -115,7 +115,9 @@ public class UpgradeDowngrade {
    * 0.10.0 -> v3
    * 0.11.0 -> v4
    * 0.12.0 to 0.13.0 -> v5
-   * 0.14.0 to current -> v6
+   * 0.14.0 to 0.x -> v6
+   * 1.0.0 to 1.0.2 -> v8
+   * 1.1.0 to current -> v9
    * <p>
    * On a high level, these are the steps performed
    * <p>
@@ -164,7 +166,10 @@ public class UpgradeDowngrade {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
-        tablePropsToAdd.putAll(upgrade(fromVersion, nextVersion, instantTime));
+        Pair<Map<ConfigProperty, String>, List<ConfigProperty>> tablePropsToAddAndRemove =
+            upgrade(fromVersion, nextVersion, instantTime);
+        tablePropsToAdd.putAll(tablePropsToAddAndRemove.getLeft());
+        tablePropsToRemove.addAll(tablePropsToAddAndRemove.getRight());
         fromVersion = nextVersion;
       }
     } else {
@@ -228,7 +233,9 @@ public class UpgradeDowngrade {
     }
   }
 
-  protected Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
+  protected Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieTableVersion fromVersion,
+                                                                            HoodieTableVersion toVersion,
+                                                                            String instantTime) {
     if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
       return new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
