@@ -304,6 +304,165 @@ public class TestHoodieListDataPairData {
     assertEquals(expected, result, "Join result does not match expected output");
   }
 
+  @Test
+  public void testFilter() {
+    // Test filtering by key
+    HoodiePairData<String, String> filteredByKey = testHoodiePairData.filter((key, value) -> key.equals(KEY1));
+    List<Pair<String, String>> expectedByKey = Arrays.asList(
+        ImmutablePair.of(KEY1, STRING_VALUE1),
+        ImmutablePair.of(KEY1, STRING_VALUE2)
+    );
+    assertEquals(expectedByKey, filteredByKey.collectAsList());
+
+    // Test filtering by value
+    testHoodiePairData = HoodieListPairData.lazy(testPairs);
+    HoodiePairData<String, String> filteredByValue = testHoodiePairData.filter((key, value) -> value.equals(STRING_VALUE3));
+    List<Pair<String, String>> expectedByValue = Arrays.asList(
+        ImmutablePair.of(KEY2, STRING_VALUE3)
+    );
+    assertEquals(expectedByValue, filteredByValue.collectAsList());
+
+    // Test filtering by both key and value
+    testHoodiePairData = HoodieListPairData.lazy(testPairs);
+    HoodiePairData<String, String> filteredByBoth = testHoodiePairData.filter((key, value) ->
+        key.equals(KEY2) && value.equals(STRING_VALUE4));
+    List<Pair<String, String>> expectedByBoth = Arrays.asList(
+        ImmutablePair.of(KEY2, STRING_VALUE4)
+    );
+    assertEquals(expectedByBoth, filteredByBoth.collectAsList());
+  }
+
+  @Test
+  public void testFilterWithComplexCondition() {
+    // Test filtering with complex condition (key starts with "key" and value length > 5)
+    HoodiePairData<String, String> filtered = testHoodiePairData.filter((key, value) -> 
+        key.startsWith("key") && value.length() > 5);
+    List<Pair<String, String>> expected = Arrays.asList(
+        ImmutablePair.of(KEY1, STRING_VALUE1),
+        ImmutablePair.of(KEY1, STRING_VALUE2),
+        ImmutablePair.of(KEY2, STRING_VALUE3),
+        ImmutablePair.of(KEY2, STRING_VALUE4),
+        ImmutablePair.of(KEY3, STRING_VALUE5),
+        ImmutablePair.of(KEY4, STRING_VALUE6)
+    );
+    assertEquals(expected, filtered.collectAsList());
+  }
+
+  @Test
+  public void testFilterWithNoMatches() {
+    // Test filtering that returns no matches
+    HoodiePairData<String, String> filtered = testHoodiePairData.filter((key, value) -> 
+        key.equals("nonexistent") && value.equals("nonexistent"));
+    List<Pair<String, String>> expected = Collections.emptyList();
+    assertEquals(expected, filtered.collectAsList());
+  }
+
+  @Test
+  public void testFilterWithAllMatches() {
+    // Test filtering that returns all matches
+    HoodiePairData<String, String> filtered = testHoodiePairData.filter((key, value) -> true);
+    assertEquals(testPairs, filtered.collectAsList());
+  }
+
+  @Test
+  public void testFilterWithNullValues() {
+    // Test filtering with null values in the data
+    List<Pair<String, String>> dataWithNulls = Arrays.asList(
+        ImmutablePair.of("key1", "value1"),
+        ImmutablePair.of("key2", null),
+        ImmutablePair.of("key3", "value3")
+    );
+    HoodiePairData<String, String> pairDataWithNulls = HoodieListPairData.lazy(dataWithNulls);
+    
+    // Filter out null values
+    HoodiePairData<String, String> filtered = pairDataWithNulls.filter((key, value) -> value != null);
+    List<Pair<String, String>> expected = Arrays.asList(
+        ImmutablePair.of("key1", "value1"),
+        ImmutablePair.of("key3", "value3")
+    );
+    assertEquals(expected, filtered.collectAsList());
+  }
+
+  @Test
+  public void testFilterWithNumericData() {
+    // Test filtering with numeric data
+    List<Pair<String, Integer>> numericData = Arrays.asList(
+        ImmutablePair.of("a", 1),
+        ImmutablePair.of("b", 2),
+        ImmutablePair.of("c", 3),
+        ImmutablePair.of("d", 4),
+        ImmutablePair.of("e", 5)
+    );
+    HoodiePairData<String, Integer> numericPairData = HoodieListPairData.lazy(numericData);
+    
+    // Filter even numbers
+    HoodiePairData<String, Integer> filtered = numericPairData.filter((key, value) -> value % 2 == 0);
+    List<Pair<String, Integer>> expected = Arrays.asList(
+        ImmutablePair.of("b", 2),
+        ImmutablePair.of("d", 4)
+    );
+    assertEquals(expected, filtered.collectAsList());
+  }
+
+  @Test
+  public void testFilterWithExceptionHandling() {
+    // Test that exceptions in filter function are properly wrapped
+    HoodiePairData<String, String> filtered = testHoodiePairData.filter((key, value) -> {
+      if (key.equals(KEY1)) {
+        throw new RuntimeException("Test exception");
+      }
+      return true;
+    });
+    
+    // Should throw RuntimeException
+    try {
+      filtered.collectAsList();
+      // If we reach here, the test should fail
+      throw new AssertionError("Expected RuntimeException to be thrown");
+    } catch (RuntimeException e) {
+      // Expected behavior
+      assertTrue(e.getMessage().contains("Test exception") || e.getCause().getMessage().contains("Test exception"));
+    }
+  }
+
+  @Test
+  public void testFilterWithEagerExecution() {
+    // Test filtering with eager execution semantic
+    HoodiePairData<String, String> eagerPairData = HoodieListPairData.eager(testPairs);
+    HoodiePairData<String, String> filtered = eagerPairData.filter((key, value) -> key.equals(KEY1));
+    
+    List<Pair<String, String>> expected = Arrays.asList(
+        ImmutablePair.of(KEY1, STRING_VALUE1),
+        ImmutablePair.of(KEY1, STRING_VALUE2)
+    );
+    assertEquals(expected, filtered.collectAsList());
+    
+    // Test that we can call collectAsList multiple times with eager execution
+    assertEquals(expected, filtered.collectAsList());
+    assertEquals(expected, filtered.collectAsList());
+  }
+
+  @Test
+  public void testFilterChaining() {
+    // Test chaining multiple filter operations
+    HoodiePairData<String, String> filtered1 = testHoodiePairData.filter((key, value) -> key.equals(KEY1));
+    HoodiePairData<String, String> filtered2 = filtered1.filter((key, value) -> value.equals(STRING_VALUE1));
+    
+    List<Pair<String, String>> expected = Arrays.asList(
+        ImmutablePair.of(KEY1, STRING_VALUE1)
+    );
+    assertEquals(expected, filtered2.collectAsList());
+  }
+
+  @Test
+  public void testFilterWithEmptyData() {
+    // Test filtering on empty data
+    HoodiePairData<String, String> emptyPairData = HoodieListPairData.lazy(Collections.emptyList());
+    HoodiePairData<String, String> filtered = emptyPairData.filter((key, value) -> true);
+    
+    assertEquals(Collections.emptyList(), filtered.collectAsList());
+  }
+
   private static List<Pair<String, String>> constructPairs() {
     return Arrays.asList(
         ImmutablePair.of(KEY1, STRING_VALUE1),
@@ -317,12 +476,12 @@ public class TestHoodieListDataPairData {
 
   private static <K,V> Map<K, List<V>> toMap(HoodiePairData<K, V> pairData) {
     return ((List<Pair<K, Iterable<V>>>) pairData.groupByKey().get()).stream()
-        .collect(
-            Collectors.toMap(
-                p -> p.getKey(),
-                p -> StreamSupport.stream(p.getValue().spliterator(), false).collect(Collectors.toList())
-            )
-        );
+      .collect(
+        Collectors.toMap(
+            p -> p.getKey(),
+            p -> StreamSupport.stream(p.getValue().spliterator(), false).collect(Collectors.toList())
+        )
+      );
   }
 
   private static <V> void addPairsToMap(

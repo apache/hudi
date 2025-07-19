@@ -41,7 +41,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarness {
+public class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarness {
 
   private HoodieSparkEngineContext context;
 

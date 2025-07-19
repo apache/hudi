@@ -35,6 +35,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -119,6 +120,7 @@ import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWr
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getInflightMetadataPartitions;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
@@ -1258,11 +1260,20 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       });
     }
 
+    // For each partition, determine the key format once and create the appropriate mapping function
+    Map<String, SerializableBiFunction<String, Integer, Integer>> indexToMappingFunctions = new HashMap<>();
+    partitionToLatestFileSlices.keySet().forEach(mdtPartition -> {
+      HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(mdtPartition, dataMetaClient);
+      // For streaming writes, we can determine the key format based on partition type
+      // Secondary index partitions will always have composite keys, others will have simple keys
+      indexToMappingFunctions.put(mdtPartition, MetadataPartitionType.fromPartitionPath(mdtPartition).getFileGroupMappingFunction(indexVersion));
+    });
+
     HoodieData<HoodieRecord> taggedRecords = untaggedRecords.map(mdtRecord -> {
       String mdtPartition = mdtRecord.getPartitionPath();
       List<FileSlice> latestFileSlices = partitionToLatestFileSlices.get(mdtPartition);
-      FileSlice slice = latestFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(mdtRecord.getRecordKey(),
-          latestFileSlices.size()));
+      SerializableBiFunction<String, Integer, Integer> mappingFunction = indexToMappingFunctions.get(mdtPartition);
+      FileSlice slice = latestFileSlices.get(mappingFunction.apply(mdtRecord.getRecordKey(), latestFileSlices.size()));
       mdtRecord.unseal();
       mdtRecord.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       mdtRecord.seal();
@@ -1694,9 +1705,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         hoodieFileGroupIdList.addAll(fileSlices.stream().map(fileSlice -> new HoodieFileGroupId(partitionName, fileSlice.getFileId())).collect(Collectors.toList()));
 
         List<FileSlice> finalFileSlices = fileSlices;
+        HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
+
+        // Determine key format once per partition to avoid repeated checks
+        SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionName).getFileGroupMappingFunction(indexVersion);
         HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
-          FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
-              fileGroupCount));
+          FileSlice slice = finalFileSlices.get(mappingFunction.apply(r.getRecordKey(), fileGroupCount));
           r.unseal();
           r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
           r.seal();

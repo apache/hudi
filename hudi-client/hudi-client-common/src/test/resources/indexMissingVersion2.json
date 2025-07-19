@@ -1,0 +1,19 @@
+{
+  "indexDefinitions" : {
+    "column_stats" : {
+      "indexName" : "column_stats",
+      "indexType" : "column_stats",
+      "indexFunction" : "column_stats",
+      "sourceFields" : [ "_hoodie_commit_time", "_hoodie_partition_path", "_hoodie_record_key", "key", "secKey", "partition", "intField", "city", "textField1", "textField2", "textField3", "textField4", "decimalField", "longField", "incrLongField", "round" ],
+      "indexOptions" : { }
+    },
+    "secondary_index_idx_price" : {
+      "indexName" : "secondary_index_idx_price",
+      "indexType" : "secondary_index",
+      "indexFunction" : "identity",
+      "sourceFields" : [ "price" ],
+      "version": "V2",
+      "indexOptions" : { }
+    }
+  }
+}

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieTable;
 
 import java.util.Collections;
 import java.util.List;
@@ -32,6 +33,9 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
 
   @Override
   public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
+        config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     return Pair.of(Collections.emptyMap(), Collections.emptyList());
   }
 }
