@@ -40,9 +40,9 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
                           @transient override val fileStatusCache: FileStatusCache = NoopCache,
                           override val includeLogFiles: Boolean,
                           override val shouldEmbedFileSlices: Boolean)
-  extends HoodieIncrementalFileIndex(
+  extends HoodieFileIndex(
     spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices
-  ) with FileIndex {
+  ) with FileIndex  {
   private val emptyPartitionPath: String = "empty_partition_path";
   val cdcRelation: CDCRelation = CDCRelation.getCDCRelation(spark.sqlContext, metaClient, options)
   val cdcExtractor: HoodieCDCExtractor = cdcRelation.cdcExtractor
@@ -78,9 +78,5 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
       val fileGroupId = fileGroupSplit._1
       new Path(fileGroupId.getPartitionPath, fileGroupId.getFileId).toString
     }.toArray
-  }
-
-  override def getRequiredFilters: Seq[Filter] = {
-    Seq.empty
   }
 }
