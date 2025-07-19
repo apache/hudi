@@ -1331,6 +1331,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     // Bytes
     public boolean bytesToStringSupport = true;
 
+    // TODO: [HUDI-9607] Flink VARBINARY in array and map
     public boolean supportBytesInArrayMap = true;
   }
 
@@ -1443,6 +1444,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     addFieldsHelper(finalFields, baseFields, fieldPrefix, false);
   }
 
+  // TODO: [HUDI-9603] remove replaceBytesWithStrings when the issue is fixed
   private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, boolean replaceBytesWithStrings) {
     for (int i = 0; i < baseFields.size(); i++) {
       if (baseFields.get(i) == Schema.Type.BOOLEAN) {
