@@ -53,6 +53,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -147,6 +148,10 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
               // for both OCC and NB-CC, this is in-correct.
               .filter(logFile -> completionTimeQueryView.isCompletedBefore(compactionInstant, logFile.getDeltaCommitTime()))
               .sorted(HoodieLogFile.getLogFileComparator()).collect(toList());
+          if (logFiles.isEmpty()) {
+            // compaction is not needed if there is no log file.
+            return null;
+          }
           totalLogFiles.add(logFiles.size());
           totalFileSlices.add(1L);
           // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
@@ -155,7 +160,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
-        }), partitionPaths.size()).stream()
+        }).filter(Objects::nonNull), partitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of {} compaction operations are retrieved for table {}", operations.size(), hoodieTable.getConfig().getBasePath());

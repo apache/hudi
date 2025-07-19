@@ -80,8 +80,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
 
     client = new SparkRDDWriteClient(context, config);
 
-    writeData(true, client.createNewInstantTime(), 100, true);
-    writeData(true, client.createNewInstantTime(), 100, true);
+    writeData(true, 100, true);
+    writeData(true, 100, true);
 
     // offline compaction schedule
     HoodieCompactor hoodieCompactorSchedule =
@@ -90,8 +90,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     TestHelpers.assertNCompletedCommits(2, tableBasePath);
     TestHelpers.assertNCleanCommits(0, tableBasePath);
 
-    writeData(true, client.createNewInstantTime(), 100, true);
-    writeData(true, client.createNewInstantTime(), 100, true);
+    writeData(true, 100, true);
+    writeData(true, 100, true);
 
     // offline compaction execute with optional clean
     HoodieCompactor hoodieCompactorExecute =

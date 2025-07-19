@@ -128,6 +128,20 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
 
+  public static final ConfigOption<String> INSERT_PARTITIONER_CLASS_NAME = ConfigOptions
+      .key("write.insert.partitioner.class.name")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Insert partitioner to use aiming to re-balance records and reducing small file number "
+          + "in the scenario of multi-level partitioning. For example dt/hour/eventID"
+          + "Currently support org.apache.hudi.sink.partitioner.DefaultInsertPartitioner");
+
+  public static final ConfigOption<Integer> DEFAULT_PARALLELISM_PER_PARTITION = ConfigOptions
+      .key("write.insert.partitioner.default_parallelism_per_partition")
+      .intType()
+      .defaultValue(30)
+      .withDescription("The parallelism to use in each partition when using DefaultInsertPartitioner.");
+
   @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
       .key("record.merger.impls")

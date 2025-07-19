@@ -443,7 +443,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     // Create a base commit.
     int numRecords = 200;
-    String firstCommit = writeClient.createNewInstantTime();
+    String firstCommit = WriteClientTestUtils.createNewInstantTime();
     String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
     dataGen = new HoodieTestDataGenerator(new String[]{HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH,
         DEFAULT_THIRD_PARTITION_PATH});
@@ -452,7 +452,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         1, INSTANT_GENERATOR);
 
     // Create second commit.
-    String secondCommit = writeClient.createNewInstantTime();
+    String secondCommit = WriteClientTestUtils.createNewInstantTime();
     writeBatch(writeClient, secondCommit, firstCommit, Option.of(Arrays.asList(firstCommit)), "000", 100,
         dataGen::generateInserts, SparkRDDWriteClient::insert, true, 100, 300,
         2, INSTANT_GENERATOR);
@@ -487,7 +487,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
         ClusteringTestUtils.getClusteringConfig(basePath, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, properties));
 
     // Schedule rollback
-    String rollbackInstant = writeClient.createNewInstantTime();
+    String rollbackInstant = WriteClientTestUtils.createNewInstantTime();
     BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
             !table.getConfig().shouldRollbackUsingMarkers(), false);
@@ -500,7 +500,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     // Schedule rollback for incomplete clustering instant.
     needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, clusteringInstant1);
-    rollbackInstant = writeClient.createNewInstantTime();
+    rollbackInstant = WriteClientTestUtils.createNewInstantTime();
     copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,
             table.getConfig().shouldRollbackUsingMarkers(), false);

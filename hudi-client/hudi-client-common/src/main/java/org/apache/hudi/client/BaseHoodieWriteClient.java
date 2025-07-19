@@ -46,7 +46,6 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -1518,7 +1517,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
 
       new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
-          .run(HoodieTableVersion.current(), instantTime.orElse(null));
+          .run(config.getWriteVersion(), instantTime.orElse(null));
 
       metaClient.reloadTableConfig();
       metaClient.reloadActiveTimeline();
