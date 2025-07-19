@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -38,6 +39,22 @@ import java.util.Map;
  */
 public class HoodieMergeHandleFactory {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandleFactory.class);
+  public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> create(
+      WriteOperationType operationType,
+      HoodieWriteConfig writeConfig,
+      String instantTime,
+      HoodieTable<T, I, K, O> table,
+      Iterator<HoodieRecord<T>> recordItr,
+      String partitionPath,
+      String fileId,
+      TaskContextSupplier taskContextSupplier,
+      Option<BaseKeyGenerator> keyGeneratorOpt) {
+    return create(
+        operationType, writeConfig, instantTime, table, recordItr,
+        partitionPath, fileId, taskContextSupplier, keyGeneratorOpt,
+        Option.empty(), Option.empty());
+  }
+
   /**
    * Creates a merge handle for normal write path.
    */
@@ -50,7 +67,9 @@ public class HoodieMergeHandleFactory {
       String partitionPath,
       String fileId,
       TaskContextSupplier taskContextSupplier,
-      Option<BaseKeyGenerator> keyGeneratorOpt) {
+      Option<BaseKeyGenerator> keyGeneratorOpt,
+      Option<HoodieReaderContext<T>> readerContextOpt,
+      Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
     LOG.info("Create update handle for fileId {} and partition path {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
@@ -66,6 +85,10 @@ public class HoodieMergeHandleFactory {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
         return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
       } else {
+        if (readerContextOpt.isPresent()) {
+          return new FileGroupReaderBasedMergeHandle<>(
+              writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContextOpt.get(), instantTime, recordTypeOpt.get());
+        }
         return new HoodieMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
       }
     }

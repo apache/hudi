@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.IOException;
