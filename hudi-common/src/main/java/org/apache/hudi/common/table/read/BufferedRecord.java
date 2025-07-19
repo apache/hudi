@@ -45,6 +45,10 @@ public class BufferedRecord<T> implements Serializable {
   private T record;
   private final Integer schemaId;
   private final boolean isDelete;
+  // Note that it is set to true only when
+  // 1. flag `reuseBuffer` is set for record buffer, and
+  // 2. the record has been merged with a base record.
+  private boolean merged = false;
 
   public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
     this.recordKey = recordKey;
@@ -107,6 +111,18 @@ public class BufferedRecord<T> implements Serializable {
       record = readerContext.seal(readerContext.toBinaryRow(readerContext.getSchemaFromBufferRecord(this), record));
     }
     return this;
+  }
+
+  public void setMerged() {
+    merged = true;
+  }
+
+  public void unsetMerged() {
+    merged = false;
+  }
+
+  public boolean isMerged() {
+    return merged;
   }
 
   @Override

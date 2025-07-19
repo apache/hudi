@@ -64,6 +64,7 @@ import org.apache.hudi.util.Transient;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.jute.Index;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -109,8 +110,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private final boolean reuse;
 
   // Readers for the latest file slice corresponding to file groups in the metadata partition
-  private final Transient<Map<Pair<String, String>, Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader>>> partitionReaders =
-      Transient.lazy(ConcurrentHashMap::new);
+  private final Transient<Map<Pair<String, String>, HoodieFileGroupReader<IndexedRecord>>>
+      partitionReaders = Transient.lazy(ConcurrentHashMap::new);
 
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();
@@ -227,34 +228,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private Iterator<HoodieRecord<HoodieMetadataPayload>> getByKeyPrefixes(FileSlice fileSlice,
                                                                          List<String> sortedKeyPrefixes,
                                                                          String partitionName) throws IOException {
-    Option<HoodieInstant> latestMetadataInstant =
-        metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-    String latestMetadataInstantTime =
-        latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-    // Only those log files which have a corresponding completed instant on the dataset should be read
-    // This is because the metadata table is updated before the dataset instants are committed.
-    Set<String> validInstantTimestamps = getValidInstantTimestamps();
-    InstantRange instantRange = InstantRange.builder()
-        .rangeType(InstantRange.RangeType.EXACT_MATCH)
-        .explicitInstants(validInstantTimestamps).build();
-    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
-        storageConf,
-        metadataMetaClient.getTableConfig(),
-        Option.of(instantRange),
-        Option.of(transformKeyPrefixesToPredicate(sortedKeyPrefixes)));
-    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
-        .withReaderContext(readerContext)
-        .withHoodieTableMetaClient(metadataMetaClient)
-        .withLatestCommitTime(latestMetadataInstantTime)
-        .withFileSlice(fileSlice)
-        .withDataSchema(schema)
-        .withRequestedSchema(schema)
-        .withProps(buildFileGroupReaderProperties(metadataConfig))
-        .withStart(0)
-        .withLength(Long.MAX_VALUE)
-        .withShouldUseRecordPosition(false)
-        .build();
+    Option<Predicate> predicateOpt =
+        Option.ofNullable(transformKeyPrefixesToPredicate(sortedKeyPrefixes));
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader =
+        getOrCreateReaders(partitionName, fileSlice, predicateOpt);
     ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator();
     return new CloseableMappingIterator<>(
         it,
@@ -332,34 +309,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<String> sortedKeys = new ArrayList<>(keys);
     // So we use the natural order to sort.
     Collections.sort(sortedKeys);
-    Option<HoodieInstant> latestMetadataInstant =
-        metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
-    String latestMetadataInstantTime =
-        latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-    // Only those log files which have a corresponding completed instant on the dataset should be read
-    // This is because the metadata table is updated before the dataset instants are committed.
-    Set<String> validInstantTimestamps = getValidInstantTimestamps();
-    InstantRange instantRange = InstantRange.builder()
-        .rangeType(InstantRange.RangeType.EXACT_MATCH)
-        .explicitInstants(validInstantTimestamps).build();
-    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
-        storageConf,
-        metadataMetaClient.getTableConfig(),
-        Option.of(instantRange),
-        Option.of(transformKeysToPredicate(sortedKeys)));
-    try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
-        .withReaderContext(readerContext)
-        .withHoodieTableMetaClient(metadataMetaClient)
-        .withLatestCommitTime(latestMetadataInstantTime)
-        .withFileSlice(fileSlice)
-        .withDataSchema(schema)
-        .withRequestedSchema(schema)
-        .withProps(buildFileGroupReaderProperties(metadataConfig))
-        .withStart(0)
-        .withLength(Long.MAX_VALUE)
-        .withShouldUseRecordPosition(false)
-        .build();
+    Option<Predicate> predicateOpt = Option.ofNullable(transformKeysToPredicate(sortedKeys));
+    try (HoodieFileGroupReader<IndexedRecord> fileGroupReader =
+             getOrCreateReaders(partitionName, fileSlice, predicateOpt);
          ClosableIterator<IndexedRecord> it = fileGroupReader.getClosableIterator()) {
       Map<String, HoodieRecord<HoodieMetadataPayload>> records = new HashMap<>();
       while (it.hasNext()) {
@@ -458,14 +410,70 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   /**
+   * Create a file group reader for a given partition and file slice
+   * if the reader is not available.
+   *
+   * @param partitionName - Partition name
+   * @param slice         - The file slice to open readers for
+   * @param predicateOpt  - The optional set of keys or key prefixes.
+   * @return File reader and the record scanner pair for the requested file slice
+   */
+  private HoodieFileGroupReader<IndexedRecord> getOrCreateReaders(String partitionName,
+                                                                  FileSlice slice,
+                                                                  Option<Predicate> predicateOpt) {
+    if (reuse) {
+      Pair<String, String> key = Pair.of(partitionName, slice.getFileId());
+      HoodieFileGroupReader<IndexedRecord> fileGroupReader =
+          partitionReaders.get().computeIfAbsent(key, ignored -> createFileReader(slice, predicateOpt));
+      // Note that: For different runs, predicates could be different.
+      // That means for the same full-keys predicate, no file scan is needed.
+      fileGroupReader.getReaderContext().setKeyFilterOpt(predicateOpt);
+      return fileGroupReader;
+    } else {
+      return createFileReader(slice, predicateOpt);
+    }
+  }
+
+  private HoodieFileGroupReader<IndexedRecord> createFileReader(FileSlice fileSlice,
+                                                                Option<Predicate> predicateOpt) {
+    Option<HoodieInstant> latestMetadataInstant =
+        metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+    String latestMetadataInstantTime =
+        latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
+    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+    // Only those log files which have a corresponding completed instant on the dataset should be read
+    // This is because the metadata table is updated before the dataset instants are committed.
+    Set<String> validInstantTimestamps = getValidInstantTimestamps();
+    InstantRange instantRange = InstantRange.builder()
+        .rangeType(InstantRange.RangeType.EXACT_MATCH)
+        .explicitInstants(validInstantTimestamps).build();
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
+        storageConf,
+        metadataMetaClient.getTableConfig(),
+        Option.of(instantRange),
+        predicateOpt,
+        reuse);
+    return HoodieFileGroupReader.<IndexedRecord>newBuilder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metadataMetaClient)
+        .withLatestCommitTime(latestMetadataInstantTime)
+        .withFileSlice(fileSlice)
+        .withDataSchema(schema)
+        .withRequestedSchema(schema)
+        .withProps(buildFileGroupReaderProperties(metadataConfig))
+        .withShouldUseRecordPosition(false)
+        .build();
+  }
+
+  /**
    * Close the file reader and the record scanner for the given file slice.
    *
    * @param partitionFileSlicePair - Partition and FileSlice
    */
   private synchronized void close(Pair<String, String> partitionFileSlicePair) {
-    Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers =
+    HoodieFileGroupReader fileGroupReader =
         partitionReaders.get().remove(partitionFileSlicePair);
-    closeReader(readers);
+    closeReader(fileGroupReader);
   }
 
   /**
@@ -478,18 +486,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     partitionReaders.get().clear();
   }
 
-  private void closeReader(Pair<HoodieSeekingFileReader<?>, HoodieMetadataLogRecordReader> readers) {
-    if (readers != null) {
-      try {
-        if (readers.getKey() != null) {
-          readers.getKey().close();
-        }
-        if (readers.getValue() != null) {
-          readers.getValue().close();
-        }
-      } catch (Exception e) {
-        throw new HoodieException("Error closing resources during metadata table merge", e);
+  private void closeReader(HoodieFileGroupReader fileGroupReader) {
+    try {
+      if (fileGroupReader != null) {
+        fileGroupReader.close();
       }
+    } catch (Exception e) {
+      throw new HoodieException(
+          "Error closing resources during metadata table merge", e);
     }
   }
 

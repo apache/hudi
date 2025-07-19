@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Literal;
@@ -33,11 +35,18 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class TestHoodieMergedLogRecordReader {
+  private HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+  private FileGroupRecordBuffer recordBuffer = mock(FileGroupRecordBuffer.class);
+
   @Test
   void testCreateKeySpecWithEmptyOutput() {
-    Option<KeySpec> r = HoodieMergedLogRecordReader.createKeySpec(Option.empty());
+    when(readerContext.getReuseBuffer()).thenReturn(false);
+    Option<KeySpec> r = HoodieMergedLogRecordReader.createKeySpec(
+        Option.empty(), readerContext, recordBuffer);
     assertTrue(r.isEmpty());
   }
 
@@ -48,7 +57,9 @@ class TestHoodieMergedLogRecordReader {
         Literal.from("key1"),
         Literal.from("key2"));
     Predicate predicate = Predicates.in(left, right);
-    Option<KeySpec> r = HoodieMergedLogRecordReader.createKeySpec(Option.of(predicate));
+    when(readerContext.getReuseBuffer()).thenReturn(false);
+    Option<KeySpec> r = HoodieMergedLogRecordReader.createKeySpec(
+        Option.of(predicate), readerContext, recordBuffer);
     assertTrue(r.isPresent());
     assertTrue(r.get().isFullKey());
     assertEquals(Arrays.asList("key1", "key2"), r.get().getKeys());
@@ -61,7 +72,9 @@ class TestHoodieMergedLogRecordReader {
         Literal.from("key_prefix1"),
         Literal.from("key_prefix2"));
     Predicate predicate = Predicates.startsWithAny(left, right);
-    Option<KeySpec> r = HoodieMergedLogRecordReader.createKeySpec(Option.of(predicate));
+    when(readerContext.getReuseBuffer()).thenReturn(false);
+    Option<KeySpec> r = HoodieMergedLogRecordReader.createKeySpec(
+        Option.of(predicate), readerContext, recordBuffer);
     assertTrue(r.isPresent());
     assertFalse(r.get().isFullKey());
     assertEquals(Arrays.asList("key_prefix1", "key_prefix2"), r.get().getKeys());

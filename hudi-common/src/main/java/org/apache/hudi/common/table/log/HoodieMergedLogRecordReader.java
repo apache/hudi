@@ -95,7 +95,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     // Do the scan and merge
     timer.startTimer();
 
-    Option<KeySpec> keySpecOpt = createKeySpec(readerContext.getKeyFilterOpt());
+    Option<KeySpec> keySpecOpt = createKeySpec(
+        readerContext.getKeyFilterOpt(), readerContext, recordBuffer);
     scanInternal(keySpecOpt, false);
 
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
@@ -105,7 +106,10 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     LOG.info("Number of entries in Map => {}", recordBuffer.size());
   }
 
-  static Option<KeySpec> createKeySpec(Option<Predicate> filter) {
+  //ToDO: split this function to smaller ones.
+  static Option<KeySpec> createKeySpec(Option<Predicate> filter,
+                                       HoodieReaderContext readerContext,
+                                       FileGroupRecordBuffer recordBuffer) {
     if (filter.isEmpty()) {
       return Option.empty();
     }
@@ -113,6 +117,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       List<Expression> rightChildren = ((Predicates.In) filter.get()).getRightChildren();
       List<String> keyOrPrefixes = rightChildren.stream()
           .map(e -> (String) e.eval(null)).collect(Collectors.toList());
+      keyOrPrefixes = getNewFullKeys(keyOrPrefixes, readerContext, recordBuffer);
       return Option.of(new FullKeySpec(keyOrPrefixes));
     } else if (filter.get().getOperator() == Expression.Operator.STARTS_WITH) {
       List<Expression> rightChildren = ((Predicates.StringStartsWithAny) filter.get()).getRightChildren();
@@ -122,6 +127,17 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     } else {
       return Option.empty();
     }
+  }
+
+  static List<String> getNewFullKeys(List<String> fullKeys,
+                                     HoodieReaderContext readerContext,
+                                     FileGroupRecordBuffer recordBuffer) {
+    if (readerContext.getReuseBuffer()) {
+      return fullKeys.stream()
+          .filter(key -> !recordBuffer.containsLogRecord(key))
+          .collect(Collectors.toList());
+    }
+    return fullKeys;
   }
 
   @Override
