@@ -71,7 +71,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                                                   isMOR: Boolean,
                                                   isBootstrap: Boolean,
                                                   isIncremental: Boolean,
-                                                  isCDC: Boolean,
                                                   validCommits: String,
                                                   shouldUseRecordPosition: Boolean,
                                                   requiredFilters: Seq[Filter]
