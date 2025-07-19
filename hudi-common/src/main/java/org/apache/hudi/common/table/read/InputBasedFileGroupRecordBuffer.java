@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -33,19 +34,21 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Iterator;
 
 public class InputBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
-  private final ClosableIterator<T> inputRecordIterator;
+  private final Iterator<T> inputRecordIterator;
 
   public InputBasedFileGroupRecordBuffer(HoodieReaderContext readerContext,
                                          HoodieTableMetaClient hoodieTableMetaClient,
                                          RecordMergeMode recordMergeMode,
+                                         PartialUpdateMode partialUpdateMode,
                                          TypedProperties props,
                                          HoodieReadStats readStats,
                                          Option<String> orderingFieldName,
-                                         boolean emitDelete,
-                                         ClosableIterator<T> inputRecordIterator) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+                                         Iterator<T> inputRecordIterator,
+                                         UpdateProcessor<T> updateProcessor) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode,partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
     this.inputRecordIterator = inputRecordIterator;
 
     // Read input records into the buffer.
