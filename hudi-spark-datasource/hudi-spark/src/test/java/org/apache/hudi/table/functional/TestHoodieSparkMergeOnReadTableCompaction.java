@@ -22,6 +22,7 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -52,6 +53,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -78,7 +80,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -135,7 +136,6 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withPath(basePath())
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
-        .withAutoCommit(false)
         .withWritePayLoad(payloadClass)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1)
@@ -145,6 +145,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
             .parquetMaxFileSize(1024).build())
         .withLayoutConfig(layoutConfig)
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(indexType).withBucketNum("1").build())
+        .withMarkersTimelineServerBasedBatchIntervalMs(10)
         .build();
     props.putAll(config.getProps());
 
@@ -152,10 +153,10 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     client = getHoodieWriteClient(config);
 
     // write data and commit
-    String instant1 = client.createNewInstantTime();
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
     writeData(instant1, dataGen.generateInserts(instant1, 100), true);
     // write mix of new data and updates, and in the case of bucket index, all records will go into log files (we use a small max_file_size)
-    String instant2 = client.createNewInstantTime();
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> updates1 = dataGen.generateUpdates(instant2, 100);
     List<HoodieRecord> newRecords1 = dataGen.generateInserts(instant2, 100);
     writeData(instant2, Stream.concat(newRecords1.stream(), updates1.stream()).collect(Collectors.toList()), true);
@@ -163,7 +164,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     // schedule compaction
     String compactionTime = (String) client.scheduleCompaction(Option.empty()).get();
     // write data, and do not commit. those records should not visible to reader
-    String instant3 = client.createNewInstantTime();
+    String instant3 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> updates2 = dataGen.generateUpdates(instant3, 200);
     List<HoodieRecord> newRecords2 = dataGen.generateInserts(instant3, 100);
     List<WriteStatus> writeStatuses = writeData(instant3, Stream.concat(newRecords2.stream(), updates2.stream()).collect(Collectors.toList()), false);
@@ -173,8 +174,9 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .collect(Collectors.toList()), Option.empty(), metaClient.getCommitActionType());
     assertEquals(300, readTableTotalRecordsNum());
     // after the compaction, total records should remain the same
-    config.setValue(AUTO_COMMIT_ENABLE, "true");
-    client.compact(compactionTime);
+    HoodieWriteMetadata result = client.compact(compactionTime);
+    client.commitCompaction(compactionTime, result, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionTime));
     assertEquals(300, readTableTotalRecordsNum());
   }
 
@@ -190,8 +192,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
           .withPath(basePath())
           .withSchema(TRIP_EXAMPLE_SCHEMA)
           .withParallelism(2, 2)
-          .withAutoCommit(true)
-          .withEmbeddedTimelineServerEnabled(enableTimelineServer)
+            .withEmbeddedTimelineServerEnabled(enableTimelineServer)
           .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build())
           .withCompactionConfig(HoodieCompactionConfig.newBuilder()
               .withMaxNumDeltaCommitsBeforeCompaction(1).build())
@@ -199,6 +200,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
               .withLayoutType(HoodieStorageLayout.LayoutType.BUCKET.name())
               .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
           .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props).withIndexType(HoodieIndex.IndexType.BUCKET).withBucketNum("1").build())
+          .withMarkersTimelineServerBasedBatchIntervalMs(10)
           .build();
       props.putAll(config.getProps());
 
@@ -209,17 +211,27 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
       JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
 
       // initialize 100 records
-      client.upsert(writeRecords, client.startCommit());
+      String commit1 = client.startCommit();
+      JavaRDD writeStatuses = client.upsert(writeRecords, commit1);
+      client.commit(commit1, writeStatuses);
+
       // update 100 records
-      client.upsert(writeRecords, client.startCommit());
+      String commit2 = client.startCommit();
+      writeStatuses = client.upsert(writeRecords, commit2);
+      client.commit(commit2, writeStatuses);
       // schedule compaction
       client.scheduleCompaction(Option.empty());
       // delete 50 records
       List<HoodieKey> toBeDeleted = records.stream().map(HoodieRecord::getKey).limit(50).collect(Collectors.toList());
       JavaRDD<HoodieKey> deleteRecords = jsc().parallelize(toBeDeleted, 2);
-      client.delete(deleteRecords, client.startCommit());
+      String commit3 = client.startCommit();
+      writeStatuses = client.delete(deleteRecords, commit3);
+      client.commit(commit3, writeStatuses);
+
       // insert the same 100 records again
-      client.upsert(writeRecords, client.startCommit());
+      String commit4 = client.startCommit();
+      writeStatuses = client.upsert(writeRecords, commit4);
+      client.commit(commit4, writeStatuses);
       assertEquals(100, readTableTotalRecordsNum());
     } finally {
       jsc().hadoopConfiguration().set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
@@ -243,7 +255,6 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withPath(basePath())
         .withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
-        .withAutoCommit(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder()
@@ -254,6 +265,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .withMarkersTimelineServerBasedBatchIntervalMs(10)
         .build();
     props.putAll(config.getProps());
 
@@ -261,13 +273,13 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     client = getHoodieWriteClient(config);
 
     // instant 1: write inserts and commit, generating base files
-    String instant1 = client.createNewInstantTime();
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> recordList = dataGen.generateInserts(instant1, 100);
     writeData(instant1, recordList, true);
     assertEquals(100, readTableTotalRecordsNum());
     validateFileListingInMetadataTable();
     // instant 2: write updates in log files and simulate failed deltacommit
-    String instant2 = client.createNewInstantTime();
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
     recordList = dataGen.generateUpdates(instant2, 100);
     List<WriteStatus> writeStatuses2 = writeData(instant2, recordList, false);
 
@@ -306,7 +318,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     assertEquals(100, readTableTotalRecordsNum());
 
     // instant 3: write updates in log files and make a successful deltacommit
-    String instant3 = client.createNewInstantTime();
+    String instant3 = WriteClientTestUtils.createNewInstantTime();
     recordList = dataGen.generateUpdates(instant3, 100);
     writeData(instant3, recordList, true);
 
@@ -324,8 +336,9 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
       // committing instant2 that conflicts with the compaction plan should fail
       assertThrows(HoodieWriteConflictException.class, () -> commitToTable(instant2, writeStatuses2));
     }
-    config.setValue(AUTO_COMMIT_ENABLE, "true");
-    client.compact(compactionInstant);
+    HoodieWriteMetadata result = client.compact(compactionInstant);
+    client.commitCompaction(compactionInstant, result, Option.empty());
+    assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionInstant));
     if (runRollback) {
       validateFileListingInMetadataTable();
     }
@@ -382,21 +395,19 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   }
 
   private void validateFileListingInMetadataTable() {
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context(), hoodieStorage(), basePath(), false)
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context(), metaClient, false)
         .stream()
         .map(e -> new StoragePath(basePath(), e).toString())
         .collect(Collectors.toList());
     Map<String, List<StoragePathInfo>> filesFromStorage = FSUtils.getFilesInPartitions(
         context(),
-        hoodieStorage(),
+        metaClient,
         HoodieMetadataConfig.newBuilder().enable(false).build(),
-        basePath(),
         partitionPaths.toArray(new String[0]));
     Map<String, List<StoragePathInfo>> filesFromMetadataTable = FSUtils.getFilesInPartitions(
         context(),
-        hoodieStorage(),
+        metaClient,
         HoodieMetadataConfig.newBuilder().enable(true).build(),
-        basePath(),
         partitionPaths.toArray(new String[0]));
     assertEquals(filesFromStorage.size(), filesFromMetadataTable.size());
     for (String partition : filesFromStorage.keySet()) {
@@ -422,7 +433,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     metaClient = HoodieTableMetaClient.reload(metaClient);
     JavaRDD<HoodieRecord> records = jsc().parallelize(hoodieRecords, 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    client.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses = client.upsert(records, instant).collect();
     assertNoWriteErrors(writeStatuses);
     if (doCommit) {

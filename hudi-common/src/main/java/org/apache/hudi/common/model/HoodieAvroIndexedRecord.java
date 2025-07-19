@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -121,7 +122,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+    return HoodieAvroReaderContext.getFieldValueFromIndexedRecord(data, column);
   }
 
   @Override
@@ -135,6 +136,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
     return new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData);
+  }
+
+  @Override
+  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+    data.put(ordinal, value);
+    return new HoodieAvroIndexedRecord(key, data, operation, metaData);
   }
 
   @Override

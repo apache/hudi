@@ -21,12 +21,16 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -35,12 +39,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.Serializable;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
@@ -55,21 +57,18 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergedLogRecordReader.class);
   // A timer for calculating elapsed time in millis
   public final HoodieTimer timer = HoodieTimer.create();
-  // Set of already scanned prefixes allowing us to avoid scanning same prefixes again
-  private final Set<String> scannedPrefixes;
   // count of merged records in log
   private long numMergedRecordsInLog;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
 
   @SuppressWarnings("unchecked")
-  private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
+  private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient metaClient, HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
                                       int bufferSize, Option<InstantRange> instantRange, boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionName, Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan,
                                       FileGroupRecordBuffer<T> recordBuffer, boolean allowInflightInstants) {
-    super(readerContext, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
+    super(readerContext, metaClient, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
         forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer, allowInflightInstants);
-    this.scannedPrefixes = new HashSet<>();
 
     if (forceFullScan) {
       performScan();
@@ -92,77 +91,37 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     scanInternal(Option.empty(), skipProcessingBlocks);
   }
 
-  /**
-   * Provides incremental scanning capability where only provided keys will be looked
-   * up in the delta-log files, scanned and subsequently materialized into the internal
-   * cache
-   *
-   * @param keys to be looked up
-   */
-  public void scanByFullKeys(List<String> keys) {
-    // We can skip scanning in case reader is in full-scan mode, in which case all blocks
-    // are processed upfront (no additional scanning is necessary)
-    if (forceFullScan) {
-      return; // no-op
-    }
-
-    List<String> missingKeys = keys.stream()
-        .filter(key -> !recordBuffer.containsLogRecord(key))
-        .collect(Collectors.toList());
-
-    if (missingKeys.isEmpty()) {
-      // All the required records are already fetched, no-op
-      return;
-    }
-
-    scanInternal(Option.of(KeySpec.fullKeySpec(missingKeys)), false);
-  }
-
-  /**
-   * Provides incremental scanning capability where only keys matching provided key-prefixes
-   * will be looked up in the delta-log files, scanned and subsequently materialized into
-   * the internal cache
-   *
-   * @param keyPrefixes to be looked up
-   */
-  public void scanByKeyPrefixes(List<String> keyPrefixes) {
-    // We can skip scanning in case reader is in full-scan mode, in which case all blocks
-    // are processed upfront (no additional scanning is necessary)
-    if (forceFullScan) {
-      return;
-    }
-
-    List<String> missingKeyPrefixes = keyPrefixes.stream()
-        .filter(keyPrefix ->
-            // NOTE: We can skip scanning the prefixes that have already
-            //       been covered by the previous scans
-            scannedPrefixes.stream().noneMatch(keyPrefix::startsWith))
-        .collect(Collectors.toList());
-
-    if (missingKeyPrefixes.isEmpty()) {
-      // All the required records are already fetched, no-op
-      return;
-    }
-
-    // NOTE: When looking up by key-prefixes unfortunately we can't short-circuit
-    //       and will have to scan every time as we can't know (based on just
-    //       the records cached) whether particular prefix was scanned or just records
-    //       matching the prefix looked up (by [[scanByFullKeys]] API)
-    scanInternal(Option.of(KeySpec.prefixKeySpec(missingKeyPrefixes)), false);
-    scannedPrefixes.addAll(missingKeyPrefixes);
-  }
-
   private void performScan() {
     // Do the scan and merge
     timer.startTimer();
 
-    scanInternal(Option.empty(), false);
+    Option<KeySpec> keySpecOpt = createKeySpec(readerContext.getKeyFilterOpt());
+    scanInternal(keySpecOpt, false);
 
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = recordBuffer.size();
 
     LOG.info("Number of log files scanned => {}", logFilePaths.size());
     LOG.info("Number of entries in Map => {}", recordBuffer.size());
+  }
+
+  static Option<KeySpec> createKeySpec(Option<Predicate> filter) {
+    if (filter.isEmpty()) {
+      return Option.empty();
+    }
+    if (filter.get().getOperator() == Expression.Operator.IN) {
+      List<Expression> rightChildren = ((Predicates.In) filter.get()).getRightChildren();
+      List<String> keyOrPrefixes = rightChildren.stream()
+          .map(e -> (String) e.eval(null)).collect(Collectors.toList());
+      return Option.of(new FullKeySpec(keyOrPrefixes));
+    } else if (filter.get().getOperator() == Expression.Operator.STARTS_WITH) {
+      List<Expression> rightChildren = ((Predicates.StringStartsWithAny) filter.get()).getRightChildren();
+      List<String> keyOrPrefixes = rightChildren.stream()
+          .map(e -> (String) e.eval(null)).collect(Collectors.toList());
+      return Option.of(new PrefixKeySpec(keyOrPrefixes));
+    } else {
+      return Option.empty();
+    }
   }
 
   @Override
@@ -217,6 +176,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
     private FileGroupRecordBuffer<T> recordBuffer;
     private boolean allowInflightInstants = false;
+    private HoodieTableMetaClient metaClient;
 
     @Override
     public Builder<T> withHoodieReaderContext(HoodieReaderContext<T> readerContext) {
@@ -294,6 +254,11 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
+    public Builder<T> withMetaClient(HoodieTableMetaClient metaClient) {
+      this.metaClient = metaClient;
+      return this;
+    }
+
     @Override
     public HoodieMergedLogRecordReader<T> build() {
       ValidationUtils.checkArgument(recordBuffer != null, "Record Buffer is null in Merged Log Record Reader");
@@ -304,7 +269,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       }
 
       return new HoodieMergedLogRecordReader<>(
-          readerContext, storage, logFilePaths,
+          readerContext, metaClient, storage, logFilePaths,
           reverseReader, bufferSize, instantRange,
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),

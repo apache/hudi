@@ -182,13 +182,13 @@ public class TestHoodieCommitMetadata {
     HoodieInstant legacyInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", "1", "1", true);
     CommitMetadataSerDe v1SerDe = new CommitMetadataSerDeV1();
     byte[] v1Bytes = convertMetadataToByteArray(commitMetadata1, v1SerDe);
-    System.out.println(new String(v1Bytes));
+
     org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata2 =
         COMMIT_METADATA_SER_DE.deserialize(legacyInstant, new ByteArrayInputStream(v1Bytes), () -> false, org.apache.hudi.common.model.HoodieCommitMetadata.class);
     assertEquals(2, commitMetadata2.partitionToWriteStats.size());
     assertEquals(2, commitMetadata2.partitionToWriteStats.get("partition1").size());
     assertEquals(2, commitMetadata2.partitionToWriteStats.get("partition1").size());
-    System.out.println(commitMetadata2.partitionToWriteStats.get("partition1").get(0));
+
     assertEquals("111", commitMetadata2.partitionToWriteStats.get("partition1").get(0).getFileId());
     assertEquals("222", commitMetadata2.partitionToWriteStats.get("partition1").get(1).getFileId());
     assertEquals("333", commitMetadata2.partitionToWriteStats.get("partition2").get(0).getFileId());

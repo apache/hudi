@@ -49,6 +49,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
@@ -167,8 +168,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   @Override
   public void processElement(HoodieFlinkInternalRow record,
-                             ProcessFunction<HoodieFlinkInternalRow, Object>.Context ctx,
-                             Collector<Object> out) throws Exception {
+                             ProcessFunction<HoodieFlinkInternalRow, RowData>.Context ctx,
+                             Collector<RowData> out) throws Exception {
     bufferRecord(record);
   }
 
@@ -350,6 +351,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     final List<WriteStatus> writeStatus = writeRecords(instant, bucket);
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
+        .checkpointId(this.checkpointId)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
         .writeStatus(writeStatus)
         .lastBatch(false)
@@ -386,6 +388,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     }
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
+        .checkpointId(checkpointId)
         .instantTime(currentInstant)
         .writeStatus(writeStatus)
         .lastBatch(true)
@@ -397,8 +400,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     this.tracer.reset();
     this.writeClient.cleanHandles();
     this.writeStatuses.addAll(writeStatus);
-    // blocks flushing until the coordinator starts a new instant
-    this.confirming = true;
 
     writeMetrics.endDataFlush();
     writeMetrics.resetAfterCommit();

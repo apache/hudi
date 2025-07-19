@@ -109,7 +109,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withRemoteServerPort(incrementTimelineServicePortToUse()).build())
           .build();
-      timelineService = new TimelineService(localEngineContext, HadoopFSUtils.getStorageConf(),
+      timelineService = new TimelineService(HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           FileSystemViewManager.createViewManager(
@@ -256,15 +256,13 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
                 ? timelineService.get().getServerPort() : REMOTE_PORT_NUM.defaultValue())
             .build())
         .withEmbeddedTimelineServerReuseEnabled(reuseTimelineServer)
-        .withAutoCommit(false)
         .forTable(tableName)
         .build();
     return new SparkRDDWriteClient(context, writeConfig, timelineService);
   }
 
   private void writeToTable(int round, SparkRDDWriteClient writeClient) throws IOException {
-    String instantTime = writeClient.createNewInstantTime();
-    writeClient.startCommitWithTime(instantTime);
+    String instantTime = writeClient.startCommit();
     List<HoodieRecord> records = round == 0
         ? dataGen.generateInserts(instantTime, 100)
         : dataGen.generateUpdates(instantTime, 100);

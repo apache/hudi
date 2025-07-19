@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -51,11 +52,12 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                        HoodieTableMetaClient hoodieTableMetaClient,
                                        RecordMergeMode recordMergeMode,
-                                       Option<String> partitionNameOverrideOpt,
-                                       Option<String[]> partitionPathFieldOpt,
+                                       PartialUpdateMode partialUpdateMode,
                                        TypedProperties props,
-                                       HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partitionNameOverrideOpt, partitionPathFieldOpt, props, readStats);
+                                       HoodieReadStats readStats,
+                                       Option<String> orderingFieldName,
+                                       boolean emitDelete) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, emitDelete);
   }
 
   @Override
@@ -67,10 +69,20 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
     Pair<ClosableIterator<T>, Schema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
-    if (dataBlock.containsPartialUpdates()) {
+    if (dataBlock.containsPartialUpdates() && !enablePartialMerging) {
       // When a data block contains partial updates, subsequent record merging must always use
       // partial merging.
       enablePartialMerging = true;
+      bufferedRecordMerger = BufferedRecordMergerFactory.create(
+          readerContext,
+          recordMergeMode,
+          true,
+          recordMerger,
+          orderingFieldName,
+          payloadClass,
+          readerSchema,
+          props,
+          partialUpdateMode);
     }
 
     Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
@@ -78,7 +90,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord);
+        boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord) || isDeleteHoodieOperation(nextRecord);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }

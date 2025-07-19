@@ -124,7 +124,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
-    this.completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+    this.completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient);
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
@@ -152,7 +152,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * Refresh the completion time query view.
    */
   protected void refreshCompletionTimeQueryView() {
-    this.completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+    this.completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient);
   }
 
   /**
@@ -484,7 +484,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return false;
       } else if (metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled()) {
         return pathName.contains(HoodieFileFormat.PARQUET.getFileExtension())
-            || pathName.contains(HoodieFileFormat.ORC.getFileExtension());
+            || pathName.contains(HoodieFileFormat.ORC.getFileExtension())
+            || pathName.contains(HoodieFileFormat.HFILE.getFileExtension());
       } else {
         return pathName.contains(metaClient.getTableConfig().getBaseFileFormat().getFileExtension());
       }
@@ -1054,6 +1055,18 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
             }
             return fileSlice;
           }).filter(Option::isPresent).map(Option::get).map(this::addBootstrapBaseFileIfPresent);
+    } finally {
+      readLock.unlock();
+    }
+  }
+
+  @Override
+  public final Option<FileSlice> getLatestMergedFileSliceBeforeOrOn(String partitionStr, String maxInstantTime, String fileId) {
+    try {
+      readLock.lock();
+      return Option.fromJavaOptional(getLatestMergedFileSlicesBeforeOrOn(partitionStr, maxInstantTime)
+          .filter(fileSlice -> fileSlice.getFileId().equals(fileId))
+          .findFirst());
     } finally {
       readLock.unlock();
     }

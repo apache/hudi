@@ -62,7 +62,7 @@ import scala.concurrent.duration._
 /**
  * Test cases for secondary index
  */
-@Tag("functional")
+@Tag("functional-c")
 class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   val metadataOpts: Map[String, String] = Map(
@@ -1318,6 +1318,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     val firstCompletedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
     val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
     writeClient.savepoint(firstCompletedInstant.get().requestedTime, "testUser", "savepoint to first commit")
+    writeClient.close()
     val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().requestedTime
     assertEquals(firstCompletedInstant.get().requestedTime, savepointTimestamp)
     // Restore to savepoint
@@ -1593,7 +1594,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       s"""
          |create table $tableName (
          |  record_key_col string,
-         |  name struct<first_name:string, last_name:string>,
+         |  student struct<
+         |    name: struct<first_name:string, last_name:string>,
+         |    age: int
+         |  >,
          |  ts bigint
          |) using hudi
          | options (
@@ -1607,10 +1611,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          | location '$basePath'
       """.stripMargin)
     // insert initial records
-    spark.sql(s"insert into $tableName values('id1', named_struct('first_name', 'John', 'last_name', 'Doe'), 1)")
-    spark.sql(s"insert into $tableName values('id2', named_struct('first_name', 'Jane', 'last_name', 'Smith'), 2)")
-    // create secondary index on name.last_name field
-    spark.sql(s"create index idx_last_name on $tableName (name.last_name)")
+    spark.sql(s"insert into $tableName values('id1', named_struct('name', named_struct('first_name', 'John', 'last_name', 'Doe'), 'age', 20), 1)")
+    spark.sql(s"insert into $tableName values('id2', named_struct('name', named_struct('first_name', 'Jane', 'last_name', 'Smith'), 'age', 25), 2)")
+    // create secondary index on student.name.last_name field
+    spark.sql(s"create index idx_last_name on $tableName (student.name.last_name)")
     // validate index creation
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -1623,18 +1627,18 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(s"Smith${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id2")
     )
     // verify pruning
-    checkAnswer(s"select record_key_col, name.last_name, ts from $tableName where name.last_name = 'Doe'")(
+    checkAnswer(s"select record_key_col, student.name.last_name, ts from $tableName where student.name.last_name = 'Doe'")(
       Seq("id1", "Doe", 1)
     )
     // update nested field
-    spark.sql(s"update $tableName set name = named_struct('first_name', 'John', 'last_name', 'Brown') where record_key_col = 'id1'")
+    spark.sql(s"update $tableName set student = named_struct('name', named_struct('first_name', 'John', 'last_name', 'Brown'), 'age', 20) where record_key_col = 'id1'")
     // validate updated index records
     checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
       Seq(s"Brown${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id1", false),
       Seq(s"Smith${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id2", false)
     )
     // verify pruning
-    checkAnswer(s"select record_key_col, name.last_name, ts from $tableName where name.last_name = 'Brown'")(
+    checkAnswer(s"select record_key_col, student.name.last_name, ts from $tableName where student.name.last_name = 'Brown'")(
       Seq("id1", "Brown", 1)
     )
   }

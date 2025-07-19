@@ -57,6 +57,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -95,7 +96,7 @@ public class TestHoodieWriteConfig {
   @Test
   public void testSupportedTableWriteVersions() {
     Set<HoodieTableVersion> supportedVersions = CollectionUtils.createSet(
-        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT
+        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE
     );
     Arrays.stream(HoodieTableVersion.values())
         .filter(version -> !supportedVersions.contains(version))
@@ -723,6 +724,33 @@ public class TestHoodieWriteConfig {
         .withPath("/tmp")
         .withProperties(props).build();
     assertEquals(bloomFilterType, config.getBloomFilterType());
+  }
+
+  @Test
+  public void testStreamingWritesToMetadataConfig() {
+    Properties props = new Properties();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withStreamingWriteEnabled(true).build())
+        .withEngineType(EngineType.SPARK).build();
+
+    assertTrue(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
+
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withEngineType(EngineType.FLINK).build();
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
+
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .withEngineType(EngineType.JAVA).build();
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.SIX));
+    assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {

@@ -28,9 +28,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -84,8 +87,6 @@ class TestFileGroupRecordBuffer {
   private final FileGroupReaderSchemaHandler schemaHandler =
       mock(FileGroupReaderSchemaHandler.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
-  private Option<String> partitionNameOverrideOpt = Option.empty();
-  private Option<String[]> partitionPathFieldOpt = Option.empty();
   private TypedProperties props = new TypedProperties();
   private HoodieReadStats readStats = mock(HoodieReadStats.class);
 
@@ -94,6 +95,8 @@ class TestFileGroupRecordBuffer {
     when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
     when(schemaHandler.getRequiredSchema()).thenReturn(schema);
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
+    when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
+    when(readerContext.getRecordSizeEstimator()).thenReturn(new DefaultSizeEstimator<>());
   }
 
   @Test
@@ -155,6 +158,7 @@ class TestFileGroupRecordBuffer {
                                            HoodieTableVersion tableVersion,
                                            String mergeStrategyId) {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+    when(readerContext.getInstantRange()).thenReturn(Option.empty());
     when(readerContext.getHasBootstrapBaseFile()).thenReturn(false);
     when(readerContext.getHasLogFiles()).thenReturn(true);
     HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
@@ -290,10 +294,12 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            partitionNameOverrideOpt,
-            partitionPathFieldOpt,
+            PartialUpdateMode.NONE,
             props,
-            readStats);
+            readStats,
+            Option.empty(),
+            false
+        );
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
 
@@ -303,10 +309,12 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            partitionNameOverrideOpt,
-            partitionPathFieldOpt,
+            PartialUpdateMode.NONE,
             props,
-            readStats);
+            readStats,
+            Option.empty(),
+            false
+    );
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
     when(readerContext.getValue(any(), any(), any())).thenReturn("d");
@@ -325,10 +333,12 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            partitionNameOverrideOpt,
-            partitionPathFieldOpt,
+            PartialUpdateMode.NONE,
             props,
-            readStats);
+            readStats,
+            Option.empty(),
+            false
+        );
 
     // CASE 1: With custom delete marker.
     GenericRecord record = new GenericData.Record(schema);

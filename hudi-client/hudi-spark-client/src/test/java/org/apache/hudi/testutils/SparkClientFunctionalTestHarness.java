@@ -24,6 +24,7 @@ import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -43,6 +45,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieIOException;
@@ -276,15 +279,13 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   protected Stream<HoodieBaseFile> insertRecordsToMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records,
                                                  SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime,
                                                            boolean doExplicitCommit) throws IOException {
-    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
-
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 1);
     JavaRDD<WriteStatus> statusesRdd = client.insert(writeRecords, commitTime);
     List<WriteStatus> statuses = statusesRdd.collect();
     assertNoWriteErrors(statuses);
-    if (doExplicitCommit) {
-      client.commit(commitTime, statusesRdd);
-    }
+    client.commit(commitTime, jsc().parallelize(statuses));
+
+    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
         reloadedMetaClient.getStorage(),
         new StoragePath(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
@@ -332,9 +333,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     List<WriteStatus> statuses = statusesRdd.collect();
     // Verify there are no errors
     assertNoWriteErrors(statuses);
-    if (doExplicitCommit) {
-      client.commit(commitTime, statusesRdd);
-    }
+    client.commit(commitTime, statusesRdd);
     assertFileSizesEqual(statuses, status -> FSUtils.getFileSize(
         reloadedMetaClient.getStorage(),
         new StoragePath(reloadedMetaClient.getBasePath(), status.getStat().getPath())));
@@ -403,7 +402,6 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
       long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
-        .withAutoCommit(autoCommit)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(compactionSmallFileSize)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
@@ -413,7 +411,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
         .withClusteringConfig(clusteringConfig)
-        .withRollbackUsingMarkers(rollbackUsingMarkers);
+        .withRollbackUsingMarkers(rollbackUsingMarkers)
+        // Enable lock provider and concurrency control for functional tests to catch any potential deadlock issues
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .build());
   }
 
   protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {

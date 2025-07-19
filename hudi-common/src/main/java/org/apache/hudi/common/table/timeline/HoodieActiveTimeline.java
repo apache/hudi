@@ -62,14 +62,14 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   void createNewInstant(HoodieInstant instant);
 
-  void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
+  HoodieInstant createRequestedCommitWithReplaceMetadata(String instantTime, String actionType);
 
   /**
    * Save Completed instant in active timeline.
    * @param instant Instant to be saved.
    * @param metadata metadata to write into the instant file
    */
-  <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata);
+  <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata);
 
   /**
    * Save Completed instant in active timeline.
@@ -77,7 +77,31 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @param instant Instant to be saved.
    * @param metadata metadata to write into the instant file
    */
-  <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata);
+  <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata);
+
+  /**
+   * Save Completed instant in active timeline with table format completion actions.
+   *
+   * @param shouldLock Lock before writing to timeline.
+   * @param instant Instant to be saved.
+   * @param metadata metadata to write into the instant file
+   * @param tableFormatCompletionAction functional interface to perform table format specific completion actions.
+   * @return The completed hoodie instant
+   * @param <T>
+   */
+  <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, TableFormatCompletionAction tableFormatCompletionAction);
+
+
+  /**
+   * Save Completed instant in active timeline with an optional completion time. For version 8 tables, completion times are generated just before wrapping up the commit and serialized as part of
+   * completed commit metadata file.
+   * @param shouldLock Lock before writing to timeline.
+   * @param instant Instant to be saved.
+   * @param metadata metadata to write into the instant file
+   * @param completionTimeOpt an optinal instance of completion time.
+   * @param <T>
+   */
+  <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt);
 
   /**
    * Delete Compaction requested instant file from timeline.
@@ -216,14 +240,15 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata);
 
+  HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, TableFormatCompletionAction tableFormatCompletionAction);
+
   /**
    * Transition Clean State from requested to inflight.
    *
    * @param requestedInstant requested instant
-   * @param metadata metadata to write into the instant file
    * @return commit instant
    */
-  HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant, Option<HoodieCleanerPlan> metadata);
+  HoodieInstant transitionCleanRequestedToInflight(HoodieInstant requestedInstant);
 
   /**
    * Transition Rollback State from inflight to Committed.
@@ -234,6 +259,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return commit instant
    */
   HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata);
+
+  HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, TableFormatCompletionAction tableFormatCompletionAction);
 
   /**
    * Transition Rollback State from requested to inflight.
@@ -279,6 +306,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
 
+  HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, TableFormatCompletionAction tableFormatCompletionAction);
+
   /**
    * Transition cluster inflight to replace committed.
    *
@@ -288,6 +317,8 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return commit instant
    */
   HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata);
+
+  HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, TableFormatCompletionAction tableFormatCompletionAction);
 
   /**
    * Save Restore requested instant with metadata.

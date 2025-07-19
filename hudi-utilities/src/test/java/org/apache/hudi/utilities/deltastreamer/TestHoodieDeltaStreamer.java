@@ -3247,8 +3247,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(HoodieTestUtils.getDefaultStorageConf()).build();
-    List<String> partitions = FSUtils.getAllPartitionPaths(
-        new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), metaClient.getBasePath(), false);
+    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient, false);
     StorageConfiguration hadoopConf = metaClient.getStorageConf();
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engContext, metaClient,
@@ -3345,7 +3344,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieStreamer deltaStreamer = new HoodieStreamer(cfg, jsc);
     HoodieStreamer.StreamSyncService streamSyncService = (HoodieStreamer.StreamSyncService) deltaStreamer.getIngestionService();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
-    InputBatch inputBatch = streamSyncService.getStreamSync().readFromSource("00000", metaClient).getLeft();
+    InputBatch inputBatch = streamSyncService.getStreamSync().readFromSource(metaClient).getLeft();
     // Read from source and validate persistRdd call.
     JavaRDD<GenericRecord> sourceRdd = (JavaRDD<GenericRecord>) inputBatch.getBatch().get();
     assertEquals(1000, sourceRdd.count());
@@ -3444,11 +3443,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
    * Return empty table.
    */
   public static class DropAllTransformer implements Transformer {
+    private static final Logger LOG = LoggerFactory.getLogger(DropAllTransformer.class);
 
     @Override
     public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                          TypedProperties properties) {
-      System.out.println("DropAllTransformer called !!");
+      LOG.info("DropAllTransformer called !!");
       return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
     }
   }

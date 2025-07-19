@@ -25,18 +25,23 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
+import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -67,9 +72,12 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
-      HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig);
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
     this.payloadClass = tableConfig.getPayloadClass();
+    this.typeConverter = new AvroReaderContextTypeConverter();
   }
 
   @Override
@@ -79,11 +87,25 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       long length,
       Schema dataSchema,
       Schema requiredSchema,
-      HoodieStorage storage
-  ) throws IOException {
+      HoodieStorage storage) throws IOException {
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, HoodieFileFormat.PARQUET, Option.empty());
+            filePath, baseFileFormat, Option.empty());
+    if (keyFilterOpt.isEmpty()) {
+      return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+    }
+    if (reader.supportKeyPredicate()) {
+      List<String> keys = reader.extractKeys(keyFilterOpt);
+      if (!keys.isEmpty()) {
+        return reader.getIndexedRecordsByKeysIterator(keys, requiredSchema);
+      }
+    }
+    if (reader.supportKeyPrefixPredicate()) {
+      List<String> keyPrefixes = reader.extractKeyPrefixes(keyFilterOpt);
+      if (!keyPrefixes.isEmpty()) {
+        return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
+      }
+    }
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
   }
 
@@ -95,6 +117,11 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema) {
     return (GenericRecord) record;
+  }
+
+  @Override
+  public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
+    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
@@ -117,7 +144,12 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
-    return getFieldValueFromIndexedRecord(record, schema, fieldName);
+    return getFieldValueFromIndexedRecord(record, fieldName);
+  }
+
+  @Override
+  public String getMetaFieldValue(IndexedRecord record, int pos) {
+    return record.get(pos).toString();
   }
 
   @Override
@@ -125,11 +157,23 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     if (bufferedRecord.isDelete()) {
       return SpillableMapUtils.generateEmptyPayload(
           bufferedRecord.getRecordKey(),
-          null,
+          partitionPath,
           bufferedRecord.getOrderingValue(),
           payloadClass);
     }
-    return new HoodieAvroIndexedRecord(bufferedRecord.getRecord());
+    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
+    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
+  }
+
+  @Override
+  public IndexedRecord constructEngineRecord(Schema schema,
+                                             Map<Integer, Object> updateValues,
+                                             BufferedRecord<IndexedRecord> baseRecord) {
+    IndexedRecord engineRecord = baseRecord.getRecord();
+    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
+      engineRecord.put(value.getKey(), value.getValue());
+    }
+    return engineRecord;
   }
 
   @Override
@@ -140,6 +184,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
     return record;
+  }
+
+  @Override
+  public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
+    return new AvroRecordSizeEstimator(getSchemaHandler().getRequiredSchema());
+  }
+
+  @Override
+  public CustomSerializer<BufferedRecord<IndexedRecord>> getRecordSerializer() {
+    return new BufferedRecordSerializer<>(new AvroRecordSerializer(this::decodeAvroSchema));
   }
 
   @Override
@@ -193,14 +247,16 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     };
   }
 
-  private Object getFieldValueFromIndexedRecord(
+  public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
-      Schema recordSchema,
       String fieldName) {
-    Schema currentSchema = recordSchema;
+    Schema currentSchema = record.getSchema();
     IndexedRecord currentRecord = record;
     String[] path = fieldName.split("\\.");
     for (int i = 0; i < path.length; i++) {
+      if (currentSchema.isUnion()) {
+        currentSchema = AvroSchemaUtils.resolveNullableSchema(currentSchema);
+      }
       Schema.Field field = currentSchema.getField(path[i]);
       if (field == null) {
         return null;

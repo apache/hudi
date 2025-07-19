@@ -214,13 +214,12 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .build()
     val context = new HoodieJavaEngineContext(HoodieTestUtils.getDefaultStorageConf)
     val writeClient = new HoodieJavaWriteClient(context, writeConfig)
-    val instantTime = makeNewCommitTime()
+    val instantTime = writeClient.startCommit()
 
     val records: java.util.List[HoodieRecord[Nothing]] =
       dataGen.generateInsertsContainsAllPartitions(instantTime, 100)
         .asInstanceOf[java.util.List[HoodieRecord[Nothing]]]
-    writeClient.startCommitWithTime(instantTime)
-    writeClient.insert(records, instantTime)
+    writeClient.commit(instantTime, writeClient.insert(records, instantTime))
     metaClient.reloadActiveTimeline()
 
     val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
@@ -635,7 +634,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     metaClient = HoodieTableMetaClient.reload(metaClient)
 
     // Test getting partition paths in a subset of directories
-    val metadata = HoodieTableMetadata.create(context,
+    val metadata = metaClient.getTableFormat.getMetadataFactory.create(context,
       metaClient.getStorage,
       HoodieMetadataConfig.newBuilder().enable(enableMetadataTable).build(),
       metaClient.getBasePath.toString)

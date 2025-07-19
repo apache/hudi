@@ -345,7 +345,6 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
   private void scheduleCompaction() {
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath.toString())
         .withRollbackUsingMarkers(false)
-        .withAutoCommit(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexColumnStats(true)
@@ -356,7 +355,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
         .withKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      client.scheduleCompactionAtInstant(client.createNewInstantTime(), Option.empty());
+      client.scheduleCompaction(Option.empty());
     }
   }
 

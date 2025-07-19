@@ -20,16 +20,28 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.serialization.CustomSerializer;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
+import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -48,6 +60,8 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
@@ -65,6 +79,10 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
 public abstract class HoodieReaderContext<T> {
   private final StorageConfiguration<?> storageConfiguration;
   private final BiFunction<T, Schema, String> recordKeyExtractor;
+  protected final HoodieFileFormat baseFileFormat;
+  // For general predicate pushdown.
+  protected final Option<Predicate> keyFilterOpt;
+  protected final HoodieTableConfig tableConfig;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
@@ -72,16 +90,29 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
+
+  // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
+  protected String partitionPath;
+  protected Option<InstantRange> instantRangeOpt = Option.empty();
+  private RecordMergeMode mergeMode;
+  protected ReaderContextTypeConverter typeConverter;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
-                                HoodieTableConfig tableConfig) {
+                                HoodieTableConfig tableConfig,
+                                Option<InstantRange> instantRangeOpt,
+                                Option<Predicate> keyFilterOpt) {
+    this.tableConfig = tableConfig;
     this.storageConfiguration = storageConfiguration;
     this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
+    this.baseFileFormat = tableConfig.getBaseFileFormat();
+    this.instantRangeOpt = instantRangeOpt;
+    this.keyFilterOpt = keyFilterOpt;
+    this.typeConverter = new ReaderContextTypeConverter();
   }
 
   // Getter and Setter for schemaHandler
@@ -129,6 +160,10 @@ public abstract class HoodieReaderContext<T> {
     this.hasLogFiles = hasLogFiles;
   }
 
+  public void setPartitionPath(String partitionPath) {
+    this.partitionPath = partitionPath;
+  }
+
   // Getter and Setter for hasBootstrapBaseFile
   public boolean getHasBootstrapBaseFile() {
     return hasBootstrapBaseFile;
@@ -158,6 +193,22 @@ public abstract class HoodieReaderContext<T> {
 
   public StorageConfiguration<?> getStorageConfiguration() {
     return storageConfiguration;
+  }
+
+  public Option<Predicate> getKeyFilterOpt() {
+    return keyFilterOpt;
+  }
+
+  public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
+    return new HoodieRecordSizeEstimator<>(schemaHandler.getRequiredSchema());
+  }
+
+  public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
+    return new DefaultSerializer<>();
+  }
+
+  public ReaderContextTypeConverter getTypeConverter() {
+    return typeConverter;
   }
 
   /**
@@ -203,6 +254,23 @@ public abstract class HoodieReaderContext<T> {
   public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
   public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
+
+  /**
+   * There are two cases to handle:
+   * 1). Return the delete record if it's not null;
+   * 2). otherwise fills an empty row with record key fields and returns.
+   *
+   * <p>For case2, when `emitDelete` is true for FileGroup reader and payload for DELETE record is empty,
+   * a record key row is emitted to downstream to delete data from storage by record key with the best effort.
+   * Returns null if the primary key semantics been lost: the requested schema does not include all the record key fields.
+   *
+   * @param record    delete record
+   * @param recordKey record key
+   *
+   * @return Engine specific row which contains record key fields.
+   */
+  @Nullable
+  public abstract T getDeleteRow(T record, String recordKey);
   
   /**
    * @param mergeMode        record merge mode
@@ -211,7 +279,31 @@ public abstract class HoodieReaderContext<T> {
    *
    * @return {@link HoodieRecordMerger} to use.
    */
-  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses);
+  protected abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses);
+
+  /**
+   * Initializes the record merger based on the table configuration and properties.
+   * @param properties the properties for the reader.
+   */
+  public void initRecordMerger(TypedProperties properties) {
+    RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
+    String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
+    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
+          recordMergeMode, tableConfig.getPayloadClass(),
+          mergeStrategyId, null, tableConfig.getTableVersion());
+      recordMergeMode = triple.getLeft();
+      mergeStrategyId = triple.getRight();
+    }
+    this.mergeMode = recordMergeMode;
+    this.recordMerger = getRecordMerger(recordMergeMode, mergeStrategyId,
+        properties.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
+            properties.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, "")));
+  }
+
+  public RecordMergeMode getMergeMode() {
+    return mergeMode;
+  }
 
   /**
    * Gets the field value.
@@ -224,16 +316,40 @@ public abstract class HoodieReaderContext<T> {
   public abstract Object getValue(T record, Schema schema, String fieldName);
 
   /**
-   * Cast to Java boolean value.
-   * If the object is not compatible with boolean type, throws.
+   * Get value of metadata field in a more efficient way than #getValue.
+   *
+   * @param record The record in engine-specific type.
+   * @param pos    The position of the metadata field.
+   *
+   * @return The value for the target metadata field.
    */
-  public boolean castToBoolean(Object value) {
-    if (value instanceof Boolean) {
-      return (boolean) value;
-    } else {
-      throw new IllegalArgumentException(
-          "Input value type " + value.getClass() + ", cannot be cast to boolean");
+  public abstract String getMetaFieldValue(T record, int pos);
+
+  /**
+   * Get the {@link InstantRange} filter.
+   */
+  public Option<InstantRange> getInstantRange() {
+    return instantRangeOpt;
+  }
+
+  /**
+   * Apply the {@link InstantRange} filter to the file record iterator.
+   *
+   * @param fileRecordIterator File record iterator.
+   *
+   * @return File record iterator filter by {@link InstantRange}.
+   */
+  public ClosableIterator<T> applyInstantRangeFilter(ClosableIterator<T> fileRecordIterator) {
+    // For metadata table, no need to apply instant range to base file.
+    if (HoodieTableMetadata.isMetadataTable(tablePath)) {
+      return fileRecordIterator;
     }
+    InstantRange instantRange = getInstantRange().get();
+    final Schema.Field commitTimeField = schemaHandler.getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    final int commitTimePos = commitTimeField.pos();
+    java.util.function.Predicate<T> instantFilter =
+        row -> instantRange.isInRange(getMetaFieldValue(row, commitTimePos));
+    return new CloseableFilterIterator<>(fileRecordIterator, instantFilter);
   }
 
   /**
@@ -288,6 +404,18 @@ public abstract class HoodieReaderContext<T> {
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+
+  /**
+   * Constructs a new Engine based record based on a given schema, base record and update values.
+   *
+   * @param schema           The schema of the new record.
+   * @param updateValues     The map recording field index and its corresponding update value.
+   * @param baseRecord       The record based on which the engine record is built.
+   * @return A new instance of engine record type {@link T}.
+   */
+  public abstract T constructEngineRecord(Schema schema,
+                                          Map<Integer, Object> updateValues,
+                                          BufferedRecord<T> baseRecord);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
@@ -399,7 +527,7 @@ public abstract class HoodieReaderContext<T> {
    * Decodes the avro schema with given version ID.
    */
   @Nullable
-  private Schema decodeAvroSchema(Object versionId) {
+  protected Schema decodeAvroSchema(Object versionId) {
     return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
 }

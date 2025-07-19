@@ -59,19 +59,17 @@ public class ClusteringCommand {
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    // First get a clustering instant time and pass it to spark launcher for scheduling clustering
-    String clusteringInstantTime = client.createNewInstantTime();
-
+    String tableName = client.getTableConfig().getTableName();
     SparkMain.addAppArgs(sparkLauncher, SparkCommand.CLUSTERING_SCHEDULE, master, sparkMemory,
-        HoodieCLI.basePath, client.getTableConfig().getTableName(), clusteringInstantTime, propsFilePath);
+        HoodieCLI.basePath, tableName, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     if (exitCode != 0) {
-      return "Failed to schedule clustering for " + clusteringInstantTime;
+      return "Failed to schedule clustering for " + tableName;
     }
-    return "Succeeded to schedule clustering for " + clusteringInstantTime;
+    return "Succeeded to schedule clustering for " + tableName;
   }
 
   /**

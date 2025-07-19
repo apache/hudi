@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELD;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
@@ -56,6 +58,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
   protected Properties getMetaProps() {
     Properties metaProps =  super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+    metaProps.setProperty(PRECOMBINE_FIELD.key(), "timestamp");
     return metaProps;
   }
 
@@ -114,7 +117,8 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     testTable = HoodieTestTable.of(metaClient);
     // Create dedicated merger to avoid current delete logic holes.
     // TODO: Unify delete logic (HUDI-7240).
-    readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig());
+    readerContext = new HoodieAvroReaderContext(
+        storageConf, metaClient.getTableConfig(), Option.empty(), Option.empty());
     setUpMockCommits();
   }
 

@@ -45,7 +45,6 @@ import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -239,13 +238,13 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
-                                                  HoodieStorage storage,
-                                                  String basePathStr,
+                                                  HoodieTableMetaClient metaClient,
                                                   boolean useFileListingFromMetadata) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(useFileListingFromMetadata)
         .build();
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig, basePathStr)) {
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory()
+        .create(engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString())) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
@@ -253,38 +252,22 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
-                                                  HoodieStorage storage,
-                                                  HoodieMetadataConfig metadataConfig,
-                                                  String basePathStr) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig,
-        basePathStr)) {
+                                                  HoodieTableMetaClient metaClient,
+                                                  HoodieMetadataConfig metadataConfig) {
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory()
+        .create(engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString())) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
     }
-  }
-
-  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
-                                                  HoodieStorage storage,
-                                                  StoragePath basePath,
-                                                  boolean useFileListingFromMetadata) {
-    return getAllPartitionPaths(engineContext, storage, basePath.toString(), useFileListingFromMetadata);
-  }
-
-  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
-                                                  HoodieStorage storage,
-                                                  HoodieMetadataConfig metadataConfig,
-                                                  StoragePath basePath) {
-    return getAllPartitionPaths(engineContext, storage, metadataConfig, basePath.toString());
   }
 
   public static Map<String, List<StoragePathInfo>> getFilesInPartitions(HoodieEngineContext engineContext,
-                                                                        HoodieStorage storage,
+                                                                        HoodieTableMetaClient metaClient,
                                                                         HoodieMetadataConfig metadataConfig,
-                                                                        String basePathStr,
                                                                         String[] partitionPaths) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig,
-        basePathStr)) {
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory()
+        .create(engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString())) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
@@ -322,7 +305,12 @@ public class FSUtils {
   }
 
   public static String createNewFileId(String idPfx, int id) {
-    return String.format("%s-%d", idPfx, id);
+    // format: {idPrefix}-{id}
+    return new StringBuilder()
+        .append(idPfx)
+        .append('-')
+        .append(id)
+        .toString();
   }
 
   /**
@@ -607,7 +595,7 @@ public class FSUtils {
                 pairOfSubPathAndConf.getKey(), pairOfSubPathAndConf.getValue(), true)
         );
         boolean result = storage.deleteDirectory(dirPath);
-        LOG.info("Removed directory at " + dirPath);
+        LOG.info("Removed directory at {}", dirPath);
         return result;
       }
     } catch (IOException ioe) {
@@ -656,18 +644,16 @@ public class FSUtils {
   public static <T> Map<String, T> parallelizeSubPathProcess(
       HoodieEngineContext hoodieEngineContext, HoodieStorage storage, StoragePath dirPath, int parallelism,
       Predicate<StoragePathInfo> subPathPredicate, SerializableFunction<Pair<String, StorageConfiguration<?>>, T> pairFunction) {
-    Map<String, T> result = new HashMap<>();
     try {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(dirPath);
       List<String> subPaths = pathInfoList.stream()
           .filter(subPathPredicate)
           .map(fileStatus -> fileStatus.getPath().toString())
           .collect(Collectors.toList());
-      result = parallelizeFilesProcess(hoodieEngineContext, storage, parallelism, pairFunction, subPaths);
+      return parallelizeFilesProcess(hoodieEngineContext, storage, parallelism, pairFunction, subPaths);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-    return result;
   }
 
   public static <T> Map<String, T> parallelizeFilesProcess(
@@ -728,14 +714,14 @@ public class FSUtils {
   }
 
   public static boolean comparePathsWithoutScheme(String pathStr1, String pathStr2) {
-    Path pathWithoutScheme1 = getPathWithoutScheme(new Path(pathStr1));
-    Path pathWithoutScheme2 = getPathWithoutScheme(new Path(pathStr2));
+    StoragePath pathWithoutScheme1 = getPathWithoutScheme(new StoragePath(pathStr1));
+    StoragePath pathWithoutScheme2 = getPathWithoutScheme(new StoragePath(pathStr2));
     return pathWithoutScheme1.equals(pathWithoutScheme2);
   }
 
-  public static Path getPathWithoutScheme(Path path) {
-    return path.isUriPathAbsolute()
-        ? new Path(null, path.toUri().getAuthority(), path.toUri().getPath()) : path;
+  public static StoragePath getPathWithoutScheme(StoragePath path) {
+    return path.isAbsolute()
+        ? new StoragePath(path.toUri().getRawSchemeSpecificPart()) : path;
   }
 
   // Converts s3a to s3a

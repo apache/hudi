@@ -62,7 +62,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness {
 
-
   private HoodieWriteConfig config;
   private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0);
 
@@ -80,7 +79,6 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, props);
     config = getConfigBuilder().withProps(props)
-        .withAutoCommit(false)
         .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(maxFileSize).build())
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringPlanPartitionFilterMode(ClusteringPlanPartitionFilterMode.RECENT_DAYS)
@@ -114,7 +112,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
 
     int numRecords = 1000;
-    writeData(writeClient.createNewInstantTime(), numRecords, true);
+    writeData(numRecords, true);
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
@@ -147,12 +145,12 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     });
   }
 
-  private List<WriteStatus> writeData(String commitTime, int totalRecords, boolean doCommit) {
+  private List<WriteStatus> writeData(int totalRecords, boolean doCommit) {
+    String commitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, totalRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    writeClient.startCommitWithTime(commitTime);
     List<WriteStatus> writeStatues = writeClient.insert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
 

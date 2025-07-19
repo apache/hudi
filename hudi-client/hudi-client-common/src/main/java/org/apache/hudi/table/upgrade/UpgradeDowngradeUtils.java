@@ -46,6 +46,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
@@ -91,7 +92,8 @@ public class UpgradeDowngradeUtils {
         try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context)) {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {
-            writeClient.compact(compactionInstantOpt.get());
+            HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
+            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.of(table));
           }
         }
       }
@@ -105,7 +107,7 @@ public class UpgradeDowngradeUtils {
    */
   public static void syncCompactionRequestedFileToAuxiliaryFolder(HoodieTable table) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
+    TimelineFactory timelineFactory = metaClient.getTableFormat().getTimelineFactory();
     InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     HoodieTimeline compactionTimeline = timelineFactory.createActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
@@ -172,13 +174,13 @@ public class UpgradeDowngradeUtils {
       properties.putAll(config.getProps());
       // TimeGenerators are cached and re-used based on table base path. Since here we are changing the lock configurations, avoiding the cache use
       // for upgrade code block.
-      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(),"false");
+      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(), "false");
       // override w/ NoopLock Provider to avoid re-entrant locking. already upgrade is happening within the table level lock.
       // Below we do trigger rollback and compaction which might again try to acquire the lock. So, here we are explicitly overriding to
       // NoopLockProvider for just the upgrade code block.
       properties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
       // if auto adjust it not disabled, chances that InProcessLockProvider will get overridden for single writer use-cases.
-      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(),"false");
+      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "false");
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
           .withProps(properties)
           .withWriteTableVersion(tableVersion.versionCode())
@@ -203,7 +205,8 @@ public class UpgradeDowngradeUtils {
         if (shouldCompact) {
           Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
           if (compactionInstantOpt.isPresent()) {
-            writeClient.compact(compactionInstantOpt.get());
+            HoodieWriteMetadata result = writeClient.compact(compactionInstantOpt.get());
+            writeClient.commitCompaction(compactionInstantOpt.get(), result, Option.empty());
           }
         }
       }

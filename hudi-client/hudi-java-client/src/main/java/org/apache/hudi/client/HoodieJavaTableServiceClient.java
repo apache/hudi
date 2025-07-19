@@ -30,6 +30,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClient<List<HoodieRecord<T>>, List<WriteStatus>, List<WriteStatus>> {
 
@@ -42,6 +43,11 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   @Override
   protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
     // no op
+  }
+
+  @Override
+  protected TableWriteStats triggerWritesAndFetchWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return new TableWriteStats(writeMetadata.getWriteStatuses().stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()));
   }
 
   @Override

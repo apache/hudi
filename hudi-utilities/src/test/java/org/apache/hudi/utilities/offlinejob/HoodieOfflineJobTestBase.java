@@ -82,11 +82,11 @@ public class HoodieOfflineJobTestBase extends UtilitiesTestBase {
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
-  protected List<WriteStatus> writeData(boolean isUpsert, String instant, int numRecords, boolean doCommit) {
+  protected List<WriteStatus> writeData(boolean isUpsert, int numRecords, boolean doCommit) {
+    String instant = client.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     JavaRDD records = jsc.parallelize(dataGen.generateInserts(instant, numRecords), 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    client.startCommitWithTime(instant);
     List<WriteStatus> writeStatuses;
     if (isUpsert) {
       writeStatuses = client.upsert(records, instant).collect();

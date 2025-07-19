@@ -19,13 +19,17 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.HoodieWriteResult;
+import org.apache.hudi.client.SparkRDDMetadataWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -41,8 +45,7 @@ import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
@@ -55,8 +58,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
-public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieBackedTableMetadataWriterTableVersionSix<JavaRDD<HoodieRecord>> {
+public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieBackedTableMetadataWriterTableVersionSix<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
 
@@ -91,6 +96,11 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   }
 
   @Override
+  MetadataIndexGenerator initializeMetadataIndexGenerator() {
+    throw new UnsupportedOperationException("Streaming writes are not supported for Spark table version six");
+  }
+
+  @Override
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
       Registry registry;
@@ -118,6 +128,31 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   }
 
   @Override
+  protected HoodieData<WriteStatus> convertEngineSpecificDataToHoodieData(JavaRDD<WriteStatus> records) {
+    throw new HoodieNotSupportedException("Unsupported flow for table version 6");
+  }
+
+  @Override
+  protected void bulkInsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
+                                     Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.bulkInsertPreppedRecords(preppedRecordInputs, instantTime, bulkInsertPartitioner);
+    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
+  }
+
+  @Override
+  protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs) {
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
+  }
+
+  @Override
+  protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs,
+                                 List<HoodieFileGroupId> fileGroupsIdsToUpdate) {
+    JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
+    writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
+  }
+
+  @Override
   protected void bulkCommit(
       String instantTime, String partitionName, HoodieData<HoodieRecord> records,
       int fileGroupCount) {
@@ -132,18 +167,14 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
     SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
-    writeClient.startCommitWithTime(instantTime, actionType);
-    writeClient.deletePartitions(partitionsToDrop, instantTime);
+    writeClient.startCommitForMetadataTable(metadataMetaClient, instantTime, actionType);
+    HoodieWriteResult result = writeClient.deletePartitions(partitionsToDrop, instantTime);
+    writeClient.commit(instantTime, result.getWriteStatuses(), Option.empty(), REPLACE_COMMIT_ACTION, result.getPartitionToReplaceFileIds());
   }
 
   @Override
-  protected HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
-    return HoodieSparkTable.create(writeConfig, engineContext, metaClient);
-  }
-
-  @Override
-  public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
-    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, Option.empty());
+  public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> initializeWriteClient() {
+    return new SparkRDDMetadataWriteClient(engineContext, metadataWriteConfig, Option.empty());
   }
 
   @Override
@@ -158,7 +189,8 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   @Override
   protected HoodieData<HoodieRecord> getExpressionIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathAndSizeTriplet, HoodieIndexDefinition indexDefinition,
-                                                               HoodieTableMetaClient metaClient, int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf, String instantTime) {
+                                                               HoodieTableMetaClient metaClient, int parallelism, Schema tableSchema, Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               String instantTime) {
     throw new HoodieNotSupportedException("Expression index not supported for Java metadata table writer yet.");
   }
 }

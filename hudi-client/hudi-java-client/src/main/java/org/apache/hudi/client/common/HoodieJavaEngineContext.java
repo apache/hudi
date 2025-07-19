@@ -25,19 +25,24 @@ import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.engine.AvroReaderContextFactory;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
+
+import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -181,5 +186,10 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
     return data.collectAsList().stream().reduce(zeroValue, seqOp::apply, combOp::apply);
+  }
+
+  @Override
+  public ReaderContextFactory<IndexedRecord> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+    return new AvroReaderContextFactory(metaClient);
   }
 }

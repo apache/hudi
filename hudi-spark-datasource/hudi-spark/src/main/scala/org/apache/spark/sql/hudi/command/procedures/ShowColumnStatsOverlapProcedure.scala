@@ -25,7 +25,6 @@ import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.storage.StoragePath
@@ -108,7 +107,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
     val fsView = buildFileSystemView(table)
     val engineCtx = new HoodieSparkEngineContext(jsc)
-    val metaTable = HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
+    val metaTable = metaClient.getTableFormat.getMetadataFactory.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
     val allFileSlices = getAllFileSlices(partitionsSeq, metaTable, fsView)
     val fileSlicesSizeByPartition = allFileSlices.groupBy(_.getPartitionPath).mapValues(_.size)
 
@@ -260,16 +259,8 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val globPath = s"$basePath/**"
     val statuses = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath))
 
-    val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-
-    val maxInstant = metaClient.createNewInstantTime()
-    val instants = timeline.getInstants.iterator().asScala.filter(_.requestedTime < maxInstant)
-
-    val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(),
-      metaClient.getActiveTimeline.getInstantReader)
-
-    new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
+    val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
+    new HoodieTableFileSystemView(metaClient, timeline, statuses)
   }
 
   override def build: Procedure = new ShowColumnStatsOverlapProcedure()

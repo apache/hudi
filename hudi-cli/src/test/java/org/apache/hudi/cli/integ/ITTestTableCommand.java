@@ -191,11 +191,11 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
 
     try (SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg)) {
-      String instantTime = client.createNewInstantTime();
+      String instantTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(instantTime, 2);
       upsert(jsc, client, records, instantTime);
 
-      instantTime = client.createNewInstantTime();
+      instantTime = client.startCommit();
       List<HoodieRecord> recordsToUpdate = dataGen.generateUpdates(instantTime, 2);
       records.addAll(recordsToUpdate);
       upsert(jsc, client, records, instantTime);
@@ -204,15 +204,15 @@ public class ITTestTableCommand extends HoodieCLIIntegrationTestBase {
 
   private void upsert(JavaSparkContext jsc, SparkRDDWriteClient<HoodieAvroPayload> client,
                       List<HoodieRecord> records, String newCommitTime) throws IOException {
-    client.startCommitWithTime(newCommitTime);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
+    JavaRDD<WriteStatus> result = operateFunc(SparkRDDWriteClient::upsert, client, writeRecords, newCommitTime);
+    client.commit(newCommitTime, result);
   }
 
-  private void operateFunc(
+  private JavaRDD<WriteStatus> operateFunc(
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       SparkRDDWriteClient<HoodieAvroPayload> client, JavaRDD<HoodieRecord> writeRecords, String commitTime)
       throws IOException {
-    writeFn.apply(client, writeRecords, commitTime);
+    return writeFn.apply(client, writeRecords, commitTime);
   }
 }

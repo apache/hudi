@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -43,7 +45,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -85,12 +86,12 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -99,6 +100,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PA
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.configuration.FlinkOptions.WRITE_FAIL_FAST;
 
 /**
  * Utilities for Flink stream read and write.
@@ -106,6 +108,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 public class StreamerUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
+
+  public static final String FLINK_CHECKPOINT_ID = "flink_checkpoint_id";
 
   public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
     TypedProperties properties = getProps(config);
@@ -270,6 +274,7 @@ public class StreamerUtil {
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setTableVersion(conf.getInteger(FlinkOptions.WRITE_TABLE_VERSION))
+          .setTableFormat(conf.getString(FlinkOptions.WRITE_TABLE_FORMAT))
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
           .setPayloadClassName(getPayloadClass(conf))
@@ -360,6 +365,22 @@ public class StreamerUtil {
   }
 
   /**
+   * Write Flink checkpoint id as extra metadata, if write.extra.metadata.enabled is true.
+   *
+   * @param conf Flink configuration
+   * @param checkpointCommitMetadata commit metadata map
+   * @param checkpointId flink checkpoint id
+   */
+  public static void addFlinkCheckpointIdIntoMetaData(
+      Configuration conf,
+      HashMap<String, String> checkpointCommitMetadata,
+      long checkpointId) {
+    if (conf.get(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED)) {
+      checkpointCommitMetadata.put(FLINK_CHECKPOINT_ID, String.valueOf(checkpointId));
+    }
+  }
+
+  /**
    * Infers the merging behavior based on what the user sets (or doesn't set).
    *
    * @param conf Flink configuration
@@ -368,24 +389,6 @@ public class StreamerUtil {
   public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
     return HoodieTableConfig.inferCorrectMergingBehavior(
         getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineField(conf), HoodieTableVersion.EIGHT);
-  }
-
-  /**
-   * Get the {@link HoodieRecordMerger} from configuration for Flink reader.
-   *
-   * @param conf Flink configuration
-   * @return The {@link HoodieRecordMerger} for Flink reader.
-   */
-  public static HoodieRecordMerger getRecordMergerForReader(Configuration conf, String tablePath) {
-    List<String> mergers = Collections.emptyList();
-    if (conf.contains(FlinkOptions.RECORD_MERGER_IMPLS)) {
-      mergers = Arrays.stream(conf.get(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-          .map(String::trim)
-          .distinct()
-          .collect(Collectors.toList());
-    }
-
-    return HoodieRecordUtils.createRecordMerger(tablePath, EngineType.FLINK, mergers, conf.get(FlinkOptions.RECORD_MERGER_STRATEGY_ID));
   }
 
   /**
@@ -423,7 +426,11 @@ public class StreamerUtil {
    * Generates the bucket ID using format {partition path}_{fileID}.
    */
   public static String generateBucketKey(String partitionPath, String fileId) {
-    return partitionPath + "_" + fileId;
+    return new StringBuilder()
+        .append(partitionPath)
+        .append('_')
+        .append(fileId)
+        .toString();
   }
 
   /**
@@ -670,5 +677,28 @@ public class StreamerUtil {
     properties.put(HoodieMetadataConfig.ENABLE.key(), conf.getBoolean(FlinkOptions.METADATA_ENABLED));
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
+  }
+
+  /**
+   * Validate against the given list of write statuses.
+   *
+   * @param config          The Flink conf
+   * @param currentInstant  The current instant
+   * @param writeStatusList The write status list
+   *
+   * @throws HoodieException if the {code WRITE_FAIL_FAST} is set up as true and there are writing errors
+   */
+  public static void validateWriteStatus(
+      Configuration config,
+      String currentInstant,
+      List<WriteStatus> writeStatusList) throws HoodieException {
+    if (config.get(WRITE_FAIL_FAST)) {
+      // It will early detect the write failures in each of task to prevent data loss caused by commit failure
+      // after a checkpoint has been triggered.
+      writeStatusList.stream().filter(ws -> !ws.getErrors().isEmpty()).findFirst().map(writeStatus -> {
+        Map.Entry<HoodieKey, Throwable> entry = writeStatus.getErrors().entrySet().iterator().next();
+        throw new HoodieException(String.format("Write failure occurs with hoodie key %s at Instant [%s] in append write function", entry.getKey(), currentInstant), entry.getValue());
+      });
+    }
   }
 }

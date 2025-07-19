@@ -101,7 +101,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       HoodieTableMetaClient metaClient = table.getMetaClient();
       boolean isTableVersionLessThanEight = metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT);
       List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, table.getStorage(), table.getMetaClient().getBasePath(), false);
+          FSUtils.getAllPartitionPaths(context, table.getMetaClient(), false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());
@@ -285,7 +285,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                         String partitionPath,
                                                         HoodieTableMetaClient metaClient) throws IOException {
     LOG.info("Collecting files to be cleaned/rolledback up for path " + partitionPath + " and commit " + commit);
-    CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+    CompletionTimeQueryView completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient);
     StoragePathFilter filter = (path) -> {
       if (path.toString().contains(baseFileExtension)) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());

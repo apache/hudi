@@ -228,13 +228,19 @@ public class HDFSParquetImporterUtils implements Serializable {
                                                                    JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (this.command.toLowerCase()) {
       case "upsert": {
-        return client.upsert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.upsert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
       case "bulkinsert": {
-        return client.bulkInsert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.bulkInsert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
       default: {
-        return client.insert(hoodieRecords, instantTime);
+        JavaRDD<WriteStatus> writeStatusJavaRDD = client.insert(hoodieRecords, instantTime);
+        client.commit(instantTime, writeStatusJavaRDD);
+        return writeStatusJavaRDD;
       }
     }
   }

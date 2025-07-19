@@ -52,6 +52,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -105,25 +106,25 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy())
-            .build()).withAutoCommit(false).withProperties(properties).build();
+            .build()).withProperties(properties).build();
     Set<String> validInstants = new HashSet<>();
     // Create the first commit with inserts
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    String instantTime1 = client.createNewInstantTime();
+    String instantTime1 = WriteClientTestUtils.createNewInstantTime();
     createCommitWithInserts(cfg, client, "000", instantTime1, 200);
     validInstants.add(instantTime1);
     // Create 2 commits with upserts
-    String instantTime2 = client.createNewInstantTime();
+    String instantTime2 = WriteClientTestUtils.createNewInstantTime();
     createCommitWithUpserts(cfg, client, instantTime1, "000", instantTime2, 100);
-    String instantTime3 = client.createNewInstantTime();
+    String instantTime3 = WriteClientTestUtils.createNewInstantTime();
     createCommitWithUpserts(cfg, client, instantTime2, "000", instantTime3, 100);
     validInstants.add(instantTime2);
     validInstants.add(instantTime3);
     ExecutorService executors = Executors.newFixedThreadPool(2);
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
-    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+    SparkRDDWriteClient<?> client2 = getHoodieWriteClient(cfg);
     // Create upserts, schedule cleaning, schedule compaction in parallel
-    String instant4 = client.createNewInstantTime();
+    String instant4 = WriteClientTestUtils.createNewInstantTime();
     Future future1 = executors.submit(() -> {
       int numRecords = 100;
       String commitTimeBetweenPrevAndNew = instantTime2;
@@ -135,29 +136,28 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         throw new RuntimeException(e1);
       }
     });
-    String instant5 = client.createNewInstantTime();
-    Future future2 = executors.submit(() -> {
+    CompletableFuture<String> future2 = CompletableFuture.supplyAsync(() -> {
       try {
-        client2.scheduleTableService(instant5, Option.empty(), TableServiceType.COMPACT);
+        return client2.scheduleTableService(Option.empty(), TableServiceType.COMPACT).get();
       } catch (Exception e2) {
         if (tableType == HoodieTableType.MERGE_ON_READ) {
           throw new RuntimeException(e2);
         }
+        return null;
       }
-    });
-    String instant6 = client.createNewInstantTime();
-    Future future3 = executors.submit(() -> {
+    }, executors);
+    CompletableFuture<String> future3 = CompletableFuture.supplyAsync(() -> {
       try {
-        client2.scheduleTableService(instant6, Option.empty(), TableServiceType.CLEAN);
+        return client2.scheduleTableService(Option.empty(), TableServiceType.CLEAN).orElse(null);
       } catch (Exception e2) {
         throw new RuntimeException(e2);
       }
     });
     future1.get();
-    future2.get();
-    future3.get();
+    String instant5 = future2.get();
+    String instant6 = future3.get();
     // Create inserts, run cleaning, run compaction in parallel
-    String instant7 = client.createNewInstantTime();
+    String instant7 = WriteClientTestUtils.createNewInstantTime();
     future1 = executors.submit(() -> {
       int numRecords = 100;
       try {
@@ -167,10 +167,11 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         throw new RuntimeException(e1);
       }
     });
-    future2 = executors.submit(() -> {
+    Future<?> future4 = executors.submit(() -> {
       try {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(instant5);
-        client2.commitCompaction(instant5, compactionMetadata.getCommitMetadata().get(), Option.empty());
+        client2.commitCompaction(instant5, compactionMetadata, Option.empty());
+        assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(instant5));
         validInstants.add(instant5);
       } catch (Exception e2) {
         if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -178,21 +179,21 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         }
       }
     });
-    future3 = executors.submit(() -> {
+    Future<?> future5 = executors.submit(() -> {
       try {
-        client2.clean(instant6, false);
-        validInstants.add(instant6);
+        client2.clean();
+        metaClient.reloadActiveTimeline().getCleanerTimeline().lastInstant().map(HoodieInstant::requestedTime).ifPresent(validInstants::add);
       } catch (Exception e2) {
         throw new RuntimeException(e2);
       }
     });
     future1.get();
-    future2.get();
-    future3.get();
-    Set<String> completedInstants = metaClient.getActiveTimeline().getCommitsTimeline()
+    future4.get();
+    future5.get();
+    Set<String> completedInstants = metaClient.reloadActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::requestedTime)
         .collect(Collectors.toSet());
-    Assertions.assertTrue(validInstants.containsAll(completedInstants));
+    Assertions.assertEquals(validInstants, completedInstants);
   }
 
   @ParameterizedTest
@@ -212,25 +213,25 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .withConflictResolutionStrategy(new PreferWriterConflictResolutionStrategy())
-            .build()).withAutoCommit(false).withProperties(properties).build();
+            .build()).withProperties(properties).build();
     SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
     // Create the first commit
-    String instant1 = client1.createNewInstantTime();
+    String instant1 = WriteClientTestUtils.createNewInstantTime();
     createCommitWithInserts(cfg, client1, "000", instant1, 200);
     // Start another inflight commit
-    String instant2 = client1.createNewInstantTime();
+    String instant2 = WriteClientTestUtils.createNewInstantTime();
     int numRecords = 100;
 
     JavaRDD<WriteStatus> result1 = updateBatch(cfg, client1, instant2, instant1,
         Option.of(Arrays.asList(instant1)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
-        numRecords, 200, 2, INSTANT_GENERATOR);
+        numRecords, 200, 2, true, INSTANT_GENERATOR, true);
     // Start and finish another commit while the previous writer for commit 003 is running
-    String instant3 = client1.createNewInstantTime();
+    String instant3 = WriteClientTestUtils.createNewInstantTime();
     SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
     JavaRDD<WriteStatus> result2 = updateBatch(cfg, client2, instant3, instant1,
         Option.of(Arrays.asList(instant1)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2, INSTANT_GENERATOR);
-    client2.commit(instant3, result2);
+
     // Schedule and run clustering while previous writer for commit 003 is running
     SparkRDDWriteClient client3 = getHoodieWriteClient(cfg);
     // schedule clustering
@@ -242,19 +243,16 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
 
   private void createCommitWithInserts(HoodieWriteConfig cfg, SparkRDDWriteClient client,
                                        String prevCommitTime, String newCommitTime, int numRecords) throws Exception {
-    // Finish first base commmit
-    JavaRDD<WriteStatus> result = insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
+    insertFirstBatch(cfg, client, newCommitTime, prevCommitTime, numRecords, SparkRDDWriteClient::bulkInsert,
         false, false, numRecords, INSTANT_GENERATOR);
-    assertTrue(client.commit(newCommitTime, result), "Commit should succeed");
   }
 
   private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,
                                        String commitTimeBetweenPrevAndNew, String newCommitTime, int numRecords)
       throws Exception {
-    JavaRDD<WriteStatus> result = updateBatch(cfg, client, newCommitTime, prevCommit,
+    updateBatch(cfg, client, newCommitTime, prevCommit,
         Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2, INSTANT_GENERATOR);
-    client.commit(newCommitTime, result);
   }
 
 }

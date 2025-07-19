@@ -20,20 +20,31 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class CommonClientUtils {
 
@@ -41,14 +52,10 @@ public class CommonClientUtils {
 
   public static void validateTableVersion(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
-    if (!tableConfig.getTableVersion().equals(writeConfig.getWriteVersion())) {
+    if (!isValidTableVersionWriteVersionPair(tableConfig.getTableVersion(), writeConfig.getWriteVersion())) {
       // if table version is greater than 6, while writer version is 6, we can still allow it for upgrade
-      if (tableConfig.getTableVersion().greaterThan(HoodieTableVersion.SIX) && writeConfig.getWriteVersion().equals(HoodieTableVersion.SIX)) {
-        LOG.warn("Table version is greater than 6, while writer version is 6. Allowing it for upgrade.");
-      } else {
-        throw new HoodieNotSupportedException(String.format("Table version (%s) and Writer version (%s) do not match for table at: %s.",
-            tableConfig.getTableVersion(), writeConfig.getWriteVersion(), writeConfig.getBasePath()));
-      }
+      throw new HoodieNotSupportedException(String.format("Table version (%s) and Writer version (%s) do not match for table at: %s.",
+          tableConfig.getTableVersion(), writeConfig.getWriteVersion(), writeConfig.getBasePath()));
     }
     // incompatible configurations.
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.shouldWritePartialUpdates()) {
@@ -59,6 +66,17 @@ public class CommonClientUtils {
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.isNonBlockingConcurrencyControl()) {
       throw new HoodieNotSupportedException("Non-blocking concurrency control is not supported for table versions < 8.");
     }
+  }
+
+  public static boolean isValidTableVersionWriteVersionPair(HoodieTableVersion tableVersion, HoodieTableVersion writeVersion) {
+    if (tableVersion.equals(writeVersion) || tableVersion.lesserThan(writeVersion)) {
+      return true;
+    }
+    if (tableVersion.greaterThan(HoodieTableVersion.SIX) && tableVersion.lesserThan(HoodieTableVersion.NINE) && writeVersion.equals(HoodieTableVersion.SIX)) {
+      LOG.warn("Table version is greater than 6 and lower than 9, while writer version is 6. Allowing it for upgrade.");
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -103,5 +121,28 @@ public class CommonClientUtils {
       LOG.warn("Error generating write token, using default.", t);
       return HoodieLogFormat.DEFAULT_WRITE_TOKEN;
     }
+  }
+
+  public static <O> HoodieWriteMetadata stitchCompactionHoodieWriteStats(HoodieWriteMetadata<O> writeMetadata, List<HoodieWriteStat> writeStats) {
+    // Fetch commit metadata from HoodieWriteMetadata and update HoodieWriteStat
+    HoodieCommitMetadata commitMetadata = writeMetadata.getCommitMetadata().get();
+    commitMetadata.setCompacted(true);
+    for (HoodieWriteStat stat : writeStats) {
+      commitMetadata.addWriteStat(stat.getPartitionPath(), stat);
+    }
+    writeMetadata.setCommitted(true);
+    writeMetadata.setCommitMetadata(Option.of(commitMetadata));
+    return writeMetadata;
+  }
+
+  public static Map<String, List<String>> getPartitionToReplacedFileIds(HoodieClusteringPlan clusteringPlan, HoodieWriteMetadata<?> writeMetadata, HoodieWriteConfig config) {
+    Set<HoodieFileGroupId> newFilesWritten = writeMetadata.getWriteStats().get().stream()
+        .map(s -> new HoodieFileGroupId(s.getPartitionPath(), s.getFileId())).collect(Collectors.toSet());
+
+    return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
+        .filter(fg -> "org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy"
+            .equals(config.getClusteringExecutionStrategyClass())
+            || !newFilesWritten.contains(fg))
+        .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
   }
 }

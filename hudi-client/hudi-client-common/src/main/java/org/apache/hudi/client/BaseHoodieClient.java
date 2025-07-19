@@ -28,12 +28,14 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
@@ -73,7 +75,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected final String basePath;
   protected final HoodieHeartbeatClient heartbeatClient;
   protected final TransactionManager txnManager;
-  private final TimeGenerator timeGenerator;
+  protected final TimeGenerator timeGenerator;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -88,7 +90,21 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   }
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
-      Option<EmbeddedTimelineService> timelineServer) {
+                             Option<EmbeddedTimelineService> timelineServer) {
+    this(context, clientConfig, timelineServer, buildTransactionManager(context, clientConfig), buildTimeGenerator(context, clientConfig));
+  }
+
+  private static TimeGenerator buildTimeGenerator(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    return TimeGenerators.getTimeGenerator(clientConfig.getTimeGeneratorConfig(), context.getStorageConf());
+  }
+
+  private static TransactionManager buildTransactionManager(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
+    return new TransactionManager(clientConfig, HoodieStorageUtils.getStorage(clientConfig.getBasePath(), context.getStorageConf()));
+  }
+
+  @VisibleForTesting
+  BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
+                   Option<EmbeddedTimelineService> timelineServer, TransactionManager transactionManager, TimeGenerator timeGenerator) {
     this.storageConf = context.getStorageConf();
     this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), storageConf);
     this.context = context;
@@ -100,9 +116,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         clientConfig.getHoodieClientHeartbeatIntervalInMs(),
         clientConfig.getHoodieClientHeartbeatTolerableMisses());
     this.metrics = new HoodieMetrics(config, storage);
-    this.txnManager = new TransactionManager(config, storage);
-    this.timeGenerator = TimeGenerators.getTimeGenerator(
-        config.getTimeGeneratorConfig(), storageConf);
+    this.txnManager = transactionManager;
+    this.timeGenerator = timeGenerator;
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
@@ -187,13 +202,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setMetaserverConfig(config.getProps()).build();
-  }
-  
-  /**
-   * Returns next instant time in the correct format. An explicit Lock is enabled in the context.
-   */
-  public String createNewInstantTime() {
-    return TimelineUtils.generateInstantTime(true, timeGenerator);
   }
 
   /**
@@ -292,4 +300,22 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * @param columnsToIndex list of columns to index.
    */
   protected abstract void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
+
+  protected void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
+    this.txnManager.beginStateChange(ownerInstant, Option.empty());
+    try {
+      r.run();
+    } finally {
+      this.txnManager.endStateChange(ownerInstant);
+    }
+  }
+
+  public TransactionManager getTransactionManager() {
+    return txnManager;
+  }
+
+  protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table) {
+    return config.isMetadataTableEnabled()
+        && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+  }
 }

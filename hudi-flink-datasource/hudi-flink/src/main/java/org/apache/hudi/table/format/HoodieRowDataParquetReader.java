@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.row.parquet.ParquetSchemaConverter;
+import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -43,6 +44,7 @@ import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -81,7 +83,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
 
   @Override
   public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), requestedSchema);
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), requestedSchema, Collections.emptyList());
     readerIterators.add(rowDataItr);
     return new CloseableMappingIterator<>(rowDataItr, HoodieFlinkRecord::new);
   }
@@ -89,12 +91,16 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), schema);
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), schema, Collections.emptyList());
     return new CloseableMappingIterator<>(rowDataItr, rowData -> Objects.toString(rowData.getString(0)));
   }
 
-  public ClosableIterator<RowData> getRowDataIterator(InternalSchemaManager internalSchemaManager, DataType dataType, Schema requestedSchema) throws IOException {
-    return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, dataType, requestedSchema, path);
+  public ClosableIterator<RowData> getRowDataIterator(
+      InternalSchemaManager internalSchemaManager,
+      DataType dataType,
+      Schema requestedSchema,
+      List<Predicate> predicates) throws IOException {
+    return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, dataType, requestedSchema, path, predicates);
   }
 
   @Override

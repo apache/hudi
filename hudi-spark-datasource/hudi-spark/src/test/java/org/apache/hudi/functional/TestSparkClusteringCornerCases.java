@@ -20,6 +20,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -35,8 +36,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 
 @Tag("functional")
 public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
@@ -46,13 +50,13 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withProperties(props).build();
     initMetaClient(getTableType(), props);
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      String firstInstant = client.createNewInstantTime();
+      String firstInstant = WriteClientTestUtils.createNewInstantTime();
       List<HoodieRecord> recordList = dataGen.generateInserts(firstInstant, 100);
       writeData(client, firstInstant, recordList);
-      String secondInstant = client.createNewInstantTime();
+      String secondInstant = WriteClientTestUtils.createNewInstantTime();
       writeData(client, secondInstant, dataGen.generateUpdates(secondInstant, 20));
       // Delete all records.
-      writeData(client, client.createNewInstantTime(), dataGen.generateDeletesFromExistingRecords(recordList));
+      writeData(client, WriteClientTestUtils.createNewInstantTime(), dataGen.generateDeletesFromExistingRecords(recordList));
       String clusteringInstantTime = (String) client.scheduleClustering(Option.empty()).get();
       client.cluster(clusteringInstantTime);
       metaClient.reloadActiveTimeline();
@@ -71,8 +75,9 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
 
   private List<HoodieRecord> writeData(SparkRDDWriteClient client, String instant, List<HoodieRecord> recordList) {
     JavaRDD records = jsc.parallelize(recordList, 2);
-    client.startCommitWithTime(instant);
+    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses = client.upsert(records, instant).collect();
+    client.commit(instant, jsc.parallelize(writeStatuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
     return recordList;
   }

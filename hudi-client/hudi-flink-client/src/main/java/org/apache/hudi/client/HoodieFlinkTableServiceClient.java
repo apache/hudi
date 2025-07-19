@@ -69,17 +69,22 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = createTable(config, storageConf).compact(context, compactionInstantTime);
-    commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
+    commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
     return compactionMetadata;
   }
 
   @Override
-  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
+  protected TableWriteStats triggerWritesAndFetchWriteStats(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
+    return new TableWriteStats(writeMetadata.getWriteStatuses().stream().map(writeStatus -> writeStatus.getStat()).collect(Collectors.toList()));
+  }
+
+  @Override
+  protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, List<HoodieWriteStat> partialMetadataWriteStats) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     final HoodieInstant compactionInstant = table.getInstantGenerator().getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginTransaction(Option.of(compactionInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
@@ -88,7 +93,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       LOG.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
-      this.txnManager.endTransaction(Option.of(compactionInstant));
+      this.txnManager.endStateChange(Option.of(compactionInstant));
     }
     WriteMarkersFactory
         .get(config.getMarkersType(), table, compactionCommitTime)
@@ -120,7 +125,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
     }
 
     try {
-      this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(clusteringInstant), Option.empty());
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
       // So, check if preCommit method that does conflict resolution needs to be triggered.
@@ -137,12 +142,13 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           false,
           clusteringInstant,
           metadata,
-          table.getActiveTimeline());
+          table.getActiveTimeline(),
+          completedInstant -> table.getMetaClient().getTableFormat().commit(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
     } catch (HoodieIOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
     } finally {
-      this.txnManager.endTransaction(Option.of(clusteringInstant));
+      this.txnManager.endStateChange(Option.of(clusteringInstant));
     }
 
     WriteMarkersFactory.get(config.getMarkersType(), table, clusteringCommitTime)

@@ -118,7 +118,6 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     final HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), tableType, new Properties());
     final HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
-        .withAutoCommit(false)
         .withReleaseResourceEnabled(shouldReleaseResource)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(metadataTableEnable).build())
         .build();
@@ -137,7 +136,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
     List<HoodieRecord> records = dataGen.generateInserts(instant1, 10);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(records, 2);
-    writeClient.startCommitWithTime(instant1);
+    WriteClientTestUtils.startCommitWithTime(writeClient, instant1);
     List<WriteStatus> writeStatuses = writeClient.insert(writeRecords, instant1).collect();
     assertNoWriteErrors(writeStatuses);
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath());

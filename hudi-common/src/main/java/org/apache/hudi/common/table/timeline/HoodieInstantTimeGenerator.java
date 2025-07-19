@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
 import java.text.ParseException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -76,13 +77,7 @@ public class HoodieInstantTimeGenerator {
       String newCommitTime;
       do {
         Date d = new Date(timeGenerator.generateTime(!shouldLock) + milliseconds);
-
-        if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
-          newCommitTime = d.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
-              .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
-        } else {
-          newCommitTime = MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(d));
-        }
+        newCommitTime = formatDateBasedOnTimeZone(d);
       } while (compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
     });
@@ -151,8 +146,21 @@ public class HoodieInstantTimeGenerator {
     return getInstantFromTemporalAccessor(convertDateToTemporalAccessor(timestamp));
   }
 
+  public static String formatDateBasedOnTimeZone(Date timestamp) {
+    if (commitTimeZone.equals(HoodieTimelineTimeZone.UTC)) {
+      return timestamp.toInstant().atZone(HoodieTimelineTimeZone.UTC.getZoneId())
+          .toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
+    } else {
+      return MILLIS_INSTANT_TIME_FORMATTER.format(convertDateToTemporalAccessor(timestamp));
+    }
+  }
+
   public static String getInstantFromTemporalAccessor(TemporalAccessor temporalAccessor) {
     return MILLIS_INSTANT_TIME_FORMATTER.format(temporalAccessor);
+  }
+
+  public static String getCurrentInstantTimeStr() {
+    return Instant.now().atZone(commitTimeZone.getZoneId()).toLocalDateTime().format(MILLIS_INSTANT_TIME_FORMATTER);
   }
 
   @VisibleForTesting

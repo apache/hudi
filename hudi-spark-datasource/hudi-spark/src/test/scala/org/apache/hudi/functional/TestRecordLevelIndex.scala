@@ -49,7 +49,7 @@ import scala.concurrent.duration.Duration
 import scala.language.postfixOps
 import scala.util.Using
 
-@Tag("functional")
+@Tag("functional-b")
 class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
@@ -229,19 +229,14 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array(
-    "COPY_ON_WRITE,6", "COPY_ON_WRITE,8", "MERGE_ON_READ,6", "MERGE_ON_READ,8"
-  ))
-  def testRLIWithDelete(tableType: String, tableVersion: Int): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      HoodieTableConfig.VERSION.key() -> tableVersion.toString,
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIWithDelete(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
     val props = new Properties()
     for ((k, v) <- hudiOpts) {
       props.put(k, v)
     }
-    initMetaClient(HoodieTableType.valueOf(tableType), props)
+    initMetaClient(tableType, props)
 
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -309,11 +304,12 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
 
     Using(getHoodieWriteClient(getWriteConfig(hudiOpts))) { client =>
-      val commitTime = client.startCommit
-      client.startCommitWithTime(commitTime, HoodieTimeline.REPLACE_COMMIT_ACTION)
+      val commitTime = client.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION)
       val deletingPartition = dataGen.getPartitionPaths.last
       val partitionList = Collections.singletonList(deletingPartition)
-      client.deletePartitions(partitionList, commitTime)
+      val result = client.deletePartitions(partitionList, commitTime)
+      client.commit(commitTime, result.getWriteStatuses, org.apache.hudi.common.util.Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION,
+        result.getPartitionToReplaceFileIds, org.apache.hudi.common.util.Option.empty());
 
       val deletedDf = latestSnapshot.filter(s"partition = $deletingPartition")
       validateDataAndRecordIndices(hudiOpts, deletedDf)
@@ -323,7 +319,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIUpsertAndDropIndex(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val hudiOpts = commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)

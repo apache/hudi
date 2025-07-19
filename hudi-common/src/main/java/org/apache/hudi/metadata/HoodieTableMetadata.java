@@ -20,9 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,7 +29,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -119,44 +116,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   static boolean isMetadataTable(StoragePath basePath) {
     return isMetadataTable(basePath.toString());
-  }
-
-  static HoodieTableMetadata create(HoodieEngineContext engineContext,
-                                    HoodieStorage storage,
-                                    HoodieMetadataConfig metadataConfig,
-                                    String datasetBasePath) {
-    return create(engineContext, storage, metadataConfig, datasetBasePath, false);
-  }
-
-  static HoodieTableMetadata create(HoodieEngineContext engineContext,
-                                    HoodieStorage storage,
-                                    HoodieMetadataConfig metadataConfig,
-                                    String datasetBasePath,
-                                    boolean reuse) {
-    if (metadataConfig.isEnabled()) {
-      HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
-      // If the MDT is not initialized then we fallback to FSBackedTableMetadata
-      if (metadata.isMetadataTableInitialized()) {
-        return metadata;
-      }
-      LOG.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
-    }
-    return createFSBackedTableMetadata(engineContext, storage, datasetBasePath);
-  }
-
-  static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
-                                                                   HoodieStorage storage,
-                                                                   String datasetBasePath) {
-    return new FileSystemBackedTableMetadata(
-        engineContext, storage, datasetBasePath);
-  }
-
-  static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
-                                                                   HoodieStorage storage,
-                                                                   HoodieMetadataConfig metadataConfig,
-                                                                   String datasetBasePath,
-                                                                   boolean reuse) {
-    return new HoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
   }
 
   /**

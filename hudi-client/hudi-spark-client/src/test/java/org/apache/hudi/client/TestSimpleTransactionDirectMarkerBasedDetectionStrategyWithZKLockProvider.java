@@ -98,7 +98,7 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
         .withEarlyConflictDetectionEnable(true)
         .withEarlyConflictDetectionStrategy(SimpleTransactionDirectMarkerBasedDetectionStrategy.class.getName())
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(ZookeeperBasedLockProvider.class).build())
-        .withAutoCommit(false).withProperties(properties)
+        .withProperties(properties)
         .build();
   }
 
@@ -122,12 +122,13 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     final List<HoodieRecord> records1 = recordGenFunction1.apply(nextCommitTime1, 200);
     final JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
     // Finish first base commit
-    client1.startCommitWithTime(nextCommitTime1);
+    WriteClientTestUtils.startCommitWithTime(client1, nextCommitTime1);
     JavaRDD<WriteStatus> writeStatusList1 =  client1.insert(writeRecords1, nextCommitTime1);
     assertTrue(client1.commit(nextCommitTime1, writeStatusList1), "Commit should succeed");
 
-    final SparkRDDWriteClient client2 = getHoodieWriteClient(config);
-    final SparkRDDWriteClient client3 = getHoodieWriteClient(config);
+    final SparkRDDWriteClient client2 = getHoodieWriteClient(config, true);
+    // We do not want to close client2 so setting shouldCloseOlderClient to false while creating client3
+    final SparkRDDWriteClient client3 = getHoodieWriteClient(config, false);
     final Function2<List<HoodieRecord>, String, Integer> recordGenFunction2 =
         generateWrapRecordsFn(false, config, dataGen::generateUniqueUpdates);
 
@@ -136,7 +137,7 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     final List<HoodieRecord> records2 = recordGenFunction2.apply(nextCommitTime2, 200);
     final JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
     // start to write commit 002
-    client2.startCommitWithTime(nextCommitTime2);
+    WriteClientTestUtils.startCommitWithTime(client2, nextCommitTime2);
     JavaRDD<WriteStatus> writeStatusList2 =  client2.upsert(writeRecords2, nextCommitTime2);
     assertNoWriteErrors(writeStatusList2.collect());
 
@@ -146,7 +147,7 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     assertThrows(SparkException.class, () -> {
       final List<HoodieRecord> records3 = recordGenFunction2.apply(nextCommitTime3, 200);
       final JavaRDD<HoodieRecord> writeRecords3 = jsc.parallelize(records3, 1);
-      client3.startCommitWithTime(nextCommitTime3);
+      WriteClientTestUtils.startCommitWithTime(client3, nextCommitTime3);
       JavaRDD<WriteStatus> writeStatusList3 =  client3.upsert(writeRecords3, nextCommitTime3);
       client3.commit(nextCommitTime3, writeStatusList3);
     }, "Early conflict detected but cannot resolve conflicts for overlapping writes");
@@ -155,6 +156,9 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     assertDoesNotThrow(() -> {
       client2.commit(nextCommitTime2, writeStatusList2);
     });
+
+    client2.close();
+    client3.close();
   }
 
 }

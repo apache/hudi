@@ -44,7 +44,6 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -199,12 +198,12 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(FILES.getPartitionPath()));
 
     // build RLI with the indexer
-    indexMetadataPartitionsAndAssert(RECORD_INDEX.getPartitionPath(), Collections.singletonList(FILES), Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName,
+    indexMetadataPartitionsAndAssert(RECORD_INDEX.getPartitionPath(), Collections.singletonList(FILES), Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName,
         "streamer-config/indexer-record-index.properties");
     // build SI with the indexer
-    String indexName = "idx_name";
-    indexMetadataPartitionsAndAssert(SECONDARY_INDEX.getPartitionPath() + indexName, Arrays.asList(new MetadataPartitionType[] {FILES, RECORD_INDEX}),
-        Arrays.asList(new MetadataPartitionType[] {COLUMN_STATS, BLOOM_FILTERS}), tableName, "streamer-config/indexer-secondary-index.properties");
+    String indexName = "idx_rider";
+    indexMetadataPartitionsAndAssert(SECONDARY_INDEX.getPartitionPath() + indexName, Arrays.asList(FILES, RECORD_INDEX),
+        Arrays.asList(COLUMN_STATS, BLOOM_FILTERS), tableName, "streamer-config/indexer-secondary-index.properties");
     // validate the secondary index is built
     assertTrue(metadataPartitionExists(basePath(), context(), SECONDARY_INDEX.getPartitionPath() + indexName));
   }
@@ -493,12 +492,11 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfig).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(instant);
+      String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
   }
 
@@ -546,12 +544,11 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(instant);
+      String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
 
     // validate partitions built successfully
@@ -600,12 +597,11 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfigBuilder.build()).build();
     // do one upsert with synchronous metadata update
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig)) {
-      String instant = writeClient.createNewInstantTime();
-      writeClient.startCommitWithTime(instant);
+      String instant = writeClient.startCommit();
       List<HoodieRecord> records = DATA_GENERATOR.generateInserts(instant, 100);
-      JavaRDD<WriteStatus> result = writeClient.upsert(jsc().parallelize(records, 1), instant);
-      List<WriteStatus> statuses = result.collect();
-      assertNoWriteErrors(statuses);
+      List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
+      writeClient.commit(instant, jsc().parallelize(statusList));
+      assertNoWriteErrors(statusList);
     }
 
     // validate files partition built successfully

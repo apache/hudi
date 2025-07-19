@@ -123,7 +123,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       }
     });
     updateIndex(writeStatuses, result);
-    updateIndexAndCommitIfNeeded(writeStatuses, result);
+    updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     return result;
   }
 
@@ -159,8 +159,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     return results;
   }
 
-  protected Pair<HashMap<String, WorkloadStat>, WorkloadStat> buildProfile(List<HoodieRecord<T>> inputRecords) {
-    HashMap<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
+  protected Pair<Map<String, WorkloadStat>, WorkloadStat> buildProfile(List<HoodieRecord<T>> inputRecords) {
+    Map<String, WorkloadStat> partitionPathStatMap = new HashMap<>();
     WorkloadStat globalStat = new WorkloadStat();
 
     Map<Pair<String, Option<HoodieRecordLocation>>, Long> partitionLocationCounts = inputRecords
@@ -293,14 +293,14 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     return getUpsertPartitioner(profile);
   }
 
-  public void updateIndexAndCommitIfNeeded(List<WriteStatus> writeStatuses, HoodieWriteMetadata result) {
+  public void updateIndexAndMaybeRunPreCommitValidations(List<WriteStatus> writeStatuses, HoodieWriteMetadata result) {
     Instant indexStartTime = Instant.now();
     // Update the index back
     List<WriteStatus> statuses = table.getIndex().updateLocation(HoodieListData.eager(writeStatuses), context, table).collectAsList();
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(result));
-    commitOnAutoCommit(result);
+    runPrecommitValidators(result);
   }
 
   @Override

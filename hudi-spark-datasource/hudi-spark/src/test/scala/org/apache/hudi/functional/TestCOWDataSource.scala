@@ -202,8 +202,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     snapshot1.cache()
     assertEquals(300, snapshot1.count())
 
+    metaClient = createMetaClient(spark, basePath)
     var partitionPaths = FSUtils.getAllPartitionPaths(
-      new HoodieSparkEngineContext(jsc), storage, HoodieMetadataConfig.newBuilder().build(), basePath)
+      new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().build())
     assertTrue(partitionPaths.contains("100/rider-123"))
     assertTrue(partitionPaths.contains("200/rider-456"))
 
@@ -226,8 +227,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    partitionPaths = FSUtils.getAllPartitionPaths(
-      new HoodieSparkEngineContext(jsc), storage, HoodieMetadataConfig.newBuilder().build(), basePath)
+    partitionPaths = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().build())
     assertEquals(partitionPaths.size(), 1)
     assertEquals(partitionPaths.get(0), "")
   }
@@ -1048,22 +1048,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     })
   }
 
-  @Test
-  def testWithAutoCommitOn(): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts()
-
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    inputDF1.write.format("org.apache.hudi")
-      .options(writeOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key, "true")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
-  }
-
   private def getDataFrameWriter(keyGenerator: String, opts: Map[String, String]): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
@@ -1876,14 +1860,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         }
         if (firstClusteringState == HoodieInstant.State.REQUESTED.name()) {
           val table = HoodieSparkTable.create(writeConfig, context)
-          table.rollbackInflightClustering(
-            metaClient.getActiveTimeline.getLastClusteringInstant.get,
-            new java.util.function.Function[String, Option[HoodiePendingRollbackInfo]] {
-              override def apply(commitToRollback: String): Option[HoodiePendingRollbackInfo] = {
-                new SparkRDDWriteClient(context, writeConfig).getTableServiceClient
-                  .getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
-              }
-            })
+          val client = new SparkRDDWriteClient(context, writeConfig)
+          try {
+            table.rollbackInflightClustering(
+              metaClient.getActiveTimeline.getLastClusteringInstant.get,
+              (commitToRollback: String) => {
+                client.getTableServiceClient.getPendingRollbackInfo(table.getMetaClient, commitToRollback, false)
+              }, client.getTransactionManager)
+          } finally {
+            client.close()
+          }
           val requestedClustering = metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get
           assertTrue(requestedClustering.isRequested)
           assertEquals(
@@ -1891,8 +1877,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             metaClient.getActiveTimeline.getLastClusteringInstant.get)
         }
         // This should not schedule any new clustering
-        new SparkRDDWriteClient(context, writeConfig)
-          .scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]().asJava))
+        val client = new SparkRDDWriteClient(context, writeConfig)
+        client.scheduleClustering(org.apache.hudi.common.util.Option.of(Map[String, String]().asJava))
+        client.close()
         assertEquals(lastInstant.requestedTime,
           metaClient.reloadActiveTimeline.getCommitsTimeline.lastInstant.get.requestedTime)
       }

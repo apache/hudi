@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.data.HoodieListData;
@@ -32,7 +33,6 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -48,7 +48,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngradeHelper;
-import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.util.WriteStatMerger;
 
 import com.codahale.metrics.Timer;
@@ -103,7 +102,8 @@ public class HoodieFlinkWriteClient<T>
   @Override
   public boolean commit(String instantTime, List<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                        Option<WriteStatusValidator> writeStatusValidatorOpt) {
     List<HoodieWriteStat> writeStats = writeStatuses.parallelStream().map(WriteStatus::getStat).collect(Collectors.toList());
     // for eager flush, multiple write stat may share one file path.
     List<HoodieWriteStat> merged = writeStats.stream()
@@ -314,7 +314,7 @@ public class HoodieFlinkWriteClient<T>
    * should be called before the Driver starts a new transaction with a reloaded metaclient.
    */
   public void preTxn(WriteOperationType operationType, HoodieTableMetaClient metaClient) {
-    if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType)) {
+    if (txnManager.isLockRequired() && config.needResolveWriteConflict(operationType, metaClient.isMetadataTable(), config, metaClient.getTableConfig())) {
       this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
       this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     }
@@ -370,7 +370,7 @@ public class HoodieFlinkWriteClient<T>
   }
 
   @Override
-  protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
+  public HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
     return tableServiceClient.compact(compactionInstantTime, shouldComplete);
   }
@@ -415,14 +415,13 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
-   * Upgrade downgrade the Hoodie table.
+   * Try upgrade the Hoodie table.
    *
    * <p>This action should only be executed once for each commit.
    * The modification of the table properties is not thread safe.
    */
-  public void upgradeDowngrade(String instantTime, HoodieTableMetaClient metaClient) {
-    new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
-        .run(HoodieTableVersion.current(), instantTime);
+  public void tryUpgrade(String instantTime, HoodieTableMetaClient metaClient) {
+    tryUpgrade(metaClient, Option.ofNullable(instantTime));
   }
 
   /**
@@ -488,7 +487,7 @@ public class HoodieFlinkWriteClient<T>
       case INSERT_OVERWRITE_TABLE:
         Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
         List<String> partitionPaths =
-            FSUtils.getAllPartitionPaths(context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
+            FSUtils.getAllPartitionPaths(context, table.getMetaClient(), config.getMetadataConfig());
         if (partitionPaths != null && partitionPaths.size() > 0) {
           context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions: " + config.getTableName());
           partitionToExistingFileIds = partitionPaths.stream().parallel()

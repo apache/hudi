@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
@@ -57,15 +58,19 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDWriteClient.class);
+  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler();
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());
@@ -82,16 +87,83 @@ public class SparkRDDWriteClient<T> extends
     return SparkHoodieIndexFactory.createIndex(config);
   }
 
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
+                        String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+    return commit(instantTime, writeStatuses, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc, Option.empty());
+  }
+
   /**
    * Complete changes performed at the given instantTime marker with specified action.
    */
   @Override
-  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses, Option<Map<String, String>> extraMetadata,
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> rawWriteStatuses, Option<Map<String, String>> extraMetadata,
                         String commitActionType, Map<String, List<String>> partitionToReplacedFileIds,
-                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc) {
+                        Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> extraPreCommitFunc,
+                        Option<WriteStatusValidator> writeStatusValidatorOpt) {
     context.setJobStatus(this.getClass().getSimpleName(), "Committing stats: " + config.getTableName());
-    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
-    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc);
+
+    // write to metadata table if streaming writes are enabled.
+    HoodieTable table = createTable(config);
+    final JavaRDD<WriteStatus> writeStatuses;
+    if (WriteOperationType.streamingWritesToMetadataSupported((getOperationType())) && isStreamingWriteToMetadataEnabled(table)) {
+      // this code block is expected to create a new Metadata Writer, start a new commit in metadata table and trigger streaming write to metadata table.
+      writeStatuses = HoodieJavaRDD.getJavaRDD(streamingMetadataWriteHandler.streamWriteToMetadataTable(table, HoodieJavaRDD.of(rawWriteStatuses), instantTime));
+    } else {
+      writeStatuses = rawWriteStatuses;
+    }
+
+    // Triggering the dag for writes.
+    //
+    // 1. If streaming writes are enabled, writes to both data table and metadata table gets triggered at this juncture;
+    // 2. If not, writes to data table gets triggered here.
+    //
+    // When streaming writes are enabled, data table's WriteStatus is expected to contain all stats required to generate metadata table records and so each object will be larger.
+    // Here all additional stats and error records are dropped to retain only the required information and prevent collecting large objects on the driver.
+    List<SlimWriteStats> slimWriteStatsList = SlimWriteStats.from(writeStatuses);
+    // Compute stats for the data table writes and invoke callback
+    AtomicLong totalRecords = new AtomicLong(0);
+    AtomicLong totalErrorRecords = new AtomicLong(0);
+    // collect record stats for data table
+    slimWriteStatsList.stream().filter(slimWriteStats -> !slimWriteStats.isMetadataTable())
+        .forEach(slimWriteStats -> {
+          totalRecords.getAndAdd(slimWriteStats.getTotalRecords());
+          totalErrorRecords.getAndAdd(slimWriteStats.getTotalErrorRecords());
+        });
+    // Why passing RDD<WriteStatus> to the WriteStatus validator:
+    // At the beginning of this method, we drop all index stats and error records before collecting in the driver.
+    // Just in case if there are errors, caller might be interested to fetch error records in the validator where
+    // a complete collection of RDD<WriteStatus> is required.
+    boolean canProceed = writeStatusValidatorOpt.map(callback -> callback.validate(totalRecords.get(), totalErrorRecords.get(),
+            totalErrorRecords.get() > 0 ? Option.of(HoodieJavaRDD.of(writeStatuses.filter(status -> !status.isMetadataTable()).map(WriteStatus::removeMetadataStats))) : Option.empty()))
+        .orElse(true);
+
+    // Proceeds only if validator returns true, otherwise bails out.
+    if (canProceed) {
+      // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
+      List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
+      List<HoodieWriteStat> partialMetadataTableWriteStats = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
+      return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
+          false, Option.of(table));
+    } else {
+      LOG.error("Exiting early due to errors with write operation ");
+      return false;
+    }
+  }
+
+  @Override
+  protected void writeToMetadataTable(boolean skipStreamingWritesToMetadataTable,
+                                      HoodieTable table,
+                                      String instantTime,
+                                      List<HoodieWriteStat> partialMetadataTableWriteStats,
+                                      HoodieCommitMetadata metadata) {
+    if (!skipStreamingWritesToMetadataTable
+        && isStreamingWriteToMetadataEnabled(table)
+        && WriteOperationType.streamingWritesToMetadataSupported(getOperationType())) {
+      streamingMetadataWriteHandler.commitToMetadataTable(table, instantTime, metadata, partialMetadataTableWriteStats);
+    } else {
+      writeTableMetadata(table, instantTime, metadata);
+    }
   }
 
   @Override
@@ -242,7 +314,7 @@ public class SparkRDDWriteClient<T> extends
   public JavaRDD<WriteStatus> deletePrepped(JavaRDD<HoodieRecord<T>> preppedRecord, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
     preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context,instantTime, HoodieJavaRDD.of(preppedRecord));
+    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context, instantTime, HoodieJavaRDD.of(preppedRecord));
     HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
     return postWrite(resultRDD, instantTime, table);
   }
@@ -343,5 +415,70 @@ public class SparkRDDWriteClient<T> extends
   public void releaseResources(String instantTime) {
     super.releaseResources(instantTime);
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
+  }
+
+  /**
+   * Slim WriteStatus to hold info like total records, total record records,
+   * HoodieWriteStat and whether the writeStatus is referring to metadata table or not.
+   */
+  static class SlimWriteStats implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private boolean isMetadataTable;
+    private long totalRecords;
+    private long totalErrorRecords;
+    private HoodieWriteStat writeStat;
+
+    private SlimWriteStats(boolean isMetadataTable, long totalRecords, long totalErrorRecords, HoodieWriteStat writeStat) {
+      this.isMetadataTable = isMetadataTable;
+      this.totalRecords = totalRecords;
+      this.totalErrorRecords = totalErrorRecords;
+      this.writeStat = writeStat;
+    }
+
+    public static List<SlimWriteStats> from(JavaRDD<WriteStatus> writeStatuses) {
+      return writeStatuses.map(writeStatus -> new SlimWriteStats(writeStatus.isMetadataTable(), writeStatus.getTotalRecords(), writeStatus.getTotalErrorRecords(),
+          writeStatus.getStat())).collect();
+    }
+
+    public boolean isMetadataTable() {
+      return isMetadataTable;
+    }
+
+    public long getTotalRecords() {
+      return totalRecords;
+    }
+
+    public long getTotalErrorRecords() {
+      return totalErrorRecords;
+    }
+
+    public HoodieWriteStat getWriteStat() {
+      return writeStat;
+    }
+
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
+    public void setMetadataTable(boolean metadataTable) {
+      isMetadataTable = metadataTable;
+    }
+
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
+    public void setTotalRecords(long totalRecords) {
+      this.totalRecords = totalRecords;
+    }
+
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
+    public void setTotalErrorRecords(long totalErrorRecords) {
+      this.totalErrorRecords = totalErrorRecords;
+    }
+
+    // setter for efficient serialization,
+    // please do not remove it even if it is not used.
+    public void setWriteStat(HoodieWriteStat writeStat) {
+      this.writeStat = writeStat;
+    }
   }
 }

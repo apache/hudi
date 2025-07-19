@@ -19,6 +19,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -35,9 +36,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.io.ArrayWritable;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
@@ -62,7 +65,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
                                               HoodieTableConfig tableConfig) {
-    super(storageConfig, tableConfig);
+    super(storageConfig, tableConfig, Option.empty(), Option.empty());
   }
 
   @Override
@@ -91,16 +94,39 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
+  public String getMetaFieldValue(InternalRow record, int pos) {
+    return record.getString(pos);
+  }
+
+  @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
+    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(
-          new HoodieKey(bufferedRecord.getRecordKey(), null),
+          hoodieKey,
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
-    return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
+    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema), false);
+  }
+
+  @Override
+  public InternalRow constructEngineRecord(Schema schema,
+                                           Map<Integer, Object> updateValues,
+                                           BufferedRecord<InternalRow> baseRecord) {
+    List<Schema.Field> fields = schema.getFields();
+    Object[] values = new Object[fields.size()];
+    for (Schema.Field field : fields) {
+      int pos = field.pos();
+      if (updateValues.containsKey(pos)) {
+        values[pos] = updateValues.get(pos);
+      } else {
+        values[pos] = getValue(baseRecord.getRecord(), schema, field.name());
+      }
+    }
+    return new GenericInternalRow(values);
   }
 
   @Override
@@ -117,7 +143,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     return unsafeProjection.apply(internalRow);
   }
 
-  private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
+  public static Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
     StructType structType = getCachedSchema(recordSchema);
     scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
@@ -160,5 +186,13 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       return UTF8String.fromString((String) value);
     }
     return value;
+  }
+
+  @Override
+  public InternalRow getDeleteRow(InternalRow record, String recordKey) {
+    if (record != null) {
+      return record;
+    }
+    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
   }
 }

@@ -56,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -95,7 +96,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
-        txnManager.beginTransaction(Option.empty(), Option.empty());
+        txnManager.beginStateChange(Option.empty(), Option.empty());
       }
     } catch (HoodieLockException e) {
       LOG.error("Fail to begin transaction", e);
@@ -117,13 +118,18 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         deleteArchivedActions(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
+        Supplier<List<HoodieInstant>> archivedInstants = () -> instantsToArchive.stream()
+            .flatMap(action -> Stream.concat(action.getCompletedInstants().stream(), action.getPendingInstants().stream()))
+            .collect(Collectors.toList());
+        // Call Table Format archive to allow archiving in table format.
+        table.getMetaClient().getTableFormat().archive(archivedInstants, table.getContext(), table.getMetaClient(), table.getViewManager());
       } else {
         LOG.info("No Instants to archive");
       }
       return instantsToArchive.size();
     } finally {
       if (acquireLock) {
-        txnManager.endTransaction(Option.empty());
+        txnManager.endStateChange(Option.empty());
       }
     }
   }
@@ -209,8 +215,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
     if (config.isMetadataTableEnabled() && table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
-          table.getContext(), table.getStorage(), config.getMetadataConfig(), config.getBasePath())) {
+      try (HoodieTableMetadata tableMetadata = table.refreshAndGetTableMetadata()) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");

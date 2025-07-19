@@ -31,9 +31,11 @@ import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Filter, LogicalPlan, Project, UpdateTable}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
+import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
+import org.apache.spark.sql.hudi.command.HoodieCommandMetrics.updateCommitMetrics
 
 case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends DataWritingCommand
   with SparkAdapterSupport with ProvidesHoodieConfig {
@@ -43,6 +45,8 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
   override def outputColumnNames: Seq[String] = {
     query.output.map(_.name)
   }
+
+  override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
 
   override def run(sparkSession: SparkSession, plan: SparkPlan): Seq[Row] = {
     val catalogTable = UpdateHoodieTableCommand.catalogTable(sparkSession, ut)
@@ -58,7 +62,11 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
     }
 
     val df = sparkSession.internalCreateDataFrame(plan.execute(), plan.schema)
-    HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
+    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
+    if (success && commitInstantTime.isPresent) {
+      updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())
+      DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
+    }
 
     sparkSession.catalog.refreshTable(tableId)
 

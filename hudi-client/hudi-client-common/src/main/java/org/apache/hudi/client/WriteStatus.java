@@ -57,10 +57,10 @@ public class WriteStatus implements Serializable {
 
   private final HashMap<HoodieKey, Throwable> errors = new HashMap<>();
 
-  private final List<HoodieRecordDelegate> writtenRecordDelegates = new ArrayList<>();
-
   private final List<Pair<HoodieRecordDelegate, Throwable>> failedRecords = new ArrayList<>();
 
+  // true if this WriteStatus refers to a write happening in metadata table.
+  private final boolean isMetadataTable;
   private Throwable globalError = null;
 
   private String fileId = null;
@@ -75,17 +75,24 @@ public class WriteStatus implements Serializable {
   private final double failureFraction;
   private final boolean trackSuccessRecords;
   private final transient Random random;
+  private IndexStats indexStats = new IndexStats();
 
-  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
+  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction, Boolean isMetadataTable) {
     this.trackSuccessRecords = trackSuccessRecords;
     this.failureFraction = failureFraction;
     this.random = new Random(RANDOM_SEED);
+    this.isMetadataTable = isMetadataTable;
+  }
+
+  public WriteStatus(Boolean trackSuccessRecords, Double failureFraction) {
+    this(trackSuccessRecords, failureFraction, false);
   }
 
   public WriteStatus() {
     this.failureFraction = 0.0d;
     this.trackSuccessRecords = false;
     this.random = null;
+    this.isMetadataTable = false;
   }
 
   /**
@@ -97,7 +104,7 @@ public class WriteStatus implements Serializable {
    */
   public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecordDelegates.add(HoodieRecordDelegate.fromHoodieRecord(record));
+      indexStats.addHoodieRecordDelegate(HoodieRecordDelegate.fromHoodieRecord(record));
     }
     updateStatsForSuccess(optionalRecordMetadata);
   }
@@ -110,7 +117,7 @@ public class WriteStatus implements Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, String>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
-      writtenRecordDelegates.add(Objects.requireNonNull(recordDelegate));
+      indexStats.addHoodieRecordDelegate(Objects.requireNonNull(recordDelegate));
     }
     updateStatsForSuccess(optionalRecordMetadata);
   }
@@ -181,6 +188,11 @@ public class WriteStatus implements Serializable {
     totalErrorRecords++;
   }
 
+  public WriteStatus removeMetadataStats() {
+    this.indexStats = null;
+    return this;
+  }
+
   public String getFileId() {
     return fileId;
   }
@@ -213,8 +225,12 @@ public class WriteStatus implements Serializable {
     this.globalError = t;
   }
 
+  public IndexStats getIndexStats() {
+    return indexStats;
+  }
+
   public List<HoodieRecordDelegate> getWrittenRecordDelegates() {
-    return writtenRecordDelegates;
+    return indexStats.getWrittenRecordDelegates();
   }
 
   public List<Pair<HoodieRecordDelegate, Throwable>> getFailedRecords() {
@@ -257,9 +273,15 @@ public class WriteStatus implements Serializable {
     return trackSuccessRecords;
   }
 
+  public boolean isMetadataTable() {
+    return isMetadataTable;
+  }
+
   @Override
   public String toString() {
-    return "WriteStatus {" + "fileId=" + fileId
+    return "WriteStatus {"
+        + "isMetadataTable=" + isMetadataTable
+        + ", fileId=" + fileId
         + ", writeStat=" + stat
         + ", globalError='" + globalError + '\''
         + ", hasErrors='" + hasErrors() + '\''

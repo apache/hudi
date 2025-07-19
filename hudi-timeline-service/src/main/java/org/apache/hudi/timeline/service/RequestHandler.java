@@ -18,7 +18,6 @@
 
 package org.apache.hudi.timeline.service;
 
-import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.marker.MarkerOperation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -29,20 +28,20 @@ import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.timeline.dto.InstantDTO;
-import org.apache.hudi.common.table.timeline.dto.InstantStateDTO;
 import org.apache.hudi.common.table.timeline.dto.TimelineDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.timeline.service.handlers.BaseFileHandler;
 import org.apache.hudi.timeline.service.handlers.FileSliceHandler;
-import org.apache.hudi.timeline.service.handlers.InstantStateHandler;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
+import org.apache.hudi.timeline.service.handlers.RemotePartitionerHandler;
 import org.apache.hudi.timeline.service.handlers.TimelineHandler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -85,12 +84,11 @@ public class RequestHandler {
   private final FileSliceHandler sliceHandler;
   private final BaseFileHandler dataFileHandler;
   private final MarkerHandler markerHandler;
-  private final InstantStateHandler instantStateHandler;
+  private RemotePartitionerHandler partitionerHandler;
   private final Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private final ScheduledExecutorService asyncResultService;
 
   public RequestHandler(Javalin app, StorageConfiguration<?> conf, TimelineService.Config timelineServiceConfig,
-                        HoodieEngineContext hoodieEngineContext,
                         FileSystemViewManager viewManager) {
     this.timelineServiceConfig = timelineServiceConfig;
     this.viewManager = viewManager;
@@ -100,14 +98,12 @@ public class RequestHandler {
     this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, viewManager);
     if (timelineServiceConfig.enableMarkerRequests) {
       this.markerHandler = new MarkerHandler(
-          conf, timelineServiceConfig, hoodieEngineContext, viewManager, metricsRegistry);
+          conf, timelineServiceConfig, viewManager, metricsRegistry);
     } else {
       this.markerHandler = null;
     }
-    if (timelineServiceConfig.enableInstantStateRequests) {
-      this.instantStateHandler = new InstantStateHandler(conf, timelineServiceConfig, viewManager);
-    } else {
-      this.instantStateHandler = null;
+    if (timelineServiceConfig.enableRemotePartitioner) {
+      this.partitionerHandler = new RemotePartitionerHandler(conf, timelineServiceConfig, viewManager);
     }
     if (timelineServiceConfig.async) {
       this.asyncResultService = Executors.newSingleThreadScheduledExecutor();
@@ -122,24 +118,22 @@ public class RequestHandler {
    * @param ctx             Javalin context
    * @param obj             object to serialize
    * @param metricsRegistry {@code Registry} instance for storing metrics
-   * @param objectMapper    JSON object mapper
-   * @param logger          {@code Logger} instance
    * @return JSON String from the input object
    * @throws JsonProcessingException
    */
   public static String jsonifyResult(
-      Context ctx, Object obj, Registry metricsRegistry, ObjectMapper objectMapper, Logger logger)
+      Context ctx, Object obj, Registry metricsRegistry)
       throws JsonProcessingException {
     HoodieTimer timer = HoodieTimer.start();
     boolean prettyPrint = ctx.queryParam("pretty") != null;
     String result =
-        prettyPrint ? objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj)
-            : objectMapper.writeValueAsString(obj);
+        prettyPrint ? OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj)
+            : OBJECT_MAPPER.writeValueAsString(obj);
     final long jsonifyTime = timer.endTimer();
     metricsRegistry.add("WRITE_VALUE_CNT", 1);
     metricsRegistry.add("WRITE_VALUE_TIME", jsonifyTime);
-    if (logger.isDebugEnabled()) {
-      logger.debug("Jsonify TimeTaken={}", jsonifyTime);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Jsonify TimeTaken={}", jsonifyTime);
     }
     return result;
   }
@@ -183,10 +177,6 @@ public class RequestHandler {
             .getOrThrow(e -> new HoodieException("INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM is invalid")));
   }
 
-  private static String getInstantStateDirPathParam(Context ctx) {
-    return ctx.queryParam(InstantStateHandler.INSTANT_STATE_DIR_PATH_PARAM);
-  }
-
   public void register() {
     registerDataFilesAPI();
     registerFileSlicesAPI();
@@ -194,8 +184,8 @@ public class RequestHandler {
     if (markerHandler != null) {
       registerMarkerAPI();
     }
-    if (instantStateHandler != null) {
-      registerInstantStateAPI();
+    if (partitionerHandler != null) {
+      registerRemotePartitionerAPI();
     }
   }
 
@@ -217,14 +207,14 @@ public class RequestHandler {
   }
 
   private void writeValueAsStringSync(Context ctx, Object obj) throws JsonProcessingException {
-    String result = jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
+    String result = jsonifyResult(ctx, obj, metricsRegistry);
     ctx.result(result);
   }
 
   private void writeValueAsStringAsync(Context ctx, Object obj) {
     ctx.future(CompletableFuture.supplyAsync(() -> {
       try {
-        return jsonifyResult(ctx, obj, metricsRegistry, OBJECT_MAPPER, LOG);
+        return jsonifyResult(ctx, obj, metricsRegistry);
       } catch (JsonProcessingException e) {
         throw new HoodieException("Failed to JSON encode the value", e);
       }
@@ -389,6 +379,16 @@ public class RequestHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.LATEST_SLICE_MERGED_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("LATEST_SLICE_MERGED_BEFORE_ON_INSTANT", 1);
+      List<FileSliceDTO> dtos = sliceHandler.getLatestMergedFileSliceBeforeOrOn(
+          getBasePathParam(ctx),
+          getPartitionParam(ctx),
+          getMaxInstantParamMandatory(ctx),
+          getFileIdParam(ctx));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.get(RemoteHoodieTableFileSystemView.LATEST_SLICES_BEFORE_ON_INSTANT_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LATEST_SLICES_BEFORE_ON_INSTANT", 1);
       List<FileSliceDTO> dtos = sliceHandler.getLatestFileSlicesBeforeOrOn(
@@ -545,17 +545,13 @@ public class RequestHandler {
     }, false));
   }
 
-  private void registerInstantStateAPI() {
-    app.get(InstantStateHandler.ALL_INSTANT_STATE_URL, new ViewHandler(ctx -> {
-      metricsRegistry.add("ALL_INSTANT_STATE", 1);
-      List<InstantStateDTO> instantStates = instantStateHandler.getAllInstantStates(getInstantStateDirPathParam(ctx));
-      writeValueAsString(ctx, instantStates);
-    }, false));
-
-    app.post(InstantStateHandler.REFRESH_INSTANT_STATE, new ViewHandler(ctx -> {
-      metricsRegistry.add("REFRESH_INSTANT_STATE", 1);
-      boolean success = instantStateHandler.refresh(getInstantStateDirPathParam(ctx));
-      writeValueAsString(ctx, success);
+  private void registerRemotePartitionerAPI() {
+    app.get(RemotePartitionHelper.URL, new ViewHandler(ctx -> {
+      int partition = partitionerHandler.gePartitionIndex(
+          ctx.queryParamAsClass(RemotePartitionHelper.NUM_BUCKETS_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemotePartitionHelper.PARTITION_PATH_PARAM, String.class).getOrDefault(""),
+          ctx.queryParamAsClass(RemotePartitionHelper.PARTITION_NUM_PARAM, String.class).getOrDefault(""));
+      writeValueAsString(ctx, partition);
     }, false));
   }
 

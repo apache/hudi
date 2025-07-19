@@ -24,6 +24,7 @@ import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.TestCompactionAdminClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -300,7 +301,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
       HoodieTestDataGenerator dataGen) throws IOException {
     // inserts
     String newCommitTime = "001";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -313,7 +314,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
       throws IOException {
     // updates
     String newCommitTime = "002";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     List<HoodieRecord> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
     records.addAll(toBeUpdated);
@@ -325,19 +326,20 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
        List<HoodieRecord> records) {
     // Delete
     String newCommitTime = "003";
-    client.startCommitWithTime(newCommitTime);
+    WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
 
     // just delete half of the records
     int numToDelete = records.size() / 2;
     List<HoodieKey> toBeDeleted = records.stream().map(HoodieRecord::getKey).limit(numToDelete).collect(Collectors.toList());
     JavaRDD<HoodieKey> deleteRecords = jsc.parallelize(toBeDeleted, 1);
-    client.delete(deleteRecords, newCommitTime);
+    client.commit(newCommitTime, client.delete(deleteRecords, newCommitTime));
   }
 
-  private JavaRDD<WriteStatus> operateFunc(
+  private void operateFunc(
       HoodieClientTestBase.Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> writeFn,
       SparkRDDWriteClient<HoodieAvroPayload> client, JavaRDD<HoodieRecord> writeRecords, String commitTime)
       throws IOException {
-    return writeFn.apply(client, writeRecords, commitTime);
+    List<WriteStatus> writeStatuses = writeFn.apply(client, writeRecords, commitTime).collect();
+    client.commit(commitTime, jsc.parallelize(writeStatuses));
   }
 }

@@ -147,7 +147,7 @@ public class TestCleanActionExecutor {
     HoodieTimeline inflightsAndRequestedTimeline = mock(HoodieTimeline.class);
     when(cleanTimeline.filterInflightsAndRequested()).thenReturn(inflightsAndRequestedTimeline);
     when(inflightsAndRequestedTimeline.getInstants()).thenReturn(Collections.singletonList(cleanInstant));
-    when(activeTimeline.transitionCleanRequestedToInflight(any(), any())).thenReturn(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "002"));
+    when(activeTimeline.transitionCleanRequestedToInflight(any())).thenReturn(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "002"));
     when(mockHoodieTable.getMetadataWriter("002")).thenReturn(Option.empty());
 
     CleanActionExecutor cleanActionExecutor = new CleanActionExecutor(context, config, mockHoodieTable, "002");

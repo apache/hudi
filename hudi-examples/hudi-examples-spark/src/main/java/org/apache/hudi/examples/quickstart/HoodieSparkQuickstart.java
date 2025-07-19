@@ -26,7 +26,6 @@ import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.sql.Dataset;
@@ -53,9 +52,8 @@ public final class HoodieSparkQuickstart {
     String tableName = args[1];
 
     SparkSession spark = HoodieExampleSparkUtils.defaultSparkSession("Hudi Spark basic example");
-    SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
 
-    try (JavaSparkContext jsc = new JavaSparkContext(sparkConf)) {
+    try (JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext())) {
       runQuickstart(jsc, spark, tableName, tablePath);
     }
   }

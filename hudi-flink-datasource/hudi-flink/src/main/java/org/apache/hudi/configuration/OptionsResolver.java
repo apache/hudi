@@ -31,6 +31,8 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -42,6 +44,7 @@ import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.HoodieFlinkIOFactory;
 
+import org.apache.flink.api.common.functions.Partitioner;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 
@@ -478,6 +481,27 @@ public class OptionsResolver {
       }
     }
     return HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue().equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
+  }
+
+  /**
+   * Returns whether the writers should use blocking instant time generation.
+   */
+  public static boolean isBlockingInstantGeneration(Configuration conf) {
+    return isCowTable(conf) && isUpsertOperation(conf);
+  }
+
+  /**
+   * Returns the customized insert partitioner instance.
+   */
+  public static Option<Partitioner> getInsertPartitioner(Configuration conf) {
+    String insertPartitionerClass = conf.getString(FlinkOptions.INSERT_PARTITIONER_CLASS_NAME);
+    try {
+      return StringUtils.isNullOrEmpty(insertPartitionerClass)
+          ? Option.empty()
+          : Option.of((Partitioner) ReflectionUtils.loadClass(insertPartitionerClass, conf));
+    } catch (Throwable e) {
+      throw new HoodieException("Could not create custom insert partitioner " + insertPartitionerClass, e);
+    }
   }
 
   // -------------------------------------------------------------------------
