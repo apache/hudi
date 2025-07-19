@@ -115,54 +115,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
-                                Option<InternalSchema> internalSchemaOpt, Iterator<T> inputRecords,
-                                HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                                boolean shouldUseRecordPosition, boolean allowInflightInstants,
-                                boolean emitDelete, boolean sortOutput,
-                                InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan) {
-    this.readerContext = readerContext;
-    this.fileGroupUpdateCallback = updateCallback;
-    this.metaClient = hoodieTableMetaClient;
-    this.storage = storage;
-    this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
-    this.inputSplit = inputSplit;
-    readerContext.setHasLogFiles(!this.inputSplit.logFiles.isEmpty());
-    readerContext.setPartitionPath(inputSplit.partitionPath);
-    if (readerContext.getHasLogFiles() && inputSplit.start != 0) {
-      throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
-    }
-    this.props = props;
-    HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.partitionPathFields = tableConfig.getPartitionFields();
-    readerContext.initRecordMerger(props);
-    readerContext.setTablePath(tablePath);
-    readerContext.setLatestCommitTime(latestCommitTime);
-    boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
-    readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition && !isSkipMerge && readerContext.getHasLogFiles());
-    readerContext.setHasBootstrapBaseFile(inputSplit.baseFileOption.flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
-    readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
-        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
-        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
-    this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.orderingFieldName = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
-        ? Option.empty()
-        : Option.ofNullable(ConfigUtils.getOrderingField(props))
-        .or(() -> {
-          String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
-          if (StringUtils.isNullOrEmpty(preCombineField)) {
-            return Option.empty();
-          }
-          return Option.of(preCombineField);
-        });
-    this.readStats = new HoodieReadStats();
-    this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
-        readerContext.getMergeMode(), tableConfig.getPartialUpdateMode(), props,
-        isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput, Option.of(inputRecords));
-    this.allowInflightInstants = allowInflightInstants;
-  }
-
-  private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
-                                String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
                                 InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan) {
@@ -511,6 +463,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean sortOutput = false;
     private boolean enableOptimizedLogBlockScan = false;
     private Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
+    private Option<Iterator<T>> recordIteratorOpt = Option.empty();
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -615,6 +568,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       this.sortOutput = sortOutput;
       return this;
     }
+
+    public Builder<T> withRecordIterator(Iterator<T> iterator) {
+      this.recordIteratorOpt = Option.ofNullable(iterator);
+      return this;
+    }
+
 
     public HoodieFileGroupReader<T> build() {
       ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
