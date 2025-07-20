@@ -46,11 +46,7 @@ public class InputBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordB
                                          Option<String> orderingFieldName,
                                          Iterator<T> inputRecordIterator,
                                          UpdateProcessor<T> updateProcessor) {
-<<<<<<< HEAD
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
-=======
-    super(readerContext, hoodieTableMetaClient, recordMergeMode,partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
->>>>>>> 6d74b6820d3 (Support record iterator based file group reader merge handle)
     this.inputRecordIterator = inputRecordIterator;
 
     // Read input records into the buffer.

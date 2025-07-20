@@ -92,7 +92,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
   // Callback to run custom logic on updates to the base files for the file group
-  private final Option<BaseFileUpdateCallback> fileGroupUpdateCallback;
+  private final List<BaseFileUpdateCallback<T>> fileGroupUpdateCallbacks;
   private final boolean enableOptimizedLogBlockScan;
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
   private List<String> validBlockInstants = Collections.emptyList();
@@ -110,16 +110,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       long start, long length, boolean shouldUseRecordPosition) {
     this(readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt,
         hoodieTableMetaClient, props, shouldUseRecordPosition, false, false, false,
-        InputSplit.fromFileSlice(fileSlice, start, length), Option.empty(), false);
+        InputSplit.fromFileSlice(fileSlice, start, length), Collections.emptyList(), false);
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
-                                InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan) {
+                                InputSplit inputSplit, List<BaseFileUpdateCallback<T>> updateCallback, boolean enableOptimizedLogBlockScan) {
     this.readerContext = readerContext;
-    this.fileGroupUpdateCallback = updateCallback;
+    this.fileGroupUpdateCallbacks = updateCallback;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
     this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
@@ -462,7 +462,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean emitDelete;
     private boolean sortOutput = false;
     private boolean enableOptimizedLogBlockScan = false;
-    private Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
+    private List<BaseFileUpdateCallback<T>> fileGroupUpdateCallbacks = Collections.emptyList();
     private Option<Iterator<T>> recordIteratorOpt = Option.empty();
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
@@ -548,8 +548,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withFileGroupUpdateCallback(Option<BaseFileUpdateCallback> fileGroupUpdateCallback) {
-      this.fileGroupUpdateCallback = fileGroupUpdateCallback;
+    public Builder<T> withFileGroupUpdateCallback(List<BaseFileUpdateCallback<T>> fileGroupUpdateCallbacks) {
+      this.fileGroupUpdateCallbacks = fileGroupUpdateCallbacks;
       return this;
     }
 

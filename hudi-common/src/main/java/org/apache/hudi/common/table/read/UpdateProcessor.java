@@ -19,8 +19,11 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.util.Option;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
 /**
  * Interface used within the {@link HoodieFileGroupReader<T>} for processing updates to records in Merge-on-Read tables.
  * Note that the updates are always relative to the base file's current state.
@@ -38,10 +41,10 @@ public interface UpdateProcessor<T> {
   T processUpdate(String recordKey, T previousRecord, T mergedRecord, boolean isDelete);
 
   static <T> UpdateProcessor<T> create(HoodieReadStats readStats, HoodieReaderContext<T> readerContext,
-                                       boolean emitDeletes, Option<BaseFileUpdateCallback> updateCallback) {
+                                       boolean emitDeletes, List<BaseFileUpdateCallback<T>> updateCallbacks) {
     UpdateProcessor<T> handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
-    if (updateCallback.isPresent()) {
-      return new CallbackProcessor<>(updateCallback.get(), handler);
+    if (!updateCallbacks.isEmpty()) {
+      return new CallbackProcessor<>(updateCallbacks, handler, readerContext);
     }
     return handler;
   }
@@ -86,11 +89,14 @@ public interface UpdateProcessor<T> {
    * @param <T> the engine specific record type
    */
   class CallbackProcessor<T> implements UpdateProcessor<T> {
-    private final BaseFileUpdateCallback<T> callback;
+    private static final Logger LOG = LoggerFactory.getLogger(CallbackProcessor.class);
+    private final List<BaseFileUpdateCallback<T>> callbacks;
     private final UpdateProcessor<T> delegate;
 
-    public CallbackProcessor(BaseFileUpdateCallback callback, UpdateProcessor<T> delegate) {
-      this.callback = callback;
+    public CallbackProcessor(List<BaseFileUpdateCallback<T>> callbacks,
+                             UpdateProcessor<T> delegate,
+                             HoodieReaderContext<T> readerContext) {
+      this.callbacks = callbacks;
       this.delegate = delegate;
     }
 
@@ -99,11 +105,29 @@ public interface UpdateProcessor<T> {
       T result = delegate.processUpdate(recordKey, previousRecord, currentRecord, isDelete);
 
       if (isDelete) {
-        callback.onDelete(recordKey, previousRecord);
+        for (BaseFileUpdateCallback<T> callback : callbacks) {
+          try {
+            callback.onDelete(recordKey, previousRecord);
+          } catch (Exception e) {
+            LOG.error("Callback failed", e);
+          }
+        }
       } else if (previousRecord != null && previousRecord != currentRecord) {
-        callback.onUpdate(recordKey, previousRecord, currentRecord);
+        for (BaseFileUpdateCallback<T> callback : callbacks) {
+          try {
+            callback.onUpdate(recordKey, previousRecord, currentRecord);
+          } catch (Exception e) {
+            LOG.error("Callback failed", e);
+          }
+        }
       } else {
-        callback.onInsert(recordKey, currentRecord);
+        for (BaseFileUpdateCallback<T> callback : callbacks) {
+          try {
+            callback.onInsert(recordKey, currentRecord);
+          } catch (Exception e) {
+            LOG.error("Callback failed", e);
+          }
+        }
       }
       return result;
     }
