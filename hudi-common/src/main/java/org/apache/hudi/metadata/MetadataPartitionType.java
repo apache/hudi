@@ -204,7 +204,7 @@ public enum MetadataPartitionType {
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
-      return metadataConfig.isSecondaryIndexEnabled();
+      return metadataConfig.isSecondaryIndexEnabled() && StringUtils.nonEmpty(metadataConfig.getSecondaryIndexColumn());
     }
 
     @Override

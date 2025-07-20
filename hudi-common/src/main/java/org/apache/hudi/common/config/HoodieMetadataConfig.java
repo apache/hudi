@@ -811,8 +811,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isSecondaryIndexEnabled() {
     // Secondary index is enabled only iff record index (primary key index) is also enabled and a secondary index column is specified.
-    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && getString(SECONDARY_INDEX_COLUMN) != null
-        && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP) && !isDropMetadataIndex(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
   }
 
   public int getSecondaryIndexParallelism() {
