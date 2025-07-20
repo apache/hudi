@@ -363,11 +363,10 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         }
         // check duplicate add or rename
         // keep consistent with hive, column names insensitive
-        checkExceptions(s"alter table $tableName rename column col0 to col9")(Seq("cannot rename column: col0 to a existing name",
-          "Cannot rename column, because col9 already exists in root"))
-        checkExceptions(s"alter table $tableName rename column col0 to COL9")(Seq("cannot rename column: col0 to a existing name", "Cannot rename column, because COL9 already exists in root"))
-        checkExceptions(s"alter table $tableName add columns(col9 int first)")(Seq("cannot add column: col9 which already exist", "Cannot add column, because col9 already exists in root"))
-        checkExceptions(s"alter table $tableName add columns(COL9 int first)")(Seq("cannot add column: COL9 which already exist", "Cannot add column, because COL9 already exists in root"))
+        checkExceptions(s"alter table $tableName rename column col0 to col9")(Seq("Cannot rename column 'col0' to 'col9' because a column with name 'col9' already exists in the schema"))
+        checkExceptions(s"alter table $tableName rename column col0 to COL9")(Seq("Cannot rename column 'col0' to 'COL9' because a column with name 'COL9' already exists in the schema"))
+        checkExceptions(s"alter table $tableName add columns(col9 int first)")(Seq("Cannot add column 'col9' because it already exists in the schema"))
+        checkExceptions(s"alter table $tableName add columns(COL9 int first)")(Seq("Cannot add column 'COL9' because it already exists in the schema"))
         // test add comment for columns / alter columns comment
         spark.sql(s"alter table $tableName add columns(col1_new int comment 'add new columns col1_new after id' after id)")
         spark.sql(s"alter table $tableName alter column col9 comment 'col9 desc'")
