@@ -54,6 +54,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -61,6 +62,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -162,7 +164,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
           payloadClass);
     }
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
+
+    // Add event_time metadata if exists.
+    Map<String, String> metadata = new HashMap<>();
+    if (bufferedRecord.getEventTime().isPresent()) {
+      metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(bufferedRecord.getEventTime().get()));
+    }
+    return new HoodieAvroIndexedRecord(
+        hoodieKey, bufferedRecord.getRecord(), null, Option.of(metadata));
   }
 
   @Override

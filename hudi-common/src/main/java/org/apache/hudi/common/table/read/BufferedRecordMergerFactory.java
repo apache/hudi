@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -43,6 +45,7 @@ import java.io.IOException;
 import java.util.Objects;
 
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.
@@ -80,7 +83,7 @@ public class BufferedRecordMergerFactory {
         return new CommitTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
       case EVENT_TIME_ORDERING:
         if (partialUpdateMode == PartialUpdateMode.NONE) {
-          return new EventTimeBufferedRecordMerger<>();
+          return new EventTimeBufferedRecordMerger<>(readerContext, props);
         }
         return new EventTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
       default:
@@ -161,7 +164,21 @@ public class BufferedRecordMergerFactory {
    * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code EVENT_TIME_ORDERING} merge mode.
    */
-  private static class EventTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
+  static class EventTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
+    protected final HoodieReaderContext<T> readerContext;
+
+    protected final boolean shouldTrackEventTimeMetadata;
+    protected final boolean shouldKeepLogicalTimestampConsistent;
+    protected final Option<String> eventTimeFieldNameOpt;
+
+    public EventTimeBufferedRecordMerger(HoodieReaderContext<T> readerContext,
+                                         TypedProperties props) {
+      this.readerContext = readerContext;
+      this.shouldTrackEventTimeMetadata = shouldKeepEventTimeMetadata(props);
+      this.shouldKeepLogicalTimestampConsistent = shouldKeepConsistentLogicalTimestamp(props);
+      this.eventTimeFieldNameOpt = getEventTimeFieldName(props);
+    }
+
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
@@ -178,9 +195,67 @@ public class BufferedRecordMergerFactory {
     @Override
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
       if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
+        attachEventTimeMetadataIfNeeded(newerRecord);
         return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
       }
+      attachEventTimeMetadataIfNeeded(olderRecord);
       return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
+    }
+
+    /**
+     * Check if event time metadata should be tracked.
+     */
+    static boolean shouldKeepEventTimeMetadata(TypedProperties props) {
+      return props.getBoolean("hoodie.write.track.event.time.watermark", false);
+    }
+
+    /**
+     * Check if logical timestamp should be made consistent.
+     */
+    static boolean shouldKeepConsistentLogicalTimestamp(TypedProperties props) {
+      return Boolean.parseBoolean(props.getProperty(
+          KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+          KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+    }
+
+    /**
+     * Extract event_time field name from configuration.
+     */
+    static Option<String> getEventTimeFieldName(TypedProperties props) {
+      return Option.ofNullable(
+          props.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY));
+    }
+
+    /**
+     * Extract event-time value from the record.
+     * This function should be only called during final merge stage since it is
+     * meaningless to call it when merge log records.
+     */
+    Option<Object> extractEventTime(T engineRecord, Schema readerSchema) {
+      Object eventTimeObject = readerContext.getValue(
+          engineRecord, readerSchema, eventTimeFieldNameOpt.get());
+      if (eventTimeObject != null) {
+        Schema.Field field = readerSchema.getField(eventTimeFieldNameOpt.get());
+        Object eventTime = HoodieAvroUtils.convertValueForAvroLogicalTypes(
+            field.schema(), eventTimeObject, shouldKeepLogicalTimestampConsistent);
+        return Option.of(eventTime);
+      }
+      return Option.empty();
+    }
+
+    /**
+     * Extract event_time metadata and set it to the buffered record.
+     * This metadata is passed to HoodieRecord when constructed from the buffered record.
+     */
+    void attachEventTimeMetadataIfNeeded(BufferedRecord<T> record) {
+      if (shouldTrackEventTimeMetadata && eventTimeFieldNameOpt.isPresent()) {
+        Schema schema = readerContext.getSchemaFromBufferRecord(record);
+        Option<Object> eventTimeMetadataOpt =
+            extractEventTime(record.getRecord(), schema);
+        if (eventTimeMetadataOpt.isPresent()) {
+          record.setEventTime(eventTimeMetadataOpt);
+        }
+      }
     }
   }
 
@@ -188,15 +263,14 @@ public class BufferedRecordMergerFactory {
    * An implementation of {@link EventTimeBufferedRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code EVENT_TIME_ORDERING} merge mode and partial update mode.
    */
-  private static class EventTimeBufferedRecordPartialUpdateMerger<T> extends EventTimeBufferedRecordMerger<T> {
+  static class EventTimeBufferedRecordPartialUpdateMerger<T> extends EventTimeBufferedRecordMerger<T> {
     private final PartialUpdateStrategy<T> partialUpdateStrategy;
-    private final HoodieReaderContext<T> readerContext;
 
     public EventTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
                                                       PartialUpdateMode partialUpdateMode,
                                                       TypedProperties props) {
+      super(readerContext, props);
       this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
-      this.readerContext = readerContext;
     }
 
     @Override
@@ -226,6 +300,7 @@ public class BufferedRecordMergerFactory {
     @Override
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
       if (newerRecord.isCommitTimeOrderingDelete()) {
+        attachEventTimeMetadataIfNeeded(newerRecord);
         return Pair.of(true, newerRecord.getRecord());
       }
 
@@ -240,6 +315,7 @@ public class BufferedRecordMergerFactory {
             readerContext.getSchemaFromBufferRecord(olderRecord),
             readerContext.getSchemaFromBufferRecord(newerRecord),
             true);
+        attachEventTimeMetadataIfNeeded(olderRecord);
         return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
       }
 
@@ -249,6 +325,7 @@ public class BufferedRecordMergerFactory {
           readerContext.getSchemaFromBufferRecord(newerRecord),
           readerContext.getSchemaFromBufferRecord(olderRecord),
           false);
+      attachEventTimeMetadataIfNeeded(newerRecord);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
