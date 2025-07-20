@@ -385,10 +385,10 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    * @return true if Polaris catalog is configured, false otherwise
    */
   def isUsingPolarisCatalog(sparkSession: SparkSession): Boolean = {
-    sparkSession.conf.getAll.exists { case (key, value) =>
-      key.startsWith("spark.sql.catalog.")  &&
-      value == "org.apache.polaris.spark.SparkCatalog"
-    }
+    val polarisCatalogClassName = sparkSession.conf.get(DataSourceReadOptions.POLARIS_CATALOG_CLASS_NAME.key(),
+      DataSourceReadOptions.POLARIS_CATALOG_CLASS_NAME.defaultValue())
+    sparkSession.conf.getAll
+      .filter(_._1.startsWith("spark.sql.catalog."))
+      .exists(_._2 == polarisCatalogClassName)
   }
-
 }

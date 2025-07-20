@@ -254,6 +254,12 @@ object DataSourceReadOptions {
       .sinceVersion("1.0.0")
       .withDocumentation("A regex under the table's base path to get file system view information")
 
+  val POLARIS_CATALOG_CLASS_NAME: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.polaris.catalog.class")
+    .defaultValue("org.apache.polaris.spark.SparkCatalog")
+    .markAdvanced()
+    .withDocumentation("Fully qualified class name of the catalog that is used by the Polaris spark client.")
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()

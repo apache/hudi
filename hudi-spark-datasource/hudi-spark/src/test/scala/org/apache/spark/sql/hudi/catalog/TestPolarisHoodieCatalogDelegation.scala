@@ -49,7 +49,7 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
     }
   }
 
-  private def buildCustomSparkSession(tempDir: File, enablePolaris: Boolean = false): (SparkSession, TestableHoodieCatalog, MockPolarisSparkCatalog) = {
+  private def buildCustomSparkSession(tempDir: File, enablePolaris: Boolean = false): (SparkSession, HoodieCatalog, MockPolarisSparkCatalog) = {
     val mockPolarisDelegate = spy(new MockPolarisSparkCatalog())
 
     val sparkBuilder = SparkSession.builder()
@@ -58,19 +58,28 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
       .config("spark.sql.warehouse.dir", tempDir.getCanonicalPath)
       .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .config("spark.sql.catalog.hoodie_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
+      .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
 
     if (enablePolaris) {
-      sparkBuilder.config("spark.sql.catalog.polaris_catalog", "org.apache.polaris.spark.SparkCatalog")
+      // In production the class should be org.apache.polaris.spark.SparkCatalog
+      // (which is the default value of the config hoodie.datasource.polaris.catalog.class)
+      // However, in testing, verify if config works by using mock catalog
+      val testPolarisCatalogClass = "org.apache.spark.sql.hudi.catalog.MockPolarisSparkCatalog"
+      sparkBuilder.config("spark.sql.catalog.polaris_catalog", testPolarisCatalogClass)
+      sparkBuilder.config("hoodie.datasource.polaris.catalog.class", testPolarisCatalogClass)
     }
 
     // Create SparkSession first so it becomes the active session
     val customSession = sparkBuilder.getOrCreate()
 
-    // Create TestableHoodieCatalog after SparkSession is active
-    // This ensures HoodieCatalog can access SparkSession.active during initialization
-    val testableHoodieCatalog = new TestableHoodieCatalog(mockPolarisDelegate)
-    (customSession, testableHoodieCatalog, mockPolarisDelegate)
+    // Get the HoodieCatalog instance from the session
+    val hoodieCatalog = customSession.sessionState.catalogManager.v2SessionCatalog.asInstanceOf[HoodieCatalog]
+
+    // Set the mock delegate if Polaris is enabled
+    if (enablePolaris) {
+      hoodieCatalog.setDelegateCatalog(mockPolarisDelegate)
+    }
+    (customSession, hoodieCatalog, mockPolarisDelegate)
   }
 
   test("Test Normal Hudi Catalog Route") {
@@ -78,53 +87,29 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-      // Create custom session with HoodieCatalog (no Polaris)
-      val (customSession, testableHoodieCatalog, mockPolarisDelegate) = buildCustomSparkSession(tmp)
+      // Create custom session with HoodieCatalog (with Polaris not enabled)
+      val (customSession, hoodieCatalog, mockPolarisDelegate) = buildCustomSparkSession(tmp)
 
       try {
         // Verify Polaris is not detected
         assertFalse(HoodieSqlCommonUtils.isUsingPolarisCatalog(customSession))
 
-        // Issue SQL DDL using custom session
-        customSession.sql(s"""
-          CREATE TABLE $tableName (
-            id int,
-            name string,
-            ts long
-          ) USING hudi
-          TBLPROPERTIES (
-            primaryKey = 'id',
-            preCombineField = 'ts'
-          )
-          LOCATION '$tablePath'
-        """.stripMargin)
-
-        // Verification via filesystem
-        assertTrue(new File(s"$tablePath/.hoodie").exists(), "Hudi metadata directory should exist")
-        assertTrue(new File(s"$tablePath/.hoodie/hoodie.properties").exists(), "Hudi properties file should exist")
-
-        // Mock Polaris delegate should not be called in normal route
-        // Since we can't easily inject TestableHoodieCatalog into SparkSession,
-        // we'll simulate the delegation logic verification
-        assertFalse(HoodieSqlCommonUtils.isUsingPolarisCatalog(customSession))
-
-        // Manual test of delegation logic for normal route
-        // Inject the spark session into the testable catalog
-        testableHoodieCatalog.setTestSparkSession(customSession)
-
-        val testTableName = tableName + "_test"
-        testableHoodieCatalog.createTable(
-          Identifier.of(Array("default"), testTableName),
+        hoodieCatalog.createTable(
+          Identifier.of(Array("default"), tableName),
           StructType(Seq(
             StructField("id", IntegerType),
             StructField("name", StringType),
             StructField("ts", LongType)
           )),
           Array.empty[Transform],
-          Map("provider" -> "hudi", "primaryKey" -> "id", "preCombineField" -> "ts").asJava
+          Map("provider" -> "hudi", "primaryKey" -> "id", "preCombineField" -> "ts", "path" -> tablePath).asJava
         )
 
-        // Verify delegate was not called (normal route)
+        // Verification via filesystem
+        assertTrue(new File(s"$tablePath/.hoodie").exists(), "Hudi metadata directory should exist")
+        assertTrue(new File(s"$tablePath/.hoodie/hoodie.properties").exists(), "Hudi properties file should exist")
+
+        // Verify delegate was not called
         verify(mockPolarisDelegate, never()).createTable(any(), any(), any(), any())
 
       } finally {
@@ -133,44 +118,19 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
     }
   }
 
-  test("Test Polaris Delegation Route") {
+  test("Test Polaris Detection and Delegation") {
     withTempDir { tmp =>
-      val tableName = generateTableName
-      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-
-      // Create custom session with HoodieCatalog + Polaris config
-      val (customSession, testableHoodieCatalog, mockPolarisDelegate) = buildCustomSparkSession(tmp, enablePolaris = true)
+      // Create custom session with HoodieCatalog (with Polaris enabled)
+      val (customSession, hoodieCatalog, mockPolarisDelegate) = buildCustomSparkSession(tmp, enablePolaris = true)
 
       try {
         // Verify Polaris is detected
-        assertTrue(HoodieSqlCommonUtils.isUsingPolarisCatalog(customSession))
+        assertTrue(HoodieSqlCommonUtils.isUsingPolarisCatalog(customSession), "Should detect Polaris with correct delegate and config")
 
-        // Issue SQL DDL using custom session
-        customSession.sql(s"""
-          CREATE TABLE $tableName (
-            id int,
-            name string,
-            ts long
-          ) USING hudi
-          TBLPROPERTIES (
-            primaryKey = 'id',
-            preCombineField = 'ts'
-          )
-          LOCATION '$tablePath'
-        """.stripMargin)
-
-        // Verification via filesystem - In real Polaris setup, HoodieCatalog would delegate
-        // to Polaris after creating the Hudi table
-        assertTrue(new File(s"$tablePath/.hoodie").exists(), "Hudi metadata directory should exist")
-        assertTrue(new File(s"$tablePath/.hoodie/hoodie.properties").exists(), "Hudi properties file should exist")
-
-        assertTrue(HoodieSqlCommonUtils.isUsingPolarisCatalog(customSession), "Polaris should be detected")
-
-        // Manual test of delegation logic with Polaris enabled
-        // Inject the spark session into the testable catalog
-        testableHoodieCatalog.setTestSparkSession(customSession)
-        testableHoodieCatalog.createTable(
-          Identifier.of(Array("default"), tableName + "_polaris"),
+        // Verify delegation works by calling createTable API
+        val tableName = generateTableName
+        hoodieCatalog.createTable(
+          Identifier.of(Array("default"), tableName),
           StructType(Seq(
             StructField("id", IntegerType),
             StructField("name", StringType),
@@ -180,7 +140,7 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
           Map("provider" -> "hudi", "primaryKey" -> "id", "preCombineField" -> "ts").asJava
         )
 
-        // Verify delegate was called (Polaris route)
+        // Verify delegate was called when Polaris is enabled
         verify(mockPolarisDelegate, times(1)).createTable(any(), any(), any(), any())
 
       } finally {
