@@ -41,9 +41,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class TestTimelineUtilsBackComp extends HoodieCommonTestHarness {
+class TestTimelineUtilsBackComp extends HoodieCommonTestHarness {
   @BeforeEach
-  public void setUp() throws Exception {
+  void setUp() throws Exception {
     initPath();
   }
 

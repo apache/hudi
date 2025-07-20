@@ -53,13 +53,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests {@link TableSchemaResolver}.
  */
-public class TestTableSchemaResolver {
+class TestTableSchemaResolver {
 
   @TempDir
-  public java.nio.file.Path tempDir;
+  java.nio.file.Path tempDir;
 
   @Test
-  public void testRecreateSchemaWhenDropPartitionColumns() {
+  void testRecreateSchemaWhenDropPartitionColumns() {
     Schema originSchema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
 
     // case2
@@ -90,7 +90,7 @@ public class TestTableSchemaResolver {
   }
 
   @Test
-  public void testReadSchemaFromLogFile() throws IOException, URISyntaxException, InterruptedException {
+  void testReadSchemaFromLogFile() throws IOException, URISyntaxException, InterruptedException {
     String testDir = initTestDir("read_schema_from_log_file");
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
     Schema expectedSchema = getSimpleSchema();

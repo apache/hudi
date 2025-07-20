@@ -77,7 +77,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 /**
  * Tests {@link HoodieTableConfig}.
  */
-public class TestHoodieTableConfig extends HoodieCommonTestHarness {
+class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   private HoodieStorage storage;
   private StoragePath metaPath;
@@ -102,7 +102,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCreate() throws IOException {
+  void testCreate() throws IOException {
     assertTrue(
         storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
@@ -110,7 +110,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testUpdate() throws IOException {
+  void testUpdate() throws IOException {
     Properties updatedProps = new Properties();
     updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table2");
     updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field");
@@ -125,7 +125,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testDelete() throws IOException {
+  void testDelete() throws IOException {
     Set<String> deletedProps = CollectionUtils.createSet(HoodieTableConfig.TIMELINE_HISTORY_PATH.key(),
         "hoodie.invalid.config");
     HoodieTableConfig.delete(storage, metaPath, deletedProps);
@@ -139,7 +139,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadsWhenPropsFileDoesNotExist() throws IOException {
+  void testReadsWhenPropsFileDoesNotExist() throws IOException {
     storage.deleteFile(cfgPath);
     assertThrows(HoodieIOException.class, () -> {
       new HoodieTableConfig(storage, metaPath, null, null, null);
@@ -147,7 +147,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadsWithUpdateFailures() throws IOException {
+  void testReadsWithUpdateFailures() throws IOException {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
     storage.deleteFile(cfgPath);
     try (OutputStream out = storage.create(backupCfgPath)) {
@@ -162,7 +162,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testUpdateRecovery(boolean shouldPropsFileExist) throws IOException {
+  void testUpdateRecovery(boolean shouldPropsFileExist) throws IOException {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
     if (!shouldPropsFileExist) {
       storage.deleteFile(cfgPath);
@@ -179,7 +179,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testReadRetry() throws IOException {
+  void testReadRetry() throws IOException {
     // When both the hoodie.properties and hoodie.properties.backup do not exist then the read fails
     storage.rename(cfgPath, new StoragePath(cfgPath.toString() + ".bak"));
     assertThrows(HoodieIOException.class, () -> new HoodieTableConfig(storage, metaPath, null, null, null));
@@ -205,7 +205,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testConcurrentlyUpdate() throws ExecutionException, InterruptedException {
+  void testConcurrentlyUpdate() throws ExecutionException, InterruptedException {
     final ExecutorService executor = Executors.newFixedThreadPool(2);
     Future updaterFuture = executor.submit(() -> {
       for (int i = 0; i < 100; i++) {
@@ -230,7 +230,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @EnumSource(value = HoodieTableVersion.class, names = {"SEVEN", "EIGHT"})
-  public void testPartitionFields(HoodieTableVersion version) {
+  void testPartitionFields(HoodieTableVersion version) {
     Properties updatedProps = new Properties();
     updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), version.greaterThan(HoodieTableVersion.SEVEN) ? "p1:simple,p2:timestamp" : "p1,p2");
     updatedProps.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
@@ -245,7 +245,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = {"p1:simple,p2:timestamp", "p1,p2"})
-  public void testPartitionFieldAPIs(String partitionFields) {
+  void testPartitionFieldAPIs(String partitionFields) {
     Properties updatedProps = new Properties();
     updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFields);
     HoodieTableConfig.update(storage, metaPath, updatedProps);
@@ -259,7 +259,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testValidateConfigVersion() {
+  void testValidateConfigVersion() {
     assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.EIGHT));
     assertTrue(HoodieTableConfig.validateConfigVersion(ConfigProperty.key("").noDefaultValue().withDocumentation(""),
         HoodieTableVersion.SIX));
@@ -267,7 +267,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testDropInvalidConfigs() {
+  void testDropInvalidConfigs() {
     // test invalid configs are dropped
     HoodieConfig config = new HoodieConfig();
     config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
@@ -288,7 +288,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testDefinedTableConfigs() {
+  void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
     assertEquals(41, configProperties.size());
     configProperties.forEach(c -> {
@@ -442,7 +442,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   @ParameterizedTest
   @MethodSource("argumentsForInferringRecordMergeMode")
-  public void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass,
+  void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass,
                                  String inputMergeStrategy, String orderingFieldName,
                                  String shouldThrowString, RecordMergeMode outputMergeMode,
                                  String outputPayloadClass, String outputMergeStrategy) throws IOException {
