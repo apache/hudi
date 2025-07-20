@@ -62,7 +62,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
       RECORD_MERGE_MODE.key -> RecordMergeMode.COMMIT_TIME_ORDERING.name)
 
-    val hudiOpts = if (!lockProviderClass.equals("null")) {
+    var hudiOpts = if (!lockProviderClass.equals("null")) {
       hudiOptsWithoutLockConfigs ++ Map(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> lockProviderClass)
     } else {
       hudiOptsWithoutLockConfigs
@@ -91,13 +91,14 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
     // auto upgrade the table
     // assert table version is eight and the partition fields in table config has partition type
+    hudiOpts = hudiOpts ++ Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       validate = false)
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig.getTableVersion)
+    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
 
     // After upgrade, based on the payload and table type, the merge mode is updated accordingly.
