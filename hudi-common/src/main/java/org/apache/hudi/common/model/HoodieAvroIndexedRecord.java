@@ -206,6 +206,9 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Option<Map<String, String>> getMetadata() {
+    if (metaData != null && metaData.isPresent()) {
+      return metaData;
+    }
     return Option.empty();
   }
 

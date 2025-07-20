@@ -45,12 +45,15 @@ public class BufferedRecord<T> implements Serializable {
   private final Integer schemaId;
   private final boolean isDelete;
 
+  private Option<Object> eventTimeOpt;
+
   public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
     this.recordKey = recordKey;
     this.orderingValue = orderingValue;
     this.record = record;
     this.schemaId = schemaId;
     this.isDelete = isDelete;
+    this.eventTimeOpt = Option.empty();
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record, Schema schema, HoodieReaderContext<T> readerContext, Properties props) {
@@ -106,6 +109,14 @@ public class BufferedRecord<T> implements Serializable {
       record = readerContext.seal(readerContext.toBinaryRow(readerContext.getSchemaFromBufferRecord(this), record));
     }
     return this;
+  }
+
+  public void setEventTime(Option<Object> eventTimeOpt) {
+    this.eventTimeOpt = eventTimeOpt;
+  }
+
+  public Option<Object> getEventTime() {
+    return eventTimeOpt;
   }
 
   @Override
