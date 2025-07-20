@@ -892,3 +892,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-07-19 16:03:57] [release-v1.148.0] ---
 [ENG-29335][MINOR] NullPointerException when reading action state of old archived timelines (#1448)
 [AUDIT-1521]: Changelog for release-v1.147.0 (#1447)
+
+--- [2025-07-20 16:04:00] [release-v1.149.0] ---
+[ENG-28935][HUDI-9563] Add tags for AWS Glue database and remove it for tables (#1454)
+[AUDIT-1071]: Changelog for release-v1.148.0 (#1452)
