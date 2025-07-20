@@ -417,12 +417,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
 
     // Already initialized partitions can be ignored
-    partitionsToInit.removeIf(metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionAvailable((metadataPartition))
-        || (metadataPartition == PARTITION_STATS && !dataMetaClient.getTableConfig().isTablePartitioned()));
+    partitionsToInit.removeIf(metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionAvailable((metadataPartition)));
 
-    if (partitionsToInit.isEmpty()) {
-      return true;
-    }
     // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
     List<DirectoryInfo> partitionInfoList;
     if (filesPartitionAvailable) {
