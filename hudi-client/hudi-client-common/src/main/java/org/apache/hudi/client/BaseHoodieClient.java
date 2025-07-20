@@ -25,7 +25,9 @@ import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -57,6 +59,8 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.hudi.config.HoodieWriteConfig.TRACK_EVENT_TIME_WATERMARK;
 
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
@@ -118,6 +122,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.metrics = new HoodieMetrics(config, storage);
     this.txnManager = transactionManager;
     this.timeGenerator = timeGenerator;
+
+    updateConfigForCompatibility(config);
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
@@ -179,6 +185,14 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       }
       ((HoodieClientInitCallback) callback).call(this);
     });
+  }
+
+  static void updateConfigForCompatibility(HoodieWriteConfig config) {
+    String payloadClass = HoodieRecordPayload.getPayloadClassName(config);
+    if ((!StringUtils.isNullOrEmpty(payloadClass))
+        && payloadClass.equals(DefaultHoodieRecordPayload.class.getName())) {
+      config.setValue(TRACK_EVENT_TIME_WATERMARK.key(), "true");
+    }
   }
 
   public HoodieWriteConfig getConfig() {

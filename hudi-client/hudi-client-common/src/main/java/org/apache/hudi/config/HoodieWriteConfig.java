@@ -1430,6 +1430,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
   }
 
+  public boolean trackEventTimeWatermark() {
+    return getBooleanOrDefault(TRACK_EVENT_TIME_WATERMARK);
+  }
+
   /**
    * Returns whether the table writer would generate pure log files at the very first place.
    */
