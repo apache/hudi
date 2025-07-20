@@ -75,6 +75,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -206,7 +207,15 @@ public class HoodieTestUtils {
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
-                                           HoodieFileFormat baseFileFormat, boolean setKeyGen, String keyGenerator, boolean populateMetaFields)
+                                           HoodieFileFormat baseFileFormat, boolean setKeyGen,
+                                           String keyGenerator, boolean populateMetaFields)
+      throws IOException {
+    return init(storageConf, basePath, tableType, baseFileFormat, setKeyGen, keyGenerator, populateMetaFields, Option.empty());
+  }
+
+  public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
+                                           HoodieFileFormat baseFileFormat, boolean setKeyGen, String keyGenerator,
+                                           boolean populateMetaFields, Option<String> payloadClass)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
@@ -214,6 +223,9 @@ public class HoodieTestUtils {
       properties.setProperty("hoodie.datasource.write.keygenerator.class", keyGenerator);
     }
     properties.setProperty("hoodie.populate.meta.fields", Boolean.toString(populateMetaFields));
+    if (payloadClass.isPresent()) {
+      properties.setProperty(PAYLOAD_CLASS_NAME.key(), payloadClass.get());
+    }
     return init(storageConf, basePath, tableType, properties);
   }
 

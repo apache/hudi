@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -184,6 +185,16 @@ public class HoodieCommonTestHarness {
       initPath();
     }
     metaClient = HoodieTestUtils.init(basePath, getTableType());
+  }
+
+  protected void initMetaClient(Option<String> payloadClassOpt) throws IOException {
+    if (basePath == null) {
+      initPath();
+    }
+    storageConf = new HadoopStorageConfiguration(true);
+    metaClient = HoodieTestUtils.init(
+        storageConf, basePath, getTableType(), HoodieFileFormat.PARQUET,
+        false, null, false, payloadClassOpt);
   }
 
   protected void initMetaClient(boolean preTableVersion8) throws IOException {
