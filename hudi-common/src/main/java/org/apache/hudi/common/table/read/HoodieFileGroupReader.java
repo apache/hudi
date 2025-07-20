@@ -107,9 +107,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient,
       TypedProperties props,
       long start, long length, boolean shouldUseRecordPosition) {
-    this(readerContext, storage, tablePath, latestCommitTime, dataSchema,
-        requestedSchema, internalSchemaOpt, hoodieTableMetaClient, props,
-        shouldUseRecordPosition, false, false, false, InputSplit.fromFileSlice(fileSlice, start, length));
+    this(readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt,
+        hoodieTableMetaClient, props, shouldUseRecordPosition, false, false, false,
+        InputSplit.fromFileSlice(fileSlice, start, length), Option.empty(), false);
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
@@ -574,7 +574,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       InputSplit inputSplit = new InputSplit(baseFileOption, logFiles, partitionPath, start, length);
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
-          props, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, inputSplit);
+          props, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, inputSplit, fileGroupUpdateCallback, enableOptimizedLogBlockScan);
     }
   }
 
@@ -589,7 +589,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     InputSplit(Option<HoodieBaseFile> baseFileOption, Stream<HoodieLogFile> logFiles, String partitionPath, long start, long length) {
       this.baseFileOption = baseFileOption;
-      this.logFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+      this.logFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator())
+          .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+          .collect(Collectors.toList());
       this.partitionPath = partitionPath;
       this.start = start;
       this.length = length;
