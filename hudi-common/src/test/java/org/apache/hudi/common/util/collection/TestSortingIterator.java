@@ -19,10 +19,16 @@
 package org.apache.hudi.common.util.collection;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -31,117 +37,94 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSortingIterator {
 
-  @Test
-  void testSortingWithComparableElements() throws Exception {
-    List<Integer> unsorted = Arrays.asList(3, 1, 4, 1, 5, 9, 2, 6);
-    Iterator<Integer> sourceIterator = unsorted.iterator();
-    try (ClosableSortingIterator<Integer> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
-      List<Integer> sorted = Arrays.asList(1, 1, 2, 3, 4, 5, 6, 9);
-      List<Integer> result = new java.util.ArrayList<>();
-      while (sortingIterator.hasNext()) {
-        result.add(sortingIterator.next());
-      }
-      
-      assertEquals(sorted, result);
-    }
+  @ParameterizedTest
+  @MethodSource("sortingTestCases")
+  <T extends Comparable<T>> void testSortingWithComparableElements(List<T> unsorted, List<T> expected) throws Exception {
+    List<T> result = collectSortedElements(unsorted.iterator());
+    assertEquals(expected, result);
   }
 
-  @Test
-  void testSortingWithStrings() throws Exception {
-    List<String> unsorted = Arrays.asList("banana", "apple", "cherry", "date");
-    Iterator<String> sourceIterator = unsorted.iterator();
-    try (ClosableSortingIterator<String> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
-      List<String> sorted = Arrays.asList("apple", "banana", "cherry", "date");
-      List<String> result = new java.util.ArrayList<>();
-      while (sortingIterator.hasNext()) {
-        result.add(sortingIterator.next());
-      }
-      
-      assertEquals(sorted, result);
-    }
+  private static Stream<Arguments> sortingTestCases() {
+    return Stream.of(
+        Arguments.of(
+            Arrays.asList(3, 1, 4, 1, 5, 9, 2, 6),
+            Arrays.asList(1, 1, 2, 3, 4, 5, 6, 9)
+        ),
+        Arguments.of(
+            Arrays.asList("banana", "apple", "cherry", "date"),
+            Arrays.asList("apple", "banana", "cherry", "date")
+        ),
+        Arguments.of(
+            Collections.singletonList(42),
+            Collections.singletonList(42)
+        ),
+        Arguments.of(
+            Collections.emptyList(),
+            Collections.emptyList()
+        )
+    );
   }
 
   @Test
   void testEmptyIterator() throws Exception {
-    List<Integer> empty = Arrays.asList();
-    Iterator<Integer> sourceIterator = empty.iterator();
-    try (ClosableSortingIterator<Integer> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
+    try (ClosableSortingIterator<Integer> sortingIterator = new ClosableSortingIterator<>(Collections.emptyIterator())) {
       assertFalse(sortingIterator.hasNext());
     }
   }
 
   @Test
   void testSingleElement() throws Exception {
-    List<Integer> single = Arrays.asList(42);
-    Iterator<Integer> sourceIterator = single.iterator();
-    try (ClosableSortingIterator<Integer> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
+    try (ClosableSortingIterator<Integer> sortingIterator = new ClosableSortingIterator<>(Arrays.asList(42).iterator())) {
       assertTrue(sortingIterator.hasNext());
       assertEquals(42, sortingIterator.next());
       assertFalse(sortingIterator.hasNext());
     }
   }
 
-  @Test
-  void testNonComparableElements() throws Exception {
-    // Create a list of non-comparable objects
-    List<Object> nonComparable = Arrays.asList(new Object(), new Object(), new Object());
-    Iterator<Object> sourceIterator = nonComparable.iterator();
-    try (ClosableSortingIterator<Object> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
-      // Should throw IllegalArgumentException for non-comparable elements
+  @ParameterizedTest
+  @MethodSource("errorTestCases")
+  void testErrorCases(List<Object> input, String expectedMessagePart) throws Exception {
+    try (ClosableSortingIterator<Object> sortingIterator = new ClosableSortingIterator<>(input.iterator())) {
       IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, sortingIterator::hasNext);
-      
-      assertTrue(exception.getMessage().contains("Elements must implement Comparable interface"));
+      assertTrue(exception.getMessage().contains(expectedMessagePart));
     }
   }
 
-  @Test
-  void testMixedComparableTypes() throws Exception {
-    // This test verifies that the iterator throws an exception when different Comparable types cannot be compared
-    List<Object> mixed = Arrays.asList(3, "string", 1, "another", 2);
-    Iterator<Object> sourceIterator = mixed.iterator();
-    try (ClosableSortingIterator<Object> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
-      // Should throw IllegalArgumentException when trying to compare incompatible types
-      IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, sortingIterator::hasNext);
-      
-      assertTrue(exception.getMessage().contains("Elements cannot be compared with each other"));
+  private static Stream<Arguments> errorTestCases() {
+    return Stream.of(
+        Arguments.of(
+            Arrays.asList(new Object(), new Object(), new Object()),
+            "Elements must implement Comparable interface"
+        ),
+        Arguments.of(
+            Arrays.asList(3, "string", 1, "another", 2),
+            "Elements cannot be compared with each other"
+        )
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("closeableSourceTestCases")
+  void testCloseableIteratorSources(boolean isAutoCloseable) throws Exception {
+    List<Integer> data = Arrays.asList(3, 1, 4, 1, 5, 9, 2, 6);
+    List<Integer> expected = Arrays.asList(1, 1, 2, 3, 4, 5, 6, 9);
+    
+    if (isAutoCloseable) {
+      TestAutoCloseableIterator<Integer> sourceIterator = new TestAutoCloseableIterator<>(data.iterator());
+      List<Integer> result = collectSortedElements(sourceIterator);
+      assertEquals(expected, result);
+      assertTrue(sourceIterator.isClosed());
+    } else {
+      List<Integer> result = collectSortedElements(data.iterator());
+      assertEquals(expected, result);
     }
   }
 
-  @Test
-  void testClosableWithAutoCloseableSource() throws Exception {
-    // Create a mock AutoCloseable iterator
-    TestAutoCloseableIterator<Integer> sourceIterator = new TestAutoCloseableIterator<>(
-        Arrays.asList(3, 1, 4, 1, 5, 9, 2, 6).iterator());
-    
-    try (ClosableSortingIterator<Integer> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
-      List<Integer> sorted = Arrays.asList(1, 1, 2, 3, 4, 5, 6, 9);
-      List<Integer> result = new java.util.ArrayList<>();
-      while (sortingIterator.hasNext()) {
-        result.add(sortingIterator.next());
-      }
-      
-      assertEquals(sorted, result);
-    }
-    
-    // Verify that the source iterator was closed
-    assertTrue(sourceIterator.isClosed());
-  }
-
-  @Test
-  void testClosableWithNonAutoCloseableSource() throws Exception {
-    // Create a regular iterator (not AutoCloseable)
-    Iterator<Integer> sourceIterator = Arrays.asList(3, 1, 4, 1, 5, 9, 2, 6).iterator();
-    
-    try (ClosableSortingIterator<Integer> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
-      List<Integer> sorted = Arrays.asList(1, 1, 2, 3, 4, 5, 6, 9);
-      List<Integer> result = new java.util.ArrayList<>();
-      while (sortingIterator.hasNext()) {
-        result.add(sortingIterator.next());
-      }
-      
-      assertEquals(sorted, result);
-    }
-    // Should not throw any exception when closing
+  private static Stream<Arguments> closeableSourceTestCases() {
+    return Stream.of(
+        Arguments.of(true),  // AutoCloseable source
+        Arguments.of(false)  // Regular iterator source
+    );
   }
 
   @Test
@@ -158,6 +141,17 @@ public class TestSortingIterator {
     
     // Verify that the source iterator was closed only once
     assertEquals(1, sourceIterator.getCloseCount());
+  }
+
+  // Helper method to collect sorted elements from an iterator
+  private <T> List<T> collectSortedElements(Iterator<T> sourceIterator) throws Exception {
+    try (ClosableSortingIterator<T> sortingIterator = new ClosableSortingIterator<>(sourceIterator)) {
+      List<T> result = new ArrayList<>();
+      while (sortingIterator.hasNext()) {
+        result.add(sortingIterator.next());
+      }
+      return result;
+    }
   }
 
   /**
@@ -198,4 +192,4 @@ public class TestSortingIterator {
       return closeCount;
     }
   }
-} 
+}
