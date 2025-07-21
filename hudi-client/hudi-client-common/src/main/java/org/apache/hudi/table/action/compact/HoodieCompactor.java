@@ -159,8 +159,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieMergeHandle<T, ?, ?, ?> mergeHandle = HoodieMergeHandleFactory.create(writeConfig,
-        instantTime, table, getFileSliceFromOperation(operation, writeConfig.getBasePath(), WriteOperationType.COMPACT), operation, taskContextSupplier,
-        hoodieReaderContext, maxInstantTime, getEngineRecordType());
+        instantTime, table, operation, taskContextSupplier, hoodieReaderContext, maxInstantTime, getEngineRecordType());
     mergeHandle.doMerge();
     return mergeHandle.close();
   }
@@ -172,24 +171,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                       HoodieTable table,
                                       TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty());
-    FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, getFileSliceFromOperation(operation,
-        writeConfig.getBasePath(), WriteOperationType.LOG_COMPACT), operation,  taskContextSupplier, readerContext);
+    FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, operation,  taskContextSupplier, readerContext);
     appendHandle.doAppend();
     return appendHandle.close();
-  }
-
-  private FileSlice getFileSliceFromOperation(CompactionOperation operation, String basePath, WriteOperationType operationType) {
-    Option<HoodieBaseFile> baseFileOpt =
-        operation.getBaseFile(basePath, operation.getPartitionPath());
-    List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->
-            new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
-                basePath, operation.getPartitionPath()), p)))
-        .collect(Collectors.toList());
-    return new FileSlice(
-        operation.getFileGroupId(),
-        operation.getBaseInstantTime(),
-        operationType == WriteOperationType.LOG_COMPACT || baseFileOpt.isEmpty() ? null : baseFileOpt.get(),
-        logFiles);
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {
