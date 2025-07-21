@@ -392,22 +392,24 @@ public class AvroSchemaUtils {
         }
         List<Schema.Field> newFields = new ArrayList<>();
         for (Schema.Field requiredSchemaField : requiredSchema.getFields()) {
-          Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
-          if (dataSchemaField != null) {
-            Schema.Field newField = new Schema.Field(
-                dataSchemaField.name(),
-                pruneDataSchemaResolveNullable(dataSchemaField.schema(), requiredSchemaField.schema(), excludeFields),
-                dataSchemaField.doc(),
-                dataSchemaField.defaultVal()
-            );
-            newFields.add(newField);
-          } else if (excludeFields.contains(requiredSchemaField.name())) {
+          if (excludeFields.contains(requiredSchemaField.name())) {
             newFields.add(new Schema.Field(
                 requiredSchemaField.name(),
                 requiredSchemaField.schema(),
                 requiredSchemaField.doc(),
                 requiredSchemaField.defaultVal()
             ));
+          } else {
+            Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
+            if (dataSchemaField != null) {
+              Schema.Field newField = new Schema.Field(
+                  dataSchemaField.name(),
+                  pruneDataSchemaResolveNullable(dataSchemaField.schema(), requiredSchemaField.schema(), excludeFields),
+                  dataSchemaField.doc(),
+                  dataSchemaField.defaultVal()
+              );
+              newFields.add(newField);
+            }
           }
         }
         Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), false);

@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
@@ -31,7 +31,7 @@ import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
-import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
@@ -50,7 +50,6 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
-import java.util.Collections
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
@@ -168,7 +167,9 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val fixedPartitionIndexes = fixedPartitionIndexesArr.toSet
 
     // schema that we want fg reader to output to us
-    val exclusionFields = Collections.singleton("op")
+    val exclusionFields = new java.util.HashSet[String]()
+    exclusionFields.add("op")
+    partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     val requestedAvroSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), exclusionFields)
     val dataAvroSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), exclusionFields)
