@@ -55,7 +55,6 @@ public abstract class HoodieSparkTable<T>
             .setConf(context.getStorageConf().newInstance())
             .setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
             .setMetaserverConfig(config.getProps()).build();
     return HoodieSparkTable.create(config, context, metaClient);

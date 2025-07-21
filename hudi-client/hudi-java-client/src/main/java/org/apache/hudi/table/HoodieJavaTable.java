@@ -50,8 +50,7 @@ public abstract class HoodieJavaTable<T>
   public static <T> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath())
-            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setTimeGeneratorConfig(config.getTimeGeneratorConfig()).build();
+            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig()).build();
     return HoodieJavaTable.create(config, context, metaClient);
   }
 

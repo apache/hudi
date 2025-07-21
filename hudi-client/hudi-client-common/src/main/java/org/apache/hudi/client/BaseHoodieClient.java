@@ -190,7 +190,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setBasePath(config.getBasePath())
         .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad)
         .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-        .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
         .setMetaserverConfig(config.getProps()).build();
   }
