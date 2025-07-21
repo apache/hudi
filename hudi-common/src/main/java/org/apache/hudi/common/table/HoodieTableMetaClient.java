@@ -23,7 +23,6 @@ import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -869,13 +868,12 @@ public class HoodieTableMetaClient implements Serializable {
   private static HoodieTableMetaClient newMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
                                                      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                                      RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy,
-                                                     HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
-                                                     HoodieMetaserverConfig metaserverConfig) {
+                                                     FileSystemRetryConfig fileSystemRetryConfig, HoodieMetaserverConfig metaserverConfig) {
     if (metaserverConfig.isMetaserverEnabled()) {
       return (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
-          new Class<?>[] {HoodieStorage.class, String.class, ConsistencyGuardConfig.class, RecordMergeMode.class, String.class, String.class, HoodieTimeGeneratorConfig.class,
+          new Class<?>[] {HoodieStorage.class, String.class, ConsistencyGuardConfig.class, RecordMergeMode.class, String.class, String.class,
               FileSystemRetryConfig.class, Option.class, Option.class, HoodieMetaserverConfig.class},
-          storage, basePath, consistencyGuardConfig, recordMergeMode, payloadClassName, recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig,
+          storage, basePath, consistencyGuardConfig, recordMergeMode, payloadClassName, recordMergerStrategy, fileSystemRetryConfig,
           Option.ofNullable(metaserverConfig.getDatabaseName()), Option.ofNullable(metaserverConfig.getTableName()), metaserverConfig);
     } else {
       return new HoodieTableMetaClient(storage, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, recordMergeMode, payloadClassName, recordMergerStrategy,
@@ -899,7 +897,6 @@ public class HoodieTableMetaClient implements Serializable {
     private String payloadClassName = null;
     private RecordMergeMode recordMergeMode = null;
     private String recordMergerStrategy = null;
-    private HoodieTimeGeneratorConfig timeGeneratorConfig = null;
     private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
     private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
     private HoodieMetaserverConfig metaserverConfig = HoodieMetaserverConfig.newBuilder().build();
@@ -945,11 +942,6 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public Builder setTimeGeneratorConfig(HoodieTimeGeneratorConfig timeGeneratorConfig) {
-      this.timeGeneratorConfig = timeGeneratorConfig;
-      return this;
-    }
-
     public Builder setConsistencyGuardConfig(ConsistencyGuardConfig consistencyGuardConfig) {
       this.consistencyGuardConfig = consistencyGuardConfig;
       return this;
@@ -980,15 +972,12 @@ public class HoodieTableMetaClient implements Serializable {
       checkArgument(conf != null || storage != null,
           "Storage configuration or HoodieStorage needs to be set to init HoodieTableMetaClient");
       checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
-      if (timeGeneratorConfig == null) {
-        timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().withPath(basePath).build();
-      }
       if (storage == null) {
         storage = getStorage(new StoragePath(basePath), conf, consistencyGuardConfig, fileSystemRetryConfig);
       }
       return newMetaClient(storage, basePath,
           loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, recordMergeMode, payloadClassName,
-          recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig, metaserverConfig);
+          recordMergerStrategy, fileSystemRetryConfig, metaserverConfig);
     }
   }
 
