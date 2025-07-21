@@ -167,7 +167,10 @@ public class BufferedRecordMergerFactory {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
         return Option.of(newRecord);
       }
-      return Option.empty();
+      // Note that:
+      // for regular route, returning Option.empty or Option.of(existingRecord) is the same.
+      // for dedup route, returning Option.of(existingRecord) is needed.
+      return Option.of(existingRecord);
     }
 
     @Override

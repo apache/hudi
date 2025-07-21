@@ -18,20 +18,38 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
+import org.apache.avro.Schema;
+
+import java.io.IOException;
+
+import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
+
 public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
+  protected boolean shouldCheckCustomDeleteMarker = false;
+  protected boolean shouldCheckBuiltInDeleteMarker = false;
 
   protected BaseWriteHelper(SerializableFunctionUnchecked<I, Integer> partitionNumberExtractor) {
     super(partitionNumberExtractor);
@@ -85,9 +103,118 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    * @return Collection of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    HoodieRecordMerger recordMerger = HoodieRecordUtils.mergerToPreCombineMode(table.getConfig().getRecordMerger());
-    return deduplicateRecords(records, table.getIndex(), parallelism, table.getConfig().getSchema(), table.getConfig().getProps(), recordMerger);
+    HoodieReaderContext<T> readerContext = table.getContext().<T>getReaderContextFactory(table.getMetaClient()).getContext();
+    Option<String> orderingFieldNameOpt = getOrderingFieldName(readerContext, table.getConfig().getProps(), table.getMetaClient());
+    BufferedRecordMerger<T> recordMerger = BufferedRecordMergerFactory.create(
+        readerContext,
+        table.getConfig().getRecordMergeMode(),
+        false,
+        Option.ofNullable(table.getConfig().getRecordMerger()),
+        orderingFieldNameOpt,
+        Option.ofNullable(table.getConfig().getPayloadClass()),
+        new SerializableSchema(table.getConfig().getSchema()).get(),
+        table.getConfig().getProps(),
+        table.getMetaClient().getTableConfig().getPartialUpdateMode());
+    this.shouldCheckCustomDeleteMarker = readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
+    this.shouldCheckBuiltInDeleteMarker = readerContext.getSchemaHandler().hasBuiltInDelete();
+    return deduplicateRecords(
+        records,
+        table.getIndex(),
+        parallelism,
+        table.getConfig().getSchema(),
+        table.getConfig().getProps(),
+        recordMerger,
+        readerContext,
+        orderingFieldNameOpt);
   }
 
-  public abstract I deduplicateRecords(I records, HoodieIndex<?, ?> index, int parallelism, String schema, TypedProperties props, HoodieRecordMerger merger);
+  public abstract I deduplicateRecords(I records,
+                                       HoodieIndex<?, ?> index,
+                                       int parallelism,
+                                       String schema,
+                                       TypedProperties props,
+                                       BufferedRecordMerger<T> merger,
+                                       HoodieReaderContext<T> readerContext,
+                                       Option<String> orderingFieldNameOpt);
+
+  public static Option<String> getOrderingFieldName(HoodieReaderContext readerContext,
+                                                    TypedProperties props,
+                                                    HoodieTableMetaClient metaClient) {
+    return readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
+        ? Option.empty()
+        : Option.ofNullable(ConfigUtils.getOrderingField(props))
+        .or(() -> {
+          String preCombineField = metaClient.getTableConfig().getPreCombineField();
+          if (StringUtils.isNullOrEmpty(preCombineField)) {
+            return Option.empty();
+          }
+          return Option.of(preCombineField);
+        });
+  }
+
+  /**
+   * Check if the value of column "_hoodie_is_deleted" is true.
+   */
+  public static <T> boolean isBuiltInDeleteRecord(T record,
+                                                  HoodieReaderContext<T> readerContext,
+                                                  Schema schema) {
+    if (!readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent()) {
+      return false;
+    }
+    Object columnValue = readerContext.getValue(record, schema, HOODIE_IS_DELETED_FIELD);
+    return columnValue != null && readerContext.getTypeConverter().castToBoolean(columnValue);
+  }
+
+  /**
+   * Check if a record is a DELETE marked by the '_hoodie_operation' field.
+   */
+  public static <T> boolean isDeleteHoodieOperation(T record,
+                                                    HoodieReaderContext<T> readerContext) {
+    int hoodieOperationPos = readerContext.getSchemaHandler().getHoodieOperationPos();
+    if (hoodieOperationPos < 0) {
+      return false;
+    }
+    String hoodieOperation = readerContext.getMetaFieldValue(record, hoodieOperationPos);
+    return hoodieOperation != null && HoodieOperation.isDeleteRecord(hoodieOperation);
+  }
+
+  /**
+   * Check if a record is a DELETE marked by a custom delete marker.
+   */
+  public static <T> boolean isCustomDeleteRecord(T record,
+                                                 HoodieReaderContext<T> readerContext,
+                                                 Schema schema) {
+    if (!readerContext.getSchemaHandler().hasBuiltInDelete()) {
+      return false;
+    }
+    Pair<String, String> markerKeyValue =
+        readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().get();
+    Object deleteMarkerValue =
+        readerContext.getValue(record, schema, markerKeyValue.getLeft());
+    return deleteMarkerValue != null
+        && markerKeyValue.getRight().equals(deleteMarkerValue.toString());
+  }
+
+  public static <T> Option<BufferedRecord<T>> merge(HoodieRecord<T> newRecord,
+                                                    HoodieRecord<T> oldRecord,
+                                                    Schema newSchema,
+                                                    Schema oldSchema,
+                                                    HoodieReaderContext<T> readerContext,
+                                                    Option<String> orderingFieldNameOpt,
+                                                    BufferedRecordMerger<T> recordMerger) throws IOException {
+    // Construct new buffered record.
+    boolean isDelete1 = isBuiltInDeleteRecord(newRecord.getData(), readerContext, newSchema)
+        || isCustomDeleteRecord(newRecord.getData(), readerContext, newSchema)
+        || isDeleteHoodieOperation(newRecord.getData(), readerContext);
+    BufferedRecord<T> bufferedRec1 = BufferedRecord.forRecordWithContext(
+        newRecord.getData(), newSchema, readerContext, orderingFieldNameOpt, isDelete1);
+    // Construct old buffered record.
+    boolean isDelete2 = isBuiltInDeleteRecord(oldRecord.getData(), readerContext, oldSchema)
+        || isCustomDeleteRecord(oldRecord.getData(), readerContext, oldSchema)
+        || isDeleteHoodieOperation(oldRecord.getData(), readerContext);
+    BufferedRecord<T> bufferedRec2 = BufferedRecord.forRecordWithContext(
+        oldRecord.getData(), oldSchema, readerContext, orderingFieldNameOpt, isDelete2);
+    // Run merge.
+    return recordMerger.deltaMerge(bufferedRec1, bufferedRec2);
+  }
 }
