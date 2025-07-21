@@ -43,6 +43,9 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -234,8 +237,9 @@ public abstract class HoodieReaderContext<T> {
    * @param storage        {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
-  public final ClosableIterator<T> getFileRecordIterator(StoragePath filePath, long start, long length, Option<Schema> dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(Either.left(filePath), start, length, dataSchema, requiredSchema, storage);
+  public final ClosableIterator<T> getFileRecordIterator(StoragePath filePath, long start, long length, Option<Schema> dataSchema, Schema requiredSchema,
+                                                         Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(Either.left(filePath), start, length, dataSchema, requiredSchema, internalSchemaOpt, storage);
   }
 
   /**
@@ -251,31 +255,42 @@ public abstract class HoodieReaderContext<T> {
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
   public final ClosableIterator<T> getFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Option<Schema> dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(Either.right(storagePathInfo), start, length, dataSchema, requiredSchema, storage);
+      StoragePathInfo storagePathInfo, long start, long length, Option<Schema> dataSchema, Schema requiredSchema,
+      Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(Either.right(storagePathInfo), start, length, dataSchema, requiredSchema, internalSchemaOpt, storage);
   }
 
-  protected abstract ClosableIterator<T> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException;
+  protected abstract ClosableIterator<T> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
+                                                                 Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException;
 
-  protected ClosableIterator<T> doGetFileRecordIterator(StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
-    return doGetFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
+  protected ClosableIterator<T> doGetFileRecordIterator(StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+                                                        Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
+    return doGetFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, internalSchemaOpt, storage);
   }
 
   /**
    * Handle schema evolution
    */
   private ClosableIterator<T> getFileRecordIterator(Either<StoragePath, StoragePathInfo> filePathEither, long start, long length,
-                                                    Option<Schema> dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
-    if (isMetadataTable() || getSchemaHandler().getInternalSchemaOpt().isPresent()) {
-      return getFileRecordIteratorInternal(filePathEither, start, length, dataSchema.get(), requiredSchema, storage);
+                                                    Option<Schema> dataSchema, Schema requiredSchema, Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
+    if (isMetadataTable()) {
+      return getFileRecordIteratorInternal(filePathEither, start, length, dataSchema.get(), requiredSchema, internalSchemaOpt, storage);
     }
+
     Schema actualDataSchema = getActualDataSchema(dataSchema, filePathEither, storage);
+    if (internalSchemaOpt.isPresent()) {
+      Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(internalSchemaOpt.get(), schemaHandler.getInternalSchema(),
+          true, false, false).mergeSchemaGetRenamed();
+      Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName());
+      UnaryOperator<T> projection = projectRecord(actualDataSchema, mergedAvroSchema, mergedInternalSchema.getRight());
+      return new CloseableMappingIterator<>(getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, actualDataSchema, internalSchemaOpt, storage), projection);
+    }
     Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(actualDataSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
     if (AvroSchemaUtils.areSchemasPrettyMuchEqual(actualRequriredSchema, requiredSchema)) {
-      return getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, requiredSchema, storage);
+      return getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, requiredSchema, internalSchemaOpt, storage);
     }
     UnaryOperator<T> projection = projectRecord(actualRequriredSchema, requiredSchema);
-    return new CloseableMappingIterator<>(getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, actualRequriredSchema, storage), projection);
+    return new CloseableMappingIterator<>(getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, actualRequriredSchema, internalSchemaOpt, storage), projection);
   }
 
   private Schema getActualDataSchema(Option<Schema> dataSchema, Either<StoragePath, StoragePathInfo> filePathEither, HoodieStorage storage) throws IOException {
@@ -292,11 +307,11 @@ public abstract class HoodieReaderContext<T> {
    * use the correct internal method
    */
   private ClosableIterator<T> getFileRecordIteratorInternal(Either<StoragePath, StoragePathInfo> filePathEither, long start, long length,
-                                        Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+                                        Schema dataSchema, Schema requiredSchema, Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
     if (filePathEither.isLeft()) {
-      return doGetFileRecordIterator(filePathEither.asLeft(), start, length, dataSchema, requiredSchema, storage);
+      return doGetFileRecordIterator(filePathEither.asLeft(), start, length, dataSchema, requiredSchema, internalSchemaOpt, storage);
     }
-    return doGetFileRecordIterator(filePathEither.asRight(), start, length, dataSchema, requiredSchema, storage);
+    return doGetFileRecordIterator(filePathEither.asRight(), start, length, dataSchema, requiredSchema, internalSchemaOpt, storage);
   }
 
   /**

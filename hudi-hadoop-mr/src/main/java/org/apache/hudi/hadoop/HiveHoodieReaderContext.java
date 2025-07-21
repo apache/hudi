@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -133,18 +134,18 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   protected ClosableIterator<ArrayWritable> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema,
-                                                               Schema requiredSchema, HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(filePath, null, start, length, dataSchema, requiredSchema, storage);
+                                                                    Schema requiredSchema, Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(filePath, null, start, length, dataSchema, requiredSchema, internalSchemaOpt, storage);
   }
 
   @Override
   protected ClosableIterator<ArrayWritable> doGetFileRecordIterator(
-      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, storage);
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema, Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, internalSchemaOpt, storage);
   }
 
   private ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, String[] hosts, long start, long length, Schema dataSchema,
-                                                                Schema requiredSchema, HoodieStorage storage) throws IOException {
+                                                                Schema requiredSchema, Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
     JobConf jobConfCopy = new JobConf(storage.getConf().unwrapAs(Configuration.class));
     if (getNeedsBootstrapMerge()) {
       // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;

@@ -19,7 +19,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema, rebuildFiltersWithInternalSchema}
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.common.engine.HoodieReaderContext
@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
@@ -36,6 +37,8 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.parquet.HadoopReadOptions
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.parquet.format.converter.ParquetMetadataConverter
@@ -48,7 +51,7 @@ import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.hudi.SparkAdapter
-import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.sources.{AlwaysFalse, AlwaysTrue, And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
@@ -79,15 +82,17 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   private lazy val allFilters = filters ++ requiredFilters
 
   override def supportsParquetRowIndex: Boolean = {
-    HoodieSparkUtils.gteqSpark3_5
+    false
+    //HoodieSparkUtils.gteqSpark3_5
   }
 
   override protected def doGetFileRecordIterator(filePath: StoragePath,
-                                     start: Long,
-                                     length: Long,
-                                     dataSchema: Schema,
-                                     requiredSchema: Schema,
-                                     storage: HoodieStorage): ClosableIterator[InternalRow] = {
+                                                 start: Long,
+                                                 length: Long,
+                                                 dataSchema: Schema,
+                                                 requiredSchema: Schema,
+                                                 internalSchemaOpt: HOption[InternalSchema],
+                                                 storage: HoodieStorage): ClosableIterator[InternalRow] = {
     val hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
     if (hasRowIndexField) {
       assert(supportsParquetRowIndex())
@@ -102,9 +107,10 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
+      val modifiedFilters = rebuildFiltersWithInternalSchema(readFilters, internalSchemaOpt, getSchemaHandler.getInternalSchemaOpt)
       new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
-        readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
-        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
+        readSchema, StructType(Seq.empty), HOption.empty(),
+        modifiedFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
   }
 
@@ -322,6 +328,71 @@ object SparkFileFormatInternalRowReaderContext {
 
   private def isIndexTempColumn(field: StructField): Boolean = {
     field.name.equals(ROW_INDEX_TEMPORARY_COLUMN_NAME)
+  }
+
+  def rebuildFiltersWithInternalSchema(oldFilter: Seq[Filter], fileSchema: HOption[InternalSchema], querySchema: HOption[InternalSchema]): Seq[Filter] = {
+    if (fileSchema.isPresent && querySchema.isPresent) {
+      oldFilter.map(rebuildFilterFromParquetHelper(_, fileSchema.get, querySchema.get))
+    } else {
+      oldFilter
+    }
+  }
+
+  private def rebuildFilterFromParquetHelper(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
+    if (fileSchema == null || querySchema == null) {
+      oldFilter
+    } else {
+      oldFilter match {
+        case eq: EqualTo =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(eq.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else eq.copy(attribute = newAttribute)
+        case eqs: EqualNullSafe =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(eqs.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else eqs.copy(attribute = newAttribute)
+        case gt: GreaterThan =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(gt.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else gt.copy(attribute = newAttribute)
+        case gtr: GreaterThanOrEqual =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(gtr.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else gtr.copy(attribute = newAttribute)
+        case lt: LessThan =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(lt.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else lt.copy(attribute = newAttribute)
+        case lte: LessThanOrEqual =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(lte.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else lte.copy(attribute = newAttribute)
+        case i: In =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(i.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else i.copy(attribute = newAttribute)
+        case isn: IsNull =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(isn.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else isn.copy(attribute = newAttribute)
+        case isnn: IsNotNull =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(isnn.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else isnn.copy(attribute = newAttribute)
+        case And(left, right) =>
+          And(rebuildFilterFromParquetHelper(left, fileSchema, querySchema), rebuildFilterFromParquetHelper(right, fileSchema, querySchema))
+        case Or(left, right) =>
+          Or(rebuildFilterFromParquetHelper(left, fileSchema, querySchema), rebuildFilterFromParquetHelper(right, fileSchema, querySchema))
+        case Not(child) =>
+          Not(rebuildFilterFromParquetHelper(child, fileSchema, querySchema))
+        case ssw: StringStartsWith =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(ssw.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else ssw.copy(attribute = newAttribute)
+        case ses: StringEndsWith =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(ses.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else ses.copy(attribute = newAttribute)
+        case sc: StringContains =>
+          val newAttribute = InternalSchemaUtils.reBuildFilterName(sc.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else sc.copy(attribute = newAttribute)
+        case AlwaysTrue =>
+          AlwaysTrue
+        case AlwaysFalse =>
+          AlwaysFalse
+        case _ =>
+          AlwaysTrue
+      }
+    }
   }
 
 }

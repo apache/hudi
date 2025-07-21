@@ -49,15 +49,9 @@ object PartitionDirectoryConverter extends SparkAdapterSupport {
     // create a delegate file status based on the file size estimation
     val delegateFile = new FileStatus(estimationFileSize, fileInfo.isDirectory, 0, fileInfo.getBlockSize, fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))
 
-    // 2. Generate a partition directory based on the delegate file and partition values
-    if (fileSlice.hasLogFiles || fileSlice.hasBootstrapBase) {
-      // should read as file slice, so we need to create a mapping from fileId to file slice
-      sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-        new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), Map(fileSlice.getFileId -> fileSlice)), Seq(delegateFile))
-    } else {
-      sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-        InternalRow.fromSeq(partitionOpt.get.values), Seq(delegateFile))
-    }
+    // should read as file slice, so we need to create a mapping from fileId to file slice
+    sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
+      new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), Map(fileSlice.getFileId -> fileSlice)), Seq(delegateFile))
   }
 
 }

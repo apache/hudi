@@ -151,6 +151,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         inlineLogFilePath, 0, blockContentLoc.getBlockSize(),
         Option.of(writerSchema),
         readerSchema,
+        Option.empty(),
         inlineStorage);
   }
 

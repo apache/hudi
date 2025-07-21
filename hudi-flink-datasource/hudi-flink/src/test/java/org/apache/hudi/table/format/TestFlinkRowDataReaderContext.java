@@ -62,7 +62,7 @@ class TestFlinkRowDataReaderContext {
     when(tableConfig.getBaseFileFormat()).thenReturn(HoodieFileFormat.PARQUET);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"id"}));
     readerContext = new FlinkRowDataReaderContext(
-        storageConfig, null, predicates, tableConfig, Option.empty());
+        storageConfig, predicates, tableConfig, Option.empty());
   }
 
   @Test

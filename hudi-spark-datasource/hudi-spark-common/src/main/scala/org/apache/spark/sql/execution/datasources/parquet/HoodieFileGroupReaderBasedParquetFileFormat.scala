@@ -102,12 +102,13 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
    *
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    val superSupportBatch = super.supportBatch(sparkSession, schema)
-    supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch
-    supportReturningBatch = !isMOR && supportVectorizedRead
-    logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
-      s"isBootstrap: $isBootstrap, superSupportBatch: $superSupportBatch")
-    supportReturningBatch
+    false
+//    val superSupportBatch = super.supportBatch(sparkSession, schema)
+//    supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch
+//    supportReturningBatch = !isMOR && supportVectorizedRead
+//    logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
+//      s"isBootstrap: $isBootstrap, superSupportBatch: $superSupportBatch")
+//    supportReturningBatch
   }
 
   //for partition columns that we read from the file, we don't want them to be constant column vectors so we
@@ -156,7 +157,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
-    setSchemaEvolutionConfigs(augmentedStorageConf)
+    //setSchemaEvolutionConfigs(augmentedStorageConf)
     val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
 
     // The schema of the partition cols we want to append the value instead of reading from the file
@@ -193,7 +194,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
           val fileGroupName = FSUtils.getFileIdFromFilePath(sparkAdapter
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
-            case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
+            case Some(fileSlice) if !isCount && requiredSchema.nonEmpty =>
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
               val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupParquetFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
@@ -236,6 +237,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
           buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, fileGroupParquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
 
         case _ =>
+          throw new IllegalArgumentException(s"Unrecognized partition file mapping: ${file.partitionValues}")
           readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
             requiredSchema, partitionSchema, outputSchema, filters, storageConf)
       }

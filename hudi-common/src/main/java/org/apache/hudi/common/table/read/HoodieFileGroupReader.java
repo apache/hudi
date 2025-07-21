@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -96,6 +97,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
   private List<String> validBlockInstants = Collections.emptyList();
 
+  private final Option<InternalSchema> baseFileInternalSchemaOpt;
+
   /**
    * Constructs an instance of the HoodieFileGroupReader.
    * @deprecated use {@link #newBuilder()} instead.
@@ -137,6 +140,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition && !isSkipMerge && readerContext.getHasLogFiles());
     readerContext.setHasBootstrapBaseFile(inputSplit.baseFileOption.flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
+    this.baseFileInternalSchemaOpt = internalSchemaOpt.flatMap(queryInternalSchema ->  inputSplit.baseFileOption.map(baseFile ->
+        InternalSchemaCache.searchSchemaAndCache(Long.parseLong(baseFile.getCommitTime()), hoodieTableMetaClient)));
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
@@ -219,13 +224,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (baseFileStoragePathInfo != null) {
       recordIterator = readerContext.getFileRecordIterator(
           baseFileStoragePathInfo, inputSplit.start, inputSplit.length,
-          readerContext.isMetadataTable() || readerContext.getSchemaHandler().internalSchemaOpt.isPresent() ? Option.of(readerContext.getSchemaHandler().getTableSchema()) : Option.empty(),
-          readerContext.getSchemaHandler().getRequiredSchema(), storage);
+          readerContext.isMetadataTable() ? Option.of(readerContext.getSchemaHandler().getTableSchema()) : Option.empty(),
+          readerContext.getSchemaHandler().getRequiredSchema(), baseFileInternalSchemaOpt, storage);
     } else {
       recordIterator = readerContext.getFileRecordIterator(
           baseFile.getStoragePath(), inputSplit.start, inputSplit.length,
-          readerContext.isMetadataTable() || readerContext.getSchemaHandler().internalSchemaOpt.isPresent() ? Option.of(readerContext.getSchemaHandler().getTableSchema()) : Option.empty(),
-          readerContext.getSchemaHandler().getRequiredSchema(), storage);
+          readerContext.isMetadataTable() ? Option.of(readerContext.getSchemaHandler().getTableSchema()) : Option.empty(),
+          readerContext.getSchemaHandler().getRequiredSchema(), baseFileInternalSchemaOpt, storage);
     }
     return readerContext.getInstantRange().isPresent()
         ? readerContext.applyInstantRangeFilter(recordIterator)
@@ -287,18 +292,16 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     StoragePathInfo fileStoragePathInfo = file.getPathInfo();
     if (fileStoragePathInfo != null) {
       return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
-          isSkeleton || readerContext.getSchemaHandler().internalSchemaOpt.isPresent()
-              ? Option.of(readerContext.getSchemaHandler().createSchemaFromFields(allFields))
-              : Option.empty(), requiredSchema, storage), requiredSchema));
+          isSkeleton ? Option.of(readerContext.getSchemaHandler().createSchemaFromFields(allFields)) : Option.empty(),
+          requiredSchema, Option.empty(), storage), requiredSchema));
     } else {
       // If the base file length passed in is invalid, i.e., -1,
       // the file group reader fetches the length from the file system
       long fileLength = file.getFileLen() >= 0
           ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
       return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
-          isSkeleton || readerContext.getSchemaHandler().internalSchemaOpt.isPresent()
-              ? Option.of(readerContext.getSchemaHandler().createSchemaFromFields(allFields))
-              : Option.empty(), requiredSchema, storage), requiredSchema));
+          isSkeleton ? Option.of(readerContext.getSchemaHandler().createSchemaFromFields(allFields)) : Option.empty(),
+          requiredSchema, Option.empty(), storage), requiredSchema));
     }
   }
 

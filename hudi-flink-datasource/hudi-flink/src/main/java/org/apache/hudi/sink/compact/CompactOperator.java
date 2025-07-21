@@ -53,7 +53,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * Operator to execute the actual compaction task assigned by the compaction plan task.
@@ -179,26 +178,17 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
         compactionOperation,
         instantTime,
         flinkTable.getTaskContextSupplier(),
-        createReaderContext(writeClient, needReloadMetaClient),
+        createReaderContext(writeClient),
         flinkTable);
     compactionMetrics.endCompaction();
     collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID));
   }
 
-  private HoodieReaderContext<?> createReaderContext(HoodieFlinkWriteClient<?> writeClient, boolean needReloadMetaClient) {
+  private HoodieReaderContext<?> createReaderContext(HoodieFlinkWriteClient<?> writeClient) {
     HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
-    // CAUTION: InternalSchemaManager will scan timeline, reusing the meta client so that the timeline is updated.
-    // Instantiate internalSchemaManager lazily here since it may not be needed for FG reader, e.g., schema evolution
-    // for log files in FG reader do not use internalSchemaManager.
-    Supplier<InternalSchemaManager> internalSchemaManagerSupplier = () -> {
-      if (internalSchemaManager == null || needReloadMetaClient) {
-        internalSchemaManager = InternalSchemaManager.get(metaClient.getStorageConf(), metaClient);
-      }
-      return internalSchemaManager;
-    };
     // initialize storage conf lazily.
     StorageConfiguration<?> readerConf = writeClient.getEngineContext().getStorageConf();
-    return new FlinkRowDataReaderContext(readerConf, internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
+    return new FlinkRowDataReaderContext(readerConf, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
   }
 
   @VisibleForTesting

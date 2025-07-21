@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -317,7 +318,8 @@ public abstract class SchemaHandlerTestBase {
     }
 
     @Override
-    protected ClosableIterator<String> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    protected ClosableIterator<String> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
+                                                               Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
       return null;
     }
 

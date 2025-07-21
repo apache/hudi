@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -167,7 +168,8 @@ class TestBaseSparkInternalRowReaderContext {
     }
 
     @Override
-    protected ClosableIterator<InternalRow> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+    protected ClosableIterator<InternalRow> doGetFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
+                                                                    Option<InternalSchema> internalSchemaOpt, HoodieStorage storage) throws IOException {
       return null;
     }
 

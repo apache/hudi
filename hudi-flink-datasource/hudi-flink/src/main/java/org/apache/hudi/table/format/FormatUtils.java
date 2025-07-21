@@ -122,7 +122,6 @@ public class FormatUtils {
     final FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(
             metaClient.getStorageConf(),
-            () -> internalSchemaManager,
             predicates,
             metaClient.getTableConfig(),
             instantRangeOption);

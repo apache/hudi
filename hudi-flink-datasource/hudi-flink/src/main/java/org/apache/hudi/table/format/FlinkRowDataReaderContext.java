@@ -25,7 +25,6 @@ import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -43,6 +42,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.HoodieStorage;
@@ -71,7 +71,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -84,7 +83,6 @@ import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
  */
 public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final List<ExpressionPredicates.Predicate> predicates;
-  private final Supplier<InternalSchemaManager> internalSchemaManager;
   private final boolean utcTimezone;
   private final HoodieTableConfig tableConfig;
   // the converter is used to create a RowData contains primary key fields only
@@ -95,13 +93,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
-      Supplier<InternalSchemaManager> internalSchemaManager,
       List<ExpressionPredicates.Predicate> predicates,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt) {
     super(storageConfiguration, tableConfig, instantRangeOpt, Option.empty());
     this.tableConfig = tableConfig;
-    this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;
     this.utcTimezone = getStorageConfiguration().getBoolean(
         FlinkOptions.READ_UTC_TIMEZONE.key(),
@@ -115,17 +111,14 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       long length,
       Schema dataSchema,
       Schema requiredSchema,
+      Option<InternalSchema> internalSchemaOpt,
       HoodieStorage storage) throws IOException {
-    boolean isLogFile = FSUtils.isLogFile(filePath);
-    // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
-    InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
-
     HoodieRowDataParquetReader rowDataParquetReader =
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
     DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, predicates);
+    return rowDataParquetReader.getRowDataIterator(InternalSchemaManager.DISABLED, rowType, requiredSchema, predicates);
   }
 
   @Override
