@@ -54,6 +54,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -69,15 +70,26 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final String payloadClass;
+  private final Map<StoragePath, HoodieAvroFileReader> reusableFileReaders;
 
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap());
+  }
+
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
     this.payloadClass = tableConfig.getPayloadClass();
     this.typeConverter = new AvroReaderContextTypeConverter();
+    this.reusableFileReaders = reusableFileReaders;
   }
 
   @Override
@@ -88,9 +100,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema dataSchema,
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
-    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, baseFileFormat, Option.empty());
+    HoodieAvroFileReader reader;
+    if (reusableFileReaders.containsKey(filePath)) {
+      reader = reusableFileReaders.get(filePath);
+    } else {
+      reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+              filePath, baseFileFormat, Option.empty());
+    }
     if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
     }

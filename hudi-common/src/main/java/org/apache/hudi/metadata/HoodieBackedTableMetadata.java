@@ -35,12 +35,14 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieDataUtils;
@@ -61,9 +63,12 @@ import org.apache.hudi.expression.Literal;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.Transient;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -117,6 +122,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableFileSystemView metadataFileSystemView;
   // should we reuse the open file handles, across calls
   private final boolean reuse;
+  private final Transient<Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, HoodieFileGroupRecordBuffer<IndexedRecord>>>> reusableFileReaders =
+      Transient.lazy(ConcurrentHashMap::new);
 
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();
@@ -350,7 +357,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
         getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true);
-    
+
     return result.filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
 
@@ -513,12 +520,35 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     InstantRange instantRange = InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
         .explicitInstants(validInstantTimestamps).build();
-    
+
+
+    // If reuse is enabled and full scan is allowed for the partition, we can reuse the file readers for base files and the reader context for the log files.
+    Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
+    if (reuse && isFullScanAllowedForPartition(fileSlice.getPartitionPath())) {
+      Pair<HoodieAvroFileReader, HoodieFileGroupRecordBuffer<IndexedRecord>> readers = reusableFileReaders.get().computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
+        try {
+          HoodieAvroFileReader baseFileReader = null;
+          if (fileSlice.getBaseFile().isPresent()) {
+            baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+                .getFileReader(metadataConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
+          }
+          HoodieFileGroupRecordBuffer<IndexedRecord> reusableRecordBuffer = null;
+          return Pair.of(baseFileReader, reusableRecordBuffer);
+        } catch (IOException ex) {
+          throw new HoodieIOException("Error opening readers for metadata table partition " + fileSlice.getPartitionPath(), ex);
+        }
+      });
+      if (fileSlice.getBaseFile().isPresent()) {
+        baseFileReaders = Collections.singletonMap(fileSlice.getBaseFile().get().getStoragePath(), readers.getLeft());
+      }
+    }
+
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
         metadataMetaClient.getTableConfig(),
         Option.of(instantRange),
-        Option.of(predicate));
+        Option.of(predicate),
+        baseFileReaders);
     return HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
@@ -527,9 +557,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withDataSchema(schema)
         .withRequestedSchema(schema)
         .withProps(buildFileGroupReaderProperties(metadataConfig))
-        .withStart(0)
-        .withLength(Long.MAX_VALUE)
-        .withShouldUseRecordPosition(false)
         .build();
   }
 
@@ -604,12 +631,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   /**
    * Builds a predicate for querying metadata partitions based on the partition type and lookup strategy.
-   * 
+   *
    * Secondary index partitions are treated as a special case where the isFullKey parameter is ignored.
-   * This is because secondary index lookups are neither pure prefix lookups nor full key lookups, 
+   * This is because secondary index lookups are neither pure prefix lookups nor full key lookups,
    * but rather use a customized key format: {secondary_key}+${record_key}. The lookup always uses
    * prefix matching to find all record keys associated with a given secondary key value.
-   * 
+   *
    * @param partitionName The name of the metadata partition
    * @param sortedKeys The list of keys to search for
    * @param isFullKey Whether to perform exact key matching (ignored for secondary index partitions)
@@ -665,6 +692,25 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (this.metadataFileSystemView != null) {
       this.metadataFileSystemView.close();
       this.metadataFileSystemView = null;
+    }
+    closeReusableReaders();
+  }
+
+  /**
+   * Close and clear all the partitions readers.
+   */
+  private void closeReusableReaders() {
+    if (reuse) {
+      reusableFileReaders.get().values().forEach(pair -> {
+        if (pair.getLeft() != null) {
+          // Close the base file reader
+          pair.getLeft().close();
+        }
+        if (pair.getRight() != null) {
+          // Close the file group record buffer
+          pair.getRight().close();
+        }
+      });
     }
   }
 
@@ -723,6 +769,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
     validInstantTimestamps = null;
     partitionFileSliceMap.clear();
+    closeReusableReaders();
   }
 
   @Override
