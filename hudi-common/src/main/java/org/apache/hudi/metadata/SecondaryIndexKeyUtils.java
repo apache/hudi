@@ -36,9 +36,9 @@ public class SecondaryIndexKeyUtils {
    *
    * @returns pair of secondary key, record key.
    * */
-  public static Pair<String, String> getSecondaryKeyRecordKeyPair(String key) {
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return Pair.of(unescapeSpecialChars(key.substring(0, delimiterIndex)), unescapeSpecialChars(key.substring(delimiterIndex + 1)));
+  public static Pair<String, String> getSecondaryKeyRecordKeyPair(String secIdxRecKey) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return Pair.of(unescapeSpecialChars(secIdxRecKey.substring(0, delimiterIndex)), unescapeSpecialChars(secIdxRecKey.substring(delimiterIndex + 1)));
   }
 
   /**
@@ -46,59 +46,59 @@ public class SecondaryIndexKeyUtils {
    *
    * @returns pair of secondary key, record key.
    * */
-  public static Pair<String, String> getRecordKeySecondaryKeyPair(String key) {
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return Pair.of(unescapeSpecialChars(key.substring(delimiterIndex + 1)), unescapeSpecialChars(key.substring(0, delimiterIndex)));
+  public static Pair<String, String> getRecordKeySecondaryKeyPair(String secIdxRecKey) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return Pair.of(unescapeSpecialChars(secIdxRecKey.substring(delimiterIndex + 1)), unescapeSpecialChars(secIdxRecKey.substring(0, delimiterIndex)));
   }
 
   /**
    * Extracts the record key portion from an encoded secondary index key.
    *
-   * @param key the encoded key in the form "escapedSecondaryKey$escapedRecordKey"
+   * @param secIdxRecKey the encoded key in the form "escapedSecondaryKey$escapedRecordKey"
    * @return the unescaped record key, or {@code null} if the record key was {@code null}
    * @throws IllegalStateException if the key format is invalid (i.e., no unescaped separator found)
    */
-  public static String getRecordKeyFromSecondaryIndexKey(String key) {
+  public static String getRecordKeyFromSecondaryIndexKey(String secIdxRecKey) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the primary key from the payload key
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return unescapeSpecialChars(key.substring(delimiterIndex + 1));
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return unescapeSpecialChars(secIdxRecKey.substring(delimiterIndex + 1));
   }
 
   /**
    * Extracts the secondary key portion from an encoded secondary index key.
    *
-   * @param key the encoded key in the form "escapedSecondaryKey$escapedRecordKey"
+   * @param secIdxRecKey the encoded key in the form "escapedSecondaryKey$escapedRecordKey"
    * @return the unescaped secondary key, or {@code null} if the secondary key was {@code null}
    * @throws IllegalStateException if the key format is invalid (i.e., no unescaped separator found)
    */
-  public static String getSecondaryKeyFromSecondaryIndexKey(String key) {
+  public static String getSecondaryKeyFromSecondaryIndexKey(String secIdxRecKey) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the secondary key from the payload key
-    return unescapeSpecialChars(getUnescapedSecondaryKeyFromSecondaryIndexKey(key));
+    return unescapeSpecialChars(getUnescapedSecondaryKeyFromSecondaryIndexKey(secIdxRecKey));
   }
 
-  public static String getUnescapedSecondaryKeyFromSecondaryIndexKey(String key) {
+  public static String getUnescapedSecondaryKeyFromSecondaryIndexKey(String secIdxRecKey) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the secondary key from the payload key
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return key.substring(0, delimiterIndex);
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return secIdxRecKey.substring(0, delimiterIndex);
   }
 
   /**
    * Constructs an encoded secondary index key by escaping the given secondary and record keys,
    * and concatenating them with the separator {@code "$"}.
    *
-   * @param secondaryKey the secondary key (can be {@code null})
-   * @param recordKey the record key (can be {@code null})
+   * @param unescapedSecKey the secondary key (can be {@code null})
+   * @param unescapedRecordKey the record key (can be {@code null})
    * @return a string representing the encoded secondary index key
    */
-  public static String constructSecondaryIndexKey(String secondaryKey, String recordKey) {
-    return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
+  public static String constructSecondaryIndexKey(String unescapedSecKey, String unescapedRecordKey) {
+    return escapeSpecialChars(unescapedSecKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(unescapedRecordKey);
   }
 
-  public static String constructSecondaryIndexKeyPrefix(String escapedKey) {
-    return escapedKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
+  public static String constructSecondaryIndexKeyPrefix(String escapedSecKey) {
+    return escapedSecKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
   }
 
   /**
