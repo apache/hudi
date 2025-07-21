@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -68,12 +69,13 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                             HoodieTableMetaClient hoodieTableMetaClient,
                                             RecordMergeMode recordMergeMode,
+                                            PartialUpdateMode partialUpdateMode,
                                             String baseFileInstantTime,
                                             TypedProperties props,
                                             HoodieReadStats readStats,
                                             Option<String> orderingFieldName,
-                                            boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+                                            UpdateProcessor<T> updateProcessor) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -111,7 +113,15 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       // partial merging.
       enablePartialMerging = true;
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
-          readerContext, recordMergeMode, true, recordMerger, orderingFieldName, payloadClass, readerSchema, props);
+          readerContext,
+          recordMergeMode,
+          true,
+          recordMerger,
+          orderingFieldName,
+          payloadClass,
+          readerSchema,
+          props,
+          partialUpdateMode);
     }
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
@@ -233,28 +243,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
     nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
-
-    final Pair<Boolean, T> isDeleteAndRecord;
-    T resultRecord = null;
-    if (logRecordInfo != null) {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      isDeleteAndRecord = merge(bufferedRecord, logRecordInfo);
-      if (!isDeleteAndRecord.getLeft()) {
-        resultRecord = isDeleteAndRecord.getRight();
-        readStats.incrementNumUpdates();
-      } else {
-        readStats.incrementNumDeletes();
-      }
-    } else {
-      resultRecord = baseRecord;
-      readStats.incrementNumInserts();
-    }
-
-    if (resultRecord != null) {
-      nextRecord = readerContext.seal(resultRecord);
-      return true;
-    }
-    return false;
+    return super.hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {

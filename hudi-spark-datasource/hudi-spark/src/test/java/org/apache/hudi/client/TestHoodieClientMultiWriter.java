@@ -622,7 +622,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Future future1 = executors.submit(() -> {
       try {
-        final String nextCommitTime = client1.createNewInstantTime();
+        final String nextCommitTime = WriteClientTestUtils.createNewInstantTime();
         final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig, client1, nextCommitTime, 100);
 
         // Wait for the 2nd writer to start the commit
@@ -643,7 +643,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     Future future2 = executors.submit(() -> {
       try {
-        final String nextCommitTime = client2.createNewInstantTime();
+        final String nextCommitTime = WriteClientTestUtils.createNewInstantTime();
 
         // Wait for the 1st writer to make progress with the commit
         cyclicBarrier.await(60, TimeUnit.SECONDS);
@@ -786,14 +786,14 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     // Create the first commit with inserts
     HoodieWriteConfig cfg = writeConfigBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-    String firstCommitTime = client.createNewInstantTime();
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
     createCommitWithInserts(cfg, client, "000", firstCommitTime, 200);
     validInstants.add(firstCommitTime);
 
     // Create 2 commits with upserts
-    String secondCommitTime = client.createNewInstantTime();
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
     createCommitWithUpserts(cfg, client, firstCommitTime, Option.of("000"), secondCommitTime, 100);
-    String thirdCommitTime = client.createNewInstantTime();
+    String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
     createCommitWithUpserts(cfg, client, secondCommitTime, Option.of("000"), thirdCommitTime, 100);
     validInstants.add(secondCommitTime);
     validInstants.add(thirdCommitTime);
@@ -813,7 +813,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     final SparkRDDWriteClient<?> client1 = getHoodieWriteClient(cfg2);
     final SparkRDDWriteClient<?> client2 = getHoodieWriteClient(cfg);
     final SparkRDDWriteClient<?> client3 = getHoodieWriteClient(cfg);
-    final String upsertCommitTime = client1.createNewInstantTime(); // upsert commit time has to be lesser than compaction instant time.
+    final String upsertCommitTime = WriteClientTestUtils.createNewInstantTime(); // upsert commit time has to be lesser than compaction instant time.
     // and w/ MOR table, during conflict resolution, we will definitely hit conflict resolution exception.
     // if the delta commit's instant time is not guaranteed to be < compaction instant time, then delta commit will succeed w/o issues.
 
@@ -863,12 +863,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .firstInstant();
     String pendingCleanTime = pendingCleanInstantOp.isPresent()
         ? pendingCleanInstantOp.get().requestedTime()
-        : client.createNewInstantTime();
+        : WriteClientTestUtils.createNewInstantTime();
 
     CountDownLatch runCountDownLatch = new CountDownLatch(threadCount);
     // Create inserts, run cleaning, run compaction in parallel
     future1 = executors.submit(() -> {
-      final String newCommitTime = client1.createNewInstantTime();
+      final String newCommitTime = WriteClientTestUtils.createNewInstantTime();
       final int numRecords = 100;
       latchCountDownAndWait(runCountDownLatch, waitAndRunSecond);
       assertDoesNotThrow(() -> {
@@ -1220,7 +1220,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     // Simulate the first commit with Writer 1
     final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig1);
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig2);
-    createCommitWithInserts(writeConfig1, getHoodieWriteClient(writeConfig1), client1.createNewInstantTime(), client1.createNewInstantTime(), 200);
+    createCommitWithInserts(writeConfig1, getHoodieWriteClient(writeConfig1), WriteClientTestUtils.createNewInstantTime(), WriteClientTestUtils.createNewInstantTime(), 200);
 
     // multi-writer setup
     final int threadCount = 2;
@@ -1232,7 +1232,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     // Writer 1 - Simulating the index update process
     Future future1 = executors.submit(() -> {
       try {
-        final String nextCommitTime = client1.createNewInstantTime();
+        final String nextCommitTime = WriteClientTestUtils.createNewInstantTime();
         final JavaRDD<WriteStatus> writeStatusList = startCommitForUpdate(writeConfig1, client1, nextCommitTime, 100);
 
         // Wait for Writer 2 to start cleaning
@@ -1260,7 +1260,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Simulate aggressive cleaning
         metaClient.reloadActiveTimeline();
         HoodieTable table = HoodieSparkTable.create(writeConfig2, context, metaClient);
-        table.clean(context, client2.createNewInstantTime()); // clean old file slices
+        table.clean(context, WriteClientTestUtils.createNewInstantTime()); // clean old file slices
 
         // Signal Writer 1 to complete its update
         cyclicBarrier.await(60, TimeUnit.SECONDS);

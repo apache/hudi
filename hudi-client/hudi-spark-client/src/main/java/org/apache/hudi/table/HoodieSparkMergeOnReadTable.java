@@ -151,7 +151,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
       HoodieEngineContext context, String compactionInstantTime) {
     RunCompactionActionExecutor<T> compactionExecutor = new RunCompactionActionExecutor<>(
         context, config, this, compactionInstantTime, new HoodieSparkMergeOnReadTableCompactor<>(),
-        this, WriteOperationType.COMPACT);
+        WriteOperationType.COMPACT);
     return compactionExecutor.execute();
   }
 
@@ -171,7 +171,7 @@ public class HoodieSparkMergeOnReadTable<T> extends HoodieSparkCopyOnWriteTable<
   public HoodieWriteMetadata<HoodieData<WriteStatus>> logCompact(
       HoodieEngineContext context, String logCompactionInstantTime) {
     RunCompactionActionExecutor logCompactionExecutor = new RunCompactionActionExecutor(context, config, this,
-        logCompactionInstantTime, new HoodieSparkMergeOnReadTableCompactor<>(), this, WriteOperationType.LOG_COMPACT);
+        logCompactionInstantTime, new HoodieSparkMergeOnReadTableCompactor<>(), WriteOperationType.LOG_COMPACT);
     return logCompactionExecutor.execute();
   }
 

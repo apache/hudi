@@ -21,6 +21,8 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -29,11 +31,20 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class NineToEightDowngradeHandler implements DowngradeHandler {
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
+public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config,
+                                                                           HoodieEngineContext context,
+                                                                           String instantTime,
+                                                                           SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    // Rollback and run compaction in one step
+    rollbackFailedWritesAndCompact(
+        table, context, config, upgradeDowngradeHelper,
+        HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
+        HoodieTableVersion.NINE);
     UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     return Pair.of(Collections.emptyMap(), Collections.emptyList());

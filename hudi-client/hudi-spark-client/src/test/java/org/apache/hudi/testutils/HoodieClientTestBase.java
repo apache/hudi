@@ -634,17 +634,16 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   /**
    * Insert a batch of records without commit(so that the instant is in-flight).
    *
-   * @param newCommitTime The commit time
    * @param numRecords    The number of records to insert
    */
   @SuppressWarnings("rawtypes, unchecked")
-  protected void insertBatchWithoutCommit(String newCommitTime, int numRecords) {
+  protected void insertBatchWithoutCommit(int numRecords) {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withRollbackUsingMarkers(true)
         .build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
+      String newCommitTime = client.startCommit();
 
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);

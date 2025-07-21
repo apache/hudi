@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -45,11 +46,12 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
   public SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                              HoodieTableMetaClient hoodieTableMetaClient,
                                              RecordMergeMode recordMergeMode,
+                                             PartialUpdateMode partialUpdateMode,
                                              TypedProperties props,
                                              HoodieReadStats readStats,
                                              Option<String> orderingFieldName,
-                                             boolean emitDelete) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, props, readStats, orderingFieldName, emitDelete);
+                                             UpdateProcessor<T> updateProcessor) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
   }
 
   @Override
@@ -68,12 +70,11 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
       }
       // Handle the case where the next record is only present in the log records
       BufferedRecord<T> nextLogRecord = records.remove(nextLogRecordKey);
-      if (!nextLogRecord.isDelete() || emitDelete) {
+      nextRecord = updateProcessor.processUpdate(recordKey, null, nextLogRecord.getRecord(), nextLogRecord.isDelete());
+      if (nextRecord != null) {
         // If the next log record does not result in a deletion, or we are emitting deletes, we can return it
         // and queue the base record, which is already read from the iterator, for the next iteration
-        nextRecord = nextLogRecord.getRecord();
         queuedBaseFileRecord = Option.of(baseRecord);
-        readStats.incrementNumInserts();
         return true;
       }
       // Iterate until the next log record key is greater than or equal to the base record key

@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests hoodie table meta client {@link HoodieTableMetaClient}.
  */
-public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
+class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void init() throws IOException {
@@ -69,7 +69,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void checkMetadata() {
+  void checkMetadata() {
     assertEquals(HoodieTestUtils.RAW_TRIPS_TEST_NAME, metaClient.getTableConfig().getTableName(),
         "Table name should be raw_trips");
     assertEquals(basePath, metaClient.getBasePath().toString(), "Basepath should be the one assigned");
@@ -81,7 +81,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testSerDe() throws IOException {
+  void testSerDe() throws IOException {
     // check if this object is serialized and de-serialized, we are able to read from the file system
     HoodieTableMetaClient deserializedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
@@ -100,7 +100,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCommitTimeline() throws IOException {
+  void testCommitTimeline() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
@@ -126,7 +126,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testEquals() throws IOException {
+  void testEquals() throws IOException {
     HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     assertEquals(metaClient1, metaClient2);
@@ -135,7 +135,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testToString() throws IOException {
+  void testToString() throws IOException {
     HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     assertEquals(metaClient1.toString(), metaClient2.toString());
@@ -143,7 +143,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testTableVersion() throws IOException {
+  void testTableVersion() throws IOException {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t1";
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
@@ -160,7 +160,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testGenerateFromAnotherMetaClient() throws IOException {
+  void testGenerateFromAnotherMetaClient() throws IOException {
     final String basePath1 = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t2A";
     final String basePath2 = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t2B";
 
@@ -180,7 +180,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testTableBuilderRequiresTableNameAndType() {
+  void testTableBuilderRequiresTableNameAndType() {
     assertThrows(IllegalArgumentException.class, () -> {
       HoodieTableMetaClient.builder()
           .setConf(this.metaClient.getStorageConf())
@@ -199,7 +199,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCreateMetaClientFromProperties() throws IOException {
+  void testCreateMetaClientFromProperties() throws IOException {
     final String basePath = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t5";
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
@@ -224,7 +224,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testCreateLayoutInStorage() throws IOException {
+  void testCreateLayoutInStorage() throws IOException {
     final String basePath = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t6";
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
@@ -241,7 +241,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testGetIndexDefinitionPath() throws IOException {
+  void testGetIndexDefinitionPath() throws IOException {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t7";
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
@@ -255,7 +255,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testDeleteDefinition() throws IOException {
+  void testDeleteDefinition() throws IOException {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t7";
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
