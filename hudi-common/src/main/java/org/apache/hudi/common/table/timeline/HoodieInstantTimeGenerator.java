@@ -86,7 +86,7 @@ public class HoodieInstantTimeGenerator {
     try {
       String timestampInMillis = fixInstantTimeCompatibility(timestamp);
       LocalDateTime dt = LocalDateTime.parse(timestampInMillis, MILLIS_INSTANT_TIME_FORMATTER);
-      return Date.from(dt.atZone(ZoneId.systemDefault()).toInstant());
+      return Date.from(dt.atZone(commitTimeZone.getZoneId()).toInstant());
     } catch (DateTimeParseException e) {
       throw new ParseException(e.getMessage(), e.getErrorIndex());
     }
