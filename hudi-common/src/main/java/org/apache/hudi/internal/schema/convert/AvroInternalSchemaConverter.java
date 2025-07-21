@@ -345,7 +345,7 @@ public class AvroInternalSchemaConverter {
       } else if (logical instanceof LogicalTypes.Date) {
         return Types.DateType.get();
 
-      } else if  (logical instanceof LogicalTypes.TimeMillis) {
+      } else if (logical instanceof LogicalTypes.TimeMillis) {
         return Types.TimeMillisType.get();
       } else if (logical instanceof LogicalTypes.TimeMicros) {
         return Types.TimeType.get();
