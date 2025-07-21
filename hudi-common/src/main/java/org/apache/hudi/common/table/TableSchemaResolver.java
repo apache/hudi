@@ -58,10 +58,12 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
@@ -248,28 +250,27 @@ public class TableSchemaResolver {
    */
   private Option<Schema> getTableParquetSchemaFromDataFile() {
     Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = getLatestCommitMetadataWithValidData();
-    try {
-      switch (metaClient.getTableType()) {
-        case COPY_ON_WRITE:
-        case MERGE_ON_READ:
-          // For COW table, data could be written in either Parquet or Orc format currently;
-          // For MOR table, data could be written in either Parquet, Orc, Hfile or Delta-log format currently;
-          //
-          // Determine the file format based on the file name, and then extract schema from it.
-          if (instantAndCommitMetadata.isPresent()) {
-            HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
-            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().iterator();
-            return Option.of(fetchSchemaFromFiles(filePaths));
-          } else {
-            LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
-            return Option.empty();
-          }
-        default:
-          LOG.error("Unknown table type {}", metaClient.getTableType());
-          throw new InvalidTableException(metaClient.getBasePath().toString());
-      }
-    } catch (IOException e) {
-      throw new HoodieException("Failed to read data schema", e);
+    switch (metaClient.getTableType()) {
+      case COPY_ON_WRITE:
+      case MERGE_ON_READ:
+        // For COW table, data could be written in either Parquet or Orc format currently;
+        // For MOR table, data could be written in either Parquet, Orc, Hfile or Delta-log format currently;
+        //
+        // Determine the file format based on the file name, and then extract schema from it.
+        if (instantAndCommitMetadata.isPresent()) {
+          HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
+          // inspect non-empty files for schema
+          Stream<StoragePath> filePaths = commitMetadata.getPartitionToWriteStats().values().stream().flatMap(Collection::stream)
+              .filter(writeStat -> writeStat.getNumInserts() > 0 || writeStat.getNumUpdateWrites() > 0)
+              .map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath()));
+          return Option.of(fetchSchemaFromFiles(filePaths));
+        } else {
+          LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
+          return Option.empty();
+        }
+      default:
+        LOG.error("Unknown table type {}", metaClient.getTableType());
+        throw new InvalidTableException(metaClient.getBasePath().toString());
     }
   }
 
@@ -459,19 +460,20 @@ public class TableSchemaResolver {
         });
   }
 
-  private Schema fetchSchemaFromFiles(Iterator<String> filePaths) throws IOException {
-    Schema schema = null;
-    while (filePaths.hasNext() && schema == null) {
-      StoragePath filePath = new StoragePath(filePaths.next());
-      if (FSUtils.isLogFile(filePath)) {
-        // this is a log file
-        schema = readSchemaFromLogFile(filePath);
-      } else {
-        schema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
-            .getFileFormatUtils(filePath).readAvroSchema(metaClient.getStorage(), filePath);
+  private Schema fetchSchemaFromFiles(Stream<StoragePath> filePaths) {
+    return filePaths.map(filePath -> {
+      try {
+        if (FSUtils.isLogFile(filePath)) {
+          // this is a log file
+          return readSchemaFromLogFile(filePath);
+        } else {
+          return HoodieIOFactory.getIOFactory(metaClient.getStorage())
+              .getFileFormatUtils(filePath).readAvroSchema(metaClient.getStorage(), filePath);
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read schema from file: " + filePath, e);
       }
-    }
-    return schema;
+    }).filter(Objects::nonNull).findFirst().orElse(null);
   }
 
   public static Schema appendPartitionColumns(Schema dataSchema, Option<String[]> partitionFields) {

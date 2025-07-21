@@ -25,10 +25,12 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
@@ -632,6 +634,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     hoodieWriteStat.setFileId("file_id1");
     hoodieWriteStat.setPath("path1");
     hoodieWriteStat.setPrevCommit("1");
+    hoodieWriteStat.setNumInserts(1);
     commitMetadata.addWriteStat("partition1", hoodieWriteStat);
     timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
     timeline.createNewInstant(commitInstant);
@@ -657,6 +660,43 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals(commitMetadata, mergedTimeline.readCommitMetadata(completedCommitInstant));
     assertEquals(cleanerPlan, getCleanerPlan(metaClient, cleanInstant));
     assertEquals(commitMetadata, mergedTimeline.readCommitMetadata(completedCommitInstant));
+  }
+
+  @Test
+  void testGetLastCommitMetadataWithValidDataChecksForEmptyCommits() {
+    HoodieInstant commit1Instant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    HoodieInstant commit2Instant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "2", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+
+    HoodieCommitMetadata commitMetadata1 = new HoodieCommitMetadata();
+    HoodieWriteStat hoodieWriteStat = new HoodieWriteStat();
+    hoodieWriteStat.setFileId("file_id1");
+    hoodieWriteStat.setPath("path1");
+    hoodieWriteStat.setPrevCommit("1");
+    hoodieWriteStat.setNumUpdateWrites(1);
+    commitMetadata1.addWriteStat("partition1", hoodieWriteStat);
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
+    timeline.createNewInstant(commit1Instant);
+    timeline.transitionRequestedToInflight(commit1Instant, Option.empty());
+    // Validate in-flight commits are ignored
+    assertFalse(timeline.getLastCommitMetadataWithValidData().isPresent());
+    HoodieInstant completeCommitInstant = new HoodieInstant(State.INFLIGHT, commit1Instant.getAction(), commit1Instant.requestedTime(), InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata1));
+    HoodieInstant completedCommitInstant = timeline.reload().lastInstant().get();
+
+    HoodieCommitMetadata commitMetadata2 = new HoodieCommitMetadata();
+    HoodieWriteStat hoodieWriteStat2 = new HoodieWriteStat();
+    hoodieWriteStat2.setFileId("file_id1");
+    hoodieWriteStat2.setPath("path1");
+    hoodieWriteStat2.setPrevCommit("1");
+    hoodieWriteStat2.setNumDeletes(1);
+    commitMetadata2.addWriteStat("partition1", hoodieWriteStat2);
+    timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient);
+    timeline.createNewInstant(commit2Instant);
+    timeline.transitionRequestedToInflight(commit2Instant, Option.empty());
+    HoodieInstant completeCommitInstant2 = new HoodieInstant(State.INFLIGHT, commit2Instant.getAction(), commit2Instant.requestedTime(), InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    timeline.saveAsComplete(completeCommitInstant2, Option.of(commitMetadata2));
+
+    assertEquals(Option.of(Pair.of(completedCommitInstant, commitMetadata1)), timeline.reload().getLastCommitMetadataWithValidData());
   }
 
   @Test
