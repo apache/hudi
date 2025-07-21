@@ -301,7 +301,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> result =
-        getEngineContext().processKeyGroups(persistedInitialPairData, processFunction, keySpace, true)
+        getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true)
             .mapToPair(p -> Pair.of(p.getLeft(), p.getRight()));
 
     return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
@@ -345,7 +345,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         };
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
-        getEngineContext().processKeyGroups(persistedInitialPairData, processFunction, keySpace, true);
+        getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true);
     
     return result.filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }

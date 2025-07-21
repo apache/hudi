@@ -132,27 +132,42 @@ public abstract class HoodieEngineContext {
   public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
 
   /**
-   * Groups values by key and applies a function to each group of values.
+   * Groups values by key and applies a processing function to each group.
    *
-   * [1 iterator maps to 1 key] It only guarantees that items returned by the same iterator shares to the same key.
-   * [exact once across iterators] The item returned by the same iterator will not be returned by other iterators.
-   * [1 key maps to >= 1 iterators] Items belong to the same shard can be load-balanced across multiple iterators. It's up to API implementations to decide
-   *                                load balancing pattern and how many iterators to split into.
-   * [iterator return sorted values] Values returned via iterator is sorted.
+   * <p>This method takes key-value pairs, groups all values that share the same key,
+   * and applies a processing function to each group. The processing function receives
+   * the grouped values as an Iterator and can transform them into new results.
    *
-   * @param data The input pair<ShardIndex, Item> to process.
-   * @param processFunc Function to apply to each group of items with the same shard
-   * @param keySpace Set of all possible keys that may appear in the data. This is used for efficient partitioning and load balancing.
-   * @param preservesPartitioning whether to preserve partitioning in the resulting collection.
+   * <p><b>Preconditions:</b>
+   * <ul>
+   *   <li>data must contain key-value pairs</li>
+   *   <li>processFunc must not be null</li>
+   *   <li>keySpace must contain all possible keys that may appear in the data</li>
+   *   <li>Both key type (K) and value type (V) must implement Comparable</li>
+   * </ul>
+   *
+   * <p><b>Postconditions:</b>
+   * <ul>
+   *   <li>All values with the same key are grouped together for processing</li>
+   *   <li>Each value from the input data is processed exactly once</li>
+   *   <li>Values passed to processFunc are sorted within each group</li>
+   *   <li>For performance, a single key's values may be split across multiple calls to processFunc</li>
+   *   <li>The function returns a collection containing all results from processFunc</li>
+   * </ul>
+   *
+   * @param data The input key-value pairs to process
+   * @param processFunc Function that processes a group of values (as Iterator) and produces results
+   * @param keySpace Complete set of all possible keys in the data. Used for efficient data distribution
+   * @param preservesPartitioning whether to maintain the same data partitioning in the output
    * @param <K> Type of the key (must be Comparable)
    * @param <V> Type of the value (must be Comparable)
-   * @param <R> Type of the result
-   * @return Result of applying the function to each group
+   * @param <R> Type of the result produced by processFunc
+   * @return Collection of all results produced by processFunc
    */
-  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> processKeyGroups(HoodiePairData<K, V> data,
-                                                                                              SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
-                                                                                              List<K> keySpace,
-                                                                                              boolean preservesPartitioning) {
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
+                                                                                            SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                            List<K> keySpace,
+                                                                                            boolean preservesPartitioning) {
     // Group values by key and apply the function to each group
     return data.groupByKey()
             .values()

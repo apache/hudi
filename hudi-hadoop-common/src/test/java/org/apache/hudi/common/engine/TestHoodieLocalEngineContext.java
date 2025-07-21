@@ -78,7 +78,7 @@ public class TestHoodieLocalEngineContext {
     };
     
     List<String> shardIndices = Arrays.asList("key1", "key2", "key3");
-    HoodieData<String> result = context.processKeyGroups(pairData, func, shardIndices, false);
+    HoodieData<String> result = context.mapGroupsByKey(pairData, func, shardIndices, false);
     
     List<String> resultList = result.collectAsList();
     
@@ -126,7 +126,7 @@ public class TestHoodieLocalEngineContext {
     };
     
     List<String> shardIndices = Arrays.asList("key1", "key2");
-    HoodieData<String> result = context.processKeyGroups(pairData, func, shardIndices, false);
+    HoodieData<String> result = context.mapGroupsByKey(pairData, func, shardIndices, false);
     
     List<String> resultList = result.collectAsList();
     
@@ -161,7 +161,7 @@ public class TestHoodieLocalEngineContext {
     };
     
     List<String> shardIndices = Arrays.asList("key1", "key2");
-    HoodieData<Integer> result = context.processKeyGroups(pairData, func, shardIndices, false);
+    HoodieData<Integer> result = context.mapGroupsByKey(pairData, func, shardIndices, false);
     
     List<Integer> resultList = result.collectAsList();
     

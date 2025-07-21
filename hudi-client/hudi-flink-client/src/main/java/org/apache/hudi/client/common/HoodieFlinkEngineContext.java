@@ -210,10 +210,10 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> processKeyGroups(HoodiePairData<K, V> data,
-                                                                                              SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
-                                                                                              List<K> keySpace,
-                                                                                              boolean preservesPartitioning) {
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
+                                                                                            SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                            List<K> keySpace,
+                                                                                            boolean preservesPartitioning) {
     throw new UnsupportedOperationException("processKeyGroups() is not supported in FlinkEngineContext");
   }
 

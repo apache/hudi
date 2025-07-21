@@ -273,10 +273,10 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> processKeyGroups(HoodiePairData<K, V> data,
-                                                                                              SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
-                                                                                              List<K> keySpace,
-                                                                                              boolean preservesPartitioning) {
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
+                                                                                            SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                            List<K> keySpace,
+                                                                                            boolean preservesPartitioning) {
     HoodiePairData<K, V> repartitionedData = rangeBasedRepartitionForEachKey(
         data, keySpace, 0.1, 100000, System.nanoTime());
     return repartitionedData.values().mapPartitions(processFunc, preservesPartitioning);
