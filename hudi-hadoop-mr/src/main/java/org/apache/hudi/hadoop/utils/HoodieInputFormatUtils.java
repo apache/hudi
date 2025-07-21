@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -538,7 +537,6 @@ public class HoodieInputFormatUtils {
    */
   public static boolean shouldUseFilegroupReader(final JobConf jobConf, final InputSplit split) {
     return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
-        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
         && !(split instanceof BootstrapBaseFileSplit);
   }
 }
