@@ -85,7 +85,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     // mock no pending compaction
     when(mockMetaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant()).thenReturn(Option.empty());
     // mock table version
-    when(mockMetaClient.getTableConfig().getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
+    when(mockMetaClient.getTableConfig().getTableVersion()).thenReturn(HoodieTableVersion.current());
 
     writeClient.startCommit(HoodieActiveTimeline.COMMIT_ACTION, mockMetaClient);
     verify(tableServiceClient).rollbackFailedWrites(mockMetaClient);

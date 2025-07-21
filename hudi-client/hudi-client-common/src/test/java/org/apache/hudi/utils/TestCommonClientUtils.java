@@ -40,10 +40,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestCommonClientUtils {
+class TestCommonClientUtils {
 
   @Test
-  public void testDisallowPartialUpdatesPreVersion8() {
+  void testDisallowPartialUpdatesPreVersion8() {
     // given:
     HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
     HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
@@ -56,7 +56,7 @@ public class TestCommonClientUtils {
   }
 
   @Test
-  public void testDisallowNBCCPreVersion8() {
+  void testDisallowNBCCPreVersion8() {
     // given:
     HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
     HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
@@ -69,7 +69,7 @@ public class TestCommonClientUtils {
   }
 
   @Test
-  public void testGenerateTokenOnError() {
+  void testGenerateTokenOnError() {
     // given: a task context supplies that throws errors.
     TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
     when(taskContextSupplier.getPartitionIdSupplier()).thenThrow(new RuntimeException("generated under testing"));
@@ -80,7 +80,7 @@ public class TestCommonClientUtils {
 
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")
   @MethodSource("provideValidTableVersionWriteVersionPairs")
-  public void testValidTableVersionWriteVersionPairs(
+  void testValidTableVersionWriteVersionPairs(
       HoodieTableVersion tableVersion, HoodieTableVersion writeVersion, boolean expectedResult) throws Exception {
     boolean result = isValidTableVersionWriteVersionPair(tableVersion, writeVersion);
     assertEquals(expectedResult, result);
@@ -95,14 +95,18 @@ public class TestCommonClientUtils {
             generateSameVersionCases()
         ),
         Stream.of(
-            // Rule 3: special case - upgrade scenario (table > 6, table < 9, writer = 6)
+            // Rule 3: downgrade scenarios
             Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true),
             Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, true),
-
-            // Rule 4: otherwise disallowed - table > writer (except special case above)
-            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, false),
-            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, false),
-            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SEVEN, false)
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, true),
+            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SEVEN, true),
+            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true),
+            // Rule 4: disallowed scenarios
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE, false)
         )
     );
   }

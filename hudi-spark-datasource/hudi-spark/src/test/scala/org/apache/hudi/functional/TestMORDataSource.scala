@@ -98,22 +98,40 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @ParameterizedTest
   @CsvSource(Array(
     // Inferred as COMMIT_TIME_ORDERING
+    "AVRO, AVRO, avro, false,,,CURRENT", "AVRO, SPARK, parquet, false,,,CURRENT",
+    "SPARK, AVRO, parquet, false,,,CURRENT", "SPARK, SPARK, parquet, false,,,CURRENT",
     "AVRO, AVRO, avro, false,,,EIGHT", "AVRO, SPARK, parquet, false,,,EIGHT",
     "SPARK, AVRO, parquet, false,,,EIGHT", "SPARK, SPARK, parquet, false,,,EIGHT",
     // EVENT_TIME_ORDERING without precombine field
+    "AVRO, AVRO, avro, false,,EVENT_TIME_ORDERING,CURRENT", "AVRO, SPARK, parquet, false,,EVENT_TIME_ORDERING,CURRENT",
+    "SPARK, AVRO, parquet, false,,EVENT_TIME_ORDERING,CURRENT", "SPARK, SPARK, parquet, false,,EVENT_TIME_ORDERING,CURRENT",
     "AVRO, AVRO, avro, false,,EVENT_TIME_ORDERING,EIGHT", "AVRO, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
     "SPARK, AVRO, parquet, false,,EVENT_TIME_ORDERING,EIGHT", "SPARK, SPARK, parquet, false,,EVENT_TIME_ORDERING,EIGHT",
     // EVENT_TIME_ORDERING with empty precombine field
+    "AVRO, AVRO, avro, true,,EVENT_TIME_ORDERING,CURRENT", "AVRO, SPARK, parquet, true,,EVENT_TIME_ORDERING,CURRENT",
+    "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING,CURRENT", "SPARK, SPARK, parquet, true,,EVENT_TIME_ORDERING,CURRENT",
     "AVRO, AVRO, avro, true,,EVENT_TIME_ORDERING,EIGHT", "AVRO, SPARK, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
     "SPARK, AVRO, parquet, true,,EVENT_TIME_ORDERING,EIGHT", "SPARK, SPARK, parquet, true,,EVENT_TIME_ORDERING,EIGHT",
     // Inferred as EVENT_TIME_ORDERING
+    "AVRO, AVRO, avro, true, timestamp,,CURRENT", "AVRO, SPARK, parquet, true, timestamp,,CURRENT",
+    "SPARK, AVRO, parquet, true, timestamp,,CURRENT", "SPARK, SPARK, parquet, true, timestamp,,CURRENT",
     "AVRO, AVRO, avro, true, timestamp,,EIGHT", "AVRO, SPARK, parquet, true, timestamp,,EIGHT",
     "SPARK, AVRO, parquet, true, timestamp,,EIGHT", "SPARK, SPARK, parquet, true, timestamp,,EIGHT",
     // test table version 6
     "AVRO, AVRO, avro, true,timestamp,EVENT_TIME_ORDERING,SIX",
     "AVRO, AVRO, avro, true,timestamp,COMMIT_TIME_ORDERING,SIX"))
-  def testCount(readType: HoodieRecordType, writeType: HoodieRecordType, logType: String,
-                hasPreCombineField: Boolean, precombineField: String, recordMergeMode: String, tableVersion: String): Unit = {
+  def testCount(readType: HoodieRecordType,
+                writeType: HoodieRecordType,
+                logType: String,
+                hasPreCombineField: Boolean,
+                precombineField: String,
+                recordMergeMode: String,
+                tableVersionName: String): Unit = {
+    val tableVersion = if (tableVersionName.equals("CURRENT")) {
+      HoodieTableVersion.current()
+    } else {
+      HoodieTableVersion.valueOf(tableVersionName)
+    }
     var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
@@ -131,7 +149,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     if (isNullOrEmpty(recordMergeMode)) {
       assertFalse(writeOpts.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key))
     }
-    val firstWriteOpts = if (tableVersion.equals("SIX")) {
+    val firstWriteOpts = if (tableVersion == HoodieTableVersion.SIX) {
       writeOpts = writeOpts ++ Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> HoodieTableVersion.SIX.versionCode().toString)
       writeOpts = writeOpts - HoodieWriteConfig.RECORD_MERGE_MODE.key
       if (recordMergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name)) {
@@ -140,7 +158,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         writeOpts = writeOpts ++ Map(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName)
       }
       writeOpts
-    } else {
+    } else if (tableVersion == HoodieTableVersion.EIGHT) {
+      writeOpts = writeOpts ++ Map(
+        HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> HoodieTableVersion.EIGHT.versionCode().toString)
+      writeOpts
+    } else { // For Current version.
       writeOpts
     }
 
@@ -168,7 +190,10 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       recordMergeMode
     }
     val expectedConfigs = (
-      if (tableVersion.equals("EIGHT")) {
+      if (tableVersion.versionCode() == HoodieTableVersion.current().versionCode()) {
+        Map(HoodieTableConfig.RECORD_MERGE_MODE.key -> expectedMergeMode,
+          HoodieTableConfig.VERSION.key -> HoodieTableVersion.current().versionCode().toString)
+      } else if (tableVersion == HoodieTableVersion.EIGHT) {
         Map(HoodieTableConfig.RECORD_MERGE_MODE.key -> expectedMergeMode,
           HoodieTableConfig.VERSION.key -> HoodieTableVersion.EIGHT.versionCode().toString)
       } else {
@@ -185,7 +210,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       Seq(HoodieTableConfig.PRECOMBINE_FIELD.key)
     }).asJava
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit1CompletionTime = if (tableVersion.equals("EIGHT")) {
+    val commit1CompletionTime = if (
+      tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
@@ -207,7 +233,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit2CompletionTime = if (tableVersion.equals("EIGHT")) {
+    val commit2CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
@@ -226,7 +252,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // incremental view
     // validate incremental queries only for table version 8
     // 1.0 reader (table version 8) supports incremental query reads using completion time
-    if (tableVersion.equals("EIGHT")) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       // base file only
       val hudiIncDF1 = spark.read.format("org.apache.hudi")
         .options(readOpts)
@@ -300,7 +326,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit3CompletionTime = if (tableVersion.equals("EIGHT")) {
+    val commit3CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
@@ -321,7 +347,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // incremental query from commit2Time
     // validate incremental queries only for table version 8
     // 1.0 reader (table version 8) supports incremental query reads using completion time
-    if (tableVersion.equals("EIGHT")) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       val hudiIncDF4 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
@@ -365,7 +391,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Incremental query, 50 from log file, 100 from base file of the new partition.
     // validate incremental queries only for table version 8
     // 1.0 reader (table version 8) supports incremental query reads using completion time
-    if (tableVersion.equals("EIGHT")) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       val hudiIncDF5 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
@@ -401,7 +427,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit6CompletionTime = if (tableVersion.equals("EIGHT")) {
+    val commit6CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
@@ -413,7 +439,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(102, hudiSnapshotDF6.count())
     // validate incremental queries only for table version 8
     // 1.0 reader (table version 8) supports incremental query reads using completion time
-    if (tableVersion.equals("EIGHT")) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       val hudiIncDF6 = spark.read.format("org.apache.hudi")
         .options(readOpts)
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
