@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -56,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -107,200 +109,279 @@ class TestEightToNineUpgradeHandler {
     // Mock create method to capture written content
     ByteArrayOutputStream capturedContent = new ByteArrayOutputStream();
     when(storage.create(any(StoragePath.class), anyBoolean())).thenReturn(capturedContent);
+    
+    // Mock autoUpgrade to return true
+    when(config.autoUpgrade()).thenReturn(true);
   }
 
   @Test
   void testUpgradeWithNoIndexMetadata() {
-    // Setup: No index metadata present
-    when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
-    
-    // Execute
-    Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
+      // Mock the static method to do nothing - avoid NPE
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null); // Do nothing
+      
+      // Setup: No index metadata present
+      when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+      
+      // Execute
+      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
-    // Verify
-    assertEquals(Collections.emptyMap(), result);
+      // Verify
+      assertEquals(Collections.emptyMap(), result);
+    }
   }
 
   @Test
   void testUpgradeWithMissingIndexVersion() throws IOException {
-    // Setup: Index metadata present with missing versions
-    HoodieIndexMetadata indexMetadata = createIndexMetadataWithMissingVersions();
-    // TODO: assert index def of indexMetadata does not have version field
-    assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
-    assertNull(indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-    
-    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<HoodieTableMetaClient> mockedMetaClient = mockStatic(HoodieTableMetaClient.class)) {
+      // Mock the static method to do nothing - avoid NPE
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class), 
+          any(HoodieEngineContext.class), 
+          any(HoodieWriteConfig.class), 
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null); // Do nothing
+      
+      // Mock the writeIndexMetadataToStorage to call the real method
+      mockedMetaClient.when(() -> HoodieTableMetaClient.writeIndexMetadataToStorage(
+          any(),
+          any(String.class),
+          any(HoodieIndexMetadata.class),
+          any(HoodieTableVersion.class)
+      )).thenCallRealMethod();
+      
+      // Setup: Index metadata present with missing versions
+      HoodieIndexMetadata indexMetadata = createIndexMetadataWithMissingVersions();
+      assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+      assertNull(indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+      
+      when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
 
-    // Capture the output stream to verify written content
-    ByteArrayOutputStream capturedContent = new ByteArrayOutputStream();
-    when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
+      // Capture the output stream to verify written content
+      ByteArrayOutputStream capturedContent = new ByteArrayOutputStream();
+      when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
 
-    // Execute
-    Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+      // Execute
+      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
-    // Verify
-    assertEquals(Collections.emptyMap(), result);
-    
-    // Verify storage methods were called correctly
-    verify(storage).exists(indexDefPath);
-    verify(storage).createNewFile(indexDefPath);
-    verify(storage).create(indexDefPath, true);
-    
-    // Verify the written content by parsing the JSON and validating the object
-    String writtenJson = capturedContent.toString();
-    
-    // Expected JSON for table version 8 with V1 versions
-    String expectedJson = "{\n"
-        + "  \"indexDefinitions\": {\n"
-        + "    \"column_stats\": {\n"
-        + "      \"indexName\": \"column_stats\",\n"
-        + "      \"indexType\": \"column_stats\",\n"
-        + "      \"indexFunction\": \"column_stats\",\n"
-        + "      \"sourceFields\": [\"field1\", \"field2\"],\n"
-        + "      \"indexOptions\": {},\n"
-        + "      \"version\": \"V1\"\n"
-        + "    },\n"
-        + "    \"secondary_index_idx_price\": {\n"
-        + "      \"indexName\": \"secondary_index_idx_price\",\n"
-        + "      \"indexType\": \"secondary_index\",\n"
-        + "      \"indexFunction\": \"identity\",\n"
-        + "      \"sourceFields\": [\"price\"],\n"
-        + "      \"indexOptions\": {},\n"
-        + "      \"version\": \"V1\"\n"
-        + "    }\n"
-        + "  }\n"
-        + "}";
-    
-    // Parse the written JSON and validate against expected
-    HoodieIndexMetadata writtenMetadata = HoodieIndexMetadata.fromJson(writtenJson);
-    HoodieIndexMetadata expectedMetadata = HoodieIndexMetadata.fromJson(expectedJson);
-    
-    // Validate the parsed objects match
-    assertEquals(expectedMetadata.getIndexDefinitions().size(), writtenMetadata.getIndexDefinitions().size());
-    
-    // Validate column_stats index
-    HoodieIndexDefinition writtenColumnStats = writtenMetadata.getIndexDefinitions().get("column_stats");
-    HoodieIndexDefinition expectedColumnStats = expectedMetadata.getIndexDefinitions().get("column_stats");
-    assertEquals(expectedColumnStats.getIndexName(), writtenColumnStats.getIndexName());
-    assertEquals(expectedColumnStats.getIndexType(), writtenColumnStats.getIndexType());
-    assertEquals(expectedColumnStats.getIndexFunction(), writtenColumnStats.getIndexFunction());
-    assertEquals(expectedColumnStats.getSourceFields(), writtenColumnStats.getSourceFields());
-    assertEquals(expectedColumnStats.getIndexOptions(), writtenColumnStats.getIndexOptions());
-    assertEquals(expectedColumnStats.getVersion(), writtenColumnStats.getVersion());
-    
-    // Validate secondary_index_idx_price index
-    HoodieIndexDefinition writtenSecondaryIndex = writtenMetadata.getIndexDefinitions().get("secondary_index_idx_price");
-    HoodieIndexDefinition expectedSecondaryIndex = expectedMetadata.getIndexDefinitions().get("secondary_index_idx_price");
-    assertEquals(expectedSecondaryIndex.getIndexName(), writtenSecondaryIndex.getIndexName());
-    assertEquals(expectedSecondaryIndex.getIndexType(), writtenSecondaryIndex.getIndexType());
-    assertEquals(expectedSecondaryIndex.getIndexFunction(), writtenSecondaryIndex.getIndexFunction());
-    assertEquals(expectedSecondaryIndex.getSourceFields(), writtenSecondaryIndex.getSourceFields());
-    assertEquals(expectedSecondaryIndex.getIndexOptions(), writtenSecondaryIndex.getIndexOptions());
-    assertEquals(expectedSecondaryIndex.getVersion(), writtenSecondaryIndex.getVersion());
+      // Verify
+      assertEquals(Collections.emptyMap(), result);
+      
+      // Verify storage methods were called correctly
+      // Note: createFileInPath directly calls create() when contentWriter is present
+      verify(storage).create(indexDefPath, true);
+      
+      // Verify the written content by parsing the JSON and validating the object
+      String writtenJson = capturedContent.toString();
+      
+      // Expected JSON for table version 8 with V1 versions
+      String expectedJson = "{\n"
+          + "  \"indexDefinitions\": {\n"
+          + "    \"column_stats\": {\n"
+          + "      \"indexName\": \"column_stats\",\n"
+          + "      \"indexType\": \"column_stats\",\n"
+          + "      \"indexFunction\": \"column_stats\",\n"
+          + "      \"sourceFields\": [\"field1\", \"field2\"],\n"
+          + "      \"indexOptions\": {},\n"
+          + "      \"version\": \"V1\"\n"
+          + "    },\n"
+          + "    \"secondary_index_idx_price\": {\n"
+          + "      \"indexName\": \"secondary_index_idx_price\",\n"
+          + "      \"indexType\": \"secondary_index\",\n"
+          + "      \"indexFunction\": \"identity\",\n"
+          + "      \"sourceFields\": [\"price\"],\n"
+          + "      \"indexOptions\": {},\n"
+          + "      \"version\": \"V1\"\n"
+          + "    }\n"
+          + "  }\n"
+          + "}";
+      
+      // Parse the written JSON and validate against expected
+      HoodieIndexMetadata writtenMetadata = HoodieIndexMetadata.fromJson(writtenJson);
+      HoodieIndexMetadata expectedMetadata = HoodieIndexMetadata.fromJson(expectedJson);
+      
+      // Validate the parsed objects match
+      assertEquals(expectedMetadata.getIndexDefinitions().size(), writtenMetadata.getIndexDefinitions().size());
+      
+      // Validate column_stats index
+      HoodieIndexDefinition writtenColumnStats = writtenMetadata.getIndexDefinitions().get("column_stats");
+      HoodieIndexDefinition expectedColumnStats = expectedMetadata.getIndexDefinitions().get("column_stats");
+      assertEquals(expectedColumnStats.getIndexName(), writtenColumnStats.getIndexName());
+      assertEquals(expectedColumnStats.getIndexType(), writtenColumnStats.getIndexType());
+      assertEquals(expectedColumnStats.getIndexFunction(), writtenColumnStats.getIndexFunction());
+      assertEquals(expectedColumnStats.getSourceFields(), writtenColumnStats.getSourceFields());
+      assertEquals(expectedColumnStats.getIndexOptions(), writtenColumnStats.getIndexOptions());
+      assertEquals(expectedColumnStats.getVersion(), writtenColumnStats.getVersion());
+      
+      // Validate secondary_index_idx_price index
+      HoodieIndexDefinition writtenSecondaryIndex = writtenMetadata.getIndexDefinitions().get("secondary_index_idx_price");
+      HoodieIndexDefinition expectedSecondaryIndex = expectedMetadata.getIndexDefinitions().get("secondary_index_idx_price");
+      assertEquals(expectedSecondaryIndex.getIndexName(), writtenSecondaryIndex.getIndexName());
+      assertEquals(expectedSecondaryIndex.getIndexType(), writtenSecondaryIndex.getIndexType());
+      assertEquals(expectedSecondaryIndex.getIndexFunction(), writtenSecondaryIndex.getIndexFunction());
+      assertEquals(expectedSecondaryIndex.getSourceFields(), writtenSecondaryIndex.getSourceFields());
+      assertEquals(expectedSecondaryIndex.getIndexOptions(), writtenSecondaryIndex.getIndexOptions());
+      assertEquals(expectedSecondaryIndex.getVersion(), writtenSecondaryIndex.getVersion());
+    }
   }
 
   @Test
   void testUpgradeWithIndexMetadataHavingVersions() {
-    // Setup: Index metadata present with existing versions
-    HoodieIndexMetadata indexMetadata = createIndexMetadataWithVersions();
-    // TODO: assert index defs of indexMetadata have version field
-    // Note: Since we can't import HoodieIndexVersion due to dependency issues, 
-    // we'll skip this test for now and focus on testing the storage functionality
-    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
+      // Mock the static method to do nothing - avoid NPE
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null); // Do nothing
+      
+      // Setup: Index metadata present with existing versions
+      HoodieIndexMetadata indexMetadata = createIndexMetadataWithVersions();
+      // TODO: assert index defs of indexMetadata have version field
+      // Note: Since we can't import HoodieIndexVersion due to dependency issues, 
+      // we'll skip this test for now and focus on testing the storage functionality
+      when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
 
-    // Execute
-    Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+      // Execute
+      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
-    // Verify
-    assertEquals(Collections.emptyMap(), result);
-    // Verify the written json is the same as before
+      // Verify
+      assertEquals(Collections.emptyMap(), result);
+      // Verify the written json is the same as before
+    }
   }
 
   @Test
   void testUpgradeWithEmptyIndexMetadata() {
-    // Setup: Empty index metadata (no index definitions)
-    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata();
-    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
+      // Mock the static method to do nothing - avoid NPE
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null); // Do nothing
+      
+      // Setup: Empty index metadata (no index definitions)
+      HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata();
+      when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
 
-    // Execute
-    Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+      // Execute
+      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
-    // Verify
-    assertEquals(Collections.emptyMap(), result);
+      // Verify
+      assertEquals(Collections.emptyMap(), result);
+    }
   }
 
   @Test
   void testUpgradeWithFileAlreadyExists() throws IOException {
-    // Setup: File already exists
-    HoodieIndexMetadata indexMetadata = createIndexMetadataWithMissingVersions();
-    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
-    when(storage.exists(indexDefPath)).thenReturn(true);
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<HoodieTableMetaClient> mockedMetaClient = mockStatic(HoodieTableMetaClient.class)) {
+      // Mock the static method to do nothing - avoid NPE
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null); // Do nothing
+      
+      // Mock the writeIndexMetadataToStorage to call the real method
+      mockedMetaClient.when(() -> HoodieTableMetaClient.writeIndexMetadataToStorage(
+          any(),
+          any(String.class),
+          any(HoodieIndexMetadata.class),
+          any(HoodieTableVersion.class)
+      )).thenCallRealMethod();
+      
+      // Setup: File already exists
+      HoodieIndexMetadata indexMetadata = createIndexMetadataWithMissingVersions();
+      when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+      when(storage.exists(indexDefPath)).thenReturn(true);
 
-    // Capture the output stream to verify written content
-    ByteArrayOutputStream capturedContent = new ByteArrayOutputStream();
-    when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
+      // Capture the output stream to verify written content
+      ByteArrayOutputStream capturedContent = new ByteArrayOutputStream();
+      when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
 
-    // Execute
-    Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+      // Execute
+      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
-    // Verify
-    assertEquals(Collections.emptyMap(), result);
-    
-    // Verify storage methods were called correctly (should not call createNewFile when file exists)
-    verify(storage).exists(indexDefPath);
-    verify(storage).create(indexDefPath, true);
-    
-    // Verify the written content by parsing the JSON and validating the object
-    String writtenJson = capturedContent.toString();
-    
-    // Expected JSON for table version 8 with V1 versions
-    String expectedJson = "{\n"
-        + "  \"indexDefinitions\": {\n"
-        + "    \"column_stats\": {\n"
-        + "      \"indexName\": \"column_stats\",\n"
-        + "      \"indexType\": \"column_stats\",\n"
-        + "      \"indexFunction\": \"column_stats\",\n"
-        + "      \"sourceFields\": [\"field1\", \"field2\"],\n"
-        + "      \"indexOptions\": {},\n"
-        + "      \"version\": \"V1\"\n"
-        + "    },\n"
-        + "    \"secondary_index_idx_price\": {\n"
-        + "      \"indexName\": \"secondary_index_idx_price\",\n"
-        + "      \"indexType\": \"secondary_index\",\n"
-        + "      \"indexFunction\": \"identity\",\n"
-        + "      \"sourceFields\": [\"price\"],\n"
-        + "      \"indexOptions\": {},\n"
-        + "      \"version\": \"V1\"\n"
-        + "    }\n"
-        + "  }\n"
-        + "}";
-    
-    // Parse the written JSON and validate against expected
-    HoodieIndexMetadata writtenMetadata = HoodieIndexMetadata.fromJson(writtenJson);
-    HoodieIndexMetadata expectedMetadata = HoodieIndexMetadata.fromJson(expectedJson);
-    
-    // Validate the parsed objects match
-    assertEquals(expectedMetadata.getIndexDefinitions().size(), writtenMetadata.getIndexDefinitions().size());
-    
-    // Validate column_stats index
-    HoodieIndexDefinition writtenColumnStats = writtenMetadata.getIndexDefinitions().get("column_stats");
-    HoodieIndexDefinition expectedColumnStats = expectedMetadata.getIndexDefinitions().get("column_stats");
-    assertEquals(expectedColumnStats.getIndexName(), writtenColumnStats.getIndexName());
-    assertEquals(expectedColumnStats.getIndexType(), writtenColumnStats.getIndexType());
-    assertEquals(expectedColumnStats.getIndexFunction(), writtenColumnStats.getIndexFunction());
-    assertEquals(expectedColumnStats.getSourceFields(), writtenColumnStats.getSourceFields());
-    assertEquals(expectedColumnStats.getIndexOptions(), writtenColumnStats.getIndexOptions());
-    assertEquals(expectedColumnStats.getVersion(), writtenColumnStats.getVersion());
-    
-    // Validate secondary_index_idx_price index
-    HoodieIndexDefinition writtenSecondaryIndex = writtenMetadata.getIndexDefinitions().get("secondary_index_idx_price");
-    HoodieIndexDefinition expectedSecondaryIndex = expectedMetadata.getIndexDefinitions().get("secondary_index_idx_price");
-    assertEquals(expectedSecondaryIndex.getIndexName(), writtenSecondaryIndex.getIndexName());
-    assertEquals(expectedSecondaryIndex.getIndexType(), writtenSecondaryIndex.getIndexType());
-    assertEquals(expectedSecondaryIndex.getIndexFunction(), writtenSecondaryIndex.getIndexFunction());
-    assertEquals(expectedSecondaryIndex.getSourceFields(), writtenSecondaryIndex.getSourceFields());
-    assertEquals(expectedSecondaryIndex.getIndexOptions(), writtenSecondaryIndex.getIndexOptions());
-    assertEquals(expectedSecondaryIndex.getVersion(), writtenSecondaryIndex.getVersion());
+      // Verify
+      assertEquals(Collections.emptyMap(), result);
+      
+      // Verify storage methods were called correctly
+      // Note: createFileInPath directly calls create() when contentWriter is present
+      verify(storage).create(indexDefPath, true);
+      
+      // Verify the written content by parsing the JSON and validating the object
+      String writtenJson = capturedContent.toString();
+      
+      // Expected JSON for table version 8 with V1 versions
+      String expectedJson = "{\n"
+          + "  \"indexDefinitions\": {\n"
+          + "    \"column_stats\": {\n"
+          + "      \"indexName\": \"column_stats\",\n"
+          + "      \"indexType\": \"column_stats\",\n"
+          + "      \"indexFunction\": \"column_stats\",\n"
+          + "      \"sourceFields\": [\"field1\", \"field2\"],\n"
+          + "      \"indexOptions\": {},\n"
+          + "      \"version\": \"V1\"\n"
+          + "    },\n"
+          + "    \"secondary_index_idx_price\": {\n"
+          + "      \"indexName\": \"secondary_index_idx_price\",\n"
+          + "      \"indexType\": \"secondary_index\",\n"
+          + "      \"indexFunction\": \"identity\",\n"
+          + "      \"sourceFields\": [\"price\"],\n"
+          + "      \"indexOptions\": {},\n"
+          + "      \"version\": \"V1\"\n"
+          + "    }\n"
+          + "  }\n"
+          + "}";
+      
+      // Parse the written JSON and validate against expected
+      HoodieIndexMetadata writtenMetadata = HoodieIndexMetadata.fromJson(writtenJson);
+      HoodieIndexMetadata expectedMetadata = HoodieIndexMetadata.fromJson(expectedJson);
+      
+      // Validate the parsed objects match
+      assertEquals(expectedMetadata.getIndexDefinitions().size(), writtenMetadata.getIndexDefinitions().size());
+      
+      // Validate column_stats index
+      HoodieIndexDefinition writtenColumnStats = writtenMetadata.getIndexDefinitions().get("column_stats");
+      HoodieIndexDefinition expectedColumnStats = expectedMetadata.getIndexDefinitions().get("column_stats");
+      assertEquals(expectedColumnStats.getIndexName(), writtenColumnStats.getIndexName());
+      assertEquals(expectedColumnStats.getIndexType(), writtenColumnStats.getIndexType());
+      assertEquals(expectedColumnStats.getIndexFunction(), writtenColumnStats.getIndexFunction());
+      assertEquals(expectedColumnStats.getSourceFields(), writtenColumnStats.getSourceFields());
+      assertEquals(expectedColumnStats.getIndexOptions(), writtenColumnStats.getIndexOptions());
+      assertEquals(expectedColumnStats.getVersion(), writtenColumnStats.getVersion());
+      
+      // Validate secondary_index_idx_price index
+      HoodieIndexDefinition writtenSecondaryIndex = writtenMetadata.getIndexDefinitions().get("secondary_index_idx_price");
+      HoodieIndexDefinition expectedSecondaryIndex = expectedMetadata.getIndexDefinitions().get("secondary_index_idx_price");
+      assertEquals(expectedSecondaryIndex.getIndexName(), writtenSecondaryIndex.getIndexName());
+      assertEquals(expectedSecondaryIndex.getIndexType(), writtenSecondaryIndex.getIndexType());
+      assertEquals(expectedSecondaryIndex.getIndexFunction(), writtenSecondaryIndex.getIndexFunction());
+      assertEquals(expectedSecondaryIndex.getSourceFields(), writtenSecondaryIndex.getSourceFields());
+      assertEquals(expectedSecondaryIndex.getIndexOptions(), writtenSecondaryIndex.getIndexOptions());
+      assertEquals(expectedSecondaryIndex.getVersion(), writtenSecondaryIndex.getVersion());
+    }
   }
 
   /**
@@ -368,46 +449,82 @@ class TestEightToNineUpgradeHandler {
 
   @Test
   void testPopulateIndexVersionIfMissing() {
-    // Test with table version 8 - should populate missing versions with V1
-    HoodieIndexMetadata indexMetadata = loadIndexDefFromResource("indexMissingVersion1.json");
-    
-    // Verify initial state - no versions
-    assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
-    assertNull(indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-    
-    // Apply the method
-    EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.of(indexMetadata));
-    
-    // Verify versions are populated with V1
-    assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
-    assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-    
-    // Verify other fields remain unchanged
-    validateAllFieldsExcludingVersion(indexMetadata);
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
+      // Mock the static method to do nothing - avoid NPE
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null); // Do nothing
+      
+      // Test with table version 8 - should populate missing versions with V1
+      HoodieIndexMetadata indexMetadata = loadIndexDefFromResource("indexMissingVersion1.json");
+      
+      // Verify initial state - no versions
+      assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+      assertNull(indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+      
+      // Apply the method
+      EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.of(indexMetadata));
+      
+      // Verify versions are populated with V1
+      assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+      assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+      
+      // Verify other fields remain unchanged
+      validateAllFieldsExcludingVersion(indexMetadata);
+    }
   }
 
   @Test
   void testPopulateIndexVersionIfMissingWithMixedVersions() {
-    // Test with indexMissingVersion2.json which has some versions already set
-    HoodieIndexMetadata indexMetadata = loadIndexDefFromResource("indexMissingVersion2.json");
-    
-    // Verify initial state - column_stats has no version, secondary_index has V2
-    assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
-    assertEquals(HoodieIndexVersion.V2, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
-    
-    // Apply the method with table version 8
-    EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.of(indexMetadata));
-    
-    // Verify column_stats gets V1, secondary_index remains V2 (since it already had a version)
-    assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
-    assertEquals(HoodieIndexVersion.V2, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
+      // Mock the static method to do nothing - avoid NPE
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null); // Do nothing
+      
+      // Test with indexMissingVersion2.json which has some versions already set
+      HoodieIndexMetadata indexMetadata = loadIndexDefFromResource("indexMissingVersion2.json");
+      
+      // Verify initial state - column_stats has no version, secondary_index has V2
+      assertNull(indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+      assertEquals(HoodieIndexVersion.V2, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+      
+      // Apply the method with table version 8
+      EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.of(indexMetadata));
+      
+      // Verify column_stats gets V1, secondary_index remains V2 (since it already had a version)
+      assertEquals(HoodieIndexVersion.V1, indexMetadata.getIndexDefinitions().get("column_stats").getVersion());
+      assertEquals(HoodieIndexVersion.V2, indexMetadata.getIndexDefinitions().get("secondary_index_idx_price").getVersion());
+    }
   }
 
   @Test
   void testPopulateIndexVersionIfMissingWithEmptyOption() {
-    // Test with empty option - should not throw exception
-    assertDoesNotThrow(() -> 
-        EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.empty()));
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
+      // Mock the static method to do nothing - avoid NPE
+      mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(HoodieTable.class),
+          any(HoodieEngineContext.class),
+          any(HoodieWriteConfig.class),
+          any(SupportsUpgradeDowngrade.class),
+          anyBoolean(),
+          any(HoodieTableVersion.class)
+      )).thenAnswer(invocation -> null); // Do nothing
+      
+      // Test with empty option - should not throw exception
+      assertDoesNotThrow(() ->
+          EightToNineUpgradeHandler.populateIndexVersionIfMissing(Option.empty()));
+    }
   }
 
   private static HoodieIndexMetadata loadIndexDefFromResource(String resourceName) {

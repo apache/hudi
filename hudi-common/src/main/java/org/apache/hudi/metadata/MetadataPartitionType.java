@@ -196,8 +196,9 @@ public enum MetadataPartitionType {
 
     @Override
     public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
-      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
-      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+      return metaClient.getIndexForMetadataPartition(indexName)
+          .map(HoodieIndexDefinition::getIndexName)
+          .orElseThrow(() -> new IllegalArgumentException("Index definition is not present for index: " + indexName));
     }
   },
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
@@ -224,8 +225,9 @@ public enum MetadataPartitionType {
 
     @Override
     public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
-      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
-      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+      return metaClient.getIndexForMetadataPartition(indexName)
+          .map(HoodieIndexDefinition::getIndexName)
+          .orElseThrow(() -> new IllegalArgumentException("Index definition is not present for index: " + indexName));
     }
 
     @Override

@@ -152,8 +152,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
                                                 Map<String, Map<String, String>> columns, Map<String, String> options, Map<String, String> tableProperties) throws Exception {
     HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(metaClient, userIndexName, indexType, columns, options, tableProperties);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
-        || !metaClient.getIndexMetadata().isPresent()
-        || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexDefinition.getIndexName())) {
+        || !metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
       LOG.info("Index definition is not present. Registering the index first");
       register(metaClient, indexDefinition);
     }

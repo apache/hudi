@@ -193,6 +193,13 @@ public class TestMetadataPartitionType {
     String secondaryIndexName = "secondary_index_dummySecondaryIndex";
     HoodieIndexMetadata indexMetadata = getIndexMetadata(expressionIndexName, secondaryIndexName);
     when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+    
+    // Mock getIndexForMetadataPartition for both index names
+    when(metaClient.getIndexForMetadataPartition(expressionIndexName))
+        .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(expressionIndexName)));
+    when(metaClient.getIndexForMetadataPartition(secondaryIndexName))
+        .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(secondaryIndexName)));
+    
     if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
       assertEquals(expressionIndexName, partitionType.getPartitionPath(metaClient, expressionIndexName));
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
@@ -228,6 +235,7 @@ public class TestMetadataPartitionType {
     MetadataPartitionType partitionType = MetadataPartitionType.EXPRESSION_INDEX;
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+    when(metaClient.getIndexForMetadataPartition("testIndex")).thenReturn(Option.empty());
 
     assertThrows(IllegalArgumentException.class,
         () -> partitionType.getPartitionPath(metaClient, "testIndex"));

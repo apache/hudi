@@ -273,7 +273,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexOptions(Collections.emptyMap())
         .build();
     metaClient.buildIndexDefinition(indexDefinition);
-    assertTrue(metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexName));
+    assertTrue(metaClient.getIndexForMetadataPartition(indexName).isPresent());
     assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
     metaClient.deleteIndexDefinition(indexName);
     assertTrue(metaClient.getIndexMetadata().isEmpty());

@@ -239,9 +239,10 @@ public class HoodieTableMetaClient implements Serializable {
     boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {
       // if index definition is present, lets check for difference and only update if required.
-      if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
-        if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
-          LOG.info("List of columns to index is changing. Old value {}. New value {}", indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(),
+      Option<HoodieIndexDefinition> existingIndexOpt = indexMetadataOpt.get().getIndex(indexName);
+      if (existingIndexOpt.isPresent()) {
+        if (!existingIndexOpt.get().getSourceFields().equals(indexDefinition.getSourceFields())) {
+          LOG.info("List of columns to index is changing. Old value {}. New value {}", existingIndexOpt.get().getSourceFields(),
               indexDefinition.getSourceFields());
           indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
         } else {
@@ -280,6 +281,17 @@ public class HoodieTableMetaClient implements Serializable {
       String indexMetaPath = getIndexDefinitionPath();
       writeIndexMetadataToStorage(storage, indexMetaPath, indexMetadata, getTableConfig().getTableVersion());
     });
+  }
+
+  /**
+   * Get the index definition for the given metadata partition name.
+   * This is a convenience method that handles checking if index metadata is present.
+   *
+   * @param partitionName The name of the metadata partition (index name)
+   * @return Option containing the index definition if it exists, Option.empty() otherwise
+   */
+  public Option<HoodieIndexDefinition> getIndexForMetadataPartition(String partitionName) {
+    return getIndexMetadata().flatMap(m -> m.getIndex(partitionName));
   }
 
   /**

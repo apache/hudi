@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -236,12 +235,14 @@ public class UpgradeDowngradeUtils {
           .stream()
           .filter(partition -> {
             // Only drop secondary indexes that are not V1
-            if (metaClient.getIndexMetadata().isPresent()) {
-              HoodieIndexDefinition indexDef = metaClient.getIndexMetadata().get().getIndexDefinitions().get(partition);
-              return MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX)
-                  && HoodieIndexVersion.V1.lowerThan(indexDef.getVersion());
-            }
-            return false;
+            return metaClient.getIndexForMetadataPartition(partition)
+                .map(indexDef -> {
+                  if (MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX)) {
+                    return HoodieIndexVersion.V1.lowerThan(indexDef.getVersion());
+                  }
+                  return false;
+                })
+                .orElse(false);
           })
           .collect(Collectors.toList());
       LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);

@@ -71,12 +71,11 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   override def getIndexName: String = ColumnStatsIndexSupport.INDEX_NAME
 
   def getIndexedColsWithColStats(metaClient: HoodieTableMetaClient) : Set[String] = {
-    if (metaClient.getIndexMetadata.isPresent
-      && metaClient.getIndexMetadata.get().getIndexDefinitions().containsKey(PARTITION_NAME_COLUMN_STATS)) {
-      metaClient.getIndexMetadata.get().getIndexDefinitions()
-        .get(PARTITION_NAME_COLUMN_STATS).asInstanceOf[HoodieIndexDefinition].getSourceFields.asScala.toSet
+    val indexDefOpt = metaClient.getIndexForMetadataPartition(PARTITION_NAME_COLUMN_STATS)
+    if (indexDefOpt.isPresent) {
+      indexDefOpt.get().getSourceFields.asScala.toSet
     } else {
-      Set.empty
+      Set.empty[String]
     }
   }
 
