@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -220,7 +221,8 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     assertEquals(3, mdtCommitMetadata.getPartitionToWriteStats().size());
     assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().get(FILES.getPartitionPath()).size());
     assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(RECORD_INDEX.getPartitionPath()).size());
-    assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(SECONDARY_INDEX.getPartitionPath()
+    assertEquals(metaClient.getTableConfig().getTableVersion().equals(HoodieTableVersion.NINE) ? 1 : 10,
+        mdtCommitMetadata.getPartitionToWriteStats().get(SECONDARY_INDEX.getPartitionPath()
         + config.getMetadataConfig().getSecondaryIndexName()).size());
   }
 
