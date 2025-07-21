@@ -17,11 +17,11 @@
  * under the License.
  */
 
-package org.apache.hudi.data;
+package org.apache.hudi.client.common;
 
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 
 import org.apache.spark.api.java.JavaPairRDD;
@@ -46,7 +46,7 @@ import scala.Tuple3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestHoodieJavaPairRDDDynamicRepartition {
+public class TestHoodieSparkEngineDynamicRepartition {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTestDelayedTableMetadata.class);
 
@@ -112,12 +112,12 @@ public class TestHoodieJavaPairRDDDynamicRepartition {
    * 3. For partitions containing entries of the same key, the value ranges are not overlapping.
    * 4. Number of keys per partition is probably at most maxKeyPerBucket.
    *
-   * @param originalRdd Original RDD
-   * @param repartitionedRdd Repartitioned RDD
+   * @param originalRdd            Original RDD
+   * @param repartitionedRdd       Repartitioned RDD
    * @param maxPartitionCountByKey Map of key to maximum number of partitions
    * @throws AssertionError if any check fails
    */
-  private static Map<Integer, Map<Integer, List<String>>> validateRepartitionedRDDProperties(
+  private static void validateRepartitionedRDDProperties(
       HoodiePairData<Integer, String> originalRdd,
       HoodiePairData<Integer, String> repartitionedRdd,
       Option<Map<Integer, Integer>> maxPartitionCountByKey) {
@@ -213,7 +213,6 @@ public class TestHoodieJavaPairRDDDynamicRepartition {
       LOG.error("Validation failed: " + e.getMessage(), e);
       throw e; // rethrow to fail the test
     }
-    return actualPartitionContents;   // handy for unit-test callers
   }
 
   /**

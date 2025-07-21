@@ -272,13 +272,32 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     return javaSparkContext.emptyRDD();
   }
 
+  /**
+   * Maps groups by key with automatic repartitioning based on sample key ranges.
+   *
+   * This Spark-specific implementation performs range-based repartitioning of the input data
+   * before applying the process function. The repartitioning ensures a statistically even distribution
+   * of data across partitions based on the provided key space, which can significantly improve
+   * performance for skewed datasets.
+   *
+   * Note:
+   * 1. This repartitioning behavior is specific to the Spark engine context and is not
+   * applicable to other engine contexts like HoodieLocalEngineContext.
+   * 2. The algorithm is not deterministic across different runs since the sample seed is based on current time.
+   *
+   * @param data The input key-value pair data
+   * @param processFunc Function to apply to each group of values
+   * @param keySpace List of keys to define the partitioning ranges
+   * @param preservesPartitioning Whether the operation preserves partitioning
+   * @return Processed data after grouping by key and applying the process function
+   */
   @Override
   public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
                                                                                             SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
                                                                                             List<K> keySpace,
                                                                                             boolean preservesPartitioning) {
     HoodiePairData<K, V> repartitionedData = rangeBasedRepartitionForEachKey(
-        data, keySpace, 0.1, 100000, System.nanoTime());
+        data, keySpace, 0.02, 100000, System.nanoTime());
     return repartitionedData.values().mapPartitions(processFunc, preservesPartitioning);
   }
 
