@@ -31,8 +31,8 @@ public class HoodieDataUtils {
   /**
    * Collects results of the pair data into a {@link Map<K, V>}
    *
-   * If there are multiple pairs sharing the same key, the resulting map will have the last processed value
-   * i.e. incoming value overwrites existing.
+   * If there are multiple pairs sharing the same key, the resulting map will end up with nondeterministically
+   * pick one pair from them.
    *
    * This is a terminal operation
    *
@@ -42,13 +42,14 @@ public class HoodieDataUtils {
    * @return a Map containing the de-duplicated key-value pairs
    */
   public static <K, V> Map<K, V> dedupeAndCollectAsMap(HoodiePairData<K, V> pairData) {
+    // Deduplicate locally before shuffling to reduce data movement
     // If there are multiple entries sharing the same key, use the incoming one
-    return pairData.collectAsList()
+    return pairData.reduceByKey((existing, incoming) -> incoming, pairData.deduceNumPartitions())
+            .collectAsList()
             .stream()
             .collect(Collectors.toMap(
                     Pair::getKey,
-                    Pair::getValue,
-                    (existing, incoming) -> incoming
+                    Pair::getValue
             ));
   }
 } 
