@@ -282,8 +282,10 @@ public abstract class HoodieReaderContext<T> {
       Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(internalSchemaOpt.get(), schemaHandler.getInternalSchema(),
           true, false, false).mergeSchemaGetRenamed();
       Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName());
-      UnaryOperator<T> projection = projectRecord(actualDataSchema, mergedAvroSchema, mergedInternalSchema.getRight());
-      return new CloseableMappingIterator<>(getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, actualDataSchema, internalSchemaOpt, storage), projection);
+      Schema actualRequiredSchema = AvroInternalSchemaConverter.convert(new InternalSchemaMerger(internalSchemaOpt.get(), schemaHandler.getInternalSchema(),
+          true, true).mergeSchema(), requiredSchema.getFullName());
+      UnaryOperator<T> projection = projectRecord(actualRequiredSchema, mergedAvroSchema, mergedInternalSchema.getRight());
+      return new CloseableMappingIterator<>(getFileRecordIteratorInternal(filePathEither, start, length, actualDataSchema, actualRequiredSchema, internalSchemaOpt, storage), projection);
     }
     Schema actualRequriredSchema = AvroSchemaUtils.pruneDataSchemaResolveNullable(actualDataSchema, requiredSchema, getSchemaHandler().getPruneExcludeFields());
     if (AvroSchemaUtils.areSchemasPrettyMuchEqual(actualRequriredSchema, requiredSchema)) {

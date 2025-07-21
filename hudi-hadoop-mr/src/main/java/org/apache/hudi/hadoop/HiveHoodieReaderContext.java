@@ -39,6 +39,7 @@ import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -50,7 +51,11 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.exec.SerializationUtilities;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
+import org.apache.hadoop.hive.ql.plan.ExprNodeColumnDesc;
+import org.apache.hadoop.hive.ql.plan.ExprNodeDesc;
+import org.apache.hadoop.hive.ql.plan.ExprNodeGenericFuncDesc;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
@@ -71,10 +76,13 @@ import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -89,6 +97,7 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL
  * {@link HoodieReaderContext} for Hive-specific {@link HoodieFileGroupReaderBasedRecordReader}.
  */
 public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> {
+  private static final Logger LOG = LoggerFactory.getLogger(HiveHoodieReaderContext.class);
   protected final HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator;
   protected final Map<String, TypeInfo> columnTypeMap;
   private final ObjectInspectorCache objectInspectorCache;
@@ -155,6 +164,8 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       // This disables row-group filtering
       jobConfCopy.unset(TableScanDesc.FILTER_EXPR_CONF_STR);
       jobConfCopy.unset(ConvertAstToSearchArg.SARG_PUSHDOWN);
+    } else if (internalSchemaOpt.isPresent()) {
+      pushDownFilter(jobConfCopy, getSchemaHandler().getInternalSchema(), internalSchemaOpt.get());
     }
     //move the partition cols to the end, because in some cases it has issues if we don't do that
     Schema modifiedDataSchema = HoodieAvroUtils.generateProjectionSchema(dataSchema, Stream.concat(dataSchema.getFields().stream()
@@ -172,6 +183,38 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     }
     // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
     return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
+  }
+
+  private void pushDownFilter(JobConf job, InternalSchema querySchema, InternalSchema fileSchema) {
+    String filterExprSerialized = job.get(TableScanDesc.FILTER_EXPR_CONF_STR);
+    if (filterExprSerialized != null) {
+      ExprNodeGenericFuncDesc filterExpr = SerializationUtilities.deserializeExpression(filterExprSerialized);
+      LinkedList<ExprNodeDesc> exprNodes = new LinkedList<ExprNodeDesc>();
+      exprNodes.add(filterExpr);
+      while (!exprNodes.isEmpty()) {
+        int size = exprNodes.size();
+        for (int i = 0; i < size; i++) {
+          ExprNodeDesc expr = exprNodes.poll();
+          if (expr instanceof ExprNodeColumnDesc) {
+            String oldColumn = ((ExprNodeColumnDesc) expr).getColumn();
+            String newColumn = InternalSchemaUtils.reBuildFilterName(oldColumn, fileSchema, querySchema);
+            ((ExprNodeColumnDesc) expr).setColumn(newColumn);
+          }
+          List<ExprNodeDesc> children = expr.getChildren();
+          if (children != null) {
+            exprNodes.addAll(children);
+          }
+        }
+      }
+      String filterText = filterExpr.getExprString();
+      String serializedFilterExpr = SerializationUtilities.serializeExpression(filterExpr);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Pushdown initiated with filterText = {}, filterExpr = {}, serializedFilterExpr = {}",
+            filterText, filterExpr, serializedFilterExpr);
+      }
+      job.set(TableScanDesc.FILTER_TEXT_CONF_STR, filterText);
+      job.set(TableScanDesc.FILTER_EXPR_CONF_STR, serializedFilterExpr);
+    }
   }
 
   @Override

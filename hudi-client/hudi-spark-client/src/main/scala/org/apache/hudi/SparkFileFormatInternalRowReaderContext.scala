@@ -82,8 +82,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   private lazy val allFilters = filters ++ requiredFilters
 
   override def supportsParquetRowIndex: Boolean = {
-    false
-    //HoodieSparkUtils.gteqSpark3_5
+    HoodieSparkUtils.gteqSpark3_5
   }
 
   override protected def doGetFileRecordIterator(filePath: StoragePath,

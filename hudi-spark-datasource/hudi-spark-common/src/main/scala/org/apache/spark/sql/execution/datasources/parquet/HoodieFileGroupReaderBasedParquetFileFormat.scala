@@ -17,11 +17,10 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -31,7 +30,7 @@ import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
-import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -103,12 +102,12 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     false
-//    val superSupportBatch = super.supportBatch(sparkSession, schema)
-//    supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch
-//    supportReturningBatch = !isMOR && supportVectorizedRead
-//    logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
-//      s"isBootstrap: $isBootstrap, superSupportBatch: $superSupportBatch")
-//    supportReturningBatch
+    val superSupportBatch = super.supportBatch(sparkSession, schema)
+    supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch && tableSchema.internalSchema.isEmpty
+    supportReturningBatch = !isMOR && supportVectorizedRead
+    logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
+      s"isBootstrap: $isBootstrap, superSupportBatch: $superSupportBatch")
+    supportReturningBatch
   }
 
   //for partition columns that we read from the file, we don't want them to be constant column vectors so we
@@ -237,18 +236,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
           buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, fileGroupParquetFileReader.value, storageConf, fileIndexProps, requiredSchema)
 
         case _ =>
-          throw new IllegalArgumentException(s"Unrecognized partition file mapping: ${file.partitionValues}")
           readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
             requiredSchema, partitionSchema, outputSchema, filters, storageConf)
       }
       CloseableIteratorListener.addListener(iter)
-    }
-  }
-
-  private def setSchemaEvolutionConfigs(conf: StorageConfiguration[Configuration]): Unit = {
-    if (internalSchemaOpt.isPresent) {
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
-      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
   }
 
