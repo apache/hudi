@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidTableException;
+import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
@@ -66,10 +67,12 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
@@ -297,7 +300,10 @@ public class TableSchemaResolver {
           // Determine the file format based on the file name, and then extract schema from it.
           if (instantAndCommitMetadata.isPresent()) {
             HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
-            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePathV2()).values().iterator();
+            // inspect non-empty files for schema
+            Stream<String> filePaths = commitMetadata.getPartitionToWriteStats().values().stream().flatMap(Collection::stream)
+                .filter(writeStat -> writeStat.getNumInserts() > 0 || writeStat.getNumUpdateWrites() > 0)
+                .map(writeStat -> new CachingPath(metaClient.getBasePathV2(), writeStat.getPath()).toString());
             return Option.of(fetchSchemaFromFiles(filePaths));
           } else {
             LOG.warn("Could not find any data file written for commit, "
@@ -543,18 +549,21 @@ public class TableSchemaResolver {
         });
   }
 
-  private MessageType fetchSchemaFromFiles(Iterator<String> filePaths) throws IOException {
-    MessageType type = null;
-    while (filePaths.hasNext() && type == null) {
-      String filePath = filePaths.next();
-      if (filePath.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
-        // this is a log file
-        type = readSchemaFromLogFile(new Path(filePath));
-      } else {
-        type = readSchemaFromBaseFile(filePath);
+  private MessageType fetchSchemaFromFiles(Stream<String> filePaths) throws IOException {
+    return filePaths.map(filePath -> {
+      try {
+        MessageType type;
+        if (filePath.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
+          // this is a log file
+          type = readSchemaFromLogFile(new Path(filePath));
+        } else {
+          type = readSchemaFromBaseFile(filePath);
+        }
+        return type;
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read schema from file: " + filePath, e);
       }
-    }
-    return type;
+    }).filter(Objects::nonNull).findFirst().orElse(null);
   }
 
   private MessageType readSchemaFromBaseFile(String filePath) throws IOException {

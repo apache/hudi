@@ -798,6 +798,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     hoodieWriteStat.setFileId("file_id1");
     hoodieWriteStat.setPath("path1");
     hoodieWriteStat.setPrevCommit("1");
+    hoodieWriteStat.setNumInserts(1);
     commitMetadata.addWriteStat("partition1", hoodieWriteStat);
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.createNewInstant(commitInstant);
@@ -825,6 +826,43 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertFalse(mergedTimeline.isEmpty(cleanInstant));
     assertFalse(mergedTimeline.isEmpty(completedCommitInstant));
     assertEquals(Option.of(Pair.of(completedCommitInstant, commitMetadata)), refreshedTimeline.getLastCommitMetadataWithValidData());
+  }
+
+  @Test
+  void testGetLastCommitMetadataWithValidDataChecksForEmptyCommits() {
+    HoodieInstant commit1Instant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant commit2Instant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "2");
+
+    HoodieCommitMetadata commitMetadata1 = new HoodieCommitMetadata();
+    HoodieWriteStat hoodieWriteStat = new HoodieWriteStat();
+    hoodieWriteStat.setFileId("file_id1");
+    hoodieWriteStat.setPath("path1");
+    hoodieWriteStat.setPrevCommit("1");
+    hoodieWriteStat.setNumUpdateWrites(1);
+    commitMetadata1.addWriteStat("partition1", hoodieWriteStat);
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commit1Instant);
+    timeline.transitionRequestedToInflight(commit1Instant, Option.empty());
+    // Validate in-flight commits are ignored
+    assertFalse(timeline.getLastCommitMetadataWithValidData().isPresent());
+    HoodieInstant completeCommitInstant = new HoodieInstant(true, commit1Instant.getAction(), commit1Instant.getTimestamp());
+    timeline.saveAsComplete(completeCommitInstant, Option.of(commitMetadata1));
+    HoodieInstant completedCommitInstant = timeline.reload().lastInstant().get();
+
+    HoodieCommitMetadata commitMetadata2 = new HoodieCommitMetadata();
+    HoodieWriteStat hoodieWriteStat2 = new HoodieWriteStat();
+    hoodieWriteStat2.setFileId("file_id1");
+    hoodieWriteStat2.setPath("path1");
+    hoodieWriteStat2.setPrevCommit("1");
+    hoodieWriteStat2.setNumDeletes(1);
+    commitMetadata2.addWriteStat("partition1", hoodieWriteStat2);
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(commit2Instant);
+    timeline.transitionRequestedToInflight(commit2Instant, Option.empty());
+    HoodieInstant completeCommitInstant2 = new HoodieInstant(true, commit2Instant.getAction(), commit2Instant.getTimestamp());
+    timeline.saveAsComplete(completeCommitInstant2, Option.of(commitMetadata2));
+
+    assertEquals(Option.of(Pair.of(completedCommitInstant, commitMetadata1)), timeline.reload().getLastCommitMetadataWithValidData());
   }
 
   @Test
