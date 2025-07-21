@@ -73,14 +73,16 @@ public class ClosableSortingIterator<T> implements Iterator<T>, AutoCloseable {
       } else {
         // Check if the first element is Comparable
         T firstElement = list.get(0);
-        if (firstElement instanceof Comparable) {
-          try {
-            // Sort the list using natural ordering
-            Collections.sort((List) list);
-          } catch (Exception e) {
-            // If sorting fails (e.g., ClassCastException), keep original order
-            // This can happen with complex objects or mixed types
-          }
+        if (!(firstElement instanceof Comparable)) {
+          throw new IllegalArgumentException("Elements must implement Comparable interface for sorting. Found: " 
+              + firstElement.getClass().getName());
+        }
+        
+        try {
+          // Sort the list using natural ordering
+          Collections.sort((List) list);
+        } catch (ClassCastException e) {
+          throw new IllegalArgumentException("Elements cannot be compared with each other for sorting", e);
         }
         sortedIterator = list.iterator();
       }
