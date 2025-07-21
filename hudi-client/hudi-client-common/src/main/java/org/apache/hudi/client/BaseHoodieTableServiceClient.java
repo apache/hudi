@@ -31,6 +31,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
@@ -118,8 +119,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected BaseHoodieTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
-                                         Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                         Option<EmbeddedTimelineService> timelineService,
+                                         TransactionManager transactionManager) {
+    super(context, clientConfig, timelineService, transactionManager);
   }
 
   protected void startAsyncCleanerService(BaseHoodieWriteClient writeClient) {
@@ -1145,7 +1147,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           LOG.warn("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
           return false;
         }
-        Pair<String, Option<HoodieRollbackPlan>> result = txnManager.executeStateChangeWithInstant(!skipLocking, suppliedRollbackInstantTime, instant ->
+        Pair<String, Option<HoodieRollbackPlan>> result = txnManager.executeStateChangeWithInstant(suppliedRollbackInstantTime, instant ->
             Pair.of(instant, table.scheduleRollback(context, instant, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(), false)));
         rollbackInstantTime = result.getLeft();
         rollbackPlanOption = result.getRight();

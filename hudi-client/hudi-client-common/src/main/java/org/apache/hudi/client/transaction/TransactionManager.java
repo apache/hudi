@@ -99,24 +99,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
    * @param <T> type of the result
    */
   public <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
-    return executeStateChangeWithInstant(true, providedInstantTime, lastCompletedActionInstant, instantTimeConsumingAction);
-  }
-
-  /**
-   * Uses the provided instant if present or else generates an instant time and executes an action that requires that instant time within a lock.
-   * @param requiresLock allows the caller to skip the locking if the action is already within another transaction block.
-   * @param providedInstantTime an optional instant time provided by the caller. If not provided, a new instant time will be generated.
-   * @param instantTimeConsumingAction a function that takes the generated instant time and performs some action
-   * @return the result of the action
-   * @param <T> type of the result
-   */
-  public <T> T executeStateChangeWithInstant(boolean requiresLock, Option<String> providedInstantTime, Function<String, T> instantTimeConsumingAction) {
-    return executeStateChangeWithInstant(requiresLock, providedInstantTime, Option.empty(), instantTimeConsumingAction);
-  }
-
-  private  <T> T executeStateChangeWithInstant(boolean requiresLock, Option<String> providedInstantTime,
-                                               Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
-    if (requiresLock && isLockRequired()) {
+    if (isLockRequired()) {
       acquireLock();
     }
     String requestedInstant = providedInstantTime.orElseGet(() -> HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L));
@@ -128,7 +111,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
       }
       return instantTimeConsumingAction.apply(requestedInstant);
     } finally {
-      if (requiresLock && isLockRequired()) {
+      if (isLockRequired()) {
         releaseLock();
         LOG.info("State change ended for {}", requestedInstant);
       }
@@ -156,6 +139,10 @@ public class TransactionManager implements Serializable, AutoCloseable {
   }
 
   private void acquireLock() {
+    if (hasLock) {
+      LOG.debug("Lock already acquired, skipping lock acquisition.");
+      return;
+    }
     lockManager.lock();
     hasLock = true;
   }

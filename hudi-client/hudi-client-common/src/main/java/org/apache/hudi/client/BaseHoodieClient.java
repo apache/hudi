@@ -195,13 +195,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         .setMetaserverConfig(config.getProps()).build();
   }
 
-  /**
-   * Returns next instant time in the correct format.
-   */
-  public String createNewInstantTime() {
-    return txnManager.generateInstantTime();
-  }
-
   public Option<EmbeddedTimelineService> getTimelineServer() {
     return timelineServer;
   }
