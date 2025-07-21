@@ -101,7 +101,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
    *
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    false
     val superSupportBatch = super.supportBatch(sparkSession, schema)
     supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch && tableSchema.internalSchema.isEmpty
     supportReturningBatch = !isMOR && supportVectorizedRead
