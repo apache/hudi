@@ -65,7 +65,7 @@ public class HoodieTableMetaserverClient extends HoodieTableMetaClient {
                                      HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                      Option<String> databaseName, Option<String> tableName, HoodieMetaserverConfig config) {
     super(storage, basePath, false, consistencyGuardConfig, Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        recordMergeMode, payloadClassName, recordMergeStrategyId, timeGeneratorConfig, fileSystemRetryConfig);
+        recordMergeMode, payloadClassName, recordMergeStrategyId, fileSystemRetryConfig);
     this.databaseName = databaseName.isPresent() ? databaseName.get() : tableConfig.getDatabaseName();
     this.tableName = tableName.isPresent() ? tableName.get() : tableConfig.getTableName();
     this.metaserverConfig = config;

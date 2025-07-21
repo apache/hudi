@@ -18,7 +18,6 @@
 
 package org.apache.hudi.internal.schema.io;
 
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -78,8 +77,6 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
       metaClient = HoodieTableMetaClient.builder()
           .setBasePath(baseSchemaPath.getParent().getParent().toString())
           .setStorage(storage)
-          .setTimeGeneratorConfig(
-              HoodieTimeGeneratorConfig.defaultConfig(baseSchemaPath.getParent().getParent().toString()))
           .build();
     }
     return metaClient;
