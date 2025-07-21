@@ -21,13 +21,17 @@ package org.apache.hudi.client;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -49,6 +53,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -68,7 +73,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void cleanRollsBackFailedWritesWithLazyPolicy(boolean rollbackOccurred) throws IOException {
-    String cleanInstantTime = "001";
+    String cleanInstantTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
@@ -109,13 +114,14 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Arrays.asList(firstTable, secondTable).iterator(), Option.empty(), expectedRollbackInfo,
-        Collections.singletonList(cleanInstantTime).iterator());
+        createTransactionManager(Collections.singletonList(cleanInstantTime)));
     tableServiceClient.clean(Option.empty(), false);
+    tableServiceClient.close();
   }
 
   @Test
   void cleanerPlanIsSkippedIfHasInflightClean() throws IOException {
-    String cleanInstantTime = "001";
+    String cleanInstantTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
@@ -144,15 +150,16 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     when(firstTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(firstTable).iterator(), Option.empty(), expectedRollbackInfo,
-        Collections.emptyIterator());
+        createTransactionManager(Collections.emptyList()));
     assertSame(metadata, tableServiceClient.clean(Option.empty(), true));
     verify(mockMetaClient).reloadActiveTimeline();
+    tableServiceClient.close();
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void cleanerPlanIsCalledWithoutInflightClean(boolean generatesPlan) throws IOException {
-    String cleanInstantTime = "001";
+    String cleanInstantTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
@@ -188,7 +195,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     }
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(mockTable).iterator(), Option.empty(), expectedRollbackInfo,
-        Collections.singletonList(cleanInstantTime).iterator());
+        createTransactionManager(Collections.singletonList(cleanInstantTime)));
     assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
     if (generatesPlan) {
       verify(mockMetaClient).reloadActiveTimeline();
@@ -196,12 +203,13 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       verify(mockMetaClient, never()).reloadActiveTimeline();
       verify(mockTable, never()).clean(any(), any());
     }
+    tableServiceClient.close();
   }
 
   @Test
   void cleanerPlanIsCalledWithInflightCleanAndAllowMultipleCleans() throws IOException {
-    String inflightInstant = "001";
-    String cleanInstantTime = "002";
+    String cleanInstantTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
+    String inflightInstant = HoodieInstantTimeGenerator.instantTimeMinusMillis(cleanInstantTime, 60_000);
     initMetaClient();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(basePath)
@@ -237,29 +245,23 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     when(mockTable.clean(any(), eq(cleanInstantTime))).thenReturn(metadata);
 
     TestTableServiceClient tableServiceClient = new TestTableServiceClient(writeConfig, Collections.singletonList(mockTable).iterator(), Option.empty(), expectedRollbackInfo,
-        Collections.singletonList(cleanInstantTime).iterator());
+        createTransactionManager(Collections.singletonList(cleanInstantTime)));
     assertEquals(metadata, tableServiceClient.clean(Option.empty(), true));
     verify(mockMetaClient).reloadActiveTimeline();
+    tableServiceClient.close();
   }
 
   private static class TestTableServiceClient extends BaseHoodieTableServiceClient<String, String, String> {
     private final Iterator<HoodieTable<String, String, String, String>> tables;
     // specify the expected rollback map
     private final Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo;
-    private final Iterator<String> instantTimes;
 
     public TestTableServiceClient(HoodieWriteConfig writeConfig, Iterator<HoodieTable<String, String, String, String>> tables,
                                   Option<EmbeddedTimelineService> timelineService, Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo,
-                                  Iterator<String> instantTimes) {
-      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService);
+                                  TransactionManager transactionManager) {
+      super(new HoodieLocalEngineContext(getDefaultStorageConf()), writeConfig, timelineService, transactionManager);
       this.tables = tables;
       this.expectedRollbackInfo = expectedRollbackInfo;
-      this.instantTimes = instantTimes;
-    }
-
-    @Override
-    public String createNewInstantTime() {
-      return instantTimes.next();
     }
 
     @Override
@@ -280,6 +282,19 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     @Override
     protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback) {
       assertEquals(expectedRollbackInfo, instantsToRollback);
+    }
+  }
+
+  private TransactionManager createTransactionManager(List<String> instantTimes) {
+    try {
+      TimeGenerator timeGenerator = mock(TimeGenerator.class);
+      for (String instantTime : instantTimes) {
+        long epochMillis = TimelineUtils.parseDateFromInstantTime(instantTime).toInstant().toEpochMilli();
+        when(timeGenerator.generateTime()).thenReturn(epochMillis);
+      }
+      return new TransactionManager(null, false, timeGenerator);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
   }
 }
