@@ -577,11 +577,10 @@ public class HadoopFSUtils {
         (FileSystem) metaClient.getStorage().getFileSystem(),
         parallelism,
         pairOfSubPathAndConf -> {
-          Path file = new Path(pairOfSubPathAndConf.getKey());
+          StoragePath file = new StoragePath(pairOfSubPathAndConf.getKey());
           try {
-            FileSystem fs = (FileSystem) metaClient.getStorage().getFileSystem();
-            if (fs.exists(file)) {
-              return fs.delete(file, false);
+            if (metaClient.getStorage().exists(file)) {
+              return metaClient.getStorage().deleteFile(file);
             }
             return true;
           } catch (IOException e) {
