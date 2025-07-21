@@ -133,7 +133,7 @@ public class BootstrapOperator
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
     this.metaClient = StreamerUtil.metaClientForReader(conf, hadoopConf);
-    this.internalSchemaManager = InternalSchemaManager.get(conf, metaClient);
+    this.internalSchemaManager = InternalSchemaManager.get(hoodieTable.getStorageConf(), metaClient);
 
     preLoadIndexRecords();
   }
@@ -145,8 +145,7 @@ public class BootstrapOperator
     StoragePath basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
-    for (String partitionPath : FSUtils.getAllPartitionPaths(
-        new HoodieFlinkEngineContext(hadoopConf), hoodieTable.getStorage(), metadataConfig(conf), basePath)) {
+    for (String partitionPath : FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), hoodieTable.getMetaClient(), metadataConfig(conf))) {
       if (pattern.matcher(partitionPath).matches()) {
         loadRecords(partitionPath);
       }

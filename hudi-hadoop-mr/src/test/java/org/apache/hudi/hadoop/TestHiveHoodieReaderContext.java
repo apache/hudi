@@ -20,14 +20,18 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
@@ -35,8 +39,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +51,11 @@ class TestHiveHoodieReaderContext {
   private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
   private final HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = mock(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator.class);
   private final StorageConfiguration<?> storageConfiguration = new HadoopStorageConfiguration(false);
+  private static final Schema SCHEMA = SchemaBuilder.record("TestRecord").fields()
+      .requiredInt("id")
+      .requiredString("name")
+      .requiredBoolean("active")
+      .endRecord();
 
   @Test
   void getRecordKeyWithSingleKey() {
@@ -89,6 +101,56 @@ class TestHiveHoodieReaderContext {
     assertEquals("value3", avroReaderContext.getValue(row, getBaseSchema(), "field_3.nested_field").toString());
   }
 
+  @Test
+  void testConstructEngineRecordWithNoUpdates() {
+    JobConf jobConf = getJobConf();
+    Schema schema = getBaseSchema();
+    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
+        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+
+    ArrayWritable base = createBaseRecord(new Writable[]{
+        new IntWritable(1),
+        new Text("Alice"),
+        new BooleanWritable(true)});
+    BufferedRecord<ArrayWritable> buffered = new BufferedRecord<>("anyKey", 1, base, 1, false);
+
+    Map<Integer, Object> updates = new HashMap<>();
+    ArrayWritable result = avroReaderContext.constructEngineRecord(SCHEMA, updates, buffered);
+    Writable[] values = result.get();
+
+    assertEquals(1, ((IntWritable) values[0]).get());
+    assertEquals("Alice", values[1].toString());
+    assertTrue(((BooleanWritable) values[2]).get());
+  }
+
+  @Test
+  void testConstructEngineRecordWithUpdates() {
+    JobConf jobConf = getJobConf();
+    Schema schema = getBaseSchema();
+    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
+        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+
+    ArrayWritable base = createBaseRecord(new Writable[]{
+        new IntWritable(1),
+        new Text("Alice"),
+        new BooleanWritable(true)});
+    BufferedRecord<ArrayWritable> buffered = new BufferedRecord<>("anyKey", 1, base, 1, false);
+
+    Map<Integer, Object> updates = new HashMap<>();
+    updates.put(0, new IntWritable(2));
+    updates.put(1, new Text("Bob"));
+    ArrayWritable result = avroReaderContext.constructEngineRecord(SCHEMA, updates, buffered);
+    Writable[] values = result.get();
+
+    assertEquals(2, ((IntWritable) values[0]).get());
+    assertEquals("Bob", values[1].toString());
+    assertTrue(((BooleanWritable) values[2]).get());
+  }
+
   private JobConf getJobConf() {
     JobConf jobConf = new JobConf(storageConfiguration.unwrapAs(Configuration.class));
     jobConf.set("columns", "field_1,field_2,field_3,datestr");
@@ -104,5 +166,9 @@ class TestHiveHoodieReaderContext {
         Schema.Type.STRING)))));
     baseDataSchema.setFields(Arrays.asList(baseField1, baseField2, baseField3));
     return baseDataSchema;
+  }
+
+  private ArrayWritable createBaseRecord(Writable[] values) {
+    return new ArrayWritable(Writable.class, values);
   }
 }

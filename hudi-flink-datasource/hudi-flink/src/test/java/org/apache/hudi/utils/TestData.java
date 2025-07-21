@@ -367,6 +367,14 @@ public class TestData {
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1), StringData.fromString("par2")));
 
+  public static List<RowData> DATA_SET_PART3 = Collections.singletonList(
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par2")));
+
+  public static List<RowData> DATA_SET_PART4 = Collections.singletonList(
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par2")));
+
   public static List<RowData> DATA_SET_SINGLE_DELETE = Collections.singletonList(
       deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(5), StringData.fromString("par1")));

@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.IntWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -155,7 +156,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
 
     // clean first commit
-    String cleanTime = writeClient.createNewInstantTime();
+    String cleanTime = WriteClientTestUtils.createNewInstantTime();
     HoodieCleanerPlan cleanerPlan = cleanerPlan(new HoodieActionInstant(instantTime2, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.COMPLETED.name()), instantTime3,
         Collections.singletonMap(partitionPath1, Collections.singletonList(new HoodieCleanFileInfo(filePath1, false))));
     metaClient.getActiveTimeline().saveToCleanRequested(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime), Option.of(cleanerPlan));
@@ -216,7 +217,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
   }
 
   private void assertFileGroupCorrectness(String instantTime, String partitionPath, String filePath, String fileId, int expectedSize) {
-    HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath().toString());
+    HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory().create(
+        context, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath().toString());
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(tableMetadata, metaClient, metaClient.reloadActiveTimeline());
     List<HoodieFileGroup> fileGroups = fsView.getAllFileGroups(partitionPath).collect(Collectors.toList());
     Assertions.assertEquals(expectedSize, fileGroups.size());

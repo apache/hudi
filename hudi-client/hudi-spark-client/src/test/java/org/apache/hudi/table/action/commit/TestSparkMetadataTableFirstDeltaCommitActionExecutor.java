@@ -49,7 +49,7 @@ import static org.mockito.Mockito.mock;
 /**
  * Tests SparkMetadataTableUpsertCommitActionExecutor.
  */
-public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClientFunctionalTestHarness {
+public class TestSparkMetadataTableFirstDeltaCommitActionExecutor extends SparkClientFunctionalTestHarness {
 
   @Test
   public void testMetadataTableUpsertCommitActionExecutor() throws IOException {
@@ -71,8 +71,8 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
     metaClient.getActiveTimeline().createNewInstant(metaClient.createNewInstant(HoodieInstant.State.REQUESTED, DELTA_COMMIT_ACTION,
         "0001"));
 
-    SparkMetadataTableUpsertCommitActionExecutor commitActionExecutor = new MockSparkMetadataTableUpsertCommitActionExecutor(context(),
-        writeConfig, table, "0001", recordHoodieData, hoodieFileGroupIdList, statusHoodieData, true);
+    BaseSparkCommitActionExecutor commitActionExecutor = new MockSparkMetadataTableFirstDeltaCommitActionExecutor(context(),
+        writeConfig, table, "0001", recordHoodieData, hoodieFileGroupIdList, statusHoodieData);
     commitActionExecutor.execute(recordHoodieData);
     // since this is initial call, inflight instant should be added.
     assertTrue(metaClient.reloadActiveTimeline().getWriteTimeline().filterInflights().containsInstant("0001"));
@@ -80,8 +80,8 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
     hoodieFileGroupIdList.clear();
     hoodieFileGroupIdList.add(new HoodieFileGroupId(MetadataPartitionType.FILES.getPartitionPath(), "files-00001"));
 
-    commitActionExecutor = new MockSparkMetadataTableUpsertCommitActionExecutor(context(),
-        writeConfig, table, "0001", recordHoodieData, hoodieFileGroupIdList, statusHoodieData, false);
+    commitActionExecutor = new MockSparkMetadataTableSecondaryDeltaCommitActionExecutor(context(),
+        writeConfig, table, "0001", recordHoodieData, statusHoodieData, false);
     commitActionExecutor.execute(recordHoodieData);
     // ensure inflight is still intact and is not complete yet unless we commit
     HoodieActiveTimeline reloadedActiveTimeline = metaClient.reloadActiveTimeline();
@@ -89,14 +89,30 @@ public class TestSparkMetadataTableUpsertCommitActionExecutor extends SparkClien
     assertFalse(reloadedActiveTimeline.getWriteTimeline().filterCompletedInstants().containsInstant("0001"));
   }
 
-  static class MockSparkMetadataTableUpsertCommitActionExecutor<T> extends SparkMetadataTableUpsertCommitActionExecutor<T> {
+  static class MockSparkMetadataTableFirstDeltaCommitActionExecutor<T> extends SparkMetadataTableFirstDeltaCommitActionExecutor<T> {
     private final HoodieData<WriteStatus> writeStatusHoodieData;
-    public MockSparkMetadataTableUpsertCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
-                                                            String instantTime, HoodieData<HoodieRecord<T>> preppedRecords,
-                                                            List<HoodieFileGroupId> hoodieFileGroupIdList,
-                                                            HoodieData<WriteStatus> writeStatusHoodieData,
-                                                            boolean initialCall) {
-      super(context, config, table, instantTime, preppedRecords, hoodieFileGroupIdList, initialCall);
+    public MockSparkMetadataTableFirstDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
+                                                                String instantTime, HoodieData<HoodieRecord<T>> preppedRecords,
+                                                                List<HoodieFileGroupId> hoodieFileGroupIdList,
+                                                                HoodieData<WriteStatus> writeStatusHoodieData) {
+      super(context, config, table, instantTime, preppedRecords, hoodieFileGroupIdList);
+      this.writeStatusHoodieData = writeStatusHoodieData;
+    }
+
+    @Override
+    protected HoodieData<WriteStatus> mapPartitionsAsRDD(HoodieData<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
+      return writeStatusHoodieData;
+    }
+  }
+
+  static class MockSparkMetadataTableSecondaryDeltaCommitActionExecutor<T> extends SparkMetadataTableSecondaryDeltaCommitActionExecutor<T> {
+    private final HoodieData<WriteStatus> writeStatusHoodieData;
+
+    public MockSparkMetadataTableSecondaryDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
+                                                                    String instantTime, HoodieData<HoodieRecord<T>> preppedRecords,
+                                                                    HoodieData<WriteStatus> writeStatusHoodieData,
+                                                                    boolean initialCall) {
+      super(context, config, table, instantTime, preppedRecords, initialCall);
       this.writeStatusHoodieData = writeStatusHoodieData;
     }
 

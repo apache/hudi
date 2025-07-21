@@ -104,6 +104,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.partitionColSet = new HashSet<>(this.partitionCols);
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
+    this.typeConverter = new HiveReaderContextTypeConverter();
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
@@ -203,22 +204,16 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
+    return getFieldValueFromArrayWritable(record, schema, fieldName, objectInspectorCache);
+  }
+
+  public static Object getFieldValueFromArrayWritable(ArrayWritable record, Schema schema, String fieldName, ObjectInspectorCache objectInspectorCache) {
     return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
   }
 
   @Override
   public String getMetaFieldValue(ArrayWritable record, int pos) {
     return record.get()[pos].toString();
-  }
-
-  @Override
-  public boolean castToBoolean(Object value) {
-    if (value instanceof BooleanWritable) {
-      return ((BooleanWritable) value).get();
-    } else {
-      throw new IllegalArgumentException(
-          "Expected BooleanWritable but got " + value.getClass());
-    }
   }
 
   @Override
@@ -232,6 +227,17 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
     return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
+  }
+
+  @Override
+  public ArrayWritable constructEngineRecord(Schema schema,
+                                             Map<Integer, Object> updateValues,
+                                             BufferedRecord<ArrayWritable> baseRecord) {
+    Writable[] engineRecord = baseRecord.getRecord().get();
+    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
+      engineRecord[value.getKey()] = (Writable) value.getValue();
+    }
+    return baseRecord.getRecord();
   }
 
   @Override
@@ -340,5 +346,4 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     }
     throw new IllegalStateException("getProgress() should not be called before a record reader has been initialized");
   }
-
 }

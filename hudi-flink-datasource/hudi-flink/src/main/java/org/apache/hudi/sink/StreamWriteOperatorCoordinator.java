@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -38,7 +39,6 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
-import org.apache.hudi.sink.utils.CommitGuard;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.ExplicitClassloaderThreadFactory;
@@ -196,11 +196,6 @@ public class StreamWriteOperatorCoordinator
   private ClientIds clientIds;
 
   /**
-   * The commit guard for blocking instant time generation.
-   */
-  private Option<CommitGuard> commitGuardOpt;
-
-  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -220,10 +215,8 @@ public class StreamWriteOperatorCoordinator
     // setup classloader for APIs that use reflection without taking ClassLoader param
     // reference: https://stackoverflow.com/questions/1771679/difference-between-threads-context-class-loader-and-normal-classloader
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
+    initEventBufferIfNecessary();
     this.tableState = TableState.create(conf);
-    initCommitGuard(this.conf);
-    // initialize event buffer
-    this.eventBuffers = EventBuffers.getInstance(this.commitGuardOpt);
     this.gateways = new SubtaskGateway[this.parallelism];
     try {
       // init table, create if not exists.
@@ -249,6 +242,7 @@ public class StreamWriteOperatorCoordinator
       if (OptionsResolver.isMultiWriter(conf)) {
         initClientIds(conf);
       }
+      restoreEvents();
     } catch (Throwable throwable) {
       LOG.error("Failed to start operator coordinator.", throwable);
       context.failJob(throwable);
@@ -283,7 +277,8 @@ public class StreamWriteOperatorCoordinator
     executor.execute(
         () -> {
           try {
-            result.complete(new byte[0]);
+            byte[] eventBytes = SerializationUtils.serialize(this.eventBuffers.getAllCompletedEvents());
+            result.complete(eventBytes);
           } catch (Throwable throwable) {
             // when a checkpoint fails, throws directly.
             result.completeExceptionally(
@@ -316,7 +311,10 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
-    // no operation
+    if (checkpointData != null) {
+      initEventBufferIfNecessary();
+      this.eventBuffers.addEventsToBuffer(SerializationUtils.deserialize(checkpointData));
+    }
   }
 
   @Override
@@ -367,7 +365,7 @@ public class StreamWriteOperatorCoordinator
       final String instantTime;
       if (instantTimeAndEventBuffer == null) {
         // wait until previous instants are committed.
-        awaitAllInstantsToCompleteIfNecessary();
+        eventBuffers.awaitAllInstantsToCompleteIfNecessary();
         instantTime = startInstant();
         this.eventBuffers.initNewEventBuffer(checkpointId, instantTime, this.parallelism);
       } else {
@@ -382,9 +380,12 @@ public class StreamWriteOperatorCoordinator
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void awaitAllInstantsToCompleteIfNecessary() {
-    if (this.commitGuardOpt.isPresent() && this.eventBuffers.nonEmpty()) {
-      this.commitGuardOpt.get().blockFor(this.eventBuffers.getPendingInstants());
+  private void restoreEvents() {
+    if (this.eventBuffers.nonEmpty()) {
+      final HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
+      this.eventBuffers.getEventBufferStream()
+          .forEach(entry -> recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight()));
+      this.metaClient.reloadActiveTimeline();
     }
   }
 
@@ -441,12 +442,12 @@ public class StreamWriteOperatorCoordinator
     this.clientIds.start();
   }
 
-  private void initCommitGuard(Configuration conf) {
-    if (tableState.isBlockingInstantGeneration) {
-      this.commitGuardOpt = Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT)));
-    } else {
-      this.commitGuardOpt = Option.empty();
+  private void initEventBufferIfNecessary() {
+    if (this.eventBuffers != null) {
+      return;
     }
+    // initialize event buffer
+    this.eventBuffers = EventBuffers.getInstance(conf);
   }
 
   private String startInstant() {
@@ -470,6 +471,14 @@ public class StreamWriteOperatorCoordinator
    */
   private void recommitInstant(long checkpointId, String instant, WriteMetadataEvent[] bootstrapBuffer) {
     HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
+    recommitInstant(completedTimeline, checkpointId, instant, bootstrapBuffer);
+  }
+
+  /**
+   * Recommits the last inflight instant if the write metadata checkpoint successfully
+   * but was not committed due to some rare cases.
+   */
+  private void recommitInstant(HoodieTimeline completedTimeline, long checkpointId, String instant, WriteMetadataEvent[] bootstrapBuffer) {
     if (!completedTimeline.containsInstant(instant)) {
       LOG.info("Recommit instant {}", instant);
       // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired;
@@ -686,10 +695,6 @@ public class StreamWriteOperatorCoordinator
     final boolean syncHive;
     final boolean syncMetadata;
     final boolean isDeltaTimeCompaction;
-    /**
-     * Whether the writer for the table applies blocking instant generation.
-     */
-    final boolean isBlockingInstantGeneration;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
@@ -701,7 +706,6 @@ public class StreamWriteOperatorCoordinator
       this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
-      this.isBlockingInstantGeneration = OptionsResolver.isBlockingInstantGeneration(conf);
     }
 
     public static TableState create(Configuration conf) {

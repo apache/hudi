@@ -21,6 +21,7 @@ package org.apache.hudi.source.stats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -56,14 +57,10 @@ public class TestColumnStatsIndex {
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.setString("hoodie.metadata.index.partition.stats.enable", "true");
     conf.setString("hoodie.metadata.index.column.stats.enable", "true");
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .enable(true)
-        .withMetadataIndexColumnStats(true)
-        .build();
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     String[] queryColumns = {"uuid", "age"};
-    PartitionStatsIndex indexSupport = new PartitionStatsIndex(path, TestConfigurations.ROW_TYPE, metadataConfig);
+    PartitionStatsIndex indexSupport = new PartitionStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf));
     List<RowData> indexRows = indexSupport.readColumnStatsIndexByColumns(queryColumns);
     List<String> results = indexRows.stream().map(Object::toString).sorted(String::compareTo).collect(Collectors.toList());
     List<String> expected = Arrays.asList(
@@ -93,19 +90,15 @@ public class TestColumnStatsIndex {
   void testTransposeColumnStatsIndex() throws Exception {
     final String path = tempFile.getAbsolutePath();
     Configuration conf = TestConfigurations.getDefaultConf(path);
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
+    conf.setBoolean(HoodieMetadataConfig.ENABLE.key(), true);
     conf.setBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
-    conf.setString("hoodie.metadata.index.column.stats.enable", "true");
+    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
 
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .enable(true)
-        .withMetadataIndexColumnStats(true)
-        .build();
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     // explicit query columns
     String[] queryColumns1 = {"uuid", "age"};
-    FileStatsIndex indexSupport = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, metadataConfig);
+    FileStatsIndex indexSupport = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf));
     List<RowData> indexRows1 = indexSupport.readColumnStatsIndexByColumns(queryColumns1);
     Pair<List<RowData>, String[]> transposedIndexTable1 = indexSupport.transposeColumnStatsIndex(indexRows1, queryColumns1);
     assertThat("The schema columns should sort by natural order",

@@ -149,7 +149,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(HoodieTableVersion.current().versionCode())
       .withValidValues(
           String.valueOf(HoodieTableVersion.SIX.versionCode()),
-          String.valueOf(HoodieTableVersion.current().versionCode())
+          String.valueOf(HoodieTableVersion.EIGHT.versionCode()),
+          String.valueOf(HoodieTableVersion.NINE.versionCode())
       )
       .sinceVersion("1.0.0")
       .withDocumentation("The table version this writer is storing the table in. This should match the current table version.");
@@ -842,7 +843,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
+      .withDocumentation("Whether to enable incremental table service. "
+          + "So far Clustering and Compaction support incremental processing.");
+
+  public static final ConfigProperty<Boolean> TRACK_EVENT_TIME_WATERMARK = ConfigProperty
+      .key("hoodie.write.track.event.time.watermark")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Records event time watermark metadata in commit metadata when enabled");
 
   public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
       .key("hoodie.write.merge.handle.class")
@@ -1256,7 +1265,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE.defaultValue();
-
   /**
    * Use Spark engine by default.
    */

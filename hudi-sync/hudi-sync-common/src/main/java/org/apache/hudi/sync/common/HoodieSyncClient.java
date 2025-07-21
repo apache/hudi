@@ -123,8 +123,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   public List<String> getAllPartitionPathsOnStorage() {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     return FSUtils.getAllPartitionPaths(engineContext,
-        metaClient.getStorage(),
-        config.getString(META_SYNC_BASE_PATH),
+        metaClient,
         config.getBoolean(META_SYNC_USE_FILE_LISTING_FROM_METADATA));
   }
 

@@ -75,11 +75,12 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.FileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.KeyBasedFileGroupRecordBuffer;
@@ -159,7 +160,7 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.getSchemaForFields;
+import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
@@ -1030,11 +1031,13 @@ public class HoodieTableMetadataUtil {
       HoodieTableConfig tableConfig = datasetMetaClient.getTableConfig();
       readerContext.initRecordMerger(properties);
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), tableConfig, properties));
+      HoodieReadStats readStats = new HoodieReadStats();
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), properties, new HoodieReadStats(), Option.ofNullable(tableConfig.getPreCombineField()), true);
+          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, readStats, Option.ofNullable(tableConfig.getPreCombineField()),
+          UpdateProcessor.create(readStats, readerContext, true, Option.empty()));
 
       // CRITICAL: Ensure allowInflightInstants is set to true
-      HoodieMergedLogRecordReader<T> mergedLogRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
+      try (HoodieMergedLogRecordReader<T> mergedLogRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
           .withStorage(datasetMetaClient.getStorage())
           .withHoodieReaderContext(readerContext)
           .withLogFiles(logFilePaths.stream().map(HoodieLogFile::new).collect(toList()))
@@ -1045,38 +1048,12 @@ public class HoodieTableMetadataUtil {
           .withMetaClient(datasetMetaClient)
           .withAllowInflightInstants(true)
           .withRecordBuffer(recordBuffer)
-          .build();
-      return new CloseableLogRecordsIterator<>(mergedLogRecordReader, recordBuffer);
+          .build()) {
+        // initializes the record buffer with the log records
+        return recordBuffer.getLogRecordIterator();
+      }
     }
     return ClosableIterator.wrap(Collections.emptyIterator());
-  }
-
-  private static class CloseableLogRecordsIterator<T> implements ClosableIterator<BufferedRecord<T>> {
-    private final HoodieMergedLogRecordReader<T> mergedLogRecordReader;
-    private final FileGroupRecordBuffer<T> recordBuffer;
-    private final Iterator<BufferedRecord<T>> iterator;
-
-    public CloseableLogRecordsIterator(HoodieMergedLogRecordReader<T> mergedLogRecordReader, FileGroupRecordBuffer<T> recordBuffer) {
-      this.mergedLogRecordReader = mergedLogRecordReader;
-      this.recordBuffer = recordBuffer;
-      this.iterator = mergedLogRecordReader.iterator();
-    }
-
-    @Override
-    public void close() {
-      mergedLogRecordReader.close();
-      recordBuffer.close();
-    }
-
-    @Override
-    public boolean hasNext() {
-      return iterator.hasNext();
-    }
-
-    @Override
-    public BufferedRecord<T> next() {
-      return iterator.next();
-    }
   }
 
   @VisibleForTesting
@@ -1419,7 +1396,7 @@ public class HoodieTableMetadataUtil {
     // default FileSystemView will not return any file slices even
     // though we may have initialized them.
     HoodieTimeline timeline = metaClient.getActiveTimeline();
-    TimelineFactory factory = metaClient.getTimelineLayout().getTimelineFactory();
+    TimelineFactory factory = metaClient.getTableFormat().getTimelineFactory();
     if (timeline.empty()) {
       final HoodieInstant instant = metaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION,
           HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
@@ -1732,7 +1709,9 @@ public class HoodieTableMetadataUtil {
       HoodieFileGroupReader fileGroupReader = HoodieFileGroupReader.newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(datasetMetaClient)
-          .withFileSlice(fileSlice)
+          .withLogFiles(Stream.of(logFile))
+          .withPartitionPath(partitionPath)
+          .withBaseFileOption(Option.empty())
           .withDataSchema(writerSchemaOpt.get())
           .withRequestedSchema(writerSchemaOpt.get())
           .withLatestCommitTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
@@ -2457,7 +2436,7 @@ public class HoodieTableMetadataUtil {
     List<String> mergedFields = new ArrayList<>(partitionFields.size() + sourceFields.size());
     mergedFields.addAll(partitionFields);
     mergedFields.addAll(sourceFields);
-    return addMetadataFields(getSchemaForFields(tableSchema, mergedFields));
+    return addMetadataFields(projectSchema(tableSchema, mergedFields));
   }
 
   /**
