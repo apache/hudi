@@ -123,7 +123,7 @@ public class HoodieMergeHandleFactory {
 
     boolean isFallbackEnabled = config.isMergeHandleFallbackEnabled();
 
-    String mergeHandleClass = config.getFileGroupReaderMergeHandleClassName();
+    String mergeHandleClass = config.getCompactionMergeHandleClassName();
     String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
     LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
 

@@ -1543,7 +1543,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getStringOrDefault(CONCAT_HANDLE_CLASS_NAME);
   }
 
-  public String getFileGroupReaderMergeHandleClassName() {
+  public String getCompactionMergeHandleClassName() {
     return getStringOrDefault(COMPACT_MERGE_HANDLE_CLASS_NAME);
   }
 
