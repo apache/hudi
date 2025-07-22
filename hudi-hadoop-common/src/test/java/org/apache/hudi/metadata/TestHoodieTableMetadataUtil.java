@@ -423,16 +423,21 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // Test multiple supported fields
     assertTrue(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "intField", "longField"), schema));
 
+    // Test newly supported types for secondary index (float and double)
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("floatField"), schema));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("doubleField"), schema));
+    
     // Test unsupported types for secondary index
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("floatField"), schema));
-    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("doubleField"), schema));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("booleanField"), schema));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("arrayField"), schema));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("mapField"), schema));
     assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("structField"), schema));
     
+    // Test mix of supported types (should pass now that float is supported)
+    assertTrue(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "floatField"), schema));
+    
     // Test mix of supported and unsupported types (should fail)
-    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "floatField"), schema));
+    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "booleanField"), schema));
   }
 
   /**

@@ -104,7 +104,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           Seq("record_index", "record_index", "")
         )
 
-        // Secondary index can not be created for two columns at once
+        // Secondary index cannot be created for two columns at once
         checkException(s"create index idx_name_price on $tableName (name,price)")(
           "Only one column can be indexed for functional or secondary index."
         )

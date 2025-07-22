@@ -615,7 +615,7 @@ public class HoodieIndexUtils {
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Column '%s' has unsupported data type '%s'. "
             + "Secondary indexes only support: STRING, CHAR, INT, BIGINT/LONG, SMALLINT, TINYINT, "
-            + "TIMESTAMP (including logical types timestampMillis, timestampMicros), "
+            + "FLOAT, DOUBLE, TIMESTAMP (including logical types timestampMillis, timestampMicros), "
             + "and DATE types. Please choose a column with one of these supported types.",
             userIndexName, columnName, actualType));
       }
