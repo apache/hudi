@@ -218,7 +218,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                 .withStart(file.start)
                 .withLength(baseFileLength)
                 .withShouldUseRecordPosition(shouldUseRecordPosition)
-                .withEnableOptimizedLogBlockScan(props.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), props.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue())))
+                .withEnableOptimizedLogBlockScan(props.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue().toBoolean))
                 .build()
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(
