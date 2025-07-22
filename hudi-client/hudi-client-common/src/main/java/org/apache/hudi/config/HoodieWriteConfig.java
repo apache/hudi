@@ -71,6 +71,9 @@ import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.io.HoodieConcatHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -850,6 +853,37 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("Records event time watermark metadata in commit metadata when enabled");
 
+  public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.write.merge.handle.class")
+      .defaultValue(HoodieWriteMergeHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The merge handle class that implements interface{@link HoodieMergeHandle} to merge the records "
+          + "from a base file with an iterator of incoming records or a map of updates and deletes from log files at a file group level.");
+
+  public static final ConfigProperty<String> CONCAT_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.write.concat.handle.class")
+      .defaultValue(HoodieConcatHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The merge handle class to use to concat the records from a base file with an iterator of incoming records.");
+
+  public static final ConfigProperty<String> COMPACT_MERGE_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.compact.merge.handle.class")
+      .defaultValue(FileGroupReaderBasedMergeHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Merge handle class for compaction");
+
+  public static final ConfigProperty<Boolean> MERGE_HANDLE_PERFORM_FALLBACK = ConfigProperty
+      .key("hoodie.write.merge.handle.fallback")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("When using a custom Hoodie Merge Handle Implementation controlled by the config " + MERGE_HANDLE_CLASS_NAME.key()
+          + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
+              + ", enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -1401,6 +1435,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
   }
 
+  public boolean isMergeHandleFallbackEnabled() {
+    return getBooleanOrDefault(HoodieWriteConfig.MERGE_HANDLE_PERFORM_FALLBACK);
+  }
+
   public boolean isConsistentLogicalTimestampEnabled() {
     return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
   }
@@ -1495,6 +1533,18 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getWriteStatusClassName() {
     return getString(WRITE_STATUS_CLASS_NAME);
+  }
+
+  public String getMergeHandleClassName() {
+    return getStringOrDefault(MERGE_HANDLE_CLASS_NAME);
+  }
+
+  public String getConcatHandleClassName() {
+    return getStringOrDefault(CONCAT_HANDLE_CLASS_NAME);
+  }
+
+  public String getCompactionMergeHandleClassName() {
+    return getStringOrDefault(COMPACT_MERGE_HANDLE_CLASS_NAME);
   }
 
   public int getFinalizeWriteParallelism() {
@@ -3396,6 +3446,21 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withIncrementalTableServiceEnabled(boolean incrementalTableServiceEnabled) {
       writeConfig.setValue(INCREMENTAL_TABLE_SERVICE_ENABLED, String.valueOf(incrementalTableServiceEnabled));
+      return this;
+    }
+
+    public Builder withMergeHandleClassName(String className) {
+      writeConfig.setValue(MERGE_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withConcatHandleClassName(String className) {
+      writeConfig.setValue(CONCAT_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withFileGroupReaderMergeHandleClassName(String className) {
+      writeConfig.setValue(COMPACT_MERGE_HANDLE_CLASS_NAME, className);
       return this;
     }
 

@@ -41,7 +41,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
+ * A {@link HoodieWriteMergeHandle} that supports MERGE write incrementally(small data buffers).
  *
  * <p>For a new data buffer, it initializes and set up the next file path to write,
  * and closes the file path when the data buffer write finish. When next data buffer
@@ -52,7 +52,7 @@ import java.util.List;
  * @see FlinkMergeAndReplaceHandle
  */
 public class FlinkMergeHandle<T, I, K, O>
-    extends HoodieMergeHandle<T, I, K, O>
+    extends HoodieWriteMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeHandle.class);
@@ -155,7 +155,7 @@ public class FlinkMergeHandle<T, I, K, O>
   }
 
   @Override
-  protected void initializeIncomingRecordsMap() {
+  protected void initIncomingRecordsMap() {
     LOG.info("Initialize on-heap keyToNewRecords for incoming records.");
     // the incoming records are already buffered on heap and the underlying bytes are managed by memory pool
     // in Flink write buffer, so there is no need to use ExternalSpillableMap.
@@ -187,6 +187,7 @@ public class FlinkMergeHandle<T, I, K, O>
     }
   }
 
+  @Override
   boolean needsUpdateLocation() {
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.
