@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -31,6 +32,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
@@ -49,6 +51,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * This is the single (non-parallel) monitoring task which takes a {@link MergeOnReadInputSplit}
@@ -89,6 +92,8 @@ public class StreamReadMonitoringFunction
    */
   private final boolean cdcEnabled;
 
+  private final int splitsLimit;
+
   private transient Object checkpointLock;
 
   private volatile boolean isRunning = true;
@@ -97,7 +102,13 @@ public class StreamReadMonitoringFunction
 
   private String issuedOffset;
 
+  private int totalSplits = -1;
+
+  private List<MergeOnReadInputSplit> remainingSplits = new ArrayList<>();
+
   private transient ListState<String> instantState;
+
+  private transient ListState<MergeOnReadInputSplit> inputSplitsState;
 
   private final Configuration conf;
 
@@ -117,6 +128,7 @@ public class StreamReadMonitoringFunction
     this.path = path;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
     this.cdcEnabled = conf.getBoolean(FlinkOptions.CDC_ENABLED);
+    this.splitsLimit = OptionsResolver.hasReadSplitsLimit(conf) ? conf.getInteger(FlinkOptions.READ_SPLITS_LIMIT) : 0;
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(conf)
         .path(path)
@@ -144,6 +156,11 @@ public class StreamReadMonitoringFunction
         )
     );
 
+    this.inputSplitsState = context.getOperatorStateStore().getListState(
+        new ListStateDescriptor<>(
+            "file-monitoring-splits",
+            TypeInformation.of(MergeOnReadInputSplit.class)));
+
     if (context.isRestored()) {
       LOG.info("Restoring state for the class {} with table {} and base path {}.",
           getClass().getSimpleName(), conf.getString(FlinkOptions.TABLE_NAME), path);
@@ -153,7 +170,7 @@ public class StreamReadMonitoringFunction
         retrievedStates.add(entry);
       }
 
-      ValidationUtils.checkArgument(retrievedStates.size() <= 2,
+      ValidationUtils.checkArgument(retrievedStates.size() <= 3,
           getClass().getSimpleName() + " retrieved invalid state.");
 
       if (retrievedStates.size() == 1 && issuedInstant != null) {
@@ -176,6 +193,20 @@ public class StreamReadMonitoringFunction
         if (LOG.isDebugEnabled()) {
           LOG.debug("{} retrieved an issued instant of time [{}, {}] for table {} with path {}.",
               getClass().getSimpleName(), issuedInstant, issuedOffset, conf.get(FlinkOptions.TABLE_NAME), path);
+        }
+      } else if (retrievedStates.size() == 3) {
+        this.issuedInstant = retrievedStates.get(0);
+        this.issuedOffset = retrievedStates.get(1);
+        this.totalSplits = Integer.parseInt(retrievedStates.get(2));
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("{} retrieved an issued instant of time [{}, {}] and total inputsplit is {} for table {} with path {}.",
+              getClass().getSimpleName(), issuedInstant, issuedOffset, totalSplits, conf.get(FlinkOptions.TABLE_NAME), path);
+        }
+      }
+      Iterable<MergeOnReadInputSplit> inputSplitsIterable = inputSplitsState.get();
+      if (inputSplitsIterable != null) {
+        for (MergeOnReadInputSplit split : inputSplitsIterable) {
+          remainingSplits.add(split);
         }
       }
     }
@@ -213,8 +244,10 @@ public class StreamReadMonitoringFunction
       // table does not exist
       return;
     }
-    IncrementalInputSplits.Result result =
-        incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled);
+
+    IncrementalInputSplits.Result result = remainingSplits.isEmpty()
+        ? incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled)
+        : IncrementalInputSplits.Result.instance(remainingSplits, issuedInstant);
 
     if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
@@ -222,19 +255,36 @@ public class StreamReadMonitoringFunction
       return;
     }
 
-    for (MergeOnReadInputSplit split : result.getInputSplits()) {
-      context.collect(split);
+    List<MergeOnReadInputSplit> inputSplits = result.getInputSplits();
+    LOG.info("Table {} : Read {} inputsplits for current instant", conf.getString(FlinkOptions.TABLE_NAME), inputSplits.size());
+    if (splitsLimit > 0) {
+      int endIndex = splitsLimit < inputSplits.size() ? splitsLimit : inputSplits.size();
+      for (int index = 0; index < endIndex; index++) {
+        context.collect(inputSplits.get(index));
+      }
+      remainingSplits = inputSplits.stream().skip(endIndex).collect(Collectors.toList());
+      if (totalSplits < 0 || !result.getEndInstant().equals(issuedInstant)) {
+        totalSplits = inputSplits.size();
+      }
+    } else {
+      for (MergeOnReadInputSplit split : inputSplits) {
+        context.collect(split);
+      }
+      totalSplits = inputSplits.size();
     }
 
     // update the issues instant time
     this.issuedInstant = result.getEndInstant();
     this.issuedOffset = result.getOffset();
+    int sentSplits = totalSplits - remainingSplits.size();
+    double sentPercent = totalSplits == 0 ? 0 : (1 - remainingSplits.size() / (double) totalSplits) * 100;
     LOG.info("\n"
             + "------------------------------------------------------------\n"
             + "---------- table: {}\n"
             + "---------- consumed to instant: {}\n"
+            + "---------- total sent {} inputsplits out of {}, percent is {}%\n"
             + "------------------------------------------------------------",
-        conf.getString(FlinkOptions.TABLE_NAME), this.issuedInstant);
+        conf.getString(FlinkOptions.TABLE_NAME), this.issuedInstant, sentSplits, totalSplits, sentPercent);
     if (result.isEmpty()) {
       LOG.warn("No new files to read for current run.");
     }
@@ -280,6 +330,11 @@ public class StreamReadMonitoringFunction
     if (this.issuedOffset != null) {
       this.instantState.add(this.issuedOffset);
     }
+    if (totalSplits > 0) {
+      this.instantState.add(String.valueOf(totalSplits));
+    }
+    inputSplitsState.clear();
+    inputSplitsState.addAll(remainingSplits);
   }
 
   private void registerMetrics() {

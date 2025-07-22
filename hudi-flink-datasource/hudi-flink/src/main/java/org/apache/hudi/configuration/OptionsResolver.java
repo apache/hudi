@@ -324,6 +324,13 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the read splits limit is specified and valid.
+   */
+  public static boolean hasReadSplitsLimit(Configuration conf) {
+    return conf.contains(FlinkOptions.READ_SPLITS_LIMIT) && conf.getInteger(FlinkOptions.READ_SPLITS_LIMIT) > 0;
+  }
+
+  /**
    * Returns the supplemental logging mode.
    */
   public static HoodieCDCSupplementalLoggingMode getCDCSupplementalLoggingMode(Configuration conf) {
