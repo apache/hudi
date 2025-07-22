@@ -17,14 +17,12 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
+import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePathInfo
 import org.apache.hudi.util.JFunction
 
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.sources.Filter
@@ -46,12 +44,12 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
   ) with FileIndex {
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val fileSlices = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters).flatMap(
+    val fileSlices = mergeOnReadIncrementalRelation.listFileSplits(partitionFilters, dataFilters).toSeq.flatMap(
       {
         case (partitionValues, fileSlices) =>
-          fileSlices.filter(!_.isEmpty).map(fs => ( partitionValues, fs))
+          fileSlices.filter(!_.isEmpty).map(fs => ( partitionValues, fs.withLogFiles(includeLogFiles)))
       }
-    ).toSeq
+    )
     prepareFileSlices(fileSlices)
   }
 
