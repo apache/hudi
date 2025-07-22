@@ -180,13 +180,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats);
     } else if (sortOutput) {
       return new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
     } else if (shouldUseRecordPosition && inputSplit.baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, inputSplit.baseFileOption.get().getCommitTime(), props, readStats, orderingFieldName, updateProcessor);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, inputSplit.baseFileOption.get().getCommitTime(), props, orderingFieldName, updateProcessor);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
     }
   }
 
@@ -388,6 +388,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public ClosableIterator<String> getClosableKeyIterator() throws IOException {
     return new CloseableMappingIterator<>(getClosableIterator(),
         nextRecord -> readerContext.getRecordKey(nextRecord, readerContext.getSchemaHandler().getRequestedSchema()));
+  }
+
+  public ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException {
+    initRecordIterators();
+    return recordBuffer.getLogRecordIterator();
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {

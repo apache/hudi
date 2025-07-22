@@ -26,8 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -60,6 +59,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
@@ -76,7 +76,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   private static final Logger LOG = LoggerFactory.getLogger(FileGroupReaderBasedMergeHandle.class);
 
   private final HoodieReaderContext<T> readerContext;
-  private final FileSlice fileSlice;
   private final CompactionOperation operation;
   private final String maxInstantTime;
   private HoodieReadStats readStats;
@@ -84,14 +83,13 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   private final Option<HoodieCDCLogger> cdcLogger;
 
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                         FileSlice fileSlice, CompactionOperation operation, TaskContextSupplier taskContextSupplier,
+                                         CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                          HoodieReaderContext<T> readerContext, String maxInstantTime,
                                          HoodieRecord.HoodieRecordType enginRecordType) {
     super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
     this.maxInstantTime = maxInstantTime;
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
-    this.fileSlice = fileSlice;
     this.operation = operation;
     // If the table is a metadata table or the base file is an HFile, we use AVRO record type, otherwise we use the engine record type.
     this.recordType = hoodieTable.isMetadataTable() || HFILE.getFileExtension().equals(hoodieTable.getBaseFileExtension()) ? HoodieRecord.HoodieRecordType.AVRO : enginRecordType;
@@ -108,21 +106,21 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     } else {
       this.cdcLogger = Option.empty();
     }
-    init(operation, this.partitionPath, fileSlice.getBaseFile());
+    init(operation, this.partitionPath);
   }
 
-  private void init(CompactionOperation operation, String partitionPath, Option<HoodieBaseFile> baseFileToMerge) {
+  private void init(CompactionOperation operation, String partitionPath) {
     LOG.info("partitionPath:{}, fileId to be merged:{}", partitionPath, fileId);
-    this.baseFileToMerge = baseFileToMerge.orElse(null);
+    this.baseFileToMerge = operation.getBaseFile(config.getBasePath(), operation.getPartitionPath()).orElse(null);
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
     writeStatus.getStat().setTotalLogSizeCompacted(
         operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
     try {
       Option<String> latestValidFilePath = Option.empty();
-      if (baseFileToMerge.isPresent()) {
-        latestValidFilePath = Option.of(baseFileToMerge.get().getFileName());
-        writeStatus.getStat().setPrevCommit(baseFileToMerge.get().getCommitTime());
+      if (baseFileToMerge != null) {
+        latestValidFilePath = Option.of(baseFileToMerge.getFileName());
+        writeStatus.getStat().setPrevCommit(baseFileToMerge.getCommitTime());
         // At the moment, we only support SI for overwrite with latest payload. So, we don't need to embed entire file slice here.
         // HUDI-8518 will be taken up to fix it for any payload during which we might require entire file slice to be set here.
         // Already AppendHandle adds all logs file from current file slice to HoodieDeltaWriteStat.
@@ -176,10 +174,14 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     TypedProperties props = TypedProperties.copy(config.getProps());
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
+    Stream<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(logFileName ->
+        new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
+            config.getBasePath(), operation.getPartitionPath()), logFileName)));
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
-        .withLatestCommitTime(maxInstantTime).withFileSlice(fileSlice).withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
-        .withInternalSchema(internalSchemaOption).withProps(props).withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
+        .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge)).withLogFiles(logFiles)
+        .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields).withInternalSchema(internalSchemaOption).withProps(props)
+        .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(cdcLogger.map(logger -> new CDCCallback(logger, readerContext))).build()) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
@@ -199,6 +201,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
             writeToFile(record.getKey(), record, writeSchemaWithMetaFields,
                 config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);
+            recordsWritten++;
           } catch (Exception e) {
             LOG.error("Error writing record {}", record, e);
             writeStatus.markFailure(record, e, recordMetadata);
@@ -211,10 +214,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         this.insertRecordsWritten = readStats.getNumInserts();
         this.updatedRecordsWritten = readStats.getNumUpdates();
         this.recordsDeleted = readStats.getNumDeletes();
-        this.recordsWritten = readStats.getNumInserts() + readStats.getNumUpdates();
       }
     } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to compact file slice: " + fileSlice, e);
+      throw new HoodieUpsertException("Failed to compact file group: " + fileId, e);
     }
   }
 
