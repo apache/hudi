@@ -720,6 +720,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> continuousModeArgs() {
     return Stream.of(
+        Arguments.of("AVRO", "CURRENT"),
+        Arguments.of("SPARK", "CURRENT"),
         Arguments.of("AVRO", "EIGHT"),
         Arguments.of("SPARK", "EIGHT"),
         Arguments.of("AVRO", "SIX")
@@ -728,6 +730,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> continuousModeMorArgs() {
     return Stream.of(
+        Arguments.of("AVRO", "CURRENT"),
         Arguments.of("AVRO", "EIGHT"),
         Arguments.of("AVRO", "SIX")
     );
@@ -736,7 +739,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Timeout(600)
   @ParameterizedTest
   @MethodSource("continuousModeArgs")
-  public void testUpsertsCOWContinuousMode(HoodieRecordType recordType, String writeTableVersion) throws Exception {
+  void testUpsertsCOWContinuousMode(HoodieRecordType recordType, String writeTableVersion) throws Exception {
     testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", recordType, writeTableVersion);
   }
 
@@ -759,8 +762,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
-  public void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "EIGHT");
+  void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "CURRENT");
   }
 
   @Timeout(600)
@@ -807,6 +810,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
     if (HoodieTableVersion.SIX.name().equals(writeTableVersion)) {
       cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode()));
+    } else if (HoodieTableVersion.EIGHT.name().equals(writeTableVersion)) {
+      cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), HoodieTableVersion.EIGHT.versionCode()));
     }
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
@@ -825,7 +830,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
     // validate table version matches
     HoodieTableMetaClient hudiTblMetaClient = HoodieTableMetaClient.builder().setBasePath(cfg.targetBasePath).setConf(context.getStorageConf()).build();
-    assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
+    if (writeTableVersion.equals("CURRENT")) {
+      assertEquals(HoodieTableVersion.current(), hudiTblMetaClient.getTableConfig().getTableVersion());
+    } else {
+      assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
+    }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 

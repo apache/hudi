@@ -26,11 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -44,8 +40,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.FileGroupReaderBasedAppendHandle;
-import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -56,7 +52,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 
@@ -157,9 +152,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    HoodieTable table,
                                    String maxInstantTime,
                                    TaskContextSupplier taskContextSupplier) throws IOException {
-    FileGroupReaderBasedMergeHandle<T, ?, ?, ?> mergeHandle = new FileGroupReaderBasedMergeHandle<>(writeConfig,
-        instantTime, table, getFileSliceFromOperation(operation, writeConfig.getBasePath()), operation, taskContextSupplier, hoodieReaderContext, maxInstantTime, getEngineRecordType());
-    mergeHandle.write();
+    HoodieMergeHandle<T, ?, ?, ?> mergeHandle = HoodieMergeHandleFactory.create(writeConfig,
+        instantTime, table, operation, taskContextSupplier, hoodieReaderContext, maxInstantTime, getEngineRecordType());
+    mergeHandle.doMerge();
     return mergeHandle.close();
   }
 
@@ -170,24 +165,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                       HoodieTable table,
                                       TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(table.getStorageConf(), table.getMetaClient().getTableConfig(), instantRange, Option.empty());
-    FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, getFileSliceFromOperation(operation,
-        writeConfig.getBasePath()), operation,  taskContextSupplier, readerContext);
+    FileGroupReaderBasedAppendHandle<IndexedRecord, ?, ?, ?> appendHandle = new FileGroupReaderBasedAppendHandle<>(writeConfig, instantTime, table, operation,  taskContextSupplier, readerContext);
     appendHandle.doAppend();
     return appendHandle.close();
-  }
-
-  private FileSlice getFileSliceFromOperation(CompactionOperation operation, String basePath) {
-    Option<HoodieBaseFile> baseFileOpt =
-        operation.getBaseFile(basePath, operation.getPartitionPath());
-    List<HoodieLogFile> logFiles = operation.getDeltaFileNames().stream().map(p ->
-            new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
-                basePath, operation.getPartitionPath()), p)))
-        .collect(Collectors.toList());
-    return new FileSlice(
-        operation.getFileGroupId(),
-        operation.getBaseInstantTime(),
-        baseFileOpt.isPresent() ? baseFileOpt.get() : null,
-        logFiles);
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {

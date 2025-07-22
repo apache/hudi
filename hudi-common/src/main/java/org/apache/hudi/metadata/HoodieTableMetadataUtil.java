@@ -1033,7 +1033,7 @@ public class HoodieTableMetadataUtil {
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), tableConfig, properties));
       HoodieReadStats readStats = new HoodieReadStats();
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, readStats, Option.ofNullable(tableConfig.getPreCombineField()),
+          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, Option.ofNullable(tableConfig.getPreCombineField()),
           UpdateProcessor.create(readStats, readerContext, true, Option.empty()));
 
       // CRITICAL: Ensure allowInflightInstants is set to true
@@ -1709,7 +1709,9 @@ public class HoodieTableMetadataUtil {
       HoodieFileGroupReader fileGroupReader = HoodieFileGroupReader.newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(datasetMetaClient)
-          .withFileSlice(fileSlice)
+          .withLogFiles(Stream.of(logFile))
+          .withPartitionPath(partitionPath)
+          .withBaseFileOption(Option.empty())
           .withDataSchema(writerSchemaOpt.get())
           .withRequestedSchema(writerSchemaOpt.get())
           .withLatestCommitTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
