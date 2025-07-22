@@ -31,6 +31,8 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -47,6 +49,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -77,6 +80,7 @@ import org.apache.hudi.table.action.rollback.CopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.rollback.RestorePlanActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -237,21 +241,32 @@ public class HoodieSparkCopyOnWriteTable<T>
       String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException {
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
-    return handleUpdateInternal(upsertHandle, instantTime, fileId);
-  }
-
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
-                                                             String fileId) throws IOException {
-    runMerge(upsertHandle, instantTime, fileId);
-    return upsertHandle.getWriteStatusesAsIterator();
+    HoodieMergeHandle mergeHandle = getUpdateHandle(instantTime, partitionPath, fileId, keyToNewRecords, oldDataFile);
+    return IOUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
-      Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
-    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
-    return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
+                                              Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
+    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
+    if (!config.populateMetaFields()) {
+      try {
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(config.getProps())));
+      } catch (Exception e) {
+        throw new HoodieException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
+            + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
+      }
+    }
+    HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
         dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+    if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
+      Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
+      Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
+          getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+          mergeHandle.getWriterSchema(), (Configuration) getStorageConf().unwrap());
+      mergeHandle.setPartitionFields(partitionFields);
+      mergeHandle.setPartitionValues(partitionValues);
+    }
+    return mergeHandle;
   }
 
   @Override

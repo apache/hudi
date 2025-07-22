@@ -86,6 +86,7 @@ class TestFileGroupRecordBuffer {
   private final HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
   private final FileGroupReaderSchemaHandler schemaHandler =
       mock(FileGroupReaderSchemaHandler.class);
+  private final UpdateProcessor updateProcessor = mock(UpdateProcessor.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
   private TypedProperties props = new TypedProperties();
   private HoodieReadStats readStats = mock(HoodieReadStats.class);
@@ -296,9 +297,8 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
-            false
+            updateProcessor
         );
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
@@ -311,9 +311,8 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
-            false
+            updateProcessor
     );
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
@@ -335,9 +334,8 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
-            false
+            updateProcessor
         );
 
     // CASE 1: With custom delete marker.

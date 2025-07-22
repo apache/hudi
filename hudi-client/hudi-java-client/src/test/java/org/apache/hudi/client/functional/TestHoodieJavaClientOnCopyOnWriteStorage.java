@@ -42,7 +42,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -261,9 +261,9 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     Pair<String, String> partitionAndBaseFilePaths = getPartitionAndBaseFilePathsFromLatestCommitMetadata(metaClient);
     HoodieBaseFile baseFile = new HoodieBaseFile(partitionAndBaseFilePaths.getRight());
 
-    HoodieMergeHandle handle = null;
+    HoodieWriteMergeHandle handle = null;
     try {
-      handle = new HoodieMergeHandle(config, instantTime, table, new HashMap<>(),
+      handle = new HoodieWriteMergeHandle(config, instantTime, table, new HashMap<>(),
           partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));
@@ -281,7 +281,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       config.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
       HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
       // does the handle need to be closed to clean up the writer it contains?
-      handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
+      handle = new HoodieWriteMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
           partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
           config.populateMetaFields() ? Option.empty() :
               Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(config.getProps())));

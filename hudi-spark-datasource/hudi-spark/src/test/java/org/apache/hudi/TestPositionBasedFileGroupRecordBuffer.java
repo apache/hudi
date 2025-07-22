@@ -37,9 +37,9 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.HoodieReadStats;
-import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
+import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -82,9 +82,11 @@ import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetada
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
 
 public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctionalTestHarness {
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF);
+  private final UpdateProcessor updateProcessor = mock(UpdateProcessor.class);
   private Schema avroSchema;
   private PositionBasedFileGroupRecordBuffer<InternalRow> buffer;
 
@@ -149,7 +151,6 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
       writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), CustomPayloadForTesting.class.getName());
       writeConfigs.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     }
-    HoodieReadStats readStats = new HoodieReadStats();
     buffer = new PositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
@@ -157,9 +158,8 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         metaClient.getTableConfig().getPartialUpdateMode(),
         baseFileInstantTime,
         props,
-        readStats,
         Option.of("timestamp"),
-        false);
+        updateProcessor);
   }
 
   private void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> options) {

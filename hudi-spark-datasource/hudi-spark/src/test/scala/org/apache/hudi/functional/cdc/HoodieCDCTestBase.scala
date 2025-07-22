@@ -57,7 +57,8 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1",
-    HoodieCleanConfig.AUTO_CLEAN.key -> "false"
+    HoodieCleanConfig.AUTO_CLEAN.key -> "false",
+    HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
   )
 
   @BeforeEach override def setUp(): Unit = {
