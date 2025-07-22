@@ -896,3 +896,8 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-07-20 16:04:00] [release-v1.149.0] ---
 [ENG-28935][HUDI-9563] Add tags for AWS Glue database and remove it for tables (#1454)
 [AUDIT-1071]: Changelog for release-v1.148.0 (#1452)
+
+--- [2025-07-22 16:04:49] [release-v1.152.0] ---
+[ENG-29993][HUDI-9604] Fix batch creation during send acknowledgement flow in GcsEventsSource (#1442)
+[ENG-30015][HUDI-9612] Update schema resolver to inspect files with inserts/updates (#1451)
+[AUDIT-1071]: Changelog for release-v1.149.0 (#1455)
