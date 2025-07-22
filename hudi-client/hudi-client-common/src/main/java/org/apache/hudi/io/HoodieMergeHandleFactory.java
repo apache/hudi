@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -127,7 +126,7 @@ public class HoodieMergeHandleFactory {
     LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
 
     Class<?>[] constructorParamTypes = new Class<?>[] {
-        HoodieWriteConfig.class, String.class, HoodieTable.class, FileSlice.class, CompactionOperation.class,
+        HoodieWriteConfig.class, String.class, HoodieTable.class, CompactionOperation.class,
         TaskContextSupplier.class, HoodieReaderContext.class, String.class, HoodieRecord.HoodieRecordType.class
     };
 
