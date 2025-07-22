@@ -455,6 +455,47 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "The index name either starts with or matches exactly can be one of the following: "
           + StringUtils.join(Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()), ", "));
 
+  // Range-based repartitioning configuration for metadata table lookups
+  public static final ConfigProperty<Double> RANGE_REPARTITION_SAMPLING_FRACTION = ConfigProperty
+      .key(METADATA_PREFIX + ".range.repartition.sampling.fraction")
+      .defaultValue(0.01)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Sampling fraction used for range-based repartitioning during metadata table lookups. "
+          + "This controls the accuracy vs performance trade-off for key distribution sampling.");
+
+  public static final ConfigProperty<Integer> RANGE_REPARTITION_TARGET_RECORDS_PER_PARTITION = ConfigProperty
+      .key(METADATA_PREFIX + ".range.repartition.target.records.per.partition")
+      .defaultValue(10000)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Target number of records per partition during range-based repartitioning. "
+          + "This helps control the size of each partition for optimal processing.");
+
+  public static final ConfigProperty<Integer> RANGE_REPARTITION_RANDOM_SEED = ConfigProperty
+      .key(METADATA_PREFIX + ".range.repartition.random.seed")
+      .defaultValue(42)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Random seed used for sampling during range-based repartitioning. "
+          + "This ensures reproducible results across runs.");
+
+  public static final ConfigProperty<Integer> REPARTITION_MIN_PARTITIONS_THRESHOLD = ConfigProperty
+      .key(METADATA_PREFIX + ".repartition.min.partitions.threshold")
+      .defaultValue(100)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Minimum number of partitions threshold below which repartitioning is triggered. "
+          + "When the number of partitions is below this threshold, data will be repartitioned for better parallelism.");
+
+  public static final ConfigProperty<Integer> REPARTITION_DEFAULT_PARTITIONS = ConfigProperty
+      .key(METADATA_PREFIX + ".repartition.default.partitions")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Default number of partitions to use when repartitioning is needed. "
+          + "This provides a reasonable level of parallelism for metadata table operations.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -666,6 +707,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getMetadataIndexToDrop() {
     return getString(DROP_METADATA_INDEX);
+  }
+
+  public double getRangeRepartitionSamplingFraction() {
+    return getDouble(RANGE_REPARTITION_SAMPLING_FRACTION);
+  }
+
+  public int getRangeRepartitionTargetRecordsPerPartition() {
+    return getInt(RANGE_REPARTITION_TARGET_RECORDS_PER_PARTITION);
+  }
+
+  public int getRangeRepartitionRandomSeed() {
+    return getInt(RANGE_REPARTITION_RANDOM_SEED);
+  }
+
+  public int getRepartitionMinPartitionsThreshold() {
+    return getInt(REPARTITION_MIN_PARTITIONS_THRESHOLD);
+  }
+
+  public int getRepartitionDefaultPartitions() {
+    return getInt(REPARTITION_DEFAULT_PARTITIONS);
   }
 
   /**
@@ -952,6 +1013,31 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withDropMetadataIndex(String indexName) {
       metadataConfig.setValue(DROP_METADATA_INDEX, indexName);
+      return this;
+    }
+
+    public Builder withRangeRepartitionSamplingFraction(double samplingFraction) {
+      metadataConfig.setValue(RANGE_REPARTITION_SAMPLING_FRACTION, String.valueOf(samplingFraction));
+      return this;
+    }
+
+    public Builder withRangeRepartitionTargetRecordsPerPartition(int targetRecordsPerPartition) {
+      metadataConfig.setValue(RANGE_REPARTITION_TARGET_RECORDS_PER_PARTITION, String.valueOf(targetRecordsPerPartition));
+      return this;
+    }
+
+    public Builder withRangeRepartitionRandomSeed(int randomSeed) {
+      metadataConfig.setValue(RANGE_REPARTITION_RANDOM_SEED, String.valueOf(randomSeed));
+      return this;
+    }
+
+    public Builder withRepartitionMinPartitionsThreshold(int minPartitionsThreshold) {
+      metadataConfig.setValue(REPARTITION_MIN_PARTITIONS_THRESHOLD, String.valueOf(minPartitionsThreshold));
+      return this;
+    }
+
+    public Builder withRepartitionDefaultPartitions(int defaultPartitions) {
+      metadataConfig.setValue(REPARTITION_DEFAULT_PARTITIONS, String.valueOf(defaultPartitions));
       return this;
     }
 

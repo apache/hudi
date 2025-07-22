@@ -55,6 +55,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
@@ -95,6 +96,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.metadata.HoodieIndexVersion.isValidIndexDefinition;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -234,13 +236,13 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
     String indexName = indexDefinition.getIndexName();
-    String indexMetaPath = getIndexDefinitionPath();
     boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {
       // if index definition is present, lets check for difference and only update if required.
-      if (indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName)) {
-        if (!indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields().equals(indexDefinition.getSourceFields())) {
-          LOG.info("List of columns to index is changing. Old value {}. New value {}", indexMetadataOpt.get().getIndexDefinitions().get(indexName).getSourceFields(),
+      Option<HoodieIndexDefinition> existingIndexOpt = indexMetadataOpt.get().getIndex(indexName);
+      if (existingIndexOpt.isPresent()) {
+        if (!existingIndexOpt.get().getSourceFields().equals(indexDefinition.getSourceFields())) {
+          LOG.info("List of columns to index is changing. Old value {}. New value {}", existingIndexOpt.get().getSourceFields(),
               indexDefinition.getSourceFields());
           indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
         } else {
@@ -255,13 +257,7 @@ public class HoodieTableMetaClient implements Serializable {
       indexMetadataOpt = Option.of(new HoodieIndexMetadata(indexDefinitionMap));
     }
     if (updateIndexDefn) {
-      try {
-        // TODO[HUDI-9094]: should not write byte array directly
-        FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
-            Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
-      }  catch (IOException e) {
-        throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
-      }
+      writeIndexMetadataToStorage();
     }
     return updateIndexDefn;
   }
@@ -274,13 +270,48 @@ public class HoodieTableMetaClient implements Serializable {
   public void deleteIndexDefinition(String indexName) {
     checkState(indexMetadataOpt.isPresent(), "Index metadata is not present");
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
-    String indexMetaPath = getIndexDefinitionPath();
+    writeIndexMetadataToStorage();
+  }
+
+  /**
+   * Writes the current index metadata to storage.
+   */
+  public void writeIndexMetadataToStorage() {
+    indexMetadataOpt.ifPresent(indexMetadata -> {
+      String indexMetaPath = getIndexDefinitionPath();
+      writeIndexMetadataToStorage(storage, indexMetaPath, indexMetadata, getTableConfig().getTableVersion());
+    });
+  }
+
+  /**
+   * Get the index definition for the given metadata partition name.
+   * This is a convenience method that handles checking if index metadata is present.
+   *
+   * @param partitionName The name of the metadata partition (index name)
+   * @return Option containing the index definition if it exists, Option.empty() otherwise
+   */
+  public Option<HoodieIndexDefinition> getIndexForMetadataPartition(String partitionName) {
+    return getIndexMetadata().flatMap(m -> m.getIndex(partitionName));
+  }
+
+  /**
+   * Static method to write index metadata to storage.
+   *
+   * @param storage the storage to write to
+   * @param indexDefinitionPath the path where the index metadata should be written
+   * @param indexMetadata the index metadata to write
+   */
+  public static void writeIndexMetadataToStorage(
+      HoodieStorage storage, String indexDefinitionPath, HoodieIndexMetadata indexMetadata, HoodieTableVersion tableVersion) {
     try {
+      // Ensure we write out valid index metadata.
+      indexMetadata.getIndexDefinitions().values().forEach(d ->
+          ValidationUtils.checkArgument(isValidIndexDefinition(tableVersion, d), "Found invalid index definition " + d));
       // TODO[HUDI-9094]: should not write byte array directly
-      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath),
-          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadataOpt.get().toJson()))));
-    }  catch (IOException e) {
-      throw new HoodieIOException("Could not write expression index metadata at path: " + indexMetaPath, e);
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexDefinitionPath),
+          Option.of(HoodieInstantWriter.convertByteArrayToWriter(getUTF8Bytes(indexMetadata.toJson()))));
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not write index metadata at path: " + indexDefinitionPath, e);
     }
   }
 
@@ -291,21 +322,27 @@ public class HoodieTableMetaClient implements Serializable {
     if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
       return indexMetadataOpt;
     }
+    Option<HoodieIndexMetadata> indexDefOption = Option.empty();
     if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
-      StoragePath indexDefinitionPath =
-          new StoragePath(basePath, tableConfig.getRelativeIndexDefinitionPath().get());
-      try {
-        Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
-        if (bytesOpt.isPresent()) {
-          return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
-        } else {
-          return Option.of(new HoodieIndexMetadata());
-        }
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not load index definition at path: " + tableConfig.getRelativeIndexDefinitionPath().get(), e);
-      }
+      indexDefOption = loadIndexDefFromStorage(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
     }
-    return Option.empty();
+    return indexDefOption;
+  }
+
+  private static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
+      StoragePath basePath, String relativeIndexDefinitionPath, HoodieStorage storage) {
+    StoragePath indexDefinitionPath =
+        new StoragePath(basePath, relativeIndexDefinitionPath);
+    try {
+      Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
+      if (bytesOpt.isPresent()) {
+        return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+      } else {
+        return Option.of(new HoodieIndexMetadata());
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not load index definition at path: " + relativeIndexDefinitionPath, e);
+    }
   }
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {

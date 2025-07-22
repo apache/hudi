@@ -20,6 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.JsonUtils;
+import org.apache.hudi.common.util.Option;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -57,6 +58,32 @@ public class HoodieIndexMetadata implements Serializable {
 
   public void setIndexDefinitions(Map<String, HoodieIndexDefinition> indexDefinitions) {
     this.indexDefinitions = indexDefinitions;
+  }
+
+  /**
+   * Check if an index with the given name exists.
+   *
+   * @param indexName The name of the index to check.
+   * @return true if the index exists, false otherwise.
+   */
+  public boolean hasIndex(String indexName) {
+    return indexDefinitions != null && indexDefinitions.containsKey(indexName) && indexDefinitions.get(indexName) != null;
+  }
+
+  /**
+   * Get the index definition for the given index name.
+   *
+   * @param indexName The name of the index to retrieve.
+   * @return Option containing the index definition if it exists, Option.empty() otherwise.
+   */
+  public Option<HoodieIndexDefinition> getIndex(String indexName) {
+    if (indexDefinitions != null && indexDefinitions.containsKey(indexName)) {
+      HoodieIndexDefinition indexDef = indexDefinitions.get(indexName);
+      if (indexDef != null) {
+        return Option.of(indexDef);
+      }
+    }
+    return Option.empty();
   }
 
   /**

@@ -60,7 +60,7 @@ object JFunction {
       override def apply(t: T): R = f.apply(t)
     }
 
-  implicit def toJavaSerializablePairFunction[T, K, V](f: Function[T, collection.Pair[K, V]]): SerializablePairFunction[T, K, V] =
+  implicit def toJavaSerializableFunctionPairOut[T, K, V](f: Function[T, collection.Pair[K, V]]): SerializablePairFunction[T, K, V] =
     new SerializablePairFunction[T, K, V] {
       override def call(t: T): collection.Pair[K, V] = f.apply(t)
     }

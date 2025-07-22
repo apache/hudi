@@ -210,6 +210,14 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
+                                                                                            SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                            List<K> keySpace,
+                                                                                            boolean preservesPartitioning) {
+    throw new UnsupportedOperationException("processKeyGroups() is not supported in FlinkEngineContext");
+  }
+
+  @Override
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table reads are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {

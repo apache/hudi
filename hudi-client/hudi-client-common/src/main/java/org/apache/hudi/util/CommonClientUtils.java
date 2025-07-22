@@ -52,7 +52,7 @@ public class CommonClientUtils {
 
   public static void validateTableVersion(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
-    if (!isValidTableVersionWriteVersionPair(tableConfig.getTableVersion(), writeConfig.getWriteVersion())) {
+    if (!areTableVersionsCompatible(tableConfig.getTableVersion(), writeConfig.getWriteVersion())) {
       // if table version is greater than 6, while writer version is 6, we can still allow it for upgrade
       throw new HoodieNotSupportedException(String.format("Table version (%s) and Writer version (%s) do not match for table at: %s.",
           tableConfig.getTableVersion(), writeConfig.getWriteVersion(), writeConfig.getBasePath()));
@@ -68,7 +68,7 @@ public class CommonClientUtils {
     }
   }
 
-  public static boolean isValidTableVersionWriteVersionPair(HoodieTableVersion tableVersion, HoodieTableVersion writeVersion) {
+  public static boolean areTableVersionsCompatible(HoodieTableVersion tableVersion, HoodieTableVersion writeVersion) {
     // Trivial case.
     if (tableVersion.equals(writeVersion)) {
       return true;

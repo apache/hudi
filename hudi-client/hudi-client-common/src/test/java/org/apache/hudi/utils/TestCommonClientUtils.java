@@ -34,7 +34,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
-import static org.apache.hudi.util.CommonClientUtils.isValidTableVersionWriteVersionPair;
+import static org.apache.hudi.util.CommonClientUtils.areTableVersionsCompatible;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -82,7 +82,7 @@ class TestCommonClientUtils {
   @MethodSource("provideValidTableVersionWriteVersionPairs")
   void testValidTableVersionWriteVersionPairs(
       HoodieTableVersion tableVersion, HoodieTableVersion writeVersion, boolean expectedResult) throws Exception {
-    boolean result = isValidTableVersionWriteVersionPair(tableVersion, writeVersion);
+    boolean result = areTableVersionsCompatible(tableVersion, writeVersion);
     assertEquals(expectedResult, result);
   }
 

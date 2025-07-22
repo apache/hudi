@@ -29,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
@@ -267,11 +268,12 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .withIndexName(indexName)
         .withIndexType("column_stats")
         .withIndexFunction("identity")
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
         .withSourceFields(new ArrayList<>(columnsMap.keySet()))
         .withIndexOptions(Collections.emptyMap())
         .build();
     metaClient.buildIndexDefinition(indexDefinition);
-    assertTrue(metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexName));
+    assertTrue(metaClient.getIndexForMetadataPartition(indexName).isPresent());
     assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getIndexDefinitionPath())));
     metaClient.deleteIndexDefinition(indexName);
     assertTrue(metaClient.getIndexMetadata().isEmpty());

@@ -20,8 +20,10 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 
@@ -125,8 +127,8 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     readDf.cache()
     val rowArr = readDf.collect()
-    val recordIndexMap = metadata.readRecordIndex(
-      JavaConverters.seqAsJavaListConverter(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava)
+    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndex(
+      HoodieListData.eager(JavaConverters.seqAsJavaListConverter(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava)))
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
@@ -139,8 +141,9 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     }
 
     val deletedRows = deletedDf.collect()
-    val recordIndexMapForDeletedRows = metadata.readRecordIndex(
-      JavaConverters.seqAsJavaListConverter(deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava)
+    val recordIndexMapForDeletedRows = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndex(
+      HoodieListData.eager(JavaConverters.seqAsJavaListConverter(deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava)))
+
     assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")
 
     assertEquals(rowArr.length, recordIndexMap.keySet.size)

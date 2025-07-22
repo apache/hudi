@@ -22,6 +22,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -63,7 +64,6 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.metadata.HoodieMetadataPayload.getBloomFilterIndexKey;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 
 /**
@@ -317,7 +317,12 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
 
       // NOTE: It's crucial that [[targetPartitions]] be congruent w/ the number of
       //       actual file-groups in the Bloom Index in MT
-      return mapRecordKeyToFileGroupIndex(bloomIndexEncodedKey, targetPartitions);
+      SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
+      try {
+        return mappingFunction.apply(bloomIndexEncodedKey, targetPartitions);
+      } catch (Exception e) {
+        throw new HoodieException("Error apply bloom index partitioner mapping function", e);
+      }
     }
   }
 

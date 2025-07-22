@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Iterator;
@@ -83,8 +84,8 @@ public abstract class HoodieEngineContext {
 
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
 
-  public abstract <I, K, V> List<V> mapToPairAndReduceByKey(
-      List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
+  public abstract <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc,
+                                                            SerializableBiFunction<V, V, V> reduceFunc, int parallelism);
 
   public abstract <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
       Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
@@ -129,4 +130,47 @@ public abstract class HoodieEngineContext {
   public abstract <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp);
 
   public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
+
+  /**
+   * Groups values by key and applies a processing function to each group.
+   *
+   * <p>This method takes key-value pairs, groups all values that share the same key,
+   * and applies a processing function to each group. The processing function receives
+   * the grouped values as an Iterator and can transform them into new results.
+   *
+   * <p><b>Preconditions:</b>
+   * <ul>
+   *   <li>data must contain key-value pairs</li>
+   *   <li>processFunc must not be null</li>
+   *   <li>keySpace must contain all possible keys that may appear in the data</li>
+   *   <li>Both key type (K) and value type (V) must implement Comparable</li>
+   * </ul>
+   *
+   * <p><b>Postconditions:</b>
+   * <ul>
+   *   <li>All values with the same key are grouped together for processing</li>
+   *   <li>Each value from the input data is processed exactly once</li>
+   *   <li>Values passed to processFunc are sorted within each group</li>
+   *   <li>For performance, a single key's values may be split across multiple calls to processFunc</li>
+   *   <li>The function returns a collection containing all results from processFunc</li>
+   * </ul>
+   *
+   * @param data The input key-value pairs to process
+   * @param processFunc Function that processes a group of values (as Iterator) and produces results
+   * @param keySpace Complete set of all possible keys in the data. Used for efficient data distribution
+   * @param preservesPartitioning whether to maintain the same data partitioning in the output
+   * @param <K> Type of the key (must be Comparable)
+   * @param <V> Type of the value (must be Comparable)
+   * @param <R> Type of the result produced by processFunc
+   * @return Collection of all results produced by processFunc
+   */
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
+                                                                                            SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                            List<K> keySpace,
+                                                                                            boolean preservesPartitioning) {
+    // Group values by key and apply the function to each group
+    return data.groupByKey()
+            .values()
+            .flatMap(it -> processFunc.apply(new ClosableSortingIterator<>(it.iterator())));
+  }
 }
