@@ -74,7 +74,6 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.util.Transient;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -129,8 +128,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableFileSystemView metadataFileSystemView;
   // should we reuse the open file handles, across calls
   private final boolean reuse;
-  private final Transient<Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableKeyBasedRecordBuffer<IndexedRecord>>>> reusableFileReaders =
-      Transient.lazy(ConcurrentHashMap::new);
+  private final transient Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableKeyBasedRecordBuffer<IndexedRecord>>> reusableFileReaders = new ConcurrentHashMap<>();
 
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();
@@ -516,6 +514,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private HoodieFileGroupReader<IndexedRecord> buildFileGroupReader(Predicate predicate,
                                                                     FileSlice fileSlice) {
+  private ClosableIterator<IndexedRecord> readSliceWithFilter(FileSlice fileSlice, Option<Predicate> keyFilter) throws IOException {
     Option<HoodieInstant> latestMetadataInstant =
         metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime =
@@ -532,7 +531,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
     ReusableKeyBasedRecordBuffer<IndexedRecord> existingRecordBuffer = null;
     if (reuse && isFullScanAllowedForPartition(fileSlice.getPartitionPath())) {
-      Pair<HoodieAvroFileReader, ReusableKeyBasedRecordBuffer<IndexedRecord>> readers = reusableFileReaders.get().computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
+      Pair<HoodieAvroFileReader, ReusableKeyBasedRecordBuffer<IndexedRecord>> readers = reusableFileReaders.computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
         try {
           HoodieAvroFileReader baseFileReader = null;
           if (fileSlice.getBaseFile().isPresent()) {
@@ -551,7 +550,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       ValidationUtils.checkArgument(keyFilter.get() instanceof Predicates.In, () -> "Key filter should be of type Predicates.In, but found: " + keyFilter.get().getClass().getName());
       List<Expression> children = ((Predicates.In) keyFilter.get()).getRightChildren();
       Set<String> keys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toSet());
-      existingRecordBuffer = readers.getRight().withKeyPredicate(keys, new HoodieReadStats());
+      existingRecordBuffer = readers.getRight().withKeyPredicate(keys);
     }
 
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
@@ -561,7 +560,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         Option.of(predicate),
         baseFileReaders);
 
-    return HoodieFileGroupReader.<IndexedRecord>newBuilder()
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
         .withLatestCommitTime(latestMetadataInstantTime)
@@ -571,6 +570,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withProps(buildFileGroupReaderProperties(metadataConfig))
         .withExistingRecordBuffer(existingRecordBuffer)
         .build();
+
+    return new CloseableIteratorWithReuse<>(fileGroupReader.getClosableIterator(), reuse);
   }
 
   private ReusableKeyBasedRecordBuffer<IndexedRecord> initializeRecordBuffer(FileSlice fileSlice, String latestMetadataInstantTime) {
@@ -754,7 +755,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   private void closeReusableReaders() {
     if (reuse) {
-      reusableFileReaders.get().values().forEach(pair -> {
+      reusableFileReaders.values().forEach(pair -> {
         if (pair.getLeft() != null) {
           // Close the base file reader
           pair.getLeft().close();
@@ -926,5 +927,34 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
     return props;
+  }
+
+  private static class CloseableIteratorWithReuse<T> implements ClosableIterator<T> {
+    private final ClosableIterator<T> delegate;
+    private final boolean reuse;
+
+    private CloseableIteratorWithReuse(ClosableIterator<T> delegate, boolean reuse) {
+      this.delegate = delegate;
+      this.reuse = reuse;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return delegate.hasNext();
+    }
+
+    @Override
+    public T next() {
+      return delegate.next();
+    }
+
+    @Override
+    public void close() {
+      if (reuse) {
+        // Do not close the iterator to allow reuse
+        return;
+      }
+      delegate.close();
+    }
   }
 }

@@ -32,9 +32,9 @@ public class ReusableKeyBasedRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
     this.validKeys = validKeys;
   }
 
-  public ReusableKeyBasedRecordBuffer<T> withKeyPredicate(Set<String> validKeys, HoodieReadStats stats) {
+  public ReusableKeyBasedRecordBuffer<T> withKeyPredicate(Set<String> validKeys) {
     return new ReusableKeyBasedRecordBuffer<>(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode,
-        props, stats, orderingFieldName, updateProcessor, validKeys, records);
+        props, readStats, orderingFieldName, updateProcessor, validKeys, records);
   }
 
   @Override
