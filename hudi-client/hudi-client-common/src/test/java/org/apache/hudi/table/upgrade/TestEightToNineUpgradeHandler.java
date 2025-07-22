@@ -20,6 +20,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -38,9 +39,13 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
@@ -80,203 +85,101 @@ class TestEightToNineUpgradeHandler {
     when(config.autoUpgrade()).thenReturn(true);
   }
 
-  @Test
-  void testDefaultHoodieRecordPayload() {
+  static Stream<Arguments> payloadClassTestCases() {
+    return Stream.of(
+        // DefaultHoodieRecordPayload
+        Arguments.of(
+            DefaultHoodieRecordPayload.class.getName(),
+            "", // mergeProperties
+            null, // recordMergeMode (should not be present)
+            PartialUpdateMode.NONE.name(), // partialUpdateMode
+            "DefaultHoodieRecordPayload"
+        ),
+        // OverwriteWithLatestAvroPayload
+        Arguments.of(
+            OverwriteWithLatestAvroPayload.class.getName(),
+            "", // mergeProperties
+            null, // recordMergeMode (should not be present)
+            PartialUpdateMode.NONE.name(), // partialUpdateMode
+            "OverwriteWithLatestAvroPayload"
+        ),
+        // AWSDmsAvroPayload
+        Arguments.of(
+            AWSDmsAvroPayload.class.getName(),
+            DELETE_KEY + "=Op," + DELETE_MARKER + "=D", // mergeProperties
+            COMMIT_TIME_ORDERING.name(), // recordMergeMode
+            PartialUpdateMode.NONE.name(), // partialUpdateMode
+            "AWSDmsAvroPayload"
+        ),
+        // PostgresDebeziumAvroPayload
+        Arguments.of(
+            PostgresDebeziumAvroPayload.class.getName(),
+            PARTIAL_UPDATE_CUSTOM_MARKER + "=" + DEBEZIUM_UNAVAILABLE_VALUE, // mergeProperties
+            EVENT_TIME_ORDERING.name(), // recordMergeMode
+            IGNORE_MARKERS.name(), // partialUpdateMode
+            "PostgresDebeziumAvroPayload"
+        ),
+        // PartialUpdateAvroPayload
+        Arguments.of(
+            PartialUpdateAvroPayload.class.getName(),
+            "", // mergeProperties
+            EVENT_TIME_ORDERING.name(), // recordMergeMode
+            PartialUpdateMode.IGNORE_DEFAULTS.name(), // partialUpdateMode
+            "PartialUpdateAvroPayload"
+        ),
+        // MySqlDebeziumAvroPayload
+        Arguments.of(
+            MySqlDebeziumAvroPayload.class.getName(),
+            "", // mergeProperties
+            EVENT_TIME_ORDERING.name(), // recordMergeMode
+            PartialUpdateMode.NONE.name(), // partialUpdateMode
+            "MySqlDebeziumAvroPayload"
+        ),
+        // OverwriteNonDefaultsWithLatestAvroPayload
+        Arguments.of(
+            OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            "", // mergeProperties
+            COMMIT_TIME_ORDERING.name(), // recordMergeMode
+            PartialUpdateMode.IGNORE_DEFAULTS.name(), // partialUpdateMode
+            "OverwriteNonDefaultsWithLatestAvroPayload"
+        )
+    );
+  }
+
+  @ParameterizedTest(name = "testUpgradeWith{4}")
+  @MethodSource("payloadClassTestCases")
+  void testUpgradeWithPayloadClass(String payloadClassName, String expectedMergeProperties,
+                                   String expectedRecordMergeMode, String expectedPartialUpdateMode,
+                                   String testName) {
     try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
              org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
               any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+      when(tableConfig.getPayloadClass()).thenReturn(payloadClassName);
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
           handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
       Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
       List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
+      // Assert merge properties
       assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
-      assertTrue(StringUtils.isNullOrEmpty(
-          propertiesToAdd.get(MERGE_PROPERTIES)));
-      assertFalse(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      if (StringUtils.isNullOrEmpty(expectedMergeProperties)) {
+        assertTrue(StringUtils.isNullOrEmpty(propertiesToAdd.get(MERGE_PROPERTIES)));
+      } else {
+        assertEquals(expectedMergeProperties, propertiesToAdd.get(MERGE_PROPERTIES));
+      }
+      // Assert record merge mode
+      if (expectedRecordMergeMode == null) {
+        assertFalse(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      } else {
+        assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+        assertEquals(expectedRecordMergeMode, propertiesToAdd.get(RECORD_MERGE_MODE));
+      }
+      // Assert partial update mode
       assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
-      assertEquals(
-          PartialUpdateMode.NONE.name(),
-          propertiesToAdd.get(PARTIAL_UPDATE_MODE));
-      assertPayloadClassChange(
-          propertiesToAdd, propertiesToRemove, DefaultHoodieRecordPayload.class.getName());
-    }
-  }
-
-  @Test
-  void testOverwriteWithLatestAvroPayload() {
-    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-              any(), any(), any(), any(), anyBoolean(), any()))
-          .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(
-          OverwriteWithLatestAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
-          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
-      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
-      assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
-      assertTrue(StringUtils.isNullOrEmpty(
-          propertiesToAdd.get(MERGE_PROPERTIES)));
-      assertFalse(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
-      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
-      assertEquals(
-          PartialUpdateMode.NONE.name(),
-          propertiesToAdd.get(PARTIAL_UPDATE_MODE));
-      assertPayloadClassChange(
-          propertiesToAdd, propertiesToRemove, OverwriteWithLatestAvroPayload.class.getName());
-    }
-  }
-
-  @Test
-  void testUpgradeWithAWSDmsAvroPayload() {
-    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-        any(), any(), any(), any(), anyBoolean(), any()))
-               .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
-          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
-      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
-      assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
-      assertEquals(
-          DELETE_KEY + "=Op," + DELETE_MARKER + "=D",
-          propertiesToAdd.get(MERGE_PROPERTIES));
-      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
-      assertEquals(
-          COMMIT_TIME_ORDERING.name(),
-          propertiesToAdd.get(RECORD_MERGE_MODE));
-      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
-      assertEquals(
-          PartialUpdateMode.NONE.name(),
-          propertiesToAdd.get(PARTIAL_UPDATE_MODE));
-      assertPayloadClassChange(
-          propertiesToAdd, propertiesToRemove, AWSDmsAvroPayload.class.getName());
-    }
-  }
-
-  @Test
-  void testUpgradeWithPostgresDebeziumAvroPayload() {
-    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-        any(), any(), any(), any(), anyBoolean(), any()))
-               .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(PostgresDebeziumAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
-          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
-      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
-      assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
-      assertEquals(
-          PARTIAL_UPDATE_CUSTOM_MARKER + "=" + DEBEZIUM_UNAVAILABLE_VALUE,
-          propertiesToAdd.get(MERGE_PROPERTIES));
-      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
-      assertEquals(
-          EVENT_TIME_ORDERING.name(),
-          propertiesToAdd.get(RECORD_MERGE_MODE));
-      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
-      assertEquals(
-          IGNORE_MARKERS.name(),
-          propertiesToAdd.get(PARTIAL_UPDATE_MODE));
-      assertPayloadClassChange(
-          propertiesToAdd,
-          propertiesToRemove,
-          PostgresDebeziumAvroPayload.class.getName());
-    }
-  }
-
-  @Test
-  void testUpgradeWithPartialUpdateAvroPayload() {
-    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-        any(), any(), any(), any(), anyBoolean(), any()))
-               .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(PartialUpdateAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
-          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
-      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
-      assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
-      assertTrue(StringUtils.isNullOrEmpty(propertiesToAdd.get(MERGE_PROPERTIES)));
-      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
-      assertEquals(
-          EVENT_TIME_ORDERING.name(),
-          propertiesToAdd.get(RECORD_MERGE_MODE));
-      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
-      assertEquals(
-          PartialUpdateMode.IGNORE_DEFAULTS.name(),
-          propertiesToAdd.get(PARTIAL_UPDATE_MODE));
-      assertPayloadClassChange(
-          propertiesToAdd,
-          propertiesToRemove,
-          PartialUpdateAvroPayload.class.getName());
-    }
-  }
-
-  // TODO: update the ordering fields after we support multi-ordering fields.
-  @Test
-  void testUpgradeWithMySqlDebeziumAvroPayload() {
-    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-              any(), any(), any(), any(), anyBoolean(), any()))
-          .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(MySqlDebeziumAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
-          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
-      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
-      assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
-      assertTrue(StringUtils.isNullOrEmpty(propertiesToAdd.get(MERGE_PROPERTIES)));
-      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
-      assertEquals(
-          EVENT_TIME_ORDERING.name(),
-          propertiesToAdd.get(RECORD_MERGE_MODE));
-      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
-      assertEquals(
-          PartialUpdateMode.NONE.name(),
-          propertiesToAdd.get(PARTIAL_UPDATE_MODE));
-      assertPayloadClassChange(
-          propertiesToAdd,
-          propertiesToRemove,
-          MySqlDebeziumAvroPayload.class.getName());
-    }
-  }
-
-  @Test
-  void testUpgradeWithOverwriteNonDefaultsWithLatestAvroPayload() {
-    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-        any(), any(), any(), any(), anyBoolean(), any()))
-               .thenAnswer(invocation -> null);
-      when(tableConfig.getPayloadClass()).thenReturn(
-          OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
-          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
-      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
-      assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
-      assertTrue(StringUtils.isNullOrEmpty(propertiesToAdd.get(MERGE_PROPERTIES)));
-      assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
-      assertEquals(
-          COMMIT_TIME_ORDERING.name(),
-          propertiesToAdd.get(RECORD_MERGE_MODE));
-      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
-      assertEquals(
-          PartialUpdateMode.IGNORE_DEFAULTS.name(),
-          propertiesToAdd.get(PARTIAL_UPDATE_MODE));
-      assertPayloadClassChange(
-          propertiesToAdd,
-          propertiesToRemove,
-          OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+      assertEquals(expectedPartialUpdateMode, propertiesToAdd.get(PARTIAL_UPDATE_MODE));
+      // Assert payload class change
+      assertPayloadClassChange(propertiesToAdd, propertiesToRemove, payloadClassName);
     }
   }
 
@@ -284,6 +187,7 @@ class TestEightToNineUpgradeHandler {
   void testUpgradeWhenAutoUpgradeIsFalse() {
     when(config.autoUpgrade()).thenReturn(false);
     // Payload class can be any, e.g., AWSDmsAvroPayload
+    when(config.getProps()).thenReturn(new TypedProperties());
     when(tableConfig.getPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
     Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
         handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);

@@ -240,7 +240,7 @@ public class UpgradeDowngradeUtils {
 
   // If the metadata table is enabled for the data table, and
   // existing metadata table is behind the data table, then delete it.
-  public static void checkAndHandleMetadataTable(HoodieEngineContext context,
+  static void checkAndHandleMetadataTable(HoodieEngineContext context,
                                                  HoodieTable table,
                                                  HoodieWriteConfig config,
                                                  HoodieTableMetaClient metaClient) {
@@ -251,7 +251,7 @@ public class UpgradeDowngradeUtils {
     }
   }
 
-  public static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config,
+  static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config,
                                                        HoodieTableMetaClient metaClient) {
     // if metadata table does not exist, then it is not behind
     if (!metaClient.getTableConfig().isMetadataTableAvailable()) {

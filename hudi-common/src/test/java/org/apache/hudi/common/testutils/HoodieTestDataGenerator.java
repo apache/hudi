@@ -153,7 +153,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String EXTRA_COL_SCHEMA2 = "{\"name\": \"extra_column2\", \"type\": [\"null\", \"string\"], \"default\": null},";
   public static final String EXTRA_COL_SCHEMA_FOR_AWS_DMS_PAYLOAD = "{\"name\": \"Op\", \"type\": [\"null\", \"string\"], \"default\": null},";
   public static final String EXTRA_COL_SCHEMA_FOR_POSTGRES_PAYLOAD = "{\"name\": \"_event_lsn\", \"type\": [\"null\", \"long\"], \"default\": null},";
-  public static final String TRIP_EXAMPLE_SCHEMA_WITH_SPECIFIC_COLUMNS =
+  public static final String TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
           + TIP_NESTED_SCHEMA + EXTRA_COL_SCHEMA_FOR_AWS_DMS_PAYLOAD + EXTRA_COL_SCHEMA_FOR_POSTGRES_PAYLOAD + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_EXAMPLE_SCHEMA =
@@ -186,7 +186,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
 
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
-  public static final Schema AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_WITH_SPECIFIC_COLUMNS);
+  public static final Schema AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
   public static final Schema NESTED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_NESTED_EXAMPLE_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
@@ -326,7 +326,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       return generatePayloadForShortTripSchema(key, commitTime);
     } else if (TRIP_NESTED_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generateNestedExampleRandomValue(key, commitTime);
-    } else if (TRIP_EXAMPLE_SCHEMA_WITH_SPECIFIC_COLUMNS.equals(schemaStr)) {
+    } else if (TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS.equals(schemaStr)) {
       return generateRandomValueWithColumnRequired(key, commitTime);
     }
 
@@ -582,7 +582,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         rec.toString(),
         key.getRecordKey(),
         key.getPartitionPath(),
-        TRIP_EXAMPLE_SCHEMA_WITH_SPECIFIC_COLUMNS);
+        TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
   }
 
   /**

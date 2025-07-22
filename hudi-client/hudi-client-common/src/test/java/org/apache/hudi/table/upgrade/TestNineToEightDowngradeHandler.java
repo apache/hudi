@@ -37,9 +37,13 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
@@ -71,180 +75,106 @@ class TestNineToEightDowngradeHandler {
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
   }
 
-  @Test
-  void testDowngradeForAWSDmsAvroPayload() {
+  static Stream<Arguments> payloadClassTestCases() {
+    return Stream.of(
+        // AWSDmsAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            AWSDmsAvroPayload.class.getName(),
+            3, // propertiesToRemove size
+            3, // propertiesToAdd size
+            true, // hasRecordMergeMode
+            true, // hasRecordMergeStrategyId
+            "AWSDmsAvroPayload"
+        ),
+        // OverwriteNonDefaultsWithLatestAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            3, // propertiesToRemove size
+            3, // propertiesToAdd size
+            true, // hasRecordMergeMode
+            true, // hasRecordMergeStrategyId
+            "OverwriteNonDefaultsWithLatestAvroPayload"
+        ),
+        // PartialUpdateAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            PartialUpdateAvroPayload.class.getName(),
+            3, // propertiesToRemove size
+            3, // propertiesToAdd size
+            true, // hasRecordMergeMode
+            true, // hasRecordMergeStrategyId
+            "PartialUpdateAvroPayload"
+        ),
+        // MySqlDebeziumAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            MySqlDebeziumAvroPayload.class.getName(),
+            3, // propertiesToRemove size
+            3, // propertiesToAdd size
+            true, // hasRecordMergeMode
+            true, // hasRecordMergeStrategyId
+            "MySqlDebeziumAvroPayload"
+        ),
+        // PostgresDebeziumAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            PostgresDebeziumAvroPayload.class.getName(),
+            3, // propertiesToRemove size
+            3, // propertiesToAdd size
+            true, // hasRecordMergeMode
+            true, // hasRecordMergeStrategyId
+            "PostgresDebeziumAvroPayload"
+        ),
+        // OverwriteWithLatestAvroPayload - only requires PAYLOAD_CLASS_NAME
+        Arguments.of(
+            OverwriteWithLatestAvroPayload.class.getName(),
+            3, // propertiesToRemove size
+            1, // propertiesToAdd size
+            false, // hasRecordMergeMode
+            false, // hasRecordMergeStrategyId
+            "OverwriteWithLatestAvroPayload"
+        ),
+        // DefaultHoodieRecordPayload - only requires PAYLOAD_CLASS_NAME
+        Arguments.of(
+            DefaultHoodieRecordPayload.class.getName(),
+            3, // propertiesToRemove size
+            1, // propertiesToAdd size
+            false, // hasRecordMergeMode
+            false, // hasRecordMergeStrategyId
+            "DefaultHoodieRecordPayload"
+        )
+    );
+  }
+
+  @ParameterizedTest(name = "testDowngradeFor{5}")
+  @MethodSource("payloadClassTestCases")
+  void testDowngradeForPayloadClass(String payloadClassName, int expectedPropertiesToRemoveSize,
+                                    int expectedPropertiesToAddSize, boolean hasRecordMergeMode,
+                                    boolean hasRecordMergeStrategyId, String testName) {
     try (MockedStatic<UpgradeDowngradeUtils> utilities =
              org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
       utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
-      when(tableConfig.getLegacyPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(payloadClassName);
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(3, propertiesToChange.getRight().size());
+      // Assert properties to remove
+      assertEquals(expectedPropertiesToRemoveSize, propertiesToChange.getRight().size());
       assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
       assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
-      assertEquals(3, propertiesToChange.getLeft().size());
-      assertEquals(
-          RecordMergeMode.CUSTOM.name(),
-          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
-      assertEquals(
-          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
-      assertEquals(
-          AWSDmsAvroPayload.class.getName(),
-          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
-    }
-  }
-
-  @Test
-  void testDowngradeForOverwriteNonDefaultsWithLatestAvroPayload() {
-    try (MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-          any(), any(), any(), any(), anyBoolean(), any()))
-          .thenAnswer(invocation -> null);
-      when(tableConfig.getLegacyPayloadClass()).thenReturn(
-          OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(3, propertiesToChange.getRight().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
-      assertEquals(3, propertiesToChange.getLeft().size());
-      assertEquals(
-          RecordMergeMode.CUSTOM.name(),
-          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
-      assertEquals(
-          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
-      assertEquals(
-          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
-          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
-    }
-  }
-
-  @Test
-  void testDowngradeForPartialUpdateAvroPayload() {
-    try (MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-          any(), any(), any(), any(), anyBoolean(), any()))
-          .thenAnswer(invocation -> null);
-      when(tableConfig.getLegacyPayloadClass()).thenReturn(PartialUpdateAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(3, propertiesToChange.getRight().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
-      assertEquals(3, propertiesToChange.getLeft().size());
-      assertEquals(
-          RecordMergeMode.CUSTOM.name(),
-          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
-      assertEquals(
-          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
-      assertEquals(
-          PartialUpdateAvroPayload.class.getName(),
-          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
-    }
-  }
-
-  @Test
-  void testDowngradeForMySqlDebeziumAvroPayload() {
-    try (MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-              any(), any(), any(), any(), anyBoolean(), any()))
-          .thenAnswer(invocation -> null);
-      when(tableConfig.getLegacyPayloadClass()).thenReturn(MySqlDebeziumAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(3, propertiesToChange.getRight().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
-      assertEquals(3, propertiesToChange.getLeft().size());
-      assertEquals(
-          RecordMergeMode.CUSTOM.name(),
-          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
-      assertEquals(
-          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
-      assertEquals(
-          MySqlDebeziumAvroPayload.class.getName(),
-          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
-    }
-  }
-
-  @Test
-  void testDowngradeForOverwriteWithLatestAvroPayload() {
-    try (MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-              any(), any(), any(), any(), anyBoolean(), any()))
-          .thenAnswer(invocation -> null);
-      when(tableConfig.getLegacyPayloadClass()).thenReturn(OverwriteWithLatestAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(3, propertiesToChange.getRight().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
-      assertEquals(1, propertiesToChange.getLeft().size());
-      assertEquals(
-          OverwriteWithLatestAvroPayload.class.getName(),
-          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
-    }
-  }
-
-  @Test
-  void testDowngradeForDefaultHoodieRecordPayload() {
-    try (MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-              any(), any(), any(), any(), anyBoolean(), any()))
-          .thenAnswer(invocation -> null);
-      when(tableConfig.getLegacyPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(3, propertiesToChange.getRight().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
-      assertEquals(1, propertiesToChange.getLeft().size());
-      assertEquals(
-          DefaultHoodieRecordPayload.class.getName(),
-          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
-    }
-  }
-
-  @Test
-  void testDowngradeForPostgresDebeziumAvroPayload() {
-    try (MockedStatic<UpgradeDowngradeUtils> utilities =
-             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
-      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
-          any(), any(), any(), any(), anyBoolean(), any()))
-          .thenAnswer(invocation -> null);
-      when(tableConfig.getLegacyPayloadClass()).thenReturn(PostgresDebeziumAvroPayload.class.getName());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
-          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(3, propertiesToChange.getRight().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
-      assertEquals(
-          RecordMergeMode.CUSTOM.name(),
-          propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
-      assertEquals(
-          PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-          propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
-      assertEquals(
-          PostgresDebeziumAvroPayload.class.getName(),
-          propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
+      // Assert properties to add
+      assertEquals(expectedPropertiesToAddSize, propertiesToChange.getLeft().size());
+      // Assert payload class is always set
+      assertEquals(payloadClassName, propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
+      // Assert record merge mode if required
+      if (hasRecordMergeMode) {
+        assertEquals(RecordMergeMode.CUSTOM.name(),
+            propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
+      }
+      // Assert record merge strategy ID if required
+      if (hasRecordMergeStrategyId) {
+        assertEquals(PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+            propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+      }
     }
   }
 

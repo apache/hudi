@@ -73,7 +73,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite,
       validate = false)
     metaClient = getLatestMetaClient(true)
-    
+
     // assert table version is current (9) and the partition fields in table config has partition type
     assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())

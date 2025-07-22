@@ -39,10 +39,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
@@ -59,27 +62,41 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSE
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
 
 /**
- * Version 8 is the placeholder version from 1.0.0 to 1.0.2.
- * Version 9 is the placeholder version >= 1.1.0.
+ * Version 8 presents Hudi version from 1.0.0 to 1.0.2.
+ * Version 9 presents Hudi version >= 1.1.0.
  * Major upgrade logic:
- *  Deprecate a given set of payload classes to prefer merge mode.
+ *  Deprecate a given set of payload classes to prefer merge mode. That is,
+ *   for table with payload class defined in RFC-97,
+ *     remove hoodie.compaction.payload.class from table_configs
+ *     add hoodie.legacy.payload.class=payload to table_configs
+ *     set hoodie.table.partial.update.mode based on RFC-97
+ *     set hoodie.table.merge.properties based on RFC-97
+ *     set hoodie.record.merge.mode based on RFC-97
+ *     set hoodie.record.merge.strategy.id based on RFC-97
+ *   for table with event_time/commit_time merge mode,
+ *     set hoodie.table.partial.update.mode to default value
+ *     set hoodie.table.merge.properties to default value
+ *   for table with custom merger or payload,
+ *     set hoodie.table.partial.update.mode to default value
+ *     set hoodie.table.merge.properties to default value
  */
 public class EightToNineUpgradeHandler implements UpgradeHandler {
+  private static final Set<String> PAYLOADS_UPGRADE_TO_EVENT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
+      EventTimeAvroPayload.class.getName(),
+      MySqlDebeziumAvroPayload.class.getName(),
+      PartialUpdateAvroPayload.class.getName(),
+      PostgresDebeziumAvroPayload.class.getName()));
+  private static final Set<String> PAYLOADS_UPGRADE_TO_COMMIT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
+      AWSDmsAvroPayload.class.getName(),
+      OverwriteNonDefaultsWithLatestAvroPayload.class.getName()));
+
   @Override
   public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
                                                                          HoodieEngineContext context,
                                                                          String instantTime,
                                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-    // Rollback and run compaction in one step
-    rollbackFailedWritesAndCompact(
-        table, context, config, upgradeDowngradeHelper,
-        HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
-        HoodieTableVersion.NINE);
-
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
-    HoodieTableMetaClient metaClient = table.getMetaClient();
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // If auto upgrade is disabled, set writer version to 8 and return.
     if (!config.autoUpgrade()) {
       config.setValue(
@@ -87,6 +104,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
       return Pair.of(tablePropsToAdd, Collections.emptyList());
     }
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // If metadata is enabled for the data table, and
     // existing metadata table is behind the data table, then delete it.
     checkAndHandleMetadataTable(context, table, config, metaClient);
@@ -126,14 +145,10 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
-    if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
-        || payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
+    if (PAYLOADS_UPGRADE_TO_COMMIT_TIME_MERGE_MODE.contains(payloadClass)) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
       tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
-    } else if (payloadClass.equals(PartialUpdateAvroPayload.class.getName())
-        || payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())
-        || payloadClass.equals(EventTimeAvroPayload.class.getName())
-        || payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+    } else if (PAYLOADS_UPGRADE_TO_EVENT_TIME_MERGE_MODE.contains(payloadClass)) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
       tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
     }
@@ -162,7 +177,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   private void upgradeMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                             HoodieTableConfig tableConfig) {
     // Set merge properties for all tables.
-    String mergeProperties = "";
+    String mergeProperties = StringUtils.EMPTY_STRING;
     tablePropsToAdd.put(MERGE_PROPERTIES, mergeProperties);
 
     String payloadClass = tableConfig.getPayloadClass();

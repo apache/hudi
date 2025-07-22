@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, H
 import org.apache.hudi.common.table.HoodieTableConfig.{DEBEZIUM_UNAVAILABLE_VALUE, PARTIAL_UPDATE_CUSTOM_MARKER}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 
 import org.apache.spark.sql.SaveMode
@@ -38,37 +39,77 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @MethodSource(Array("payloadConfigs"))
-  def testPartitionFieldsWithUpgrade(tableType: HoodieTableType, payloadClass: String): Unit = {
+  def testUpgradeDowngradeBetweenEightAndNine(tableType: HoodieTableType,
+                                              payloadClass: String): Unit = {
     val partitionFields = "partition:simple"
     val mergerClasses = "org.apache.hudi.DefaultSparkRecordMerger," +
       "org.apache.hudi.OverwriteWithLatestSparkRecordMerger," +
       "org.apache.hudi.common.model.HoodieAvroRecordMerger"
-    val hudiOpts= commonOpts ++ Map(
+    var hudiOpts= commonOpts ++ Map(
       TABLE_TYPE.key -> tableType.name(),
       PARTITIONPATH_FIELD.key -> partitionFields,
       PAYLOAD_CLASS_NAME.key -> payloadClass,
       RECORD_MERGE_IMPL_CLASSES.key -> mergerClasses,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8",
       HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
     )
 
+    // Create a table in table version 8.
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = INSERT_OVERWRITE_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
-      validate = true,
-      schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_SPECIFIC_COLUMNS)
+      schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS)
     metaClient = getLatestMetaClient(true)
+    // Assert table version is 8.
+    checkResultForVersion8(payloadClass)
+    checkResultForVersion8(payloadClass)
+    // Add an extra commit.
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = INSERT_OVERWRITE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS)
+    // Do validations.
+    checkResultForVersion8(payloadClass)
 
-    // Assert table version is 9 and the partition fields in table config has partition type.
-    assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig.getTableVersion)
-    assertEquals(
-      partitionFields,
-      HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
-    assertEquals(payloadClass, metaClient.getTableConfig.getPayloadClass)
+    // Upgrade to version 9.
+    // Remove the write table version config, such that an upgrade could be triggered.
+    hudiOpts = hudiOpts ++ Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "9")
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = INSERT_OVERWRITE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS)
+    // Table should be automatically upgraded to version 9.
+    // Do validations for table version 9.
+    checkResultForVersion9(partitionFields, payloadClass)
+    // Add an extra commit.
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = INSERT_OVERWRITE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS)
+    // Do validations for table version 9.
+    checkResultForVersion9(partitionFields, payloadClass)
 
-    // Downgrade table to version 8
-    // Assert table version is 8 and the partition fields in table config does not have partition type.
+    // Downgrade to table version 8 explicitly.
+    // Note that downgrade is NOT automatic.
+    // It has to be triggered explicitly.
+    hudiOpts = hudiOpts ++ Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8")
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.EIGHT, null)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = INSERT_OVERWRITE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS)
+    checkResultForVersion8(payloadClass)
+    // Add an extra commit.
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = INSERT_OVERWRITE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS)
+    // Do validations.
+    checkResultForVersion8(payloadClass)
+  }
+
+  def checkResultForVersion8(payloadClass: String): Unit = {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
     // The payload class should be maintained.
@@ -81,25 +122,15 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     assertEquals(
       HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
       metaClient.getTableConfig.getRecordMergeStrategyId)
-
-    // Do another write; auto upgrade is triggered.
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = INSERT_OVERWRITE_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append,
-      validate = false,
-      schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_SPECIFIC_COLUMNS)
-    metaClient = HoodieTableMetaClient.reload(metaClient)
-
-    // Assert.
-    checkResult(partitionFields, payloadClass)
   }
 
-  def checkResult(partitionFields: String, payloadClass: String): Unit = {
+  def checkResultForVersion9(partitionFields: String, payloadClass: String): Unit = {
+    metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig.getTableVersion)
     assertEquals(
       partitionFields,
       HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
-    assertEquals(payloadClass, metaClient.getTableConfig.getPayloadClass)
+    assertEquals(payloadClass, metaClient.getTableConfig.getLegacyPayloadClass)
     // Based on the payload and table type, the merge mode is updated accordingly.
     if (payloadClass.equals(classOf[PartialUpdateAvroPayload].getName)) {
       assertEquals(

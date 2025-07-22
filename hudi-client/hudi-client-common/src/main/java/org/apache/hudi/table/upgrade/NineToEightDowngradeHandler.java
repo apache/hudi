@@ -52,11 +52,16 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailed
 /**
  * Version 8 is the placeholder version from 1.0.0 to 1.0.2.
  * Version 9 is the placeholder version >= 1.1.0.
- * The major change introduced in version 9 is two table configurations for payload deprecation
- * (PARTIAL_UPDATE_MODE, and MERGE_PROPERTIES).
- * During the downgrade, we remove these two table configurations.
- * For the builtin payloads, their merge mode and payload class configurations
- * are modified accordingly based in RFC-97.
+ * The major change introduced in version 9 is two table configurations for payload deprecation.
+ * The main downgrade logic:
+ *   for all tables:
+ *     remove hoodie.table.partial.update.mode from table_configs
+ *     remove hoodie.table.merge.properties from table_configs
+ *   for table with payload class defined in RFC-97,
+ *     remove hoodie.legacy.payload.class from table_configs
+ *     set hoodie.compaction.payload.class=payload
+ *     set hoodie.record.merge.mode=CUSTOM
+ *     set hoodie.record.merge.strategy.id accordingly
  */
 public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
@@ -75,15 +80,11 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         table, context, config, upgradeDowngradeHelper,
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.NINE);
-    HoodieTableMetaClient sd = HoodieTableMetaClient.builder()
-        .setConf(context.getStorageConf().newInstance())
-        .setBasePath(config.getBasePath())
-        .build();
     // Prepare parameters.
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.EIGHT, metaClient);
     }
-
+    // Update table properties.
     List<ConfigProperty> propertiesToRemove = new ArrayList<>();
     propertiesToRemove.add(MERGE_PROPERTIES);
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);

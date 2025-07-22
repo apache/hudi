@@ -45,6 +45,8 @@ import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Helper class to assist in upgrading/downgrading Hoodie when there is a version change.
@@ -204,8 +206,14 @@ public class UpgradeDowngrade {
       metaClient.getTableConfig().setTableVersion(toVersion);
     }
 
-    HoodieTableConfig.update(metaClient.getStorage(),
-        metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+    // Remove properties.
+    Set<String> propertiesToRemove =
+        tablePropsToRemove.stream().map(ConfigProperty::key).collect(Collectors.toSet());
+    HoodieTableConfig.delete(
+        metaClient.getStorage(), metaClient.getMetaPath(), propertiesToRemove);
+    // Update modified properties.
+    HoodieTableConfig.update(
+        metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
 
     if (metaClient.getTableConfig().isMetadataTableAvailable() && toVersion.equals(HoodieTableVersion.SIX) && isDowngrade) {
       // NOTE: Add empty deltacommit to metadata table. The compaction instant format has changed in version 8.
