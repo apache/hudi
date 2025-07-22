@@ -162,7 +162,7 @@ public class HoodieFileGroupReader<T> implements Closeable {
   /**
    * Initialize correct record buffer
    */
-  protected FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  private FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                    HoodieTableMetaClient hoodieTableMetaClient,
                                                    RecordMergeMode recordMergeMode,
                                                    PartialUpdateMode partialUpdateMode,
@@ -200,7 +200,9 @@ public class HoodieFileGroupReader<T> implements Closeable {
       this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
     } else {
       this.baseFileIterator = iter;
-      scanLogFiles();
+      if (!recordBuffer.hasScannedLogs()) {
+        scanLogFiles();
+      }
       recordBuffer.setBaseFileIterator(baseFileIterator);
     }
   }

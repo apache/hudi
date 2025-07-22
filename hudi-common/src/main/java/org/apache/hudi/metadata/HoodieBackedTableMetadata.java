@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.ReusableKeyBasedRecordBuffer;
@@ -119,6 +120,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView
 public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadata.class);
+  private static final Schema SCHEMA = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
 
   private final String metadataBasePath;
 
@@ -518,7 +520,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime =
         latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
     Set<String> validInstantTimestamps = getValidInstantTimestamps();
@@ -538,7 +539,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                 .getFileReader(metadataConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
           }
-          return Pair.of(baseFileReader, initializeRecordBuffer(fileSlice));
+          return Pair.of(baseFileReader, initializeRecordBuffer(fileSlice, latestMetadataInstantTime));
         } catch (IOException ex) {
           throw new HoodieIOException("Error opening readers for metadata table partition " + fileSlice.getPartitionPath(), ex);
         }
@@ -565,20 +566,26 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withHoodieTableMetaClient(metadataMetaClient)
         .withLatestCommitTime(latestMetadataInstantTime)
         .withFileSlice(fileSlice)
-        .withDataSchema(schema)
-        .withRequestedSchema(schema)
+        .withDataSchema(SCHEMA)
+        .withRequestedSchema(SCHEMA)
         .withProps(buildFileGroupReaderProperties(metadataConfig))
         .withExistingRecordBuffer(existingRecordBuffer)
         .build();
   }
 
-  private ReusableKeyBasedRecordBuffer<IndexedRecord> initializeRecordBuffer(FileSlice fileSlice) {
+  private ReusableKeyBasedRecordBuffer<IndexedRecord> initializeRecordBuffer(FileSlice fileSlice, String latestMetadataInstantTime) {
     // initialize without any filters
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
         metadataMetaClient.getTableConfig(),
         Option.empty(),
         Option.empty());
+    readerContext.initRecordMerger(metadataConfig.getProps());
+    readerContext.setHasBootstrapBaseFile(false);
+    readerContext.setHasLogFiles(fileSlice.hasLogFiles());
+    readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, SCHEMA, SCHEMA, Option.empty(), metadataMetaClient.getTableConfig(), metadataConfig.getProps()));
+    readerContext.setShouldMergeUseRecordPosition(false);
+    readerContext.setLatestCommitTime(latestMetadataInstantTime);
     HoodieReadStats readStats = new HoodieReadStats();
     ReusableKeyBasedRecordBuffer<IndexedRecord> recordBuffer = new ReusableKeyBasedRecordBuffer<>(
         readerContext,
@@ -602,7 +609,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withRecordBuffer(recordBuffer)
         .withAllowInflightInstants(false)
         .withMetaClient(metadataMetaClient)
-        .withOptimizedLogBlocksScan(true)
         .build();
     return recordBuffer;
   }
