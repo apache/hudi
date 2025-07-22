@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
@@ -33,30 +33,30 @@ public abstract class BaseMergeHelper {
   /**
    * Read records from previous version of base file and merge.
    * @param table Hoodie Table
-   * @param upsertHandle Merge Handle
+   * @param mergeHandle Merge Handle
    * @throws IOException in case of error
    */
-  public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieMergeHandle<?, ?, ?, ?> upsertHandle) throws IOException;
+  public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieWriteMergeHandle<?, ?, ?, ?> mergeHandle) throws IOException;
 
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.
    */
   protected static class UpdateHandler implements HoodieConsumer<HoodieRecord, Void> {
 
-    private final HoodieMergeHandle upsertHandle;
+    private final HoodieWriteMergeHandle mergeHandle;
 
-    protected UpdateHandler(HoodieMergeHandle upsertHandle) {
-      this.upsertHandle = upsertHandle;
+    protected UpdateHandler(HoodieWriteMergeHandle mergeHandle) {
+      this.mergeHandle = mergeHandle;
     }
 
     @Override
     public void consume(HoodieRecord record) {
-      upsertHandle.write(record);
+      mergeHandle.write(record);
     }
 
     @Override
     public Void finish() {
-      upsertHandle.close();
+      mergeHandle.close();
       return null;
     }
   }

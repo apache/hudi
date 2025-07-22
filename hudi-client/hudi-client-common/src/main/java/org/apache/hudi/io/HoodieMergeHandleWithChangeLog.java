@@ -45,7 +45,7 @@ import java.util.Map;
 /**
  * A merge handle that supports logging change logs.
  */
-public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandleWithChangeLog.class);
 

@@ -18,11 +18,20 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieUpsertException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.config.HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
@@ -33,6 +42,8 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTI
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE;
 
 public class IOUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(IOUtils.class);
+
   /**
    * Dynamic calculation of max memory to use for spillable map. There is always more than one task
    * running on an executor and each task maintains a spillable map.
@@ -81,10 +92,40 @@ public class IOUtils {
   }
 
   public static long getMaxMemoryPerCompaction(TaskContextSupplier context, Map<String, String> options) {
-    if (options.containsKey(MAX_MEMORY_FOR_COMPACTION)) {
-      return Long.parseLong(options.get(MAX_MEMORY_FOR_COMPACTION));
+    if (options.containsKey(MAX_MEMORY_FOR_COMPACTION.key())) {
+      return Long.parseLong(options.get(MAX_MEMORY_FOR_COMPACTION.key()));
     }
     String fraction = options.getOrDefault(MAX_MEMORY_FRACTION_FOR_COMPACTION.key(), MAX_MEMORY_FRACTION_FOR_COMPACTION.defaultValue());
     return getMaxMemoryAllowedForMerge(context, fraction);
+  }
+
+  /**
+   * Triggers the merge action with given merge handle {@code HoodieMergeHandle}.
+   *
+   * <p>Note: it can be either regular write path merging
+   * or compact merging based on impls of the {@link HoodieMergeHandle}.
+   *
+   * @param mergeHandle The merge handle
+   * @param instantTime The instant time
+   * @param fileId      The file ID
+   *
+   * @return the write status iterator
+   */
+  public static Iterator<List<WriteStatus>> runMerge(HoodieMergeHandle<?, ?, ?, ?> mergeHandle,
+                                                     String instantTime,
+                                                     String fileId) throws IOException {
+    if (mergeHandle.getOldFilePath() == null) {
+      throw new HoodieUpsertException(
+          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
+    } else {
+      mergeHandle.doMerge();
+    }
+
+    // TODO(vc): This needs to be revisited
+    if (mergeHandle.getPartitionPath() == null) {
+      LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", " + mergeHandle.getWriteStatuses());
+    }
+
+    return Collections.singletonList(mergeHandle.getWriteStatuses()).iterator();
   }
 }

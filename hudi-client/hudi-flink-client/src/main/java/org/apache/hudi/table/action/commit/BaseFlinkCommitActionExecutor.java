@@ -32,8 +32,9 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieCreateHandle;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -166,7 +167,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         // the second batch batch2 tries to reuse the same bucket
         // and append instead of UPDATE.
         return handleInsert(fileIdHint, recordItr);
-      } else if (this.writeHandle instanceof HoodieMergeHandle) {
+      } else if (this.writeHandle instanceof HoodieWriteMergeHandle) {
         return handleUpdate(partitionPath, fileIdHint, recordItr);
       } else {
         switch (bucketType) {
@@ -190,19 +191,13 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
                                                   Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
-    HoodieMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieMergeHandle<?, ?, ?, ?>) this.writeHandle;
+    HoodieWriteMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieWriteMergeHandle<?, ?, ?, ?>) this.writeHandle;
     if (upsertHandle.isEmptyNewRecords() && !recordItr.hasNext()) {
       LOG.info("Empty partition with fileId => {}.", fileId);
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
-    return handleUpdateInternal(upsertHandle, fileId);
-  }
-
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String fileId)
-      throws IOException {
-    table.runMerge(upsertHandle, instantTime, fileId);
-    return upsertHandle.getWriteStatusesAsIterator();
+    return IOUtils.runMerge(upsertHandle, instantTime, fileId);
   }
 
   @Override
