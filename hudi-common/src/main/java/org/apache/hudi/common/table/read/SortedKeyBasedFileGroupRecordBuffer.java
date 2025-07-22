@@ -48,10 +48,9 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
                                              RecordMergeMode recordMergeMode,
                                              PartialUpdateMode partialUpdateMode,
                                              TypedProperties props,
-                                             HoodieReadStats readStats,
                                              Option<String> orderingFieldName,
                                              UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
   }
 
   @Override

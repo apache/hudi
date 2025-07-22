@@ -52,6 +52,7 @@ import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
@@ -190,7 +191,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
 
   @Override
   public RawTripTestPayload preCombine(RawTripTestPayload oldValue) {
-    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+    if (!orderingVal.equals(DEFAULT_ORDERING_VALUE) && oldValue.orderingVal.compareTo(orderingVal) > 0) {
       // pick the payload with greatest ordering value
       return oldValue;
     } else {

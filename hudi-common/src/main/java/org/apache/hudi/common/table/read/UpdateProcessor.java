@@ -21,10 +21,6 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.Schema;
-
-import java.util.function.UnaryOperator;
-
 /**
  * Interface used within the {@link HoodieFileGroupReader<T>} for processing updates to records in Merge-on-Read tables.
  * Note that the updates are always relative to the base file's current state.
@@ -45,7 +41,7 @@ public interface UpdateProcessor<T> {
                                        boolean emitDeletes, Option<BaseFileUpdateCallback> updateCallback) {
     UpdateProcessor<T> handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
     if (updateCallback.isPresent()) {
-      return new CallbackProcessor<>(updateCallback.get(), handler, readerContext);
+      return new CallbackProcessor<>(updateCallback.get(), handler);
     }
     return handler;
   }
@@ -75,9 +71,9 @@ public interface UpdateProcessor<T> {
         }
         return null;
       } else {
-        if (previousRecord != null) {
+        if (previousRecord != null && previousRecord != mergedRecord) {
           readStats.incrementNumUpdates();
-        } else {
+        } else if (previousRecord == null) {
           readStats.incrementNumInserts();
         }
         return readerContext.seal(mergedRecord);
@@ -92,17 +88,10 @@ public interface UpdateProcessor<T> {
   class CallbackProcessor<T> implements UpdateProcessor<T> {
     private final BaseFileUpdateCallback<T> callback;
     private final UpdateProcessor<T> delegate;
-    private final HoodieReaderContext<T> readerContext;
-    private final Option<UnaryOperator<T>> outputConverter;
-    private final Schema requestedSchema;
 
-    public CallbackProcessor(BaseFileUpdateCallback callback, UpdateProcessor<T> delegate,
-                             HoodieReaderContext<T> readerContext) {
+    public CallbackProcessor(BaseFileUpdateCallback callback, UpdateProcessor<T> delegate) {
       this.callback = callback;
       this.delegate = delegate;
-      this.readerContext = readerContext;
-      this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-      this.requestedSchema = readerContext.getSchemaHandler().getRequestedSchema();
     }
 
     @Override

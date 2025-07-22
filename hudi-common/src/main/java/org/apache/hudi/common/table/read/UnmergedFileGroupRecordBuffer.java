@@ -43,6 +43,7 @@ import java.util.Deque;
 public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   private final Deque<HoodieLogBlock> currentInstantLogBlocks;
+  private final HoodieReadStats readStats;
   private ClosableIterator<T> recordIterator;
 
   public UnmergedFileGroupRecordBuffer(
@@ -52,7 +53,8 @@ public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       PartialUpdateMode partialUpdateMode,
       TypedProperties props,
       HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, Option.empty(), null);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, Option.empty(), null);
+    this.readStats = readStats;
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
 

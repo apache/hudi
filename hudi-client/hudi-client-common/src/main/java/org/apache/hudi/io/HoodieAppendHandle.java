@@ -68,6 +68,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -529,6 +530,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       markClosed();
       // flush any remaining records to disk
       appendDataAndDeleteBlocks(header, true);
+      if (recordItr instanceof Closeable) {
+        ((Closeable) recordItr).close();
+      }
       recordItr = null;
 
       if (writer != null) {
