@@ -207,24 +207,32 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private void initWriteFunction() {
     final String writeOperation = this.config.get(FlinkOptions.OPERATION);
+    WriteFunction writeFunctionImpl;
     switch (WriteOperationType.fromValue(writeOperation)) {
       case INSERT:
-        this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.insert(records, bucketInfo, instantTime);
+        writeFunctionImpl = (records, bucketInfo, instantTime) -> this.writeClient.insert(records, bucketInfo, instantTime);
         break;
       case UPSERT:
       case DELETE: // shares the code path with UPSERT
       case DELETE_PREPPED:
-        this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.upsert(records, bucketInfo, instantTime);
+        writeFunctionImpl = (records, bucketInfo, instantTime) -> this.writeClient.upsert(records, bucketInfo, instantTime);
         break;
       case INSERT_OVERWRITE:
-        this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.insertOverwrite(records, bucketInfo, instantTime);
+        writeFunctionImpl = (records, bucketInfo, instantTime) -> this.writeClient.insertOverwrite(records, bucketInfo, instantTime);
         break;
       case INSERT_OVERWRITE_TABLE:
-        this.writeFunction = (records, bucketInfo, instantTime) -> this.writeClient.insertOverwriteTable(records, bucketInfo, instantTime);
+        writeFunctionImpl = (records, bucketInfo, instantTime) -> this.writeClient.insertOverwriteTable(records, bucketInfo, instantTime);
         break;
       default:
         throw new RuntimeException("Unsupported write operation : " + writeOperation);
     }
+    this.writeFunction = (records, bucketInfo, instant) -> {
+      if (!records.hasNext()) {
+        LOG.info("Empty records with bucket info => {}.", bucketInfo);
+        return Collections.emptyList();
+      }
+      return writeFunctionImpl.write(records, bucketInfo, instant);
+    };
   }
 
   private void initRecordConverter() {
