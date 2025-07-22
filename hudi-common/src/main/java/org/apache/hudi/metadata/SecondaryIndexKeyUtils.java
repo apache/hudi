@@ -18,15 +18,36 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 
 public class SecondaryIndexKeyUtils {
 
+  /**
+   * Use this function if you want to get both record key and secondary key.
+   *
+   * @returns pair of secondary key, record key.
+   * */
+  public static Pair<String, String> getSecondaryKeyRecordKeyPair(String key) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
+    return Pair.of(unescapeSpecialChars(key.substring(0, delimiterIndex)), unescapeSpecialChars(key.substring(delimiterIndex + 1)));
+  }
+
+  /**
+   * Use this function if you want to get both record key and secondary key.
+   *
+   * @returns pair of secondary key, record key.
+   * */
+  public static Pair<String, String> getRecordKeySecondaryKeyPair(String key) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
+    return Pair.of(unescapeSpecialChars(key.substring(delimiterIndex + 1)), unescapeSpecialChars(key.substring(0, delimiterIndex)));
+  }
+
   public static String getRecordKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the primary key from the payload key
-    checkState(key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
     int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
     return unescapeSpecialChars(key.substring(delimiterIndex + 1));
   }
@@ -34,7 +55,6 @@ public class SecondaryIndexKeyUtils {
   public static String getSecondaryKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the secondary key from the payload key
-    checkState(key.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR), "Invalid key format for secondary index payload: " + key);
     int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
     return unescapeSpecialChars(key.substring(0, delimiterIndex));
   }
@@ -43,7 +63,7 @@ public class SecondaryIndexKeyUtils {
     return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
   }
 
-  private static String escapeSpecialChars(String str) {
+  public static String escapeSpecialChars(String str) {
     StringBuilder escaped = new StringBuilder();
     for (char c : str.toCharArray()) {
       if (c == '\\' || c == '$') {
@@ -74,7 +94,7 @@ public class SecondaryIndexKeyUtils {
     return delimiterIndex;
   }
 
-  private static String unescapeSpecialChars(String str) {
+  static String unescapeSpecialChars(String str) {
     StringBuilder unescaped = new StringBuilder();
     boolean isEscape = false;
     for (char c : str.toCharArray()) {

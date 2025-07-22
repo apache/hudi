@@ -21,8 +21,10 @@ package org.apache.hudi.source.stats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -394,7 +396,8 @@ public class FileStatsIndex implements ColumnStatsIndex {
         .map(colName -> new ColumnIndexID(colName).asBase64EncodedString()).collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
-        getMetadataTable().getRecordsByKeyPrefixes(encodedTargetColumnNames, getIndexPartitionName(), false);
+        getMetadataTable().getRecordsByKeyPrefixes(
+            HoodieListData.lazy(encodedTargetColumnNames), getIndexPartitionName(), false, Option.empty());
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());
