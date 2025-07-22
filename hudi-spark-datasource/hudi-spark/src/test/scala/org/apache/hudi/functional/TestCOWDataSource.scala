@@ -348,6 +348,38 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
   }
 
+  @Test
+  def testUserProvidedKeyGeneratorClass(): Unit = {
+    val recordType = HoodieRecordType.AVRO
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType, Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      "hoodie.delete.shuffle.parallelism" -> "1",
+      "hoodie.datasource.write.precombine.field" -> "timestamp",
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.UserProvidedKeyGenerator",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition"
+    ))
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val commonOptsNoPreCombine = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    ) ++ writeOpts
+    writeToHudi(commonOptsNoPreCombine, inputDF)
+
+    spark.read.format("hudi").options(readOpts).load(basePath).count()
+
+    writeToHudi(commonOptsNoPreCombine, inputDF)
+
+    spark.read.format("hudi").options(readOpts).load(basePath).count()
+  }
+
   @ParameterizedTest
   @CsvSource(Array("hoodie.datasource.write.recordkey.field,begin_lat", "hoodie.datasource.write.partitionpath.field,end_lon",
     "hoodie.datasource.write.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator", "hoodie.datasource.write.precombine.field,fare"))
