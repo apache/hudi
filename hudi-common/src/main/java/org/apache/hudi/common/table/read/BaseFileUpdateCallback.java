@@ -44,4 +44,9 @@ public interface BaseFileUpdateCallback<T> {
    * @param previousRecord the record in the base file before deletion
    */
   void onDelete(String recordKey, T previousRecord);
+
+  /**
+   * Callback method to return the name of the callback.
+   */
+  String getName();
 }

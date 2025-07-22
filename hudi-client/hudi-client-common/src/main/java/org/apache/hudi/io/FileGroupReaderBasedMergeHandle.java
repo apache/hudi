@@ -258,7 +258,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       callbacks.add(new CDCCallback<>(cdcLogger.get(), readerContext));
     }
     // Stream secondary index stats.
-    if (isSecondaryIndexStatsStreamingWritesEnabled || writeStatus.isTrackingSuccessfulWrites()) {
+    if (isSecondaryIndexStatsStreamingWritesEnabled) {
       callbacks.add(new SecondaryIndexCallback<>(
           partitionPath,
           writeSchemaWithMetaFields,
@@ -338,6 +338,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     public void onDelete(String recordKey, T previousRecord) {
       cdcLogger.put(recordKey, convertOutput(previousRecord), Option.empty());
 
+    }
+
+    @Override
+    public String getName() {
+      return "CdcCallBack";
     }
 
     private GenericRecord convertOutput(T record) {
@@ -428,6 +433,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           secondaryIndexDefns,
           keyGeneratorOpt,
           config);
+    }
+
+    @Override
+    public String getName() {
+      return "SecondaryIndex Callback";
     }
   }
 }

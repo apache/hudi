@@ -87,7 +87,8 @@ public interface UpdateProcessor<T> {
 
   /**
    * A processor that wraps the standard update processor and invokes a customizable callback for each update.
-   * @param <T> the engine specific record type
+   *
+   * @param <T> the engine-specific record type
    */
   class CallbackProcessor<T> implements UpdateProcessor<T> {
     private static final Logger LOG = LoggerFactory.getLogger(CallbackProcessor.class);
@@ -106,31 +107,29 @@ public interface UpdateProcessor<T> {
       T result = delegate.processUpdate(recordKey, previousRecord, currentRecord, isDelete);
 
       if (isDelete) {
-        for (BaseFileUpdateCallback<T> callback : callbacks) {
-          try {
-            callback.onDelete(recordKey, previousRecord);
-          } catch (Exception e) {
-            LOG.error("Callback failed", e);
-          }
-        }
+        invokeCallbacks(callback -> callback.onDelete(recordKey, previousRecord));
       } else if (previousRecord != null && previousRecord != currentRecord) {
-        for (BaseFileUpdateCallback<T> callback : callbacks) {
-          try {
-            callback.onUpdate(recordKey, previousRecord, currentRecord);
-          } catch (Exception e) {
-            LOG.error("Callback failed", e);
-          }
-        }
+        invokeCallbacks(callback -> callback.onUpdate(recordKey, previousRecord, currentRecord));
       } else {
-        for (BaseFileUpdateCallback<T> callback : callbacks) {
-          try {
-            callback.onInsert(recordKey, currentRecord);
-          } catch (Exception e) {
-            LOG.error("Callback failed", e);
-          }
+        invokeCallbacks(callback -> callback.onInsert(recordKey, currentRecord));
+      }
+
+      return result;
+    }
+
+    private void invokeCallbacks(CallbackInvoker<T> invoker) {
+      for (BaseFileUpdateCallback<T> callback : callbacks) {
+        try {
+          invoker.invoke(callback);
+        } catch (Exception e) {
+          LOG.error(String.format("Callback %s failed: ", callback.getName()), e);
         }
       }
-      return result;
+    }
+
+    @FunctionalInterface
+    private interface CallbackInvoker<T> {
+      void invoke(BaseFileUpdateCallback<T> callback) throws Exception;
     }
   }
 }
