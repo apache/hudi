@@ -114,7 +114,6 @@ public class HoodieMergeHandleFactory {
       HoodieWriteConfig config,
       String instantTime,
       HoodieTable<T, I, K, O> hoodieTable,
-      FileSlice fileSlice,
       CompactionOperation operation,
       TaskContextSupplier taskContextSupplier,
       HoodieReaderContext<T> readerContext,
@@ -124,8 +123,7 @@ public class HoodieMergeHandleFactory {
     boolean isFallbackEnabled = config.isMergeHandleFallbackEnabled();
 
     String mergeHandleClass = config.getCompactionMergeHandleClassName();
-    String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
-    LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
+    LOG.info("Create HoodieMergeHandle implementation {} for fileId {} and partitionPath {} at commit {}", mergeHandleClass, operation.getFileId(), operation.getPartitionPath(), instantTime);
 
     Class<?>[] constructorParamTypes = new Class<?>[] {
         HoodieWriteConfig.class, String.class, HoodieTable.class, FileSlice.class, CompactionOperation.class,
@@ -134,7 +132,7 @@ public class HoodieMergeHandleFactory {
 
     return instantiateMergeHandle(
         isFallbackEnabled, mergeHandleClass, COMPACT_MERGE_HANDLE_CLASS_NAME.defaultValue(), logContext, constructorParamTypes,
-        config, instantTime, hoodieTable, fileSlice, operation, taskContextSupplier, readerContext, maxInstantTime, recordType);
+        config, instantTime, hoodieTable, operation, taskContextSupplier, readerContext, maxInstantTime, recordType);
   }
 
   /**
