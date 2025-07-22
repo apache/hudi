@@ -353,7 +353,7 @@ abstract class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val 
   extends HoodieBaseMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   private val incrementalFileIndex = new HoodieIncrementalFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, true, true, mergeOnReadIncrementalRelation)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, true, mergeOnReadIncrementalRelation)
 
   override def buildFileIndex(): HoodieFileIndex = incrementalFileIndex
 
@@ -387,7 +387,7 @@ class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
                                                   isBootstrap: Boolean)
   extends HoodieBaseMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   private val hoodieCDCFileIndex = new HoodieCDCFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, true, true)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, true)
 
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
@@ -451,7 +451,7 @@ abstract class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val 
   extends HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   private val incrementalFileIndex = new HoodieIncrementalFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, true, mergeOnReadIncrementalRelation)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, mergeOnReadIncrementalRelation)
 
   override def buildFileIndex(): HoodieFileIndex = incrementalFileIndex
 
@@ -487,7 +487,7 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
   extends HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   private val hoodieCDCFileIndex = new HoodieCDCFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, true)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false)
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
   override def buildDataSchema(): StructType = hoodieCDCFileIndex.cdcRelation.schema
