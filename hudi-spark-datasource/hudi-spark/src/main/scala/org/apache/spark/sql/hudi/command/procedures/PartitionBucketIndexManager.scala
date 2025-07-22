@@ -195,7 +195,8 @@ class PartitionBucketIndexManager extends BaseProcedure
       logInfo("Perform OVERWRITE with dry-run disabled.")
       val partitionsToRescale = rescalePartitionsMap.keys
       // get all fileSlices need to read
-      val allFilesMap = FSUtils.getFilesInPartitions(context, metaClient, HoodieMetadataConfig.newBuilder.enable(mdtEnable).build,
+      val metadataConfig = HoodieMetadataConfig.newBuilder.enable(mdtEnable).build
+      val allFilesMap = FSUtils.getFilesInPartitions(context, metaClient, metadataConfig,
         partitionsToRescale.map(relative => {
           new StoragePath(basePath, relative)
         }).map(storagePath => storagePath.toString).toArray)
@@ -237,8 +238,7 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)
-            // enable optimized log block scan
-            .withEnableOptimizedLogBlockScan(true)
+            .withEnableOptimizedLogBlockScan(metadataConfig.isOptimizedLogBlocksScanEnabled)
             .build()
           val iterator = fileGroupReader.getClosableIterator
           CloseableIteratorListener.addListener(iterator)

@@ -242,6 +242,13 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
     List<String> columnsToIndex = Arrays.asList("rider", "driver");
+    // Create metadata config for both log file column range metadata and partition stats
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true)
+        .withMetadataIndexColumnStats(true)
+        .withMetadataIndexPartitionStats(true)
+        .withColumnStatsIndexForColumns("rider,driver")
+        .withPartitionStatsIndexParallelism(1)
+        .build();
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
@@ -273,7 +280,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             metaClient,
             columnsToIndex,
             Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
-            HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue());
+            HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue(),
+            metadataConfig);
         // there must be two ranges for rider and driver
         assertEquals(2, columnRangeMetadataLogFile.size());
       } catch (Exception e) {
@@ -284,12 +292,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext,
         partitionFileSlicePairs,
-        HoodieMetadataConfig.newBuilder().enable(true)
-            .withMetadataIndexColumnStats(true)
-            .withMetadataIndexPartitionStats(true)
-            .withColumnStatsIndexForColumns("rider,driver")
-            .withPartitionStatsIndexParallelism(1)
-            .build(),
+        metadataConfig,
         metaClient,
         Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty());

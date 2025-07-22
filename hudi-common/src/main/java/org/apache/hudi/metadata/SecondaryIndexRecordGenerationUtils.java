@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -230,8 +231,9 @@ public class SecondaryIndexRecordGenerationUtils {
         .withDataSchema(tableSchema)
         .withRequestedSchema(requestedSchema)
         .withAllowInflightInstants(allowInflightInstants)
-        // enable optimized log block scan
-        .withEnableOptimizedLogBlockScan(true)
+        // props should contain the following config
+        .withEnableOptimizedLogBlockScan(props.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
+                Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue())))
         .build();
 
     return new ClosableIterator<Pair<String, String>>() {

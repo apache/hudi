@@ -18,6 +18,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -45,8 +46,12 @@ public class LogFileColStatsTestUtil {
                                                           int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       String partitionPath = FSUtils.getRelativePartitionPath(datasetMetaClient.getBasePath(), new StoragePath(filePath).getParent());
+      // Create metadata config from table properties
+      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+          .fromProperties(datasetMetaClient.getTableConfig().getProps())
+          .build();
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
-          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize);
+          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize, metadataConfig);
       return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {
       throw new HoodieException("Writer schema needs to be set");
