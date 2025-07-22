@@ -720,6 +720,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .withShouldUseRecordPosition(false)
         .withAllowInflightInstants(false)
         .withSortOutput(sortOutput)
+        // enable optimized log block scan
+        .withEnableOptimizedLogBlockScan(true)
         .build();
   }
 

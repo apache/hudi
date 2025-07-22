@@ -53,7 +53,7 @@ public class HoodieReaderConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
       .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
-      .defaultValue("false")
+      .defaultValue("true")
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "

@@ -547,6 +547,8 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         .withRequestedSchema(schema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
+        // enable optimized log block scan
+        .withEnableOptimizedLogBlockScan(true)
         .build();
 
     try (ClosableIterator<HoodieRecord<IndexedRecord>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {

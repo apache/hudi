@@ -728,6 +728,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           .withHoodieTableMetaClient(datasetMetaClient)
           .withProps(properties)
           .withEmitDelete(true)
+          // revisit if this needs to enable log optimized scan
           .build();
       Set<String> allRecordKeys = new HashSet<>();
       try (ClosableIterator<String> keysIterator = reader.getClosableKeyIterator()) {

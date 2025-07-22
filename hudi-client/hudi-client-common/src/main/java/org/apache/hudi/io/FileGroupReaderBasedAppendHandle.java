@@ -85,7 +85,7 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
     // Initializes the record iterator, log compaction requires writing the deletes into the delete block of the resulting log file.
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(instantTime).withPartitionPath(partitionPath).withLogFiles(logFiles).withBaseFileOption(Option.empty()).withDataSchema(writeSchemaWithMetaFields)
-        .withRequestedSchema(writeSchemaWithMetaFields).withEnableOptimizedLogBlockScan(true).withInternalSchema(internalSchemaOption).withProps(props).withEmitDelete(true)
+        .withRequestedSchema(writeSchemaWithMetaFields).withEnableOptimizedLogBlockScan(config.enableOptimizedLogBlocksScan()).withInternalSchema(internalSchemaOption).withProps(props).withEmitDelete(true)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords()).build()) {
       recordItr = new CloseableMappingIterator<>(fileGroupReader.getLogRecordsOnly(), record -> {
         HoodieRecord<T> hoodieRecord = readerContext.constructHoodieRecord(record);

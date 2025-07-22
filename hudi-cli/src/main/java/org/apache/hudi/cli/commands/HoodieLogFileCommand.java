@@ -75,6 +75,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
@@ -240,6 +241,7 @@ public class HoodieLogFileCommand {
       HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getRelativePartitionPath(HoodieCLI.getTableMetaClient().getBasePath(), firstLogFile), FSUtils.getFileIdFromLogPath(firstLogFile));
       FileSlice fileSlice = new FileSlice(fileGroupId, HoodieTimeline.INIT_INSTANT_TS, null, logFilePaths.stream()
           .map(l -> new HoodieLogFile(new StoragePath(l))).collect(Collectors.toList()));
+      TypedProperties fileGroupReaderProperties = buildFileGroupReaderProperties();
       try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(HoodieCLI.getTableMetaClient())
@@ -247,8 +249,9 @@ public class HoodieLogFileCommand {
           .withDataSchema(readerSchema)
           .withRequestedSchema(readerSchema)
           .withLatestCommitTime(client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(HoodieInstantTimeGenerator.getCurrentInstantTimeStr()))
-          .withProps(buildFileGroupReaderProperties())
+          .withProps(fileGroupReaderProperties)
           .withShouldUseRecordPosition(false)
+          .withEnableOptimizedLogBlockScan(getEnableOptimizedLogBlocksScan(fileGroupReaderProperties))
           .build();
            ClosableIterator<IndexedRecord> recordIterator = fileGroupReader.getClosableIterator()) {
         recordIterator.forEachRemaining(record -> {
@@ -311,6 +314,19 @@ public class HoodieLogFileCommand {
     props.setProperty(
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()));
+    props.setProperty(
+        ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
+        ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue());
+
     return props;
+  }
+
+  /**
+   * Gets the enableOptimizedLogBlocksScan value from configuration.
+   */
+  private boolean getEnableOptimizedLogBlocksScan(TypedProperties props) {
+    return props.getBoolean(
+        ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
+        Boolean.parseBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()));
   }
 }

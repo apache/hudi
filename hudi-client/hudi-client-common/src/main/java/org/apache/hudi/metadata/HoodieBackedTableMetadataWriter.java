@@ -796,6 +796,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           .withInternalSchema(internalSchemaOption)
           .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
+          .withEnableOptimizedLogBlockScan(dataWriteConfig.enableOptimizedLogBlocksScan())
           .build();
       String baseFileInstantTime = fileSlice.getBaseInstantTime();
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {

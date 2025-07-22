@@ -230,6 +230,8 @@ public class SecondaryIndexRecordGenerationUtils {
         .withDataSchema(tableSchema)
         .withRequestedSchema(requestedSchema)
         .withAllowInflightInstants(allowInflightInstants)
+        // enable optimized log block scan
+        .withEnableOptimizedLogBlockScan(true)
         .build();
 
     return new ClosableIterator<Pair<String, String>>() {

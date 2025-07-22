@@ -237,6 +237,8 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)
+            // enable optimized log block scan
+            .withEnableOptimizedLogBlockScan(true)
             .build()
           val iterator = fileGroupReader.getClosableIterator
           CloseableIteratorListener.addListener(iterator)

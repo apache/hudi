@@ -962,6 +962,8 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withRequestedSchema(schema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
+        // ensure this is using v2 scan for log reading
+        .withEnableOptimizedLogBlockScan(true)
         .build();
 
     try (ClosableIterator<HoodieRecord<IndexedRecord>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {

@@ -142,6 +142,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         val properties = TypedProperties.fromMap(options.asJava)
         properties.setProperty(MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxCompactionMemoryInBytes))
         properties.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), mergeType)
+        properties.setProperty(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue())
         val storageConf = new HadoopStorageConfiguration(hadoopConf)
 
         val baseFileOption = HOption.ofNullable(
@@ -167,6 +168,8 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withDataSchema(new Schema.Parser().parse(tableSchema.avroSchemaStr))
             .withRequestedSchema(requestedSchema)
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
+            // revisit this if properties works
+            .withEnableOptimizedLogBlockScan(properties.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key()))
             .build()
           convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
@@ -183,6 +186,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withDataSchema(new Schema.Parser().parse(tableSchema.avroSchemaStr))
             .withRequestedSchema(new Schema.Parser().parse(requiredSchema.avroSchemaStr))
             .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
+            .withEnableOptimizedLogBlockScan(properties.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key()))
             .build()
           convertCloseableIterator(fileGroupReader.getClosableIterator)
         }

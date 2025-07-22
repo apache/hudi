@@ -1466,6 +1466,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withRequestedSchema(schema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
+        .withEnableOptimizedLogBlockScan(writeConfig.enableOptimizedLogBlocksScan())
         .build();
 
     try (ClosableIterator<HoodieRecord<IndexedRecord>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {

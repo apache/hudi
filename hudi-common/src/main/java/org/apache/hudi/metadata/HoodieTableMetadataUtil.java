@@ -1050,6 +1050,8 @@ public class HoodieTableMetadataUtil {
           .withMetaClient(datasetMetaClient)
           .withAllowInflightInstants(true)
           .withRecordBuffer(recordBuffer)
+          // enable optimized log blocks scan
+          .withOptimizedLogBlocksScan(true)
           .build()) {
         // initializes the record buffer with the log records
         return recordBuffer.getLogRecordIterator();
@@ -1732,6 +1734,8 @@ public class HoodieTableMetadataUtil {
           .withRequestedSchema(writerSchemaOpt.get())
           .withLatestCommitTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().requestedTime())
           .withProps(properties)
+          // enable optimized log block scan, need to find a way to use config for this though
+          .withEnableOptimizedLogBlockScan(true)
           .build();
       try (ClosableIterator<HoodieRecord> recordIterator = (ClosableIterator<HoodieRecord>) fileGroupReader.getClosableHoodieRecordIterator()) {
         if (!recordIterator.hasNext()) {
@@ -2425,6 +2429,8 @@ public class HoodieTableMetadataUtil {
             .withRequestedSchema(HoodieAvroUtils.getRecordKeySchema())
             .withLatestCommitTime(latestCommitTime)
             .withProps(getFileGroupReaderPropertiesFromStorageConf(storageConf))
+            // need to enable log block scan
+            .withEnableOptimizedLogBlockScan(true)
             .build();
 
         ClosableIterator<String> recordKeyIterator = fileGroupReader.getClosableKeyIterator();

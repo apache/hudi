@@ -346,7 +346,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
         getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true);
-    
+
     return result.filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
 
@@ -510,7 +510,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     InstantRange instantRange = InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
         .explicitInstants(validInstantTimestamps).build();
-    
+
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
         metadataMetaClient.getTableConfig(),
@@ -530,6 +530,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withStart(0)
         .withLength(Long.MAX_VALUE)
         .withShouldUseRecordPosition(false)
+        .withEnableOptimizedLogBlockScan(metadataConfig.isOptimizedLogBlocksScanEnabled())
         .build();
   }
 
