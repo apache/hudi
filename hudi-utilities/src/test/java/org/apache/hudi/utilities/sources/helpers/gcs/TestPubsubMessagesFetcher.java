@@ -39,6 +39,9 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+
+import java.util.Collections;
 
 public class TestPubsubMessagesFetcher {
   private static final String PROJECT_ID = "test-project";
@@ -96,7 +99,7 @@ public class TestPubsubMessagesFetcher {
   public void testSendAcks() throws IOException {
     doNothing().when(mockSubscriber).close();
     when(mockPubsubQueueClient.getSubscriber(any())).thenReturn(mockSubscriber);
-    List<String> messageAcks = IntStream.range(0, 20).mapToObj(i -> "msg_" + i).collect(Collectors.toList());
+    List<String> messageAcks = IntStream.range(0, 25).mapToObj(i -> "msg_" + i).collect(Collectors.toList());
     doNothing().when(mockPubsubQueueClient).makeAckRequest(eq(mockSubscriber), eq(SUBSCRIPTION_NAME), any());
     PubsubMessagesFetcher fetcher = new PubsubMessagesFetcher(
         PROJECT_ID, SUBSCRIPTION_ID, SMALL_BATCH_SIZE,
@@ -104,7 +107,31 @@ public class TestPubsubMessagesFetcher {
     );
 
     fetcher.sendAcks(messageAcks);
-    verify(mockPubsubQueueClient, times(2)).makeAckRequest(eq(mockSubscriber), eq(SUBSCRIPTION_NAME), any());
+    verify(mockPubsubQueueClient, times(3)).makeAckRequest(eq(mockSubscriber), eq(SUBSCRIPTION_NAME), any());
+
+    // Verify first batch (messages 0-9) was sent
+    List<String> expectedBatch1 = IntStream.range(0, 10).mapToObj(i -> "msg_" + i).collect(Collectors.toList());
+    verify(mockPubsubQueueClient).makeAckRequest(mockSubscriber, SUBSCRIPTION_NAME, expectedBatch1);
+
+    // Verify second batch (messages 10-19) was sent
+    List<String> expectedBatch2 = IntStream.range(10, 20).mapToObj(i -> "msg_" + i).collect(Collectors.toList());
+    verify(mockPubsubQueueClient).makeAckRequest(mockSubscriber, SUBSCRIPTION_NAME, expectedBatch2);
+
+    // Verify third batch (messages 20-24) was sent
+    List<String> expectedBatch3 = IntStream.range(20, 25).mapToObj(i -> "msg_" + i).collect(Collectors.toList());
+    verify(mockPubsubQueueClient).makeAckRequest(mockSubscriber, SUBSCRIPTION_NAME, expectedBatch3);
   }
 
+  @Test
+  void testSendAcks_EmptyMessageList() throws IOException {
+    doNothing().when(mockSubscriber).close();
+    when(mockPubsubQueueClient.getSubscriber(any())).thenReturn(mockSubscriber);
+    PubsubMessagesFetcher fetcher = new PubsubMessagesFetcher(
+        PROJECT_ID, SUBSCRIPTION_ID, SMALL_BATCH_SIZE,
+        MAX_MESSAGES_IN_REQUEST, MAX_WAIT_TIME_IN_REQUEST, mockPubsubQueueClient
+    );
+
+    fetcher.sendAcks(Collections.emptyList());
+    verify(mockPubsubQueueClient, never()).makeAckRequest(any(), any(), any());
+  }
 }
