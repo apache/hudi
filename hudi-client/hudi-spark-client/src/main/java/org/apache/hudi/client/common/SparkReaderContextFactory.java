@@ -85,6 +85,8 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
     // Broadcast: Configuration.
     Configuration configs = getHadoopConfiguration(jsc.hadoopConfiguration());
     schemaEvolutionConfigs.forEach(configs::set);
+    configs.set(SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE().key(), sqlConf.getConfString(SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE().key()));
+    configs.set(SQLConf.PARQUET_WRITE_LEGACY_FORMAT().key(), sqlConf.getConfString(SQLConf.PARQUET_WRITE_LEGACY_FORMAT().key()));
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(configs));
     // Broadcast: ParquetReader.
     // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
