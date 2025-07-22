@@ -19,29 +19,40 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
+import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.util.{CollectionUtils, Option => HOption}
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.SchemaOnWriteConfigs
+import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, Option, Option => HOption}
+import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.avro.{Schema, SchemaBuilder}
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
+import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.internal.SQLConf.LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION
 import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, DataType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -423,12 +434,52 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     assertArrayMatchesSchema(schema.valueType, map.valueArray())
   }
 
-  override def getSchemaEvolutionConfigs: HoodieTestDataGenerator.SchemaEvolutionConfigs = {
-    val configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs()
+  override def getSchemaEvolutionConfigs: SchemaOnWriteConfigs = {
+    val configs = new SchemaOnWriteConfigs()
     configs.floatToDoubleSupport = false
     configs
   }
 
+
+  override def commitSchemaToTable(schema: InternalSchema, writeConfigs: util.Map[String, String], historySchemaStr: String): Unit = {
+    val tableName = writeConfigs.get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
+    val avroSchema = AvroInternalSchemaConverter.convert(schema, getAvroRecordQualifiedName(tableName))
+    val jsc = new JavaSparkContext(spark.sparkContext)
+    val client = DataSourceUtils.createHoodieClient(
+      jsc,
+      avroSchema.toString,
+      getBasePath,
+      tableName,
+      HoodieWriterUtils.parametersWithWriteDefaults(
+        writeConfigs.asScala.toMap ++ Map(
+          HoodieCleanConfig.AUTO_CLEAN.key -> "false",
+          HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
+          HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false"
+        )).asJava)
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(getBasePath)
+      .setConf(getStorageConf)
+      .setTimeGeneratorConfig(client.getConfig.getTimeGeneratorConfig)
+      .build()
+
+    val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType)
+    val instantTime = client.startCommit(commitActionType)
+    client.setOperationType(WriteOperationType.ALTER_SCHEMA)
+
+    val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
+    val timeLine = hoodieTable.getActiveTimeline
+    val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator
+    val requested = instantGenerator.createNewInstant(State.REQUESTED, commitActionType, instantTime)
+    val metadata = new HoodieCommitMetadata
+    metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
+    timeLine.transitionRequestedToInflight(requested, Option.of(metadata))
+    val extraMeta = new util.HashMap[String, String]()
+    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(schema.setSchemaId(instantTime.toLong)))
+    val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)
+    schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(schema, historySchemaStr))
+    client.commit(instantTime, jsc.emptyRDD, Option.of(extraMeta))
+  }
 }
 
 object TestHoodieFileGroupReaderOnSpark {

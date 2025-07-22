@@ -52,6 +52,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -133,11 +134,13 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     commitToTable(recordList, operation, firstCommit, writeConfigs, TRIP_EXAMPLE_SCHEMA);
   }
 
+  public abstract void commitSchemaToTable(InternalSchema schema, Map<String, String> writeConfigs, String historySchemaStr);
+
   public abstract void assertRecordsEqual(Schema schema, T expected, T actual);
 
   public abstract void assertRecordMatchesSchema(Schema schema, T record);
 
-  public abstract HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs();
+  public abstract HoodieTestDataGenerator.SchemaOnWriteConfigs getSchemaEvolutionConfigs();
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
@@ -385,7 +388,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           mergedRecords);
 
       // Evolve schema
-      HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
+      HoodieTestDataGenerator.SchemaOnWriteConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
       boolean addNewFieldSupport = schemaEvolutionConfigs.addNewFieldSupport;
       schemaEvolutionConfigs.addNewFieldSupport = false;
       baseFileDataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);

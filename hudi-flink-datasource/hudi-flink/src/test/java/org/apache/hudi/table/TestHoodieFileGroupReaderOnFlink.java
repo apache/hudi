@@ -19,9 +19,14 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.client.FlinkTaskContextSupplier;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -30,14 +35,25 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FlinkRowDataReaderContext;
@@ -62,17 +78,20 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
@@ -161,6 +180,65 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   }
 
   @Override
+  public void commitSchemaToTable(InternalSchema schema, Map<String, String> writeConfigs, String historySchemaStr) {
+    String tableName = writeConfigs.get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
+    Schema avroSchema = AvroInternalSchemaConverter.convert(schema, getAvroRecordQualifiedName(tableName));
+
+    StorageConfiguration<?> storageConf = getStorageConf();
+    String basePath = getBasePath();
+
+    Map<String, String> finalWriteConfigs = new HashMap<>(writeConfigs);
+    finalWriteConfigs.put(HoodieCleanConfig.AUTO_CLEAN.key(), "false");
+    finalWriteConfigs.put(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+        HoodieFailedWritesCleaningPolicy.NEVER.name());
+    finalWriteConfigs.put(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "false");
+
+    HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
+        new FlinkTaskContextSupplier(null));
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(avroSchema.toString())
+        .withProps(finalWriteConfigs)
+        .build();
+    try (HoodieFlinkWriteClient client = new HoodieFlinkWriteClient<>(context, config)) {
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf(storageConf)
+          .setBasePath(basePath)
+          .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
+          .build();
+
+      WriteOperationType operationType = WriteOperationType.ALTER_SCHEMA;
+      String commitActionType = CommitUtils.getCommitActionType(operationType, metaClient.getTableType());
+
+      String instantTime = client.startCommit(commitActionType);
+      client.setOperationType(operationType);
+
+      HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
+
+      HoodieActiveTimeline timeline = table.getActiveTimeline();
+      TimelineLayout layout = metaClient.getTimelineLayout();
+      HoodieInstant requested = layout.getInstantGenerator()
+          .createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, instantTime);
+
+      HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+      metadata.setOperationType(operationType);
+
+      timeline.transitionRequestedToInflight(requested, Option.of(metadata));
+
+      Map<String, String> extraMeta = new HashMap<>();
+      long schemaId = Long.parseLong(instantTime);
+      InternalSchema withId = schema.setSchemaId(schemaId);
+      extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(withId));
+
+      FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
+      schemaManager.persistHistorySchemaStr(instantTime,
+          SerDeHelper.inheritSchemas(schema, historySchemaStr));
+
+      assertTrue(client.commit(instantTime, new ArrayList<>(), Option.of(extraMeta)));
+    }
+  }
+
+  @Override
   public void assertRecordsEqual(Schema schema, RowData expected, RowData actual) {
     TestData.assertRowDataEquals(
         Collections.singletonList(actual),
@@ -174,8 +252,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   }
 
   @Override
-  public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
-    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
+  public HoodieTestDataGenerator.SchemaOnWriteConfigs getSchemaEvolutionConfigs() {
+    HoodieTestDataGenerator.SchemaOnWriteConfigs configs = new HoodieTestDataGenerator.SchemaOnWriteConfigs();
     configs.nestedSupport = false;
     configs.arraySupport = false;
     configs.mapSupport = false;

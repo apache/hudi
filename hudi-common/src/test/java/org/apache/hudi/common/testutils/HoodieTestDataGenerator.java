@@ -43,6 +43,7 @@ import org.apache.hudi.storage.StoragePath;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.avro.Conversions;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -1299,7 +1300,105 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
-  public static class SchemaEvolutionConfigs {
+  public static class SchemaOnReadConfigs {
+    public Schema schema = AVRO_SCHEMA;
+    public boolean nestedSupport = true;
+    public boolean mapSupport = true;
+    public boolean arraySupport = true;
+    public boolean addNewFieldSupport = true;
+    // TODO: [HUDI-9603] Flink 1.18 array values incorrect in fg reader test
+    public boolean anyArraySupport = true;
+    public boolean reorderColumnSupport = true;
+    public boolean renameColumnSupport = true;
+    public boolean removeColumnSupport = true;
+    public boolean renameColumnAsPreviouslyRemovedSupport = true;
+
+    // Int
+    public boolean intToLongSupport = true;
+    public boolean intToFloatSupport = true;
+    public boolean intToDoubleSupport = true;
+    public boolean intToStringSupport = true;
+    public boolean intToDecimalFixedSupport = true;
+    public boolean intToDecimalBytesSupport = true;
+
+    // Long
+    public boolean longToFloatSupport = true;
+    public boolean longToDoubleSupport = true;
+    public boolean longToStringSupport = true;
+    public boolean longToDecimalFixedSupport = true;
+    public boolean longToDecimalBytesSupport = true;
+
+    // Float
+    public boolean floatToDoubleSupport = true;
+    public boolean floatToStringSupport = true;
+    public boolean floatToDecimalFixedSupport = true;
+    public boolean floatToDecimalBytesSupport = true;
+
+    // Double
+    public boolean doubleToStringSupport = true;
+    public boolean doubleToDecimalFixedSupport = true;
+    public boolean doubleToDecimalBytesSupport = true;
+
+    // String
+    public boolean stringToDecimalFixedSupport = true;
+    public boolean stringToDecimalBytesSupport = true;
+    public boolean stringToDateSupport = true;
+
+    // Decimal
+    public boolean decimalFixedToStringSupport = true;
+    public boolean decimalBytesToStringSupport = true;
+
+    // Date
+    public boolean dateToStringSupport = true;
+  }
+
+  private enum SchemaOnReadTypePromotionCase {
+    INT_TO_INT(Schema.Type.INT, Schema.Type.INT, null, config -> true),
+    INT_TO_LONG(Schema.Type.INT, Schema.Type.LONG, null, config -> config.intToLongSupport),
+    INT_TO_FLOAT(Schema.Type.INT, Schema.Type.FLOAT, null, config -> config.intToFloatSupport),
+    INT_TO_DOUBLE(Schema.Type.INT, Schema.Type.DOUBLE, null, config -> config.intToDoubleSupport),
+    INT_TO_STRING(Schema.Type.INT, Schema.Type.STRING, null, config -> config.intToStringSupport),
+    INT_TO_DECIMAL_FIXED(Schema.Type.INT, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.intToDecimalFixedSupport),
+    INT_TO_DECIMAL_BYTES(Schema.Type.INT, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.intToDecimalBytesSupport),
+    LONG_TO_LONG(Schema.Type.LONG, Schema.Type.LONG, null, config -> true),
+    LONG_TO_FLOAT(Schema.Type.LONG, Schema.Type.FLOAT, null, config -> config.longToFloatSupport),
+    LONG_TO_DOUBLE(Schema.Type.LONG, Schema.Type.DOUBLE, null, config -> config.longToDoubleSupport),
+    LONG_TO_STRING(Schema.Type.LONG, Schema.Type.STRING, null, config -> config.longToStringSupport),
+    LONG_TO_DECIMAL_FIXED(Schema.Type.LONG, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.longToDecimalFixedSupport),
+    LONG_TO_DECIMAL_BYTES(Schema.Type.LONG, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.longToDecimalBytesSupport),
+    FLOAT_TO_FLOAT(Schema.Type.FLOAT, Schema.Type.FLOAT, null, config -> true),
+    FLOAT_TO_DOUBLE(Schema.Type.FLOAT, Schema.Type.DOUBLE, null, config -> config.floatToDoubleSupport),
+    FLOAT_TO_STRING(Schema.Type.FLOAT, Schema.Type.STRING, null, config -> config.floatToStringSupport),
+    FLOAT_TO_DECIMAL_FIXED(Schema.Type.FLOAT, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.floatToDecimalFixedSupport),
+    FLOAT_TO_DECIMAL_BYTES(Schema.Type.FLOAT, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.floatToDecimalBytesSupport),
+    DOUBLE_TO_DOUBLE(Schema.Type.DOUBLE, Schema.Type.DOUBLE, null, config -> true),
+    DOUBLE_TO_STRING(Schema.Type.DOUBLE, Schema.Type.STRING, null, config -> config.doubleToStringSupport),
+    DOUBLE_TO_DECIMAL_FIXED(Schema.Type.DOUBLE, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.doubleToDecimalFixedSupport),
+    DOUBLE_TO_DECIMAL_BYTES(Schema.Type.DOUBLE, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.doubleToDecimalBytesSupport),
+    STRING_TO_STRING(Schema.Type.STRING, Schema.Type.STRING, null, config -> true),
+    STRING_TO_DECIMAL_FIXED(Schema.Type.STRING, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.stringToDecimalFixedSupport),
+    STRING_TO_DECIMAL_BYTES(Schema.Type.STRING, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.stringToDecimalBytesSupport),
+    STRING_TO_DATE(Schema.Type.STRING, Schema.Type.INT, LogicalTypes.date(), config -> config.stringToDateSupport),
+    DECIMAL_FIXED_TO_STRING(Schema.Type.FIXED, Schema.Type.STRING, LogicalTypes.decimal(3, 4), config -> config.decimalFixedToStringSupport),
+    DECIMAL_BYTES_TO_STRING(Schema.Type.BYTES, Schema.Type.STRING, LogicalTypes.decimal(3, 4), config -> config.decimalBytesToStringSupport),
+    DATE_TO_STRING(Schema.Type.INT, Schema.Type.STRING, LogicalTypes.date(), config -> config.dateToStringSupport);
+
+    public final Schema.Type before;
+    public final Schema.Type after;
+    public final LogicalType logicalType;
+    public final Predicate<SchemaOnReadConfigs> isEnabled;
+
+    SchemaOnReadTypePromotionCase(Schema.Type before, Schema.Type after, LogicalType logicalType, Predicate<SchemaOnReadConfigs> isEnabled) {
+      this.before = before;
+      this.after = after;
+      this.logicalType = logicalType;
+      this.isEnabled = isEnabled;
+    }
+  }
+
+
+
+  public static class SchemaOnWriteConfigs {
     public Schema schema = AVRO_SCHEMA;
     public boolean nestedSupport = true;
     public boolean mapSupport = true;
@@ -1333,7 +1432,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     public boolean bytesToStringSupport = true;
   }
 
-  private enum SchemaEvolutionTypePromotionCase {
+  private enum SchemaOnWriteTypePromotionCase {
     INT_TO_INT(Schema.Type.INT, Schema.Type.INT, config -> true),
     INT_TO_LONG(Schema.Type.INT, Schema.Type.LONG, config -> config.intToLongSupport),
     INT_TO_FLOAT(Schema.Type.INT, Schema.Type.FLOAT, config -> config.intToFloatSupport),
@@ -1355,18 +1454,18 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
     public final Schema.Type before;
     public final Schema.Type after;
-    public final Predicate<SchemaEvolutionConfigs> isEnabled;
+    public final Predicate<SchemaOnWriteConfigs> isEnabled;
 
-    SchemaEvolutionTypePromotionCase(Schema.Type before, Schema.Type after, Predicate<SchemaEvolutionConfigs> isEnabled) {
+    SchemaOnWriteTypePromotionCase(Schema.Type before, Schema.Type after, Predicate<SchemaOnWriteConfigs> isEnabled) {
       this.before = before;
       this.after = after;
       this.isEnabled = isEnabled;
     }
   }
 
-  public void extendSchema(SchemaEvolutionConfigs configs, boolean isBefore) {
+  public void extendSchema(SchemaOnWriteConfigs configs, boolean isBefore) {
     List<Schema.Type> baseFields = new ArrayList<>();
-    for (SchemaEvolutionTypePromotionCase evolution : SchemaEvolutionTypePromotionCase.values()) {
+    for (SchemaOnWriteTypePromotionCase evolution : SchemaOnWriteTypePromotionCase.values()) {
       if (evolution.isEnabled.test(configs)) {
         baseFields.add(isBefore ? evolution.before : evolution.after);
       }
@@ -1380,11 +1479,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields)));
   }
 
-  public void extendSchemaBeforeEvolution(SchemaEvolutionConfigs configs) {
+  public void extendSchemaBeforeEvolution(SchemaOnWriteConfigs configs) {
     extendSchema(configs, true);
   }
 
-  public void extendSchemaAfterEvolution(SchemaEvolutionConfigs configs) {
+  public void extendSchemaAfterEvolution(SchemaOnWriteConfigs configs) {
     extendSchema(configs, false);
   }
 
@@ -1392,11 +1491,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return extendedSchema.orElseThrow(IllegalArgumentException::new);
   }
 
-  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields) {
+  private static Schema generateExtendedSchema(SchemaOnWriteConfigs configs, List<Schema.Type> baseFields) {
     return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
+  private static Schema generateExtendedSchema(Schema baseSchema, SchemaOnWriteConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
     List<Schema.Field> fields =  baseSchema.getFields();
     List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
     boolean addedFields = false;
@@ -1421,7 +1520,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return finalSchema;
   }
 
-  private static void addFields(SchemaEvolutionConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
+  private static void addFields(SchemaOnWriteConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
     if (toplevel) {
       if (configs.mapSupport) {
         List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
