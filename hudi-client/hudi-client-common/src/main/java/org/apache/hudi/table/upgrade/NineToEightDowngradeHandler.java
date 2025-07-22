@@ -45,7 +45,8 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         table, context, config, upgradeDowngradeHelper,
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.NINE);
-
+    UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
+        config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     return Pair.of(Collections.emptyMap(), Collections.emptyList());
   }
 }

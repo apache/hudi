@@ -73,7 +73,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
-  protected final HoodieReadStats readStats;
   protected final boolean shouldCheckCustomDeleteMarker;
   protected final boolean shouldCheckBuiltInDeleteMarker;
   protected ClosableIterator<T> baseFileIterator;
@@ -91,7 +90,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   RecordMergeMode recordMergeMode,
                                   PartialUpdateMode partialUpdateMode,
                                   TypedProperties props,
-                                  HoodieReadStats readStats,
                                   Option<String> orderingFieldName,
                                   UpdateProcessor<T> updateProcessor) {
     this.readerContext = readerContext;
@@ -122,7 +120,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
     boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
-    this.readStats = readStats;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -324,12 +321,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
     // Inserts
     nextRecord = readerContext.seal(baseRecord);
-    readStats.incrementNumInserts();
     return true;
   }
 
   protected void initializeLogRecordIterator() {
-    logRecordIterator = records.values().iterator();
+    logRecordIterator = records.iterator();
   }
 
   protected boolean hasNextLogRecord() {
