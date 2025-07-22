@@ -92,6 +92,18 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
                                   TypedProperties props,
                                   Option<String> orderingFieldName,
                                   UpdateProcessor<T> updateProcessor) {
+    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor, null);
+  }
+
+  protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                  HoodieTableMetaClient hoodieTableMetaClient,
+                                  RecordMergeMode recordMergeMode,
+                                  PartialUpdateMode partialUpdateMode,
+                                  TypedProperties props,
+                                  HoodieReadStats readStats,
+                                  Option<String> orderingFieldName,
+                                  UpdateProcessor<T> updateProcessor,
+                                  ExternalSpillableMap<Serializable, BufferedRecord<T>> records) {
     this.readerContext = readerContext;
     this.updateProcessor = updateProcessor;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
@@ -122,7 +134,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
-      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
+      this.records = records != null ? records : new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
           readerContext.getRecordSizeEstimator(), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
@@ -180,6 +192,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   @Override
   public void setBaseFileIterator(ClosableIterator<T> baseFileIterator) {
     this.baseFileIterator = baseFileIterator;
+  }
+
+  @Override
+  public boolean hasScannedLogs() {
+    return !records.isEmpty();
   }
 
   /**

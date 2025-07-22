@@ -71,7 +71,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow}
  *            in Spark and {@code RowData} in Flink.
  */
-public final class HoodieFileGroupReader<T> implements Closeable {
+public class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final HoodieTableMetaClient metaClient;
   private final InputSplit inputSplit;
@@ -80,7 +80,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieStorage storage;
   private final TypedProperties props;
   // Core structure to store and process records.
-  private final FileGroupRecordBuffer<T> recordBuffer;
+  protected final HoodieFileGroupRecordBuffer<T> recordBuffer;
   private ClosableIterator<T> baseFileIterator;
   private final Option<UnaryOperator<T>> outputConverter;
   private final HoodieReadStats readStats;
@@ -109,14 +109,15 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       long start, long length, boolean shouldUseRecordPosition) {
     this(readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt,
         hoodieTableMetaClient, props, shouldUseRecordPosition, false, false, false,
-        InputSplit.fromFileSlice(fileSlice, start, length), Option.empty(), false);
+        InputSplit.fromFileSlice(fileSlice, start, length), Option.empty(), false, null);
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
-                                InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan) {
+                                InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan,
+                                HoodieFileGroupRecordBuffer<T> existingRecordBuffer) {
     this.readerContext = readerContext;
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
@@ -152,7 +153,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           return Option.of(preCombineField);
         });
     this.readStats = new HoodieReadStats();
-    this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
+    this.recordBuffer = existingRecordBuffer != null ? existingRecordBuffer : getRecordBuffer(readerContext, hoodieTableMetaClient,
         readerContext.getMergeMode(), tableConfig.getPartialUpdateMode(), props,
         isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput);
     this.allowInflightInstants = allowInflightInstants;
@@ -161,7 +162,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   /**
    * Initialize correct record buffer
    */
-  private FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  protected FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                    HoodieTableMetaClient hoodieTableMetaClient,
                                                    RecordMergeMode recordMergeMode,
                                                    PartialUpdateMode partialUpdateMode,
@@ -328,7 +329,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return nextVal;
   }
 
-  private void scanLogFiles() {
+  protected void scanLogFiles() {
     try (HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
         .withHoodieReaderContext(readerContext)
         .withStorage(storage)
@@ -455,6 +456,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean sortOutput = false;
     private boolean enableOptimizedLogBlockScan = false;
     private Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
+    private HoodieFileGroupRecordBuffer<T> existingRecordBuffer;
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -560,6 +562,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
+    public Builder<T> withExistingRecordBuffer(HoodieFileGroupRecordBuffer<T> existingRecordBuffer) {
+      this.existingRecordBuffer = existingRecordBuffer;
+      return this;
+    }
+
     public HoodieFileGroupReader<T> build() {
       ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
       ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");
@@ -579,7 +586,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       InputSplit inputSplit = new InputSplit(baseFileOption, logFiles, partitionPath, start, length);
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
-          props, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, inputSplit, fileGroupUpdateCallback, enableOptimizedLogBlockScan);
+          props, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, inputSplit, fileGroupUpdateCallback, enableOptimizedLogBlockScan, existingRecordBuffer);
     }
   }
 
