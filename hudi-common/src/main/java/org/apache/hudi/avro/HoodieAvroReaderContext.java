@@ -197,8 +197,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
           payloadClass);
     }
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    return new HoodieAvroIndexedRecord(
-        hoodieKey, bufferedRecord.getRecord(), null, Option.empty());
+    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
   }
 
   @Override

@@ -22,7 +22,9 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,8 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,7 +63,7 @@ public class TestConfigUtils {
 
   @ParameterizedTest
   @MethodSource("separatorArgs")
-  public void testToMapSucceeds(Option<String> separator) {
+  void testToMapSucceeds(Option<String> separator) {
     String sepString = separator.isPresent() ? separator.get() : "\n";
     Map<String, String> expectedMap = new HashMap<>();
     expectedMap.put("k.1.1.2", "v1");
@@ -111,11 +115,79 @@ public class TestConfigUtils {
 
   @ParameterizedTest
   @MethodSource("separatorArgs")
-  public void testToMapThrowError(Option<String> separator) {
+  void testToMapThrowError(Option<String> separator) {
     String sepString = separator.isPresent() ? separator.get() : "\n";
     String srcKv = String.format(
         "k.1.1.2=v1=v1.1%sk.2.1.2=v2%sk.3.1.2=v3", sepString, sepString);
     assertThrows(IllegalArgumentException.class, () -> toMap(srcKv, separator));
+  }
+
+  @Test
+  void testShouldTrackEventTimeWaterMarkByConfig() {
+    TypedProperties props = new TypedProperties();
+
+    // Test default value (should be false)
+    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+
+    // Test when explicitly set to true
+    props.put("hoodie.write.track.event.time.watermark", "true");
+    assertTrue(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+
+    // Test when explicitly set to false
+    props.put("hoodie.write.track.event.time.watermark", "false");
+    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+
+    // Test with boolean value
+    props.put("hoodie.write.track.event.time.watermark", true);
+    assertTrue(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+
+    props.put("hoodie.write.track.event.time.watermark", false);
+    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+  }
+
+  @Test
+  void testShouldKeepConsistentLogicalTimestamp() {
+    TypedProperties props = new TypedProperties();
+
+    // Test default value (should be false based on KeyGeneratorOptions)
+    assertFalse(ConfigUtils.shouldKeepConsistentLogicalTimestamp(props));
+
+    // Test when explicitly set to true
+    props.put(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    assertTrue(ConfigUtils.shouldKeepConsistentLogicalTimestamp(props));
+
+    // Test when explicitly set to false
+    props.put(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "false");
+    assertFalse(ConfigUtils.shouldKeepConsistentLogicalTimestamp(props));
+
+    // Test with boolean value
+    props.put(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), true);
+    assertTrue(ConfigUtils.shouldKeepConsistentLogicalTimestamp(props));
+
+    props.put(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), false);
+    assertFalse(ConfigUtils.shouldKeepConsistentLogicalTimestamp(props));
+  }
+
+  @Test
+  void testGetEventTimeFieldName() {
+    TypedProperties props = new TypedProperties();
+
+    // Test when property is not set (should return null)
+    assertNull(ConfigUtils.getEventTimeFieldName(props));
+
+    // Test when property is set to a field name
+    String eventTimeField = "event_timestamp";
+    props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, eventTimeField);
+    assertEquals(eventTimeField, ConfigUtils.getEventTimeFieldName(props));
+
+    // Test with different field name
+    String anotherField = "created_at";
+    props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, anotherField);
+    assertEquals(anotherField, ConfigUtils.getEventTimeFieldName(props));
+
+    // Test with empty string
+    props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "");
+    assertEquals("", ConfigUtils.getEventTimeFieldName(props));
   }
 
   private Map<String, String> toMap(String config, Option<String> separator) {

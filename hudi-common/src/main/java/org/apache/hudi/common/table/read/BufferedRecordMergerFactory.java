@@ -177,13 +177,6 @@ public class BufferedRecordMergerFactory {
       }
       return new MergeResult<>(olderRecord.isDelete(), olderRecord.getRecord());
     }
-
-    /**
-     * Check if event time metadata should be tracked.
-     */
-    static boolean shouldKeepEventTimeMetadata(TypedProperties props) {
-      return props.getBoolean("hoodie.write.track.event.time.watermark", false);
-    }
   }
 
   /**

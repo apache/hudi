@@ -292,7 +292,11 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
                               Schema schema,
                               Properties prop,
                               boolean isDelete) {
-    Option recordMetadata = newRecord.getMetadata();
+    Option<Map<String, String>> recordMetadata = newRecord.getMetadata();
+    // Track event time metadata.
+    if (trackEventTimeWatermark && eventTimeFieldNameOpt.isPresent()) {
+      recordMetadata = appendEventTimeMetadata(newRecord, recordMetadata);
+    }
     if (!partitionPath.equals(newRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + newRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);

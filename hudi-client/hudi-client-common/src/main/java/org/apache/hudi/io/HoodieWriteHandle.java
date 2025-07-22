@@ -21,9 +21,11 @@ package org.apache.hudi.io;
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -36,9 +38,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -50,15 +54,19 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
@@ -92,6 +100,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
+  protected boolean trackEventTimeWatermark;
+  protected boolean keepConsistentLogicalTimestamp;
+  protected Option<String> eventTimeFieldNameOpt;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
@@ -123,6 +134,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     } else {
       this.isSecondaryIndexStatsStreamingWritesEnabled = false;
     }
+
+    // For tracking event time watermark.
+    this.trackEventTimeWatermark = shouldTrackEventTimeWaterMarker(getHoodieTableMetaClient(), config);
+    this.keepConsistentLogicalTimestamp = ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
+    this.eventTimeFieldNameOpt = Option.ofNullable(ConfigUtils.getEventTimeFieldName(config.getProps()));
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {
@@ -335,5 +351,52 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       LOG.error("Failed to convert to IndexedRecord", e);
       return Option.empty();
     }
+  }
+
+  boolean shouldTrackEventTimeWaterMarkerByPayload(HoodieTableMetaClient metaClient) {
+    // Only for event time ordering mode.
+    if (metaClient.getTableConfig().getRecordMergeMode()
+        != RecordMergeMode.EVENT_TIME_ORDERING) {
+      return false;
+    }
+
+    // Only when `DefaultHoodieRecordPayload` was the payload class.
+    String payloadClass = metaClient.getTableConfig().getLegacyPayloadClass();
+    return !StringUtils.isNullOrEmpty(payloadClass)
+        && payloadClass.equals(DefaultHoodieRecordPayload.class.getName());
+  }
+
+  /**
+   * To match previous behavior, we track event time watermarker when
+   * 1. Record type is AVRO.
+   * 2. Original payload class is `DefaultHoodieRecordPayload` or
+   *    the config is set to true.
+   */
+  boolean shouldTrackEventTimeWaterMarker(HoodieTableMetaClient metaClient,
+                                          HoodieWriteConfig config) {
+    return config.getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.AVRO
+        && (shouldTrackEventTimeWaterMarkerByPayload(metaClient)
+        || ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(config.getProps()));
+  }
+
+  /**
+   * Extract the event_time value and put into metadata.
+   * Assume: the record type is AVRO.
+   */
+  Option<Map<String, String>> appendEventTimeMetadata(HoodieRecord record,
+                                                      Option<Map<String, String>> metadataOpt) {
+    // Extract event_time value.
+    Object eventTime = HoodieAvroUtils.getNestedFieldVal(
+        (GenericRecord) record.getData(),
+        eventTimeFieldNameOpt.get(),
+        true,
+        keepConsistentLogicalTimestamp);
+    if (eventTime != null) {
+      // Append event time.
+      Map<String, String> metadata = metadataOpt.orElse(new HashMap<>());
+      metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
+      return Option.of(metadata);
+    }
+    return Option.empty();
   }
 }

@@ -23,10 +23,8 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -41,7 +39,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieLockConfig;
-import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
@@ -62,7 +59,6 @@ import java.util.function.BiConsumer;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -151,36 +147,6 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     inOrder.verify(transactionManager).beginStateChange(Option.empty(), Option.empty());
     inOrder.verify(timeGenerator).generateTime(true);
     inOrder.verify(transactionManager).endStateChange(Option.of(expectedInstant));
-  }
-
-  @Test
-  void testUpdateConfigForCompatibilityWithoutUpdate() throws IOException {
-    initMetaClient();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withPayloadConfig(HoodiePayloadConfig
-            .newBuilder().withPayloadClass(OverwriteWithLatestAvroPayload.class.getName()).build())
-        .build();
-    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
-    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
-    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
-    HoodieWriteConfig config = writeClient.getConfig();
-    assertFalse(config.trackEventTimeWatermark());
-  }
-
-  @Test
-  void testUpdateConfigForCompatibilityWithUpdate() throws IOException {
-    initMetaClient();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withPayloadConfig(HoodiePayloadConfig
-            .newBuilder().withPayloadClass(DefaultHoodieRecordPayload.class.getName()).build())
-        .build();
-    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
-    BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
-    TestWriteClient writeClient = new TestWriteClient(writeConfig, table, Option.empty(), tableServiceClient);
-    HoodieWriteConfig config = writeClient.getConfig();
-    assertTrue(config.trackEventTimeWatermark());
   }
 
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {

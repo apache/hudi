@@ -286,6 +286,10 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   private void bufferRecord(HoodieRecord<T> hoodieRecord) {
     Option<Map<String, String>> recordMetadata = hoodieRecord.getMetadata();
+    // Track event time metadata.
+    if (trackEventTimeWatermark && eventTimeFieldNameOpt.isPresent()) {
+      recordMetadata = appendEventTimeMetadata(hoodieRecord, recordMetadata);
+    }
     Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
