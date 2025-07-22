@@ -17,10 +17,11 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -30,7 +31,7 @@ import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
+import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -102,7 +103,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
     val superSupportBatch = super.supportBatch(sparkSession, schema)
-    supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch && tableSchema.internalSchema.isEmpty
+    supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch
     supportReturningBatch = !isMOR && supportVectorizedRead
     logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
       s"isBootstrap: $isBootstrap, superSupportBatch: $superSupportBatch")
@@ -155,7 +156,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
-    //setSchemaEvolutionConfigs(augmentedStorageConf)
+    setSchemaEvolutionConfigs(augmentedStorageConf)
     val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
 
     // The schema of the partition cols we want to append the value instead of reading from the file
@@ -192,7 +193,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
           val fileGroupName = FSUtils.getFileIdFromFilePath(sparkAdapter
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
-            case Some(fileSlice) if !isCount && requiredSchema.nonEmpty =>
+            case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
               val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupParquetFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
@@ -239,6 +240,13 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
             requiredSchema, partitionSchema, outputSchema, filters, storageConf)
       }
       CloseableIteratorListener.addListener(iter)
+    }
+  }
+
+  private def setSchemaEvolutionConfigs(conf: StorageConfiguration[Configuration]): Unit = {
+    if (internalSchemaOpt.isPresent) {
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
+      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
   }
 
