@@ -54,7 +54,6 @@ elif [[ -n "$MAVEN_BASE_URL" ]]; then
 fi
 
 # choose versions based on build profiles
-REPO_NAME=apachehudi
 if [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
@@ -64,7 +63,6 @@ if [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
   SPARK_HADOOP_VERSION=2
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  REPO_NAME=icshuo
   IMAGE_TAG=flink1171hive313spark334
 elif [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
   HADOOP_VERSION=3.3.5
@@ -75,7 +73,6 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  REPO_NAME=icshuo
   IMAGE_TAG=flink1181hive313spark343
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' && ${SCALA_PROFILE} == 'scala-2.12' ]]; then
   HADOOP_VERSION=3.3.5
@@ -106,7 +103,6 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   if [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
-    REPO_NAME=icshuo
     IMAGE_TAG=flink200hive313spark351
     FLINK_VERSION=2.0.0
   else
@@ -222,7 +218,6 @@ docker build \
 --build-arg CONFLUENT_VERSION=$CONFLUENT_VERSION \
 --build-arg KAFKA_CONNECT_HDFS_VERSION=$KAFKA_CONNECT_HDFS_VERSION \
 --build-arg IMAGE_TAG=$IMAGE_TAG \
---build-arg REPO_NAME=$REPO_NAME \
 -t hudi-ci-bundle-validation:$IMAGE_TAG \
 .
 
