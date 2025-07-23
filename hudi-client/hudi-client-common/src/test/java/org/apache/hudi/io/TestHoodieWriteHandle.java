@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -76,7 +75,7 @@ class TestHoodieWriteHandle {
     when(mockHoodieTable.getMetaClient()).thenReturn(mockMetaClient);
     when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
     when(mockWriteConfig.getRecordMerger()).thenReturn(mockRecordMerger);
-    
+
     // Set up a basic schema for the write config
     String basicSchema = "{\"type\":\"record\",\"name\":\"test\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
     when(mockWriteConfig.getWriteSchema()).thenReturn(basicSchema);
@@ -103,81 +102,31 @@ class TestHoodieWriteHandle {
   }
 
   @Test
-  void testShouldTrackEventTimeWaterMarkerByPayloadEventTimeOrderingWithDefaultPayload() {
-    // Setup: Event time ordering mode with DefaultHoodieRecordPayload
+  void testShouldTrackEventTimeWaterMarkerByPayloadEventTimeOrdering() {
+    // Setup: Event time ordering mode
     when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    when(mockTableConfig.getLegacyPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
 
     // Test using reflection to access private method
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerByPayload(mockMetaClient);
+    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerBaseOnMergeMode(mockMetaClient);
 
-    assertTrue(result, "Should track event time watermark when using EVENT_TIME_ORDERING with DefaultHoodieRecordPayload");
-  }
-
-  @Test
-  void testShouldTrackEventTimeWaterMarkerByPayloadEventTimeOrderingWithOtherPayload() {
-    // Setup: Event time ordering mode with different payload class
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    when(mockTableConfig.getLegacyPayloadClass())
-        .thenReturn("org.apache.hudi.common.model.OverwriteWithLatestAvroPayload");
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerByPayload(mockMetaClient);
-
-    assertFalse(result, "Should not track event time watermark when using different payload class");
+    assertTrue(result, "Should track event time watermark when using EVENT_TIME_ORDERING");
   }
 
   @Test
   void testShouldTrackEventTimeWaterMarkerByPayloadCommitTimeOrdering() {
     // Setup: Commit time ordering mode
     when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
-    when(mockTableConfig.getLegacyPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
 
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerByPayload(mockMetaClient);
+    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerBaseOnMergeMode(mockMetaClient);
 
     assertFalse(result, "Should not track event time watermark when using COMMIT_TIME_ORDERING");
   }
 
   @Test
-  void testShouldTrackEventTimeWaterMarkerByPayloadNullPayloadClass() {
-    // Setup: Event time ordering mode with null payload class
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    when(mockTableConfig.getLegacyPayloadClass()).thenReturn(null);
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerByPayload(mockMetaClient);
-
-    assertFalse(result, "Should not track event time watermark when payload class is null");
-  }
-
-  @Test
-  void testShouldTrackEventTimeWaterMarkerByPayloadEmptyPayloadClass() {
-    // Setup: Event time ordering mode with empty payload class
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    when(mockTableConfig.getLegacyPayloadClass()).thenReturn("");
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerByPayload(mockMetaClient);
-
-    assertFalse(result, "Should not track event time watermark when payload class is empty");
-  }
-
-  @Test
-  void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithDefaultPayload() {
-    // Setup: AVRO record type with DefaultHoodieRecordPayload
+  void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithEventTimeOrderingAndConfigEnabled() {
+    // Setup: AVRO record type with event time ordering and config enabled
     when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
     when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    when(mockTableConfig.getLegacyPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarker(mockMetaClient, mockWriteConfig);
-
-    assertTrue(result, "Should track event time watermark for AVRO records with DefaultHoodieRecordPayload");
-  }
-
-  @Test
-  void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithConfigEnabled() {
-    // Setup: AVRO record type with config enabled
-    when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
-    when(mockTableConfig.getLegacyPayloadClass())
-        .thenReturn("org.apache.hudi.common.model.OverwriteWithLatestAvroPayload");
     
     TypedProperties props = new TypedProperties();
     props.put("hoodie.write.track.event.time.watermark", "true");
@@ -185,7 +134,22 @@ class TestHoodieWriteHandle {
 
     boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarker(mockMetaClient, mockWriteConfig);
 
-    assertTrue(result, "Should track event time watermark when config is enabled");
+    assertTrue(result, "Should track event time watermark for AVRO records with event time ordering and config enabled");
+  }
+
+  @Test
+  void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithEventTimeOrderingAndConfigDisabled() {
+    // Setup: AVRO record type with event time ordering but config disabled
+    when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
+    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
+    
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.write.track.event.time.watermark", "false");
+    when(mockWriteConfig.getProps()).thenReturn(props);
+
+    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarker(mockMetaClient, mockWriteConfig);
+
+    assertFalse(result, "Should not track event time watermark when config is disabled");
   }
 
   @Test
@@ -199,16 +163,17 @@ class TestHoodieWriteHandle {
   }
 
   @Test
-  void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithNoConditions() {
-    // Setup: AVRO record type but no payload or config conditions met
+  void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithCommitTimeOrdering() {
+    // Setup: AVRO record type but with commit time ordering
     when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
     when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
-    when(mockTableConfig.getLegacyPayloadClass())
-        .thenReturn("org.apache.hudi.common.model.OverwriteWithLatestAvroPayload");
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.write.track.event.time.watermark", "true");
+    when(mockWriteConfig.getProps()).thenReturn(props);
 
     boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarker(mockMetaClient, mockWriteConfig);
 
-    assertFalse(result, "Should not track event time watermark when no conditions are met");
+    assertFalse(result, "Should not track event time watermark when using commit time ordering");
   }
 
   @Test
@@ -381,7 +346,6 @@ class TestHoodieWriteHandle {
     record.put("nested", nestedRecord);
 
     HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
-    
     // Setup event time field name for nested field
     testWriteHandle.setEventTimeFieldNameOpt(Option.of("nested.event_time"));
     testWriteHandle.setKeepConsistentLogicalTimestamp(false);
@@ -399,7 +363,6 @@ class TestHoodieWriteHandle {
 
   // Test implementation class to access private methods
   private static class DummyHoodieWriteHandle extends HoodieWriteHandle<Object, Object, Object, Object> {
-    
     public DummyHoodieWriteHandle(HoodieWriteConfig config,
                                   String instantTime,
                                   String partitionPath,
@@ -410,8 +373,8 @@ class TestHoodieWriteHandle {
       super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, preserveMetadata);
     }
 
-    public boolean testShouldTrackEventTimeWaterMarkerByPayload(HoodieTableMetaClient metaClient) {
-      return shouldTrackEventTimeWaterMarkerByPayload(metaClient);
+    public boolean testShouldTrackEventTimeWaterMarkerBaseOnMergeMode(HoodieTableMetaClient metaClient) {
+      return shouldTrackEventTimeWaterMarkerBasedOnMergeMode(metaClient);
     }
 
     public boolean testShouldTrackEventTimeWaterMarker(HoodieTableMetaClient metaClient,

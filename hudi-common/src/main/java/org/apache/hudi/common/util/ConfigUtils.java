@@ -135,8 +135,9 @@ public class ConfigUtils {
    * Extract event_time field name from configuration.
    */
   @Nullable
-  public static String getEventTimeFieldName(TypedProperties props) {
-    return props.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY);
+  public static Option<String> getEventTimeFieldName(TypedProperties props) {
+    return Option.ofNullable(
+        props.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY));
   }
 
   public static List<String> split2List(String param) {

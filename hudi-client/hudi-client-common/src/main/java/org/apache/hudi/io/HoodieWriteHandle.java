@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -42,7 +41,6 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -138,7 +136,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     // For tracking event time watermark.
     this.trackEventTimeWatermark = shouldTrackEventTimeWaterMarker(getHoodieTableMetaClient(), config);
     this.keepConsistentLogicalTimestamp = ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
-    this.eventTimeFieldNameOpt = Option.ofNullable(ConfigUtils.getEventTimeFieldName(config.getProps()));
+    this.eventTimeFieldNameOpt = ConfigUtils.getEventTimeFieldName(config.getProps());
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {
@@ -353,17 +351,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     }
   }
 
-  boolean shouldTrackEventTimeWaterMarkerByPayload(HoodieTableMetaClient metaClient) {
+  protected boolean shouldTrackEventTimeWaterMarkerBasedOnMergeMode(HoodieTableMetaClient metaClient) {
     // Only for event time ordering mode.
-    if (metaClient.getTableConfig().getRecordMergeMode()
-        != RecordMergeMode.EVENT_TIME_ORDERING) {
-      return false;
-    }
-
-    // Only when `DefaultHoodieRecordPayload` was the payload class.
-    String payloadClass = metaClient.getTableConfig().getLegacyPayloadClass();
-    return !StringUtils.isNullOrEmpty(payloadClass)
-        && payloadClass.equals(DefaultHoodieRecordPayload.class.getName());
+    return metaClient.getTableConfig().getRecordMergeMode() == RecordMergeMode.EVENT_TIME_ORDERING;
   }
 
   /**
@@ -375,8 +365,8 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   boolean shouldTrackEventTimeWaterMarker(HoodieTableMetaClient metaClient,
                                           HoodieWriteConfig config) {
     return config.getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.AVRO
-        && (shouldTrackEventTimeWaterMarkerByPayload(metaClient)
-        || ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(config.getProps()));
+        && shouldTrackEventTimeWaterMarkerBasedOnMergeMode(metaClient)
+        && ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(config.getProps());
   }
 
   /**

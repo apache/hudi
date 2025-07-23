@@ -41,7 +41,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -172,22 +171,25 @@ public class TestConfigUtils {
   void testGetEventTimeFieldName() {
     TypedProperties props = new TypedProperties();
 
-    // Test when property is not set (should return null)
-    assertNull(ConfigUtils.getEventTimeFieldName(props));
+    // Test when property is not set (should return empty Option)
+    assertFalse(ConfigUtils.getEventTimeFieldName(props).isPresent());
 
     // Test when property is set to a field name
     String eventTimeField = "event_timestamp";
     props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, eventTimeField);
-    assertEquals(eventTimeField, ConfigUtils.getEventTimeFieldName(props));
+    assertTrue(ConfigUtils.getEventTimeFieldName(props).isPresent());
+    assertEquals(eventTimeField, ConfigUtils.getEventTimeFieldName(props).get());
 
     // Test with different field name
     String anotherField = "created_at";
     props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, anotherField);
-    assertEquals(anotherField, ConfigUtils.getEventTimeFieldName(props));
+    assertTrue(ConfigUtils.getEventTimeFieldName(props).isPresent());
+    assertEquals(anotherField, ConfigUtils.getEventTimeFieldName(props).get());
 
     // Test with empty string
     props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "");
-    assertEquals("", ConfigUtils.getEventTimeFieldName(props));
+    assertTrue(ConfigUtils.getEventTimeFieldName(props).isPresent());
+    assertEquals("", ConfigUtils.getEventTimeFieldName(props).get());
   }
 
   private Map<String, String> toMap(String config, Option<String> separator) {
