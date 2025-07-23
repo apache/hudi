@@ -53,7 +53,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -291,8 +290,7 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     return Option.fromJavaOptional(
         getCommitMetadataStream()
             .filter(instantCommitMetadataPair ->
-                instantCommitMetadataPair.getValue().getPartitionToWriteStats().values().stream().flatMap(Collection::stream)
-                    .anyMatch(writeStat -> writeStat.getNumInserts() > 0 || writeStat.getNumUpdateWrites() > 0))
+                !instantCommitMetadataPair.getValue().getFileIdAndRelativePaths().isEmpty())
             .findFirst()
     );
   }

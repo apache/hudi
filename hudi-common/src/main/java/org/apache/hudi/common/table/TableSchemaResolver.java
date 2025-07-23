@@ -101,7 +101,7 @@ public class TableSchemaResolver {
   private final Lazy<ConcurrentHashMap<HoodieInstant, HoodieCommitMetadata>> commitMetadataCache;
 
   private volatile HoodieInstant latestCommitWithValidSchema = null;
-  private volatile HoodieInstant latestCommitWithValidData = null;
+  private volatile HoodieInstant latestCommitWithInsertOrUpdate = null;
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
@@ -249,7 +249,7 @@ public class TableSchemaResolver {
    * Fetches the schema for a table from any the table's data files
    */
   private Option<Schema> getTableParquetSchemaFromDataFile() {
-    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = getLatestCommitMetadataWithValidData();
+    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = getLatestCommitMetadataWithInsertOrUpdate();
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
       case MERGE_ON_READ:
@@ -428,24 +428,48 @@ public class TableSchemaResolver {
         .map(instant -> Pair.of(instant, commitMetadataCache.get().get(instant)));
   }
 
-  private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitMetadataWithValidData() {
-    if (latestCommitWithValidData == null) {
-      Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata =
-          metaClient.getActiveTimeline().getLastCommitMetadataWithValidData();
-      if (instantAndCommitMetadata.isPresent()) {
-        HoodieInstant instant = instantAndCommitMetadata.get().getLeft();
-        HoodieCommitMetadata metadata = instantAndCommitMetadata.get().getRight();
+  private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitMetadataWithInsertOrUpdate() {
+    if (latestCommitWithValidSchema != null && commitMetadataCache.get().containsKey(latestCommitWithValidSchema)) {
+      HoodieCommitMetadata commitMetadata = commitMetadataCache.get().get(latestCommitWithValidSchema);
+      if (commitHasInsertOrUpdate(commitMetadata)) {
+        latestCommitWithInsertOrUpdate = latestCommitWithValidSchema;
+      }
+    }
+    if (latestCommitWithInsertOrUpdate == null) {
+      getLatestCommitWithInsertOrUpdate().ifPresent(instantAndCommitMetadata -> {
+        HoodieInstant instant = instantAndCommitMetadata.getLeft();
+        HoodieCommitMetadata metadata = instantAndCommitMetadata.getRight();
         synchronized (this) {
-          if (latestCommitWithValidData == null) {
-            latestCommitWithValidData = instant;
+          if (latestCommitWithInsertOrUpdate == null) {
+            latestCommitWithInsertOrUpdate = instant;
           }
           commitMetadataCache.get().putIfAbsent(instant, metadata);
         }
-      }
+      });
     }
 
-    return Option.ofNullable(latestCommitWithValidData)
+    return Option.ofNullable(latestCommitWithInsertOrUpdate)
         .map(instant -> Pair.of(instant, commitMetadataCache.get().get(instant)));
+  }
+
+  private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitWithInsertOrUpdate() {
+    HoodieTimeline commitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    return Option.fromJavaOptional(commitsTimeline.getReverseOrderedInstants()
+        .map(instant -> {
+          try {
+            HoodieCommitMetadata commitMetadata = commitsTimeline.readCommitMetadata(instant);
+            return Pair.of(instant, commitMetadata);
+          } catch (IOException e) {
+            throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
+          }
+        })
+        .filter(pair -> commitHasInsertOrUpdate(pair.getRight()))
+        .findFirst());
+  }
+
+  private boolean commitHasInsertOrUpdate(HoodieCommitMetadata commitMetadata) {
+    return commitMetadata.getPartitionToWriteStats().values().stream().flatMap(Collection::stream)
+        .anyMatch(writeStat -> writeStat.getNumInserts() > 0 || writeStat.getNumUpdateWrites() > 0);
   }
 
   private HoodieCommitMetadata getCachedCommitMetadata(HoodieInstant instant) {

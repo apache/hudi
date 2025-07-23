@@ -35,7 +35,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -56,6 +55,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
 import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.getDataBlock;
@@ -121,7 +121,7 @@ class TestTableSchemaResolver {
   }
 
   @Test
-  void testHasOperationFieldFileInspectionOrdering() {
+  void testHasOperationFieldFileInspectionOrdering() throws IOException {
     StorageConfiguration conf = new HadoopStorageConfiguration(false);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(metaClient.getStorageConf()).thenReturn(conf);
@@ -145,7 +145,10 @@ class TestTableSchemaResolver {
     commitMetadata.addWriteStat("partition1", baseFileWriteStat2);
     commitMetadata.addWriteStat("partition2", baseFileWithOnlyDeletes);
     HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "001", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
-    when(metaClient.getActiveTimeline().getLastCommitMetadataWithValidData()).thenReturn(Option.of(Pair.of(instant, commitMetadata)));
+    HoodieTimeline timeline = mock(HoodieTimeline.class);
+    when(metaClient.getCommitsTimeline().filterCompletedInstants()).thenReturn(timeline);
+    when(timeline.getReverseOrderedInstants()).thenReturn(Stream.of(instant));
+    when(timeline.readCommitMetadata(instant)).thenReturn(commitMetadata);
 
     // mock calls to read schema
     try (MockedStatic<HoodieIOFactory> ioFactoryMockedStatic = mockStatic(HoodieIOFactory.class);
