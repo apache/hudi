@@ -55,6 +55,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -72,6 +74,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -258,14 +262,51 @@ public class UpgradeDowngradeUtils {
       return false;
     }
     // get last commit instant in data table and metadata table
-    HoodieInstant lastCommitInstantInDataTable = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    HoodieInstant lastCommitInstantInDataTable = metaClient.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
     HoodieTableMetaClient metadataTableMetaClient = HoodieTableMetaClient.builder()
         .setConf(metaClient.getStorageConf().newInstance())
         .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()))
         .build();
-    HoodieInstant lastCommitInstantInMetadataTable = metadataTableMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    HoodieInstant lastCommitInstantInMetadataTable = metadataTableMetaClient.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
     // if last commit instant in data table is greater than the last commit instant in metadata table, then metadata table is behind
     return lastCommitInstantInDataTable != null && lastCommitInstantInMetadataTable != null
-        && InstantComparison.compareTimestamps(lastCommitInstantInMetadataTable.requestedTime(), InstantComparison.LESSER_THAN, lastCommitInstantInDataTable.requestedTime());
+        && InstantComparison.compareTimestamps(lastCommitInstantInMetadataTable.requestedTime(),
+        InstantComparison.LESSER_THAN,
+        lastCommitInstantInDataTable.requestedTime());
+  }
+
+  /**
+   * Drops secondary index partitions from metadata table that are V2 or higher.
+   *
+   * @param config        Write config
+   * @param context       Engine context
+   * @param table         Hoodie table
+   * @param operationType Type of operation (upgrade/downgrade)
+   */
+  public static void dropNonV1SecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
+                                                       HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
+      List<String> mdtPartitions = metaClient.getTableConfig().getMetadataPartitions()
+          .stream()
+          .filter(partition -> {
+            // Only drop secondary indexes that are not V1
+            return metaClient.getIndexForMetadataPartition(partition)
+                .map(indexDef -> {
+                  if (MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX)) {
+                    return HoodieIndexVersion.V1.lowerThan(indexDef.getVersion());
+                  }
+                  return false;
+                })
+                .orElse(false);
+          })
+          .collect(Collectors.toList());
+      LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
+      if (!mdtPartitions.isEmpty()) {
+        writeClient.dropIndex(mdtPartitions);
+      }
+    }
   }
 }

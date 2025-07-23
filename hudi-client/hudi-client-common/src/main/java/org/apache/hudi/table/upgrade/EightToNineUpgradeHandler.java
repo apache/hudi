@@ -21,21 +21,24 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.ArrayList;
@@ -53,13 +56,13 @@ import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABL
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 /**
  * Version 8 presents Hudi version from 1.0.0 to 1.0.2.
@@ -106,6 +109,17 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     }
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    // Populate missing index versions indexes
+    Option<HoodieIndexMetadata> indexMetadataOpt = metaClient.getIndexMetadata();
+    if (indexMetadataOpt.isPresent()) {
+      populateIndexVersionIfMissing(indexMetadataOpt);
+      // Write the updated index metadata back to storage
+      HoodieTableMetaClient.writeIndexMetadataToStorage(
+          metaClient.getStorage(),
+          metaClient.getIndexDefinitionPath(),
+          indexMetadataOpt.get(),
+          metaClient.getTableConfig().getTableVersion());
+    }
     // If metadata is enabled for the data table, and
     // existing metadata table is behind the data table, then delete it.
     checkAndHandleMetadataTable(context, table, config, metaClient);
@@ -197,5 +211,21 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     }
     // else: No op, which means merge_properties is not changed.
     tablePropsToAdd.put(MERGE_PROPERTIES, mergeProperties);
+  }
+
+  /**
+   * Populates missing version attributes in index definitions based on table version.
+   *
+   * @param indexDefOption optional index metadata containing index definitions
+   */
+  static void populateIndexVersionIfMissing(Option<HoodieIndexMetadata> indexDefOption) {
+    indexDefOption.ifPresent(idxDefs ->
+        idxDefs.getIndexDefinitions().replaceAll((indexName, idxDef) -> {
+          if (idxDef.getVersion() == null) {
+            return idxDef.toBuilder().withVersion(HoodieIndexVersion.V1).build();
+          } else {
+            return idxDef;
+          }
+        }));
   }
 }

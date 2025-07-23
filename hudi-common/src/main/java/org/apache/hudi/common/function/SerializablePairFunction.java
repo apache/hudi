@@ -23,7 +23,12 @@ import org.apache.hudi.common.util.collection.Pair;
 import java.io.Serializable;
 
 /**
- * A function that returns key-value pairs (Tuple2&lt;K, V&gt;).
+ * A serializable functional interface that represents a function taking an input value
+ * and returning a key-value pair result.
+ *
+ * @param <I> the type of the input parameter
+ * @param <K> the type of the output key
+ * @param <V> the type of the output value
  */
 @FunctionalInterface
 public interface SerializablePairFunction<I, K, V> extends Serializable {

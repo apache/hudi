@@ -80,6 +80,8 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         table, context, config, upgradeDowngradeHelper,
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.NINE);
+    UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
+        config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     // Prepare parameters.
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.EIGHT, metaClient);
@@ -101,7 +103,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         propertiesToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
       }
     }
-
     return Pair.of(propertiesToAdd, propertiesToRemove);
   }
 }
