@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -31,10 +30,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -60,8 +57,6 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
-
 /**
  * A file group reader that iterates through the records in a single file group.
  * <p>
@@ -86,15 +81,8 @@ public class HoodieFileGroupReader<T> implements Closeable {
   private ClosableIterator<T> baseFileIterator;
   private final Option<UnaryOperator<T>> outputConverter;
   private final HoodieReadStats readStats;
-  // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
-  // The inflight instants need to be considered while updating RLI records. RLI needs to fetch the revived
-  // and deleted keys from the log files written as part of active data commit. During the RLI update,
-  // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
-  // considers the log records which are inflight.
-  private final boolean allowInflightInstants;
   // Callback to run custom logic on updates to the base files for the file group
-  private final Option<BaseFileUpdateCallback> fileGroupUpdateCallback;
-  private final boolean enableOptimizedLogBlockScan;
+  private final Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback;
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
   private List<String> validBlockInstants = Collections.emptyList();
 
@@ -110,22 +98,21 @@ public class HoodieFileGroupReader<T> implements Closeable {
       TypedProperties props,
       long start, long length, boolean shouldUseRecordPosition) {
     this(readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt,
-        hoodieTableMetaClient, props, shouldUseRecordPosition, false, false, false,
-        InputSplit.fromFileSlice(fileSlice, start, length), Option.empty(), false, null);
+        hoodieTableMetaClient, props, new ReaderParameters(shouldUseRecordPosition, false, false, false, false),
+        InputSplit.fromFileSlice(fileSlice, start, length), Option.empty(), FileGroupRecordBufferInitializer.createDefault());
   }
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                                boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
-                                InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan,
+                                ReaderParameters readerParameters, InputSplit inputSplit, Option<BaseFileUpdateCallback<T>> updateCallback,
                                 FileGroupRecordBufferInitializer<T> recordBufferInitializer) {
     this.readerContext = readerContext;
     this.recordBufferInitializer = recordBufferInitializer;
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
-    this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
+    this.readerParameters = readerParameters;
     this.inputSplit = inputSplit;
     readerContext.setHasLogFiles(!this.inputSplit.logFiles.isEmpty());
     readerContext.setPartitionPath(inputSplit.partitionPath);
@@ -139,7 +126,7 @@ public class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
-    readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition && !isSkipMerge && readerContext.getHasLogFiles());
+    readerContext.setShouldMergeUseRecordPosition(readerParameters.isShouldUseRecordPosition() && !isSkipMerge && readerContext.getHasLogFiles());
     readerContext.setHasBootstrapBaseFile(inputSplit.baseFileOption.flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
@@ -156,7 +143,6 @@ public class HoodieFileGroupReader<T> implements Closeable {
           return Option.of(preCombineField);
         });
     this.readStats = new HoodieReadStats();
-    this.allowInflightInstants = allowInflightInstants;
   }
 
   /**
@@ -401,7 +387,7 @@ public class HoodieFileGroupReader<T> implements Closeable {
     private boolean emitDelete;
     private boolean sortOutput = false;
     private boolean enableOptimizedLogBlockScan = false;
-    private Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
+    private Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback = Option.empty();
     private FileGroupRecordBufferInitializer<T> recordBufferInitializer;
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
@@ -487,7 +473,7 @@ public class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withFileGroupUpdateCallback(Option<BaseFileUpdateCallback> fileGroupUpdateCallback) {
+    public Builder<T> withFileGroupUpdateCallback(Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
       this.fileGroupUpdateCallback = fileGroupUpdateCallback;
       return this;
     }
@@ -529,10 +515,20 @@ public class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(logFiles != null, "Log files stream is required");
       ValidationUtils.checkArgument(partitionPath != null, "Partition path is required");
 
+      if (recordBufferInitializer == null) {
+        recordBufferInitializer = FileGroupRecordBufferInitializer.createDefault();
+      }
+
+      ReaderParameters readerParameters = new ReaderParameters(
+          shouldUseRecordPosition,
+          emitDelete,
+          sortOutput,
+          allowInflightInstants,
+          enableOptimizedLogBlockScan);
       InputSplit inputSplit = new InputSplit(baseFileOption, logFiles, partitionPath, start, length);
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
-          props, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, inputSplit, fileGroupUpdateCallback, enableOptimizedLogBlockScan, existingRecordBuffer);
+          props, readerParameters, inputSplit, fileGroupUpdateCallback, recordBufferInitializer);
     }
   }
 
@@ -585,6 +581,11 @@ public class HoodieFileGroupReader<T> implements Closeable {
     private final boolean shouldUseRecordPosition;
     private final boolean emitDelete;
     private final boolean sortOutput;
+    // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
+    // The inflight instants need to be considered while updating RLI records. RLI needs to fetch the revived
+    // and deleted keys from the log files written as part of active data commit. During the RLI update,
+    // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
+    // considers the log records which are inflight.
     private final boolean allowInflightInstants;
     private final boolean enableOptimizedLogBlockScan;
 

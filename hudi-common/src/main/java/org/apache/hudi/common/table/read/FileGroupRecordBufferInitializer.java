@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
@@ -12,28 +30,34 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.jetbrains.annotations.NotNull;
-
+import java.io.Closeable;
 import java.util.List;
 
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
 public interface FileGroupRecordBufferInitializer<T> {
-  Pair<FileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                                   HoodieStorage storage,
-                                                                   HoodieFileGroupReader.InputSplit inputSplit,
-                                                                   Option<String> orderingFieldName,
-                                                                   HoodieTableMetaClient hoodieTableMetaClient,
-                                                                   TypedProperties props,
-                                                                   HoodieFileGroupReader.ReaderParameters readerParameters,
-                                                                   HoodieReadStats readStats,
-                                                                   Option<BaseFileUpdateCallback> fileGroupUpdateCallback);
 
-  public static FileGroupRecordBufferInitializer createDefault() {
-    return new DefaultFileGroupRecordBufferInitializer();
+  Pair<FileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+                                                               HoodieStorage storage,
+                                                               HoodieFileGroupReader.InputSplit inputSplit,
+                                                               Option<String> orderingFieldName,
+                                                               HoodieTableMetaClient hoodieTableMetaClient,
+                                                               TypedProperties props,
+                                                               HoodieFileGroupReader.ReaderParameters readerParameters,
+                                                               HoodieReadStats readStats,
+                                                               Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback);
+
+  static <T> FileGroupRecordBufferInitializer<T> createDefault() {
+    return (FileGroupRecordBufferInitializer<T>) DefaultFileGroupRecordBufferInitializer.INSTANCE;
+  }
+
+  static <T> ReusableFileGroupRecordBufferInitializer<T> createReusable(HoodieReaderContext<T> readerContextWithoutFilters) {
+    return new ReusableFileGroupRecordBufferInitializer<>(readerContextWithoutFilters);
   }
 
   class DefaultFileGroupRecordBufferInitializer<T> implements FileGroupRecordBufferInitializer<T> {
+    private static final DefaultFileGroupRecordBufferInitializer INSTANCE = new DefaultFileGroupRecordBufferInitializer<>();
+
     @Override
     public Pair<FileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                             HoodieStorage storage,
@@ -43,7 +67,7 @@ public interface FileGroupRecordBufferInitializer<T> {
                                                                             TypedProperties props,
                                                                             HoodieFileGroupReader.ReaderParameters readerParameters,
                                                                             HoodieReadStats readStats,
-                                                                            Option<BaseFileUpdateCallback> fileGroupUpdateCallback
+                                                                            Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback
     ) {
 
       boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
@@ -58,7 +82,8 @@ public interface FileGroupRecordBufferInitializer<T> {
             readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
       } else if (readerParameters.isShouldUseRecordPosition() && inputSplit.getBaseFileOption().isPresent()) {
         recordBuffer = new PositionBasedFileGroupRecordBuffer<>(
-            readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, inputSplit.getBaseFileOption().get().getCommitTime(), props, readStats, orderingFieldName, updateProcessor);
+            readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, inputSplit.getBaseFileOption().get().getCommitTime(), props, readStats,
+            orderingFieldName, updateProcessor);
       } else {
         recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
             readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
@@ -67,32 +92,42 @@ public interface FileGroupRecordBufferInitializer<T> {
     }
   }
 
-  class ReusableFileGroupRecordBufferInitializer<T> implements FileGroupRecordBufferInitializer<T> {
+  class ReusableFileGroupRecordBufferInitializer<T> implements FileGroupRecordBufferInitializer<T>, Closeable {
     private final HoodieReaderContext<T> readerContextWithoutFilters;
     private Pair<ReusableKeyBasedRecordBuffer<T>, List<String>> cachedResults;
 
+    public ReusableFileGroupRecordBufferInitializer(HoodieReaderContext<T> readerContextWithoutFilters) {
+      this.readerContextWithoutFilters = readerContextWithoutFilters;
+    }
+
     @Override
     public synchronized Pair<FileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                                            HoodieStorage storage,
-                                                                            HoodieFileGroupReader.InputSplit inputSplit,
+                                                                                     HoodieStorage storage,
+                                                                                     HoodieFileGroupReader.InputSplit inputSplit,
                                                                                      Option<String> orderingFieldName,
-
                                                                                      HoodieTableMetaClient hoodieTableMetaClient,
-                                                                            TypedProperties props,
-                                                                            HoodieFileGroupReader.ReaderParameters readerParameters,
-                                                                            HoodieReadStats readStats,
-                                                                            Option<BaseFileUpdateCallback> fileGroupUpdateCallback) {
+                                                                                     TypedProperties props,
+                                                                                     HoodieFileGroupReader.ReaderParameters readerParameters,
+                                                                                     HoodieReadStats readStats,
+                                                                                     Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
       if (cachedResults == null) {
-
+        UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDelete(), fileGroupUpdateCallback);
         PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
         ReusableKeyBasedRecordBuffer<T> reusableKeyBasedRecordBuffer = new ReusableKeyBasedRecordBuffer<>(
-            readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats, orderingFieldName,
-            UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDelete(), fileGroupUpdateCallback));
+            readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
         Pair<FileGroupRecordBuffer<T>, List<String>> results = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats,
             reusableKeyBasedRecordBuffer);
         cachedResults = Pair.of((ReusableKeyBasedRecordBuffer<T>) results.getLeft(), results.getRight());
       }
       return Pair.of(cachedResults.getLeft().withKeyPredicate(readerContext.getKeyFilterOpt()), cachedResults.getRight());
+    }
+
+    @Override
+    public void close() {
+      if (cachedResults != null && cachedResults.getLeft() != null) {
+        cachedResults.getLeft().close();
+        cachedResults = null;
+      }
     }
   }
 
