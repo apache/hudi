@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -58,18 +57,6 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        Option<String> orderingFieldName,
                                        UpdateProcessor<T> updateProcessor) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
-  }
-
-  KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                HoodieTableMetaClient hoodieTableMetaClient,
-                                RecordMergeMode recordMergeMode,
-                                PartialUpdateMode partialUpdateMode,
-                                TypedProperties props,
-                                HoodieReadStats readStats,
-                                Option<String> orderingFieldName,
-                                UpdateProcessor<T> updateProcessor,
-                                ExternalSpillableMap<Serializable, BufferedRecord<T>> records) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor, records);
   }
 
   @Override

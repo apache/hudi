@@ -21,8 +21,12 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.table.log.KeySpec;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -39,20 +43,23 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class ReusableKeyBasedRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
+public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   private final Set<String> validKeys;
+  private final Map<Serializable, BufferedRecord<T>> existingRecords;
 
   public ReusableKeyBasedRecordBuffer(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient,
                                       RecordMergeMode recordMergeMode, PartialUpdateMode partialUpdateMode,
-                                      TypedProperties props, HoodieReadStats readStats, Option<String> orderingFieldName, UpdateProcessor<T> updateProcessor) {
-    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor, Collections.emptySet(), null);
+                                      TypedProperties props, HoodieReadStats readStats, Option<String> orderingFieldName,
+                                      UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records) {
+    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor, records, Collections.emptySet());
   }
 
   private ReusableKeyBasedRecordBuffer(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient,
                                        RecordMergeMode recordMergeMode, PartialUpdateMode partialUpdateMode,
                                        TypedProperties props, HoodieReadStats readStats, Option<String> orderingFieldName,
-                                       UpdateProcessor<T> updateProcessor, Set<String> validKeys, ExternalSpillableMap<Serializable, BufferedRecord<T>> records) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor, records);
+                                       UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records, Set<String> validKeys) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
+    this.existingRecords = records;
     this.validKeys = validKeys;
   }
 
@@ -61,23 +68,75 @@ public class ReusableKeyBasedRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
     List<Expression> children = ((Predicates.In) keyFilter.get()).getRightChildren();
     Set<String> validKeys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toSet());
     return new ReusableKeyBasedRecordBuffer<>(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode,
-        props, readStats, orderingFieldName, updateProcessor, validKeys, records);
+        props, readStats, orderingFieldName, updateProcessor, existingRecords, validKeys);
+  }
+
+  @Override
+  protected ExternalSpillableMap<Serializable, BufferedRecord<T>> initializeRecordsMap(String spillableMapBasePath) {
+    return (ExternalSpillableMap<Serializable, BufferedRecord<T>>) existingRecords;
   }
 
   @Override
   protected void initializeLogRecordIterator() {
-    logRecordIterator = new RemainingRecordIterator<>(validKeys, records);
+    logRecordIterator = new RemainingRecordIterator<>(validKeys, existingRecords);
   }
 
   @Override
+  public BufferType getBufferType() {
+    return BufferType.KEY_BASED_MERGE;
+  }
+
+  @Override
+  protected boolean doHasNext() throws IOException {
+    ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
+
+    // Handle merging.
+    while (baseFileIterator.hasNext()) {
+      if (hasNextBaseRecord(baseFileIterator.next())) {
+        return true;
+      }
+    }
+
+    // Handle records solely from log files.
+    return hasNextLogRecord();
+  }
+
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
     // Avoid removing from the map so the map can be reused later
-    BufferedRecord<T> logRecordInfo = records.get(recordKey);
+    BufferedRecord<T> logRecordInfo = existingRecords.get(recordKey);
     if (logRecordInfo != null) {
       validKeys.remove(recordKey);
     }
     return hasNextBaseRecord(baseRecord, logRecordInfo);
+  }
+
+  @Override
+  public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
+    throw new UnsupportedOperationException("Reusable record buffer does not perform the processing of the data blocks");
+  }
+
+  @Override
+  public void processNextDataRecord(BufferedRecord<T> record, Serializable index) {
+    throw new UnsupportedOperationException("Reusable record buffer does not process the data records from the logs");
+
+  }
+
+  @Override
+  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
+    throw new UnsupportedOperationException("Reusable record buffer does not perform the processing of the delete blocks");
+
+  }
+
+  @Override
+  public void processNextDeletedRecord(DeleteRecord record, Serializable index) {
+    throw new UnsupportedOperationException("Reusable record buffer does not process the delete records from the logs");
+
+  }
+
+  @Override
+  public boolean containsLogRecord(String recordKey) {
+    return validKeys.contains(recordKey) && existingRecords.containsKey(recordKey);
   }
 
   private static class RemainingRecordIterator<T> implements Iterator<T> {
@@ -109,6 +168,13 @@ public class ReusableKeyBasedRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
       T result = recordsByKey.get(nextKey);
       nextKey = null;
       return result;
+    }
+  }
+
+  @Override
+  public void close() {
+    if (existingRecords instanceof ExternalSpillableMap) {
+      ((ExternalSpillableMap) existingRecords).close();
     }
   }
 }

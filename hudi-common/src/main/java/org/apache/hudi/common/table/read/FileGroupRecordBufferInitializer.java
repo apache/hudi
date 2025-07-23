@@ -113,11 +113,13 @@ public interface FileGroupRecordBufferInitializer<T> {
       if (cachedResults == null) {
         UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDelete(), fileGroupUpdateCallback);
         PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
-        ReusableKeyBasedRecordBuffer<T> reusableKeyBasedRecordBuffer = new ReusableKeyBasedRecordBuffer<>(
+        // create an initial buffer to process the log files
+        KeyBasedFileGroupRecordBuffer<T> initialBuffer = new KeyBasedFileGroupRecordBuffer<>(
             readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
-        Pair<FileGroupRecordBuffer<T>, List<String>> results = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats,
-            reusableKeyBasedRecordBuffer);
-        cachedResults = Pair.of((ReusableKeyBasedRecordBuffer<T>) results.getLeft(), results.getRight());
+        Pair<FileGroupRecordBuffer<T>, List<String>> results = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, initialBuffer);
+        ReusableKeyBasedRecordBuffer<T> resuableBuffer = new ReusableKeyBasedRecordBuffer<>(
+            readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats, orderingFieldName, updateProcessor, initialBuffer.getLogRecords());
+        cachedResults = Pair.of(resuableBuffer, results.getRight());
       }
       return Pair.of(cachedResults.getLeft().withKeyPredicate(readerContext.getKeyFilterOpt()), cachedResults.getRight());
     }
