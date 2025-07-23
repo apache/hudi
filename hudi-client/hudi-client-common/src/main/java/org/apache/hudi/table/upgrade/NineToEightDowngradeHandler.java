@@ -71,14 +71,14 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                                            SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
+    // If metadata is enabled for the data table, and
+    // existing metadata table is behind the data table, then delete it
+    checkAndHandleMetadataTable(context, table, config, metaClient);
     // Rollback and run compaction in one step
     rollbackFailedWritesAndCompact(
         table, context, config, upgradeDowngradeHelper,
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.NINE);
-    // If metadata is enabled for the data table, and
-    // existing metadata table is behind the data table, then delete it
-    checkAndHandleMetadataTable(context, table, config, metaClient);
     // Handle secondary index.
     UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
