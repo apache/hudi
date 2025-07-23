@@ -13,6 +13,10 @@ import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
 
+/**
+ * Factory class to provide the implementation for
+ * the HFile Reader for {@link HoodieNativeAvroHFileReader}.
+ */
 public class HFileReaderFactory {
 
   private final HoodieStorage storage;
