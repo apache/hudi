@@ -550,7 +550,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       ValidationUtils.checkArgument(keyFilter.get() instanceof Predicates.In, () -> "Key filter should be of type Predicates.In, but found: " + keyFilter.get().getClass().getName());
       List<Expression> children = ((Predicates.In) keyFilter.get()).getRightChildren();
       Set<String> keys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toSet());
-      existingRecordBuffer = readers.getRight().withKeyPredicate(keys);
+      //existingRecordBuffer = readers.getRight().withKeyPredicate(keys);
     }
 
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(

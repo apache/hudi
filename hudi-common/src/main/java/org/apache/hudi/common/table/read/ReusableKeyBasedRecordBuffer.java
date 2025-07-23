@@ -6,14 +6,20 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.expression.Predicate;
+import org.apache.hudi.expression.Predicates;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class ReusableKeyBasedRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
   private final Set<String> validKeys;
@@ -32,7 +38,10 @@ public class ReusableKeyBasedRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
     this.validKeys = validKeys;
   }
 
-  public ReusableKeyBasedRecordBuffer<T> withKeyPredicate(Set<String> validKeys) {
+  public ReusableKeyBasedRecordBuffer<T> withKeyPredicate(Option<Predicate> keyFilter) {
+    ValidationUtils.checkArgument(keyFilter.get() instanceof Predicates.In, () -> "Key filter should be of type Predicates.In, but found: " + keyFilter.get().getClass().getName());
+    List<Expression> children = ((Predicates.In) keyFilter.get()).getRightChildren();
+    Set<String> validKeys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toSet());
     return new ReusableKeyBasedRecordBuffer<>(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode,
         props, readStats, orderingFieldName, updateProcessor, validKeys, records);
   }
