@@ -516,9 +516,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
     Set<String> validInstantTimestamps = getValidInstantTimestamps();
-    InstantRange instantRange = InstantRange.builder()
+    Option<InstantRange> instantRange = Option.of(InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
-        .explicitInstants(validInstantTimestamps).build();
+        .explicitInstants(validInstantTimestamps).build());
 
     // If reuse is enabled and full scan is allowed for the partition, we can reuse the file readers for base files and the reader context for the log files.
     Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
@@ -532,7 +532,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                 baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                     .getFileReader(metadataConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
               }
-              return Pair.of(baseFileReader, buildReusableRecordBufferInitializer(fileSlice, latestMetadataInstantTime));
+              return Pair.of(baseFileReader, buildReusableRecordBufferInitializer(fileSlice, latestMetadataInstantTime, instantRange));
             } catch (IOException ex) {
               throw new HoodieIOException("Error opening readers for metadata table partition " + fileSlice.getPartitionPath(), ex);
             }
@@ -548,7 +548,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
         metadataMetaClient.getTableConfig(),
-        Option.of(instantRange),
+        instantRange,
         Option.of(predicate),
         baseFileReaders);
 
@@ -566,12 +566,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return new CloseableIteratorWithReuse<>(fileGroupReader.getClosableIterator(), reuse);
   }
 
-  private FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord> buildReusableRecordBufferInitializer(FileSlice fileSlice, String latestMetadataInstantTime) {
+  private FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord> buildReusableRecordBufferInitializer(FileSlice fileSlice, String latestMetadataInstantTime,
+                                                                                                                                        Option<InstantRange> instantRangeOption) {
     // initialize without any filters
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
         metadataMetaClient.getTableConfig(),
-        Option.empty(),
+        instantRangeOption,
         Option.empty());
     readerContext.initRecordMerger(metadataConfig.getProps());
     readerContext.setHasBootstrapBaseFile(false);
