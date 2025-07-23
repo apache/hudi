@@ -265,7 +265,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
                                                                           String partitionName,
                                                                           boolean shouldLoadInMemory,
-                                                                          Option<SerializableFunctionUnchecked<String, String>> keyEncoder);
+                                                                          SerializableFunctionUnchecked<String, String> keyEncoder);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.
