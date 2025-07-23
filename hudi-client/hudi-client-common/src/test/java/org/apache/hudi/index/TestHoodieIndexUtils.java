@@ -34,6 +34,7 @@ import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,8 +42,11 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
+import static org.apache.hudi.index.HoodieIndexUtils.validateDataTypeForSecondaryIndex;
+import static org.apache.hudi.index.HoodieIndexUtils.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
@@ -125,18 +129,139 @@ public class TestHoodieIndexUtils {
       // Then: Should not throw exception because all data types are supported
       assertDoesNotThrow(() -> HoodieIndexUtils.validateEligibilityForSecondaryOrExpressionIndex(
           mockMetaClient, PARTITION_NAME_SECONDARY_INDEX, options, columns, "test_index"));
-      
-      // Test case 4: Secondary index with boolean field
-      // Given: Column with boolean data type
-      columns.clear();
-      columns.put("booleanField", Collections.emptyMap());
-      
-      // When: Checking eligibility for secondary index with boolean field
-      // Then: Should not throw exception because boolean is now supported
-      assertDoesNotThrow(() -> HoodieIndexUtils.validateEligibilityForSecondaryOrExpressionIndex(
-          mockMetaClient, PARTITION_NAME_SECONDARY_INDEX, options, columns, "test_index"));
     }
   }
+
+  @Test
+  public void testValidateDataTypeForSecondaryOrExpressionIndex() {
+    // Create a dummy schema with both complex and primitive types
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .requiredString("stringField")
+        .optionalInt("intField")
+        .name("arrayField").type().array().items().stringType().noDefault()
+        .name("mapField").type().map().values().intType().noDefault()
+        .name("structField").type().record("NestedRecord")
+        .fields()
+        .requiredString("nestedString")
+        .endRecord()
+        .noDefault()
+        .endRecord();
+
+    // Test for primitive fields
+    assertTrue(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("stringField", "intField"), schema));
+
+    // Test for complex fields
+    assertFalse(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("arrayField", "mapField", "structField"), schema));
+  }
+
+  /**
+   * Test validation of data types for secondary index.
+   *
+   * Given: A schema with various data types including supported (String/CHAR, Int, Long) and unsupported (Float, Double, Boolean, Array, Map, Struct) types
+   * When: Validating each data type for secondary index compatibility
+   * Then: Should return true for supported types and false for unsupported types
+   */
+  @Test
+  public void testValidateDataTypeForSecondaryIndex() {
+    // Create a schema with various data types
+    Schema schema = SchemaBuilder.record("TestRecord")
+        .fields()
+        .requiredString("stringField")
+        .requiredString("charField") // CHAR is represented as STRING in Avro
+        .optionalInt("intField")
+        .requiredLong("longField")
+        .name("timestampField").type().longType().longDefault(0L) // timestamp as long
+        .name("booleanField").type().booleanType().noDefault()
+        .name("floatField").type().floatType().noDefault()
+        .name("doubleField").type().doubleType().noDefault()
+        .name("arrayField").type().array().items().stringType().noDefault()
+        .name("mapField").type().map().values().intType().noDefault()
+        .name("structField").type().record("NestedRecord")
+        .fields()
+        .requiredString("nestedString")
+        .endRecord()
+        .noDefault()
+        .endRecord();
+
+    // Test supported types for secondary index
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("stringField"), schema));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("charField"), schema)); // CHAR as STRING
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("intField"), schema));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("longField"), schema));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timestampField"), schema));
+
+    // Test multiple supported fields
+    assertTrue(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "intField", "longField"), schema));
+
+    // Test unsupported types for secondary index
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("floatField"), schema));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("doubleField"), schema));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("booleanField"), schema));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("arrayField"), schema));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("mapField"), schema));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("structField"), schema));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("booleanField"), schema));
+
+    // Test mix of supported and unsupported types (should fail)
+    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("stringField", "floatField"), schema));
+  }
+
+  /**
+   * Test validation of logical types for secondary index.
+   *
+   * Given: A schema with all Avro logical types including supported (timestampMillis, timestampMicros, date, timeMillis, timeMicros)
+   *        and unsupported (decimal, uuid, duration, localTimestampMillis, localTimestampMicros)
+   * When: Validating each logical type for secondary index compatibility
+   * Then: Should return true only for timestamp and date/time logical types, false for others
+   */
+  @Test
+  public void testValidateDataTypeForSecondaryIndexWithLogicalTypes() {
+    // Supported logical types
+    Schema timestampMillis = LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+    Schema timestampMicros = LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+    Schema date = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+    Schema timeMillis = LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT));
+    Schema timeMicros = LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+    // Unsupported logical types
+    Schema decimal = LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES));
+    Schema uuid = LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING));
+    Schema localTimestampMillis = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+    Schema localTimestampMicros = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+    Schema schemaWithLogicalTypes = SchemaBuilder.record("TestRecord")
+        .fields()
+        // Supported logical types
+        .name("timestampMillisField").type(timestampMillis).noDefault()
+        .name("timestampMicrosField").type(timestampMicros).noDefault()
+        .name("dateField").type(date).noDefault()
+        .name("timeMillisField").type(timeMillis).noDefault()
+        .name("timeMicrosField").type(timeMicros).noDefault()
+        // Unsupported logical types
+        .name("decimalField").type(decimal).noDefault()
+        .name("uuidField").type(uuid).noDefault()
+        .name("localTimestampMillisField").type(localTimestampMillis).noDefault()
+        .name("localTimestampMicrosField").type(localTimestampMicros).noDefault()
+        .endRecord();
+
+    // Test supported timestamp and date/time logical types
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timestampMillisField"), schemaWithLogicalTypes));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timestampMicrosField"), schemaWithLogicalTypes));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("dateField"), schemaWithLogicalTypes));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timeMillisField"), schemaWithLogicalTypes));
+    assertTrue(validateDataTypeForSecondaryIndex(Collections.singletonList("timeMicrosField"), schemaWithLogicalTypes));
+
+    // Test unsupported logical types
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("decimalField"), schemaWithLogicalTypes));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("uuidField"), schemaWithLogicalTypes));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("localTimestampMillisField"), schemaWithLogicalTypes));
+    assertFalse(validateDataTypeForSecondaryIndex(Collections.singletonList("localTimestampMicrosField"), schemaWithLogicalTypes));
+
+    // Test mix of supported and unsupported logical types
+    assertFalse(validateDataTypeForSecondaryIndex(Arrays.asList("timestampMillisField", "decimalField"), schemaWithLogicalTypes));
+  }
+
 
   /**
    * Test eligibility check for secondary index with unsupported data types.
@@ -224,7 +349,8 @@ public class TestHoodieIndexUtils {
           () -> HoodieIndexUtils.validateEligibilityForSecondaryOrExpressionIndex(
               mockMetaClient, PARTITION_NAME_SECONDARY_INDEX, options, columns, "test_index"));
       assertTrue(ex4.getMessage().contains("unsupported data type"));
-      assertTrue(ex4.getMessage().contains("BYTES with logical type decimal"));
+      assertTrue(ex4.getMessage().contains("BYTES with logical type"));
+      assertTrue(ex4.getMessage().contains("Decimal"));
       assertTrue(ex4.getMessage().contains("Secondary indexes only support"));
 
       // Test case 5: Mix of supported and unsupported fields
