@@ -115,8 +115,6 @@ public interface HoodieFileGroupRecordBuffer<T> {
    */
   boolean hasNext() throws IOException;
 
-  boolean hasScannedLogs();
-
   /**
    *
    * @return output the next merged record.

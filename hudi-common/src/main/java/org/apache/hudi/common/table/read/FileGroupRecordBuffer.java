@@ -186,11 +186,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.baseFileIterator = baseFileIterator;
   }
 
-  @Override
-  public boolean hasScannedLogs() {
-    return !records.isEmpty();
-  }
-
   /**
    * This allows hasNext() to be called multiple times without incrementing the iterator by more than 1
    * record. It does come with the caveat that hasNext() must be called every time before next(). But
