@@ -162,7 +162,7 @@ public class BufferedRecordMergerFactory {
    * based on {@code EVENT_TIME_ORDERING} merge mode.
    */
   private static class EventTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
-    private final HoodieReaderContext<T> readerContext;
+    protected final HoodieReaderContext<T> readerContext;
 
     public EventTimeBufferedRecordMerger(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -183,7 +183,7 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
-      if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
+      if (shouldKeepNewerRecord(readerContext, olderRecord, newerRecord)) {
         return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
       }
       return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
@@ -196,20 +196,19 @@ public class BufferedRecordMergerFactory {
    */
   private static class EventTimeBufferedRecordPartialUpdateMerger<T> extends EventTimeBufferedRecordMerger<T> {
     private final PartialUpdateStrategy<T> partialUpdateStrategy;
-    private final HoodieReaderContext<T> readerContext;
 
     public EventTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
                                                       PartialUpdateMode partialUpdateMode,
                                                       TypedProperties props) {
+      super(readerContext);
       this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
-      this.readerContext = readerContext;
     }
 
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null) {
         return Option.of(newRecord);
-      } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
+      } else if (shouldKeepNewerRecord(readerContext, existingRecord, newRecord)) {
         newRecord = partialUpdateStrategy.partialMerge(
             newRecord,
             existingRecord,

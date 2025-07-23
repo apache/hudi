@@ -83,7 +83,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val partitionedFiles = slices.flatMap(slice => {
       val dir = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(partitionOpt, slice, options)
       sparkAdapter.splitFiles(spark, dir, false, maxSplitSize)
-    }).toSeq
+    })
 
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)

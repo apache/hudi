@@ -182,7 +182,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     // Verify the table version
     metaClient.reload()
     val jsc = new JavaSparkContext(spark.sparkContext)
-    val sqlContext = new SQLContext(spark)
+    val sqlContext = SQLContext.getOrCreate(jsc)
     val context = new HoodieSparkEngineContext(jsc, sqlContext)
     hoodieBackedTableMetadata = new HoodieBackedTableMetadata(
       context, metaClient.getStorage, writeConfig.getMetadataConfig, basePath, true)
@@ -261,7 +261,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 6: Use parallelized RDD
     val jsc = new JavaSparkContext(spark.sparkContext)
-    val context = new HoodieSparkEngineContext(jsc, new SQLContext(spark))
+    val context = new HoodieSparkEngineContext(jsc, SQLContext.getOrCreate(jsc))
     val rddKeys = HoodieJavaRDD.of(List("1", "2", "$").asJava, context, 2)
     val rddResult = hoodieBackedTableMetadata.readRecordIndex(rddKeys)
     assert(rddResult.collectAsList().asScala.size == 3, "RDD input should return 3 results")
@@ -391,7 +391,7 @@ class HoodieBackedTableMetadataIndexLookupV8TestBase extends HoodieBackedTableMe
     // For version 1, test that it only supports HoodieListData
     val secondaryIndexName = "secondary_index_idx_name"
     val jsc = new JavaSparkContext(spark.sparkContext)
-    val context = new HoodieSparkEngineContext(jsc, new SQLContext(spark))
+    val context = new HoodieSparkEngineContext(jsc, SQLContext.getOrCreate(jsc))
     val rddKeys = HoodieJavaRDD.of(List("b1").asJava, context, 1)
     checkExceptionContain(() => {
       hoodieBackedTableMetadata.readSecondaryIndexLocations(rddKeys, secondaryIndexName)
@@ -449,7 +449,7 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
     // For version 2, test that it supports both HoodieListData and RDD
     val secondaryIndexName = "secondary_index_idx_name"
     val jsc = new JavaSparkContext(spark.sparkContext)
-    val context = new HoodieSparkEngineContext(jsc, new SQLContext(spark))
+    val context = new HoodieSparkEngineContext(jsc, SQLContext.getOrCreate(jsc))
     val rddKeys = HoodieJavaRDD.of(List("b1", "b2", "$").asJava, context, 2)
     val rddResult = hoodieBackedTableMetadata.readSecondaryIndexLocations(rddKeys, secondaryIndexName)
     assert(rddResult.collectAsList().asScala.size == 3, "Version 2 should support RDD input")
