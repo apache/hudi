@@ -119,6 +119,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void bulkCommit(String instantTime, String partitionPath, HoodieData<HoodieRecord> records, MetadataTableFileGroupIndexParser fileGroupIndexParser) {
+    // TODO: functional and secondary index are not supported with Flink yet, but we should fix the partition name when we support them.
     commitInternal(instantTime, Collections.singletonMap(partitionPath, records), true, Option.empty());
   }
 

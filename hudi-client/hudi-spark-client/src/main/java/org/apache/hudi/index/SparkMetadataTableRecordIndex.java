@@ -19,7 +19,6 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -77,7 +76,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
       ValidationUtils.checkState(getTotalFileGroupCount(fileGroupSize) > 0, "Record index should have at least one file group");
     } catch (TableNotFoundException | IllegalStateException e) {
       // This means that record index has not been initialized.
-      LOG.warn(String.format("Record index not initialized so falling back to %s for tagging records", getFallbackIndexType().name()));
+      LOG.warn("Record index not initialized so falling back to {} for tagging records", getFallbackIndexType().name());
 
       // Fallback to another index so that tagLocation is still accurate and there are no duplicates.
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
@@ -91,7 +90,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
     }
 
     if (config.getRecordIndexUseCaching()) {
-      records.persist(new HoodieConfig(config.getProps()).getString(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE));
+      records.persist(config.getRecordIndexInputStorageLevel());
     }
 
     HoodiePairData<String, HoodieRecordGlobalLocation> keyAndExistingLocations = lookupRecords(records, context, hoodieTable, fileGroupSize);
