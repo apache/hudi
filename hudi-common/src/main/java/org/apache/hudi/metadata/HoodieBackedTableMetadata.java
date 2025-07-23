@@ -532,7 +532,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                 baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
                     .getFileReader(metadataConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
               }
-              return Pair.of(baseFileReader, initializeRecordBuffer(fileSlice, latestMetadataInstantTime));
+              return Pair.of(baseFileReader, buildReusableRecordBufferInitializer(fileSlice, latestMetadataInstantTime));
             } catch (IOException ex) {
               throw new HoodieIOException("Error opening readers for metadata table partition " + fileSlice.getPartitionPath(), ex);
             }
@@ -566,7 +566,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return new CloseableIteratorWithReuse<>(fileGroupReader.getClosableIterator(), reuse);
   }
 
-  private FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord> initializeRecordBuffer(FileSlice fileSlice, String latestMetadataInstantTime) {
+  private FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord> buildReusableRecordBufferInitializer(FileSlice fileSlice, String latestMetadataInstantTime) {
     // initialize without any filters
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
@@ -732,6 +732,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           pair.getRight().close();
         }
       });
+      reusableFileReaders.clear();
     }
   }
 
