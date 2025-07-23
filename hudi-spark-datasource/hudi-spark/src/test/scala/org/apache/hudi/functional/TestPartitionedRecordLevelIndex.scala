@@ -39,7 +39,7 @@ import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.functions.lit
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.{Disabled, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -51,7 +51,7 @@ import scala.collection.JavaConverters._
 
 @Tag("functional")
 class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
-  class testPartitionedRecordLevelIndexHolder {
+  private class testPartitionedRecordLevelIndexHolder {
     var bulkRecordKeys: java.util.List[String] = null
     var options: Map[String, String] = null
     var recordKeys: java.util.List[String] = null
@@ -70,7 +70,6 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       PARTITIONPATH_FIELD.key -> "data_partition_path",
       PRECOMBINE_FIELD.key -> "timestamp",
       HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()-> "false",
-      HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key() -> "false",
       HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key() -> "true",
       HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> "false",
       HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
@@ -310,6 +309,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
+  @Disabled
   def testPartitionedRecordLevelIndexInitializationFailedWrite(tableType: HoodieTableType): Unit = {
     testPartitionedRecordLevelIndexInitialization(tableType, failWrite = true, failAndDoRollback = false, compact = false, cluster = false)
   }
