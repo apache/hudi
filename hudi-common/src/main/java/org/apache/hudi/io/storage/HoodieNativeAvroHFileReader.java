@@ -330,7 +330,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     long fileSize;
     if (path.isPresent()) {
       fileSize = storage.getPathInfo(path.get()).getLength();
-      inputStream = storage.openSeekable(path.get(), false);
+      inputStream = storage.openSeekable(path.get());
     } else {
       fileSize = bytesContent.get().length;
       inputStream = new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytesContent.get()));

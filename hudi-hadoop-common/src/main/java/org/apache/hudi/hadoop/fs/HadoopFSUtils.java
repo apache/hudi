@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
+import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -245,6 +246,10 @@ public class HadoopFSUtils {
     // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
     // need to wrap in another BufferedFSInputStream the make bufferSize work?
     return fsDataInputStream;
+  }
+
+  public static SeekableDataInputStream createHadoopSeekableStream(FileSystem fs, StoragePath filePath, int bufferSize, boolean wrapStream) {
+    return new HadoopSeekableDataInputStream(HadoopFSUtils.getFSDataInputStream(fs, filePath, bufferSize, wrapStream));
   }
 
   /**
