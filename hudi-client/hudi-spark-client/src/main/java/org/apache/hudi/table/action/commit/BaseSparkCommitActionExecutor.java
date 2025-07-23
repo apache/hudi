@@ -20,6 +20,8 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
@@ -392,9 +394,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     HoodieMergeHandle mergeHandle;
     if (config.getMergeHandleClassName().equals(FileGroupReaderBasedMergeHandle.class.getName())) {
       HoodieReaderContext<T> readerContext = table.getContext().<T>getReaderContextFactory(table.getMetaClient()).getContext();
-      mergeHandle = HoodieMergeHandleFactory.create(
-          operationType, config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt,
-          readerContext, HoodieRecord.HoodieRecordType.SPARK);
+      mergeHandle = new FileGroupReaderBasedMergeHandle(
+          config, instantTime, table, Option.of(recordItr), partitionPath, fileId, taskContextSupplier, keyGeneratorOpt,
+          readerContext, instantTime, table.getConfig().getRecordMerger().getRecordType(), Option.empty());
     } else {
       mergeHandle = HoodieMergeHandleFactory.create(
           operationType, config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);

@@ -100,7 +100,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
                                          Option<BaseKeyGenerator> keyGeneratorOpt,
                                          HoodieReaderContext<T> readerContext, String maxInstantTime,
                                          HoodieRecord.HoodieRecordType enginRecordType) {
-    this(config, instantTime, hoodieTable, null, operation.getPartitionPath(), operation.getFileId(),
+    this(config, instantTime, hoodieTable, Option.empty(), operation.getPartitionPath(), operation.getFileId(),
         taskContextSupplier, keyGeneratorOpt, readerContext, maxInstantTime, enginRecordType, Option.of(operation));
   }
 
@@ -108,12 +108,12 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * For generic FG reader based merge handle.
    */
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                         Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                         Option<Iterator<HoodieRecord<T>>> recordItr, String partitionPath, String fileId,
                                          TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
                                          HoodieReaderContext<T> readerContext, String maxInstantTime,
                                          HoodieRecord.HoodieRecordType enginRecordType, Option<CompactionOperation> operation) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    this.recordIterator = Option.ofNullable(recordItr);
+    super(config, instantTime, hoodieTable, recordItr.get(), partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+    this.recordIterator = recordItr;
     this.operation = operation;
 
     // Common attributes.
@@ -197,21 +197,35 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     TypedProperties props = TypedProperties.copy(config.getProps());
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
-    props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
-    Stream<HoodieLogFile> logFiles = operation.get().getDeltaFileNames().stream().map(logFileName ->
-        new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
-            config.getBasePath(), operation.get().getPartitionPath()), logFileName)));
-    Option<Iterator<T>> engineRecordIterator = recordIterator.isEmpty()
-        ? Option.empty() : Option.of(new MappingIterator<>(recordIterator.get(), HoodieRecord::getData));
+    Stream<HoodieLogFile> logFiles = Stream.empty();
+    Option<Iterator<T>> engineRecordIterator = Option.empty();
+    // For compaction.
+    if (operation.isPresent()) {
+      long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
+      props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
+      logFiles = operation.get().getDeltaFileNames().stream().map(logFileName ->
+          new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
+              config.getBasePath(), operation.get().getPartitionPath()), logFileName)));
+    }
+    // For generic merge.
+    if (recordIterator.isPresent()) {
+      engineRecordIterator = Option.of(new MappingIterator<>(recordIterator.get(), HoodieRecord::getData));
+      usePosition = false;
+    }
     // Initializes file group reader
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
-        .withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
-        .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath)
-        .withBaseFileOption(Option.ofNullable(baseFileToMerge)).withLogFiles(logFiles)
-        .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
-        .withInternalSchema(internalSchemaOption).withProps(props)
-        .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(hoodieTable.getMetaClient())
+        .withLatestCommitTime(maxInstantTime)
+        .withPartitionPath(partitionPath)
+        .withBaseFileOption(Option.ofNullable(baseFileToMerge))
+        .withLogFiles(logFiles)
+        .withDataSchema(writeSchemaWithMetaFields)
+        .withRequestedSchema(writeSchemaWithMetaFields)
+        .withInternalSchema(internalSchemaOption)
+        .withProps(props)
+        .withShouldUseRecordPosition(usePosition)
+        .withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(createCallbacks())
         .withRecordIterator(engineRecordIterator).build()) {
       // Reads the records from the file slice
@@ -342,7 +356,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
     @Override
     public String getName() {
-      return "CdcCallBack";
+      return "CDCCallback";
     }
 
     private GenericRecord convertOutput(T record) {
@@ -382,14 +396,14 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     @Override
     public void onUpdate(String recordKey, T previousRecord, T mergedRecord) {
       HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
-      BufferedRecord<T> bufferedPrevousRecord = BufferedRecord.forRecordWithContext(
+      BufferedRecord<T> bufferedPreviousRecord = BufferedRecord.forRecordWithContext(
           previousRecord, writeSchemaWithMetaFields, readerContext, Option.empty(), false);
       BufferedRecord<T> bufferedMergedRecord = BufferedRecord.forRecordWithContext(
           mergedRecord, writeSchemaWithMetaFields, readerContext, Option.empty(), false);
       SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
           hoodieKey,
           Option.of(readerContext.constructHoodieRecord(bufferedMergedRecord)),
-          readerContext.constructHoodieRecord(bufferedPrevousRecord),
+          readerContext.constructHoodieRecord(bufferedPreviousRecord),
           false,
           writeStatus,
           writeSchemaWithMetaFields,
@@ -420,12 +434,12 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     @Override
     public void onDelete(String recordKey, T previousRecord) {
       HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
-      BufferedRecord<T> bufferedPrevousRecord = BufferedRecord.forRecordWithContext(
+      BufferedRecord<T> bufferedPreviousRecord = BufferedRecord.forRecordWithContext(
           previousRecord, writeSchemaWithMetaFields, readerContext, Option.empty(), false);
       SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
           hoodieKey,
           null,
-          readerContext.constructHoodieRecord(bufferedPrevousRecord),
+          readerContext.constructHoodieRecord(bufferedPreviousRecord),
           true,
           writeStatus,
           writeSchemaWithMetaFields,
@@ -437,7 +451,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
     @Override
     public String getName() {
-      return "SecondaryIndex Callback";
+      return "SecondaryIndexCallback";
     }
   }
 }

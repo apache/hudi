@@ -80,7 +80,6 @@ public class HoodieMergeHandleFactory {
   /**
    * Creates a FG reader based handle for generic write path.
    */
-
   public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> create(
       WriteOperationType operationType,
       HoodieWriteConfig writeConfig,
@@ -158,11 +157,15 @@ public class HoodieMergeHandleFactory {
     String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
     LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
 
+    if (mergeHandleClass.equals(FileGroupReaderBasedMergeHandle.class.getName())) {
+      return new FileGroupReaderBasedMergeHandle<>(
+          config, instantTime, hoodieTable, operation, taskContextSupplier, Option.empty(), readerContext, maxInstantTime, recordType);
+    }
+
     Class<?>[] constructorParamTypes = new Class<?>[] {
         HoodieWriteConfig.class, String.class, HoodieTable.class, CompactionOperation.class,
         TaskContextSupplier.class, HoodieReaderContext.class, String.class, HoodieRecord.HoodieRecordType.class
     };
-
     return instantiateMergeHandle(
         isFallbackEnabled, mergeHandleClass, COMPACT_MERGE_HANDLE_CLASS_NAME.defaultValue(), logContext, constructorParamTypes,
         config, instantTime, hoodieTable, operation, taskContextSupplier, readerContext, maxInstantTime, recordType);
