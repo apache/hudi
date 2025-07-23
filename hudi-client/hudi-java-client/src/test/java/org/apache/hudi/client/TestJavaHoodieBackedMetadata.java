@@ -27,7 +27,6 @@ import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPl
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
@@ -35,7 +34,6 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -67,11 +65,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
@@ -79,7 +74,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
-import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
@@ -109,7 +103,6 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -2961,30 +2954,5 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Override
   protected HoodieTableType getTableType() {
     return tableType;
-  }
-
-  @Test
-  public void timeLoad() {
-    // warm up estimator
-    new DefaultSizeEstimator().sizeEstimate("foo");
-
-    String path = "/Users/timbrown/debug/tpc-ds-1tb-store-sales";
-    HadoopStorageConfiguration conf = new HadoopStorageConfiguration(false);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(path)
-        .setConf(conf)
-        .build();
-
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(conf);
-    FileSystemViewManager viewManager = FileSystemViewManager.createViewManagerWithTableMetadata(engineContext,
-        HoodieMetadataConfig.newBuilder().enable(true).build(),
-        FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.MEMORY).build(),
-        HoodieCommonConfig.newBuilder().build());
-    SyncableFileSystemView view = viewManager.getFileSystemView(metaClient);
-
-    long start = System.currentTimeMillis();
-    view.loadAllPartitions();
-    long end = System.currentTimeMillis();
-    System.out.println("Time taken to load all partitions: " + (end - start) + " ms");
   }
 }
