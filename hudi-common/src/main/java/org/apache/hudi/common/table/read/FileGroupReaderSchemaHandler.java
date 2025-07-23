@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -203,14 +204,18 @@ public class FileGroupReaderSchemaHandler<T> {
                                                        boolean hasBuiltInDelete,
                                                        Option<Pair<String, String>> customDeleteMarkerKeyAndValue,
                                                        boolean hasInstantRange) {
-    Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
-        cfg.getRecordMergeMode(),
-        cfg.getPayloadClass(),
-        cfg.getRecordMergeStrategyId(),
-        cfg.getPreCombineField(),
-        cfg.getTableVersion());
+    RecordMergeMode mergeMode = cfg.getRecordMergeMode();
+    if (HoodieTableVersion.current().lesserThan(HoodieTableVersion.EIGHT)) {
+      Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+          cfg.getRecordMergeMode(),
+          cfg.getPayloadClass(),
+          cfg.getRecordMergeStrategyId(),
+          cfg.getPreCombineField(),
+          cfg.getTableVersion());
+      mergeMode = mergingConfigs.getLeft();
+    }
 
-    if (mergingConfigs.getLeft() == RecordMergeMode.CUSTOM) {
+    if (mergeMode == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(tableSchema, cfg, props);
     }
 
@@ -231,7 +236,7 @@ public class FileGroupReaderSchemaHandler<T> {
       }
     }
     // Add precombine field for event time ordering merge mode.
-    if (mergingConfigs.getLeft() == RecordMergeMode.EVENT_TIME_ORDERING) {
+    if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
       String preCombine = cfg.getPreCombineField();
       if (!StringUtils.isNullOrEmpty(preCombine)) {
         requiredFields.add(preCombine);

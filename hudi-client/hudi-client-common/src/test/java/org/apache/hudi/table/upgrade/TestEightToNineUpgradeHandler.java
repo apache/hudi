@@ -46,6 +46,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -53,11 +54,14 @@ import org.mockito.MockedStatic;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
@@ -72,7 +76,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.PartialUpdateMode.IGNORE_MARKERS;
-import static org.apache.hudi.table.repair.TestRepairUtils.tempDir;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -96,8 +99,17 @@ class TestEightToNineUpgradeHandler {
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper =
       mock(SupportsUpgradeDowngrade.class);
   private final HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+  private static final Map<ConfigProperty, String> DEFAULT_CONFIG_UPDATED = Stream.of(
+      new AbstractMap.SimpleEntry<>(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name()),
+      new AbstractMap.SimpleEntry<>(MERGE_PROPERTIES, StringUtils.EMPTY_STRING)
+  ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  private static final List<ConfigProperty> DEFAULT_CONFIG_REMOVED = Collections.emptyList();
+  private static final Pair<Map<ConfigProperty, String>, List<ConfigProperty>> DEFAULT_UPGRADE_RESULT =
+      Pair.of(DEFAULT_CONFIG_UPDATED, DEFAULT_CONFIG_REMOVED);
   private static final String INSTANT_TIME = "20231201120000";
   private StoragePath indexDefPath;
+  @TempDir
+  private Path tempDir;
 
   @BeforeEach
   public void setUp() throws IOException {
@@ -201,6 +213,7 @@ class TestEightToNineUpgradeHandler {
               any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
       when(tableConfig.getPayloadClass()).thenReturn(payloadClassName);
+      when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
           handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
       Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
@@ -245,7 +258,7 @@ class TestEightToNineUpgradeHandler {
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> result =
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT, result);
     }
   }
 
@@ -316,7 +329,7 @@ class TestEightToNineUpgradeHandler {
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT, result);
       
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present
@@ -399,8 +412,7 @@ class TestEightToNineUpgradeHandler {
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> result =
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
-      // Verify the written json is the same as before
+      assertEquals(DEFAULT_UPGRADE_RESULT, result);
     }
   }
 
@@ -424,7 +436,7 @@ class TestEightToNineUpgradeHandler {
       Pair<Map<ConfigProperty, String>, List<ConfigProperty>> result =
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT, result);
     }
   }
 
@@ -464,7 +476,7 @@ class TestEightToNineUpgradeHandler {
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT, result);
       
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present
