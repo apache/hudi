@@ -260,9 +260,9 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     }
     if (config.getMergeHandleClassName().equals(FileGroupReaderBasedMergeHandle.class.getName())) {
       HoodieReaderContext<T> readerContext = table.getContext().<T>getReaderContextFactory(table.getMetaClient()).getContext();
-      return HoodieMergeHandleFactory.create(
-          operationType, config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt,
-          readerContext, HoodieRecord.HoodieRecordType.AVRO);
+      return new FileGroupReaderBasedMergeHandle<>(
+          config, instantTime, table, Option.of(recordItr), partitionPath, fileId,
+          taskContextSupplier, keyGeneratorOpt, readerContext, instantTime, config.getRecordMerger().getRecordType(), Option.empty());
     }
     return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
         taskContextSupplier, keyGeneratorOpt);

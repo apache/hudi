@@ -78,38 +78,6 @@ public class HoodieMergeHandleFactory {
   }
 
   /**
-   * Creates a FG reader based handle for generic write path.
-   */
-  public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> create(
-      WriteOperationType operationType,
-      HoodieWriteConfig writeConfig,
-      String instantTime,
-      HoodieTable<T, I, K, O> table,
-      Iterator<HoodieRecord<T>> recordItr,
-      String partitionPath,
-      String fileId,
-      TaskContextSupplier taskContextSupplier,
-      Option<BaseKeyGenerator> keyGeneratorOpt,
-      HoodieReaderContext<T> readerContext,
-      HoodieRecord.HoodieRecordType recordType) {
-
-    boolean isFallbackEnabled = writeConfig.isMergeHandleFallbackEnabled();
-    Pair<String, String> mergeHandleClasses = getMergeHandleClassesWrite(operationType, writeConfig, table);
-    String logContext = String.format("for fileId %s and partition path %s at commit %s", fileId, partitionPath, instantTime);
-    LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClasses.getLeft(), logContext);
-
-    Class<?>[] constructorParamTypes = new Class<?>[] {
-        HoodieWriteConfig.class, String.class, HoodieTable.class, Iterator.class,
-        String.class, String.class, TaskContextSupplier.class, Option.class, HoodieReaderContext.class, HoodieRecord.HoodieRecordType.class,
-        Option.class
-    };
-
-    return instantiateMergeHandle(
-        isFallbackEnabled, mergeHandleClasses.getLeft(), mergeHandleClasses.getRight(), logContext, constructorParamTypes,
-        writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContext, recordType, Option.empty());
-  }
-
-  /**
    * Creates a merge handle for compaction path.
    */
   public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> create(
@@ -156,12 +124,6 @@ public class HoodieMergeHandleFactory {
     String mergeHandleClass = config.getCompactionMergeHandleClassName();
     String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
     LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
-
-    if (mergeHandleClass.equals(FileGroupReaderBasedMergeHandle.class.getName())) {
-      return new FileGroupReaderBasedMergeHandle<>(
-          config, instantTime, hoodieTable, operation, taskContextSupplier, Option.empty(), readerContext, maxInstantTime, recordType);
-    }
-
     Class<?>[] constructorParamTypes = new Class<?>[] {
         HoodieWriteConfig.class, String.class, HoodieTable.class, CompactionOperation.class,
         TaskContextSupplier.class, HoodieReaderContext.class, String.class, HoodieRecord.HoodieRecordType.class

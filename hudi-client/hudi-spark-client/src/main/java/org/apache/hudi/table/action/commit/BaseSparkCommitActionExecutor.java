@@ -20,8 +20,6 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
