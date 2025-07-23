@@ -43,22 +43,28 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * A {@link HoodieFileGroupRecordBuffer<T>} implementation that allows the user to create a record buffer with an existing mapping of key to latest record from the log files.
+ * The implementation is used when point lookups are required for the same file group, such as the metadata table's files partition.
+ * As a result, the buffer also requires a set of valid keys to be provided to avoid returning all records in the processed logs when doing these point or small-batch lookups.
+ * @param <T> the engine specific record type
+ */
 public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   private final Set<String> validKeys;
   private final Map<Serializable, BufferedRecord<T>> existingRecords;
 
-  public ReusableKeyBasedRecordBuffer(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient,
-                                      RecordMergeMode recordMergeMode, PartialUpdateMode partialUpdateMode,
-                                      TypedProperties props, HoodieReadStats readStats, Option<String> orderingFieldName,
-                                      UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records) {
-    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor, records, Collections.emptySet());
+  ReusableKeyBasedRecordBuffer(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient,
+                               RecordMergeMode recordMergeMode, PartialUpdateMode partialUpdateMode,
+                               TypedProperties props, Option<String> orderingFieldName,
+                               UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records) {
+    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor, records, Collections.emptySet());
   }
 
   private ReusableKeyBasedRecordBuffer(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient,
                                        RecordMergeMode recordMergeMode, PartialUpdateMode partialUpdateMode,
-                                       TypedProperties props, HoodieReadStats readStats, Option<String> orderingFieldName,
+                                       TypedProperties props, Option<String> orderingFieldName,
                                        UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records, Set<String> validKeys) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats, orderingFieldName, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
     this.existingRecords = records;
     this.validKeys = validKeys;
   }
@@ -68,7 +74,7 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     List<Expression> children = ((Predicates.In) keyFilter.get()).getRightChildren();
     Set<String> validKeys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toSet());
     return new ReusableKeyBasedRecordBuffer<>(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode,
-        props, readStats, orderingFieldName, updateProcessor, existingRecords, validKeys);
+        props, orderingFieldName, updateProcessor, existingRecords, validKeys);
   }
 
   @Override
