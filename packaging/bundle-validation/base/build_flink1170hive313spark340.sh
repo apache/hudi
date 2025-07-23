@@ -19,10 +19,9 @@
 #
 docker build \
  --build-arg HIVE_VERSION=3.1.3 \
- --build-arg FLINK_VERSION=1.18.0 \
- --build-arg SPARK_VERSION=3.5.1 \
+ --build-arg FLINK_VERSION=1.17.0 \
+ --build-arg SPARK_VERSION=3.4.0 \
  --build-arg SPARK_HADOOP_VERSION=3 \
  --build-arg HADOOP_VERSION=3.3.5 \
- --build-arg SCALA_VERSION=2.13 \
- -t hudi-ci-bundle-validation-base:flink1180hive313spark351scala213 .
-docker image tag hudi-ci-bundle-validation-base:flink1180hive313spark351scala213 timbrown126/tb-integ-test:flink1180hive313spark351scala213
+ -t hudi-ci-bundle-validation-base:flink1170hive313spark340 .
+docker image tag hudi-ci-bundle-validation-base:flink1170hive313spark340 timbrown126/tb-integ-test:flink1170hive313spark340
