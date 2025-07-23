@@ -2477,7 +2477,7 @@ public class HoodieTableMetadataUtil {
    * @param tableSchema  table schema
    * @return true if each field's data type are supported for secondary index, false otherwise
    */
-  public static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, Schema tableSchema) {
+  static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, Schema tableSchema) {
     return sourceFields.stream().allMatch(fieldToIndex -> {
       Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
       return isSecondaryIndexSupportedType(schema);
