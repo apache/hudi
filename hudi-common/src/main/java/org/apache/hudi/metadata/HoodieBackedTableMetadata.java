@@ -167,11 +167,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
-    List<HoodieRecord<HoodieMetadataPayload>> records = getRecordsByKeys(
-        HoodieListData.eager(Collections.singletonList(key)), partitionName, Option.empty())
-        .values().collectAsList();
-    ValidationUtils.checkArgument(records.size() <= 1, "Found more than 1 record for record key " + key);
-    return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
+    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData = getRecordsByKeys(
+        HoodieListData.eager(Collections.singletonList(key)), partitionName, Option.empty());
+    try {
+      List<HoodieRecord<HoodieMetadataPayload>> records = recordsData.values().collectAsList();
+      ValidationUtils.checkArgument(records.size() <= 1, "Found more than 1 record for record key " + key);
+      return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
+    } finally {
+      recordsData.unpersistWithDependencies();
+    }
   }
 
   @Override
