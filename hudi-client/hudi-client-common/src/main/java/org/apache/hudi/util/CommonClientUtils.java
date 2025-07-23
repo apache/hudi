@@ -52,14 +52,10 @@ public class CommonClientUtils {
 
   public static void validateTableVersion(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
-    if (!tableConfig.getTableVersion().equals(writeConfig.getWriteVersion())) {
+    if (!areTableVersionsCompatible(tableConfig.getTableVersion(), writeConfig.getWriteVersion())) {
       // if table version is greater than 6, while writer version is 6, we can still allow it for upgrade
-      if (tableConfig.getTableVersion().greaterThan(HoodieTableVersion.SIX) && writeConfig.getWriteVersion().equals(HoodieTableVersion.SIX)) {
-        LOG.warn("Table version is greater than 6, while writer version is 6. Allowing it for upgrade.");
-      } else {
-        throw new HoodieNotSupportedException(String.format("Table version (%s) and Writer version (%s) do not match for table at: %s.",
-            tableConfig.getTableVersion(), writeConfig.getWriteVersion(), writeConfig.getBasePath()));
-      }
+      throw new HoodieNotSupportedException(String.format("Table version (%s) and Writer version (%s) do not match for table at: %s.",
+          tableConfig.getTableVersion(), writeConfig.getWriteVersion(), writeConfig.getBasePath()));
     }
     // incompatible configurations.
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.shouldWritePartialUpdates()) {
@@ -70,6 +66,28 @@ public class CommonClientUtils {
     if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.EIGHT) && writeConfig.isNonBlockingConcurrencyControl()) {
       throw new HoodieNotSupportedException("Non-blocking concurrency control is not supported for table versions < 8.");
     }
+  }
+
+  public static boolean areTableVersionsCompatible(HoodieTableVersion tableVersion, HoodieTableVersion writeVersion) {
+    // Trivial case.
+    if (tableVersion.equals(writeVersion)) {
+      return true;
+    }
+    // Upgrade is always allowed.
+    if (tableVersion.lesserThan(writeVersion)) {
+      return true;
+    }
+    // Downgrade requirements:
+    // 1. Table version > 6.
+    // 2. Writer version < table version.
+    // 3. Writer version >= 6.
+    if (tableVersion.greaterThan(HoodieTableVersion.SIX)
+        && writeVersion.versionCode() < tableVersion.versionCode()
+        && writeVersion.greaterThanOrEquals(HoodieTableVersion.SIX)) {
+      LOG.warn("Table version is greater than 6, and writer version is lower than table version and must be >= 6.");
+      return true;
+    }
+    return false;
   }
 
   /**

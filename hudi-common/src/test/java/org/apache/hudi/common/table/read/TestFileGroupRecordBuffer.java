@@ -32,6 +32,7 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -85,6 +86,7 @@ class TestFileGroupRecordBuffer {
   private final HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
   private final FileGroupReaderSchemaHandler schemaHandler =
       mock(FileGroupReaderSchemaHandler.class);
+  private final UpdateProcessor updateProcessor = mock(UpdateProcessor.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
   private TypedProperties props = new TypedProperties();
   private HoodieReadStats readStats = mock(HoodieReadStats.class);
@@ -293,10 +295,10 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
+            PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
-            false
+            updateProcessor
         );
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
@@ -307,10 +309,10 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
+            PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
-            false
+            updateProcessor
     );
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
     assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
@@ -330,10 +332,10 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
+            PartialUpdateMode.NONE,
             props,
-            readStats,
             Option.empty(),
-            false
+            updateProcessor
         );
 
     // CASE 1: With custom delete marker.

@@ -44,6 +44,8 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -57,7 +59,9 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -174,13 +178,13 @@ public class UpgradeDowngradeUtils {
       properties.putAll(config.getProps());
       // TimeGenerators are cached and re-used based on table base path. Since here we are changing the lock configurations, avoiding the cache use
       // for upgrade code block.
-      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(),"false");
+      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(), "false");
       // override w/ NoopLock Provider to avoid re-entrant locking. already upgrade is happening within the table level lock.
       // Below we do trigger rollback and compaction which might again try to acquire the lock. So, here we are explicitly overriding to
       // NoopLockProvider for just the upgrade code block.
       properties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
       // if auto adjust it not disabled, chances that InProcessLockProvider will get overridden for single writer use-cases.
-      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(),"false");
+      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "false");
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
           .withProps(properties)
           .withWriteTableVersion(tableVersion.versionCode())
@@ -212,6 +216,39 @@ public class UpgradeDowngradeUtils {
       }
     } catch (Exception e) {
       throw new HoodieException(e);
+    }
+  }
+
+  /**
+   * Drops secondary index partitions from metadata table that are V2 or higher.
+   *
+   * @param config        Write config
+   * @param context       Engine context
+   * @param table         Hoodie table
+   * @param operationType Type of operation (upgrade/downgrade)
+   */
+  public static void dropNonV1SecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
+                                                       HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
+      List<String> mdtPartitions = metaClient.getTableConfig().getMetadataPartitions()
+          .stream()
+          .filter(partition -> {
+            // Only drop secondary indexes that are not V1
+            return metaClient.getIndexForMetadataPartition(partition)
+                .map(indexDef -> {
+                  if (MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX)) {
+                    return HoodieIndexVersion.V1.lowerThan(indexDef.getVersion());
+                  }
+                  return false;
+                })
+                .orElse(false);
+          })
+          .collect(Collectors.toList());
+      LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
+      if (!mdtPartitions.isEmpty()) {
+        writeClient.dropIndex(mdtPartitions);
+      }
     }
   }
 }

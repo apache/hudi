@@ -156,7 +156,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     }
     if (resultRecordOpt == null) {
       // If there is no condition matched, just filter this record.
-      // here we return a IGNORE_RECORD, HoodieMergeHandle will not handle it.
+      // here we return a IGNORE_RECORD, HoodieWriteMergeHandle will not handle it.
       HOption.of(HoodieRecord.SENTINEL)
     } else {
       resultRecordOpt

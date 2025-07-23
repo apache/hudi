@@ -19,6 +19,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -314,7 +315,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
 
       assertRowNumberEqualsTo(20);
       // write a delta_commit but does not commit
-      updateBatchWithoutCommit(client.createNewInstantTime(),
+      updateBatchWithoutCommit(WriteClientTestUtils.createNewInstantTime(),
           Objects.requireNonNull(baseRecordsToUpdate, "The records to update should not be null"));
       // rollback the delta_commit
       metaClient = HoodieTableMetaClient.reload(metaClient);

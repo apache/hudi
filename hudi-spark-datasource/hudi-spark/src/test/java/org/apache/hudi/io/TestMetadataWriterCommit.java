@@ -19,7 +19,6 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -153,14 +153,12 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
         .build();
 
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
-    String instantTime = InProcessTimeGenerator.createNewInstantTime();
-
     // commit is needed to populate schema of the table. We use a different partition path in the commit below than what is used
     // for actual test
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[1]});
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    WriteClientTestUtils.startCommitWithTime(writeClient, instantTime);
+    String instantTime = writeClient.startCommit();
     List<HoodieRecord> records1 = dataGenerator.generateInserts(instantTime, 1);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records1, 1);
     JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, instantTime);
@@ -223,7 +221,8 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     assertEquals(3, mdtCommitMetadata.getPartitionToWriteStats().size());
     assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().get(FILES.getPartitionPath()).size());
     assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(RECORD_INDEX.getPartitionPath()).size());
-    assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(SECONDARY_INDEX.getPartitionPath()
+    assertEquals(metaClient.getTableConfig().getTableVersion().equals(HoodieTableVersion.NINE) ? 1 : 10,
+        mdtCommitMetadata.getPartitionToWriteStats().get(SECONDARY_INDEX.getPartitionPath()
         + config.getMetadataConfig().getSecondaryIndexName()).size());
   }
 

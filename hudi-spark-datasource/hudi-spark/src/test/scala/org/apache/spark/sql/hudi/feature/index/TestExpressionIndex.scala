@@ -29,7 +29,7 @@ import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
@@ -38,7 +38,7 @@ import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.hive.testutils.HiveTestUtil
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.expression.HoodieExpressionIndex
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataPayload, MetadataPartitionType}
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieIndexVersion, HoodieMetadataPayload, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
@@ -57,7 +57,6 @@ import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.Test
 
 import java.util.stream.Collectors
 
@@ -879,15 +878,14 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  @Test
-  def testPrunePartitions(): Unit = {
+  test("Test Prune Partitions") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_prune_partitions_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
-
+        setCompactionConfigs(tableType)
         spark.sql(
           s"""
            CREATE TABLE $tableName (
@@ -981,16 +979,12 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  /**
-   * Test expression index partition pruning with unpartitioned table.
-   */
-  @Test
-  def testExpressionIndexPartitionStatsWithUnpartitionedTable(): Unit = {
+  test("Test expression index partition pruning with unpartitioned table") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_partition_pruning_with_unpartitioned_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1079,16 +1073,12 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  /**
-   * Test expression index partition pruning with partition stats.
-   */
-  @Test
-  def testPartitionPruningWithPartitionStats(): Unit = {
+  test("Test expression index partition pruning with partition stats") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_partition_pruning_with_partition_stats_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1178,17 +1168,13 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  /**
-   * Test expression index pruning after update with partition stats.
-   */
-  @Test
-  def testPartitionPruningAfterUpdateWithPartitionStats(): Unit = {
+  test("Test expression index pruning after update with partition stats") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isTableMOR = tableType.equals("mor")
         val tableName = generateTableName + s"_partition_pruning_after_update_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        spark.sql("set hoodie.compact.inline=false") // initially disable compaction to avoid merging log files
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1302,26 +1288,18 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
           Seq(riderCalifornia, "RIDER-A", "RIDER-C"),
           Seq(riderTexas, "RIDER-E", "RIDER-H")
         )
-
-        if (isTableMOR) {
-          spark.sql("set hoodie.compact.inline=false")
-        }
         spark.sql(s"drop index idx_rider on $tableName")
       }
     }
   }
 
-  /**
-   * Test expression index pruning after update with partition stats.
-   */
-  @Test
-  def testPartitionPruningAfterDeleteWithPartitionStats(): Unit = {
+  test("Test expression index pruning after delete with partition stats") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val isTableMOR = tableType.equals("mor")
         val tableName = generateTableName + s"_partition_pruning_after_delete_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        spark.sql("set hoodie.compact.inline=false") // initially disable compaction to avoid merging log files
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1437,9 +1415,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
           Seq(riderTexas, "RIDER-F", "RIDER-F")
         )
 
-        if (isTableMOR) {
-          spark.sql("set hoodie.compact.inline=false")
-        }
         spark.sql(s"drop index idx_rider on $tableName")
       }
     }
@@ -1453,7 +1428,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_stats_pruning_date_expr_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
 
         spark.sql(
@@ -1603,7 +1578,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_stats_pruning_string_expr_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql(
           s"""
            CREATE TABLE $tableName (
@@ -1723,13 +1698,12 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  @Test
-  def testBloomFiltersIndexPruning(): Unit = {
+  test("Test bloom filters index pruning") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName + s"_bloom_pruning_$tableType"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
-
+        setCompactionConfigs(tableType)
         spark.sql(
           s"""
            CREATE TABLE $tableName (
@@ -1783,7 +1757,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
           .filterCompletedInstants().lastInstant().get().requestedTime
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(s"expr_index_idx_bloom_$tableName"))
         assertTrue(metaClient.getIndexMetadata.isPresent)
-        assertEquals(2, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
+        assertEquals(1, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
         val indexDefinition: HoodieIndexDefinition = metaClient.getIndexMetadata.get.getIndexDefinitions.get(s"expr_index_idx_bloom_$tableName")
         // validate index options
         assertEquals("0.01", indexDefinition.getIndexOptions.get(HoodieExpressionIndex.FALSE_POSITIVE_RATE))
@@ -2189,9 +2163,15 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
       HoodieExpressionIndex.BLOOM_FILTER_NUM_ENTRIES -> "1000",
       HoodieExpressionIndex.DYNAMIC_BLOOM_MAX_ENTRIES -> "1000"
     )
+    val mdtPartitionName = "expr_index_random"
     val bloomFilterRecords = SparkMetadataWriterUtils.getExpressionIndexRecordsUsingBloomFilter(df, "c5",
         HoodieStorageConfig.newBuilder().build(), "",
-        HoodieIndexDefinition.newBuilder().withIndexName("random").withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
+        HoodieIndexDefinition.newBuilder()
+          .withIndexName(mdtPartitionName)
+          .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
+          .withVersion(HoodieIndexVersion.getCurrentVersion(
+            HoodieTableVersion.current(), mdtPartitionName))
+          .withIndexOptions(JavaConverters.mapAsJavaMapConverter(indexOptions).asJava).build())
       .getExpressionIndexRecords
     // Since there is only one partition file pair there is only one bloom filter record
     assertEquals(1, bloomFilterRecords.count())

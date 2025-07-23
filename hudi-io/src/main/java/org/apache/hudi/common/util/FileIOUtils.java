@@ -169,19 +169,12 @@ public class FileIOUtils {
                                       StoragePath fullPath,
                                       Option<HoodieInstantWriter> contentWriter, boolean ignoreIOE) {
     try {
-      // If the path does not exist, create it first
-      if (!storage.exists(fullPath)) {
-        if (storage.createNewFile(fullPath)) {
-          LOG.info("Created a new file in meta path: {}", fullPath);
-        } else {
-          throw new HoodieIOException("Failed to create file " + fullPath);
-        }
-      }
-
       if (contentWriter.isPresent()) {
         try (OutputStream out = storage.create(fullPath, true)) {
           contentWriter.get().writeToStream(out);
         }
+      } else {
+        storage.createNewFile(fullPath);
       }
     } catch (IOException e) {
       LOG.warn("Failed to create file {}", fullPath, e);

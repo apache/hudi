@@ -39,6 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.table.action.index.BaseHoodieIndexClient;
@@ -66,6 +67,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
@@ -111,10 +113,14 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
     }
 
-    LOG.info("Creating index {} of using {}", fullIndexName, indexType);
+    HoodieIndexVersion version = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
+    LOG.info("Creating index {} using version {}", fullIndexName, version);
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, Option.empty(), Option.of(indexType))) {
       // generate index plan
-      Option<String> indexInstantTime = doSchedule(writeClient, metaClient, fullIndexName, MetadataPartitionType.RECORD_INDEX);
+      HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(
+          metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
+      Option<String> indexInstantTime = doSchedule(
+          writeClient, metaClient, fullIndexName, MetadataPartitionType.RECORD_INDEX, currentVersion);
       if (indexInstantTime.isPresent()) {
         // build index
         writeClient.index(indexInstantTime.get());
@@ -134,6 +140,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withIndexFunction(PARTITION_NAME_COLUMN_STATS)
         .withSourceFields(columnsToIndex)
+        // Use the existing version if exists, otherwise fall back to the default version.
+        .withVersion(existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, metaClient))
         .withIndexOptions(Collections.EMPTY_MAP)
         .build();
     LOG.info("Registering Or Updating the index " + PARTITION_NAME_COLUMN_STATS);
@@ -144,20 +152,22 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
                                                 Map<String, Map<String, String>> columns, Map<String, String> options, Map<String, String> tableProperties) throws Exception {
     HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(metaClient, userIndexName, indexType, columns, options, tableProperties);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
-        || !metaClient.getIndexMetadata().isPresent()
-        || !metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(indexDefinition.getIndexName())) {
+        || !metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
       LOG.info("Index definition is not present. Registering the index first");
       register(metaClient, indexDefinition);
     }
 
     ValidationUtils.checkState(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
 
-    LOG.info("Creating index {} of using {}", indexDefinition.getIndexName(), indexType);
+    LOG.info("Creating index {}", indexDefinition);
     Option<HoodieIndexDefinition> expressionIndexDefinitionOpt = Option.ofNullable(indexDefinition);
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, expressionIndexDefinitionOpt, Option.of(indexType))) {
       MetadataPartitionType partitionType = indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? MetadataPartitionType.SECONDARY_INDEX : MetadataPartitionType.EXPRESSION_INDEX;
       // generate index plan
-      Option<String> indexInstantTime = doSchedule(writeClient, metaClient, indexDefinition.getIndexName(), partitionType);
+      HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
+
+      Option<String> indexInstantTime = doSchedule(
+          writeClient, metaClient, indexDefinition.getIndexName(), partitionType, currentVersion);
       if (indexInstantTime.isPresent()) {
         // build index
         writeClient.index(indexInstantTime.get());
@@ -227,7 +237,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
   }
 
-  private static Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client, HoodieTableMetaClient metaClient, String indexName, MetadataPartitionType partitionType) {
+  private static Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client, HoodieTableMetaClient metaClient,
+                                           String indexName, MetadataPartitionType partitionType, HoodieIndexVersion version) {
     List<MetadataPartitionType> partitionTypes = Collections.singletonList(partitionType);
     if (metaClient.getTableConfig().getMetadataPartitions().isEmpty()) {
       throw new HoodieException("Metadata table is not yet initialized. Initialize FILES partition before any other partition " + Arrays.toString(partitionTypes.toArray()));

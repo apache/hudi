@@ -52,7 +52,6 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     // 1. base file only
     // 2. log files only
     // 3. base file + log files
-    // 4. empty file slice
 
     // iterate 100000 times to create file slices
     val slicesAndNum = (0 until 10000).map { i =>
@@ -63,7 +62,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
       } else {
         0
       }
-      val logRecordNums = if (nextInt(2) == 0) {
+      val logRecordNums = if (baseRecordNum == 0 || nextInt(2) == 0) {
         Seq(nextInt(300), nextInt(300), nextInt(300))
       } else {
         Seq()
@@ -80,9 +79,12 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val maxSplitSize = totalSize / expectedTaskCount
     val partitionValues = Seq("2025-01-01")
     val partitionOpt = Some(new PartitionPath(partitionPath, partitionValues.toArray))
-    val partitionDirectory = PartitionDirectoryConverter.convertFileSlicesToPartitionDirectory(partitionOpt, slices, options)
 
-    val partitionedFiles = sparkAdapter.splitFiles(spark, partitionDirectory, false, maxSplitSize)
+    val partitionedFiles = slices.flatMap(slice => {
+      val dir = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(partitionOpt, slice, options)
+      sparkAdapter.splitFiles(spark, dir, false, maxSplitSize)
+    }).toSeq
+
     val tasks = sparkAdapter.getFilePartitions(spark, partitionedFiles, maxSplitSize)
     verifyBalanceByNum(tasks, totalRecordNum, logFraction)
     spark.stop()
@@ -111,7 +113,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
       if (totalRecordNum < expectedToleranceMin || totalRecordNum > expectedToleranceMax) {
         outOfRangeCount += 1
       }
-      assert(outOfRangeCount <= 1 , s"Record num $totalRecordNum is not in the range [$expectedToleranceMin, $expectedToleranceMax]")
+      assert(outOfRangeCount <= 1, s"Record num $totalRecordNum is not in the range [$expectedToleranceMin, $expectedToleranceMax]")
       totalRecordNum
     })
   }
@@ -140,7 +142,8 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     logRecordNums.zipWithIndex.foreach { case (logRecordNum, index) => {
       val logFile = buildHoodieLogFile(fileId, logRecordNum, sizePerLogRecord.toLong, index)
       slice.addLogFile(logFile)
-    }}
+    }
+    }
     slice
   }
 
