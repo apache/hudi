@@ -57,6 +57,13 @@ public interface HoodiePairData<K, V> extends Serializable {
   void unpersist();
 
   /**
+   * Un-persists this data and all its upstream dependencies recursively.
+   * This method traverses the lineage graph and unpersists any cached RDDs
+   * that this data depends on.
+   */
+  void unpersistWithDependencies();
+
+  /**
    * Returns a {@link HoodieData} holding the key from every corresponding pair
    */
   HoodieData<K> keys();

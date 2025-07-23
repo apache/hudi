@@ -214,7 +214,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                  String partitionName,
                                                                                  boolean shouldLoadInMemory,
                                                                                  SerializableFunctionUnchecked<String, String> keyEncodingFn) {
-    ValidationUtils.checkState(keyPrefixes instanceof HoodieListData, "getRecordsByKeyPrefixes only support HoodieListData at the moment");
     // Apply key encoding
     List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes.map(keyEncodingFn::apply).collectAsList());
     // Sort the prefixes so that keys are looked up in order
