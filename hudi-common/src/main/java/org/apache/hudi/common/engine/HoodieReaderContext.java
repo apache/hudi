@@ -113,7 +113,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
-    this.typeConverter = new ReaderContextTypeConverter();
+    this.typeConverter = new ReaderContextTypeConverter() {};
   }
 
   // Getter and Setter for schemaHandler
@@ -416,7 +416,7 @@ public abstract class HoodieReaderContext<T> {
    * @param baseRecord       The record based on which the engine record is built.
    * @return A new instance of engine record type {@link T}.
    */
-  public abstract T constructEngineRecord(Schema schema,
+  public abstract T mergeWithEngineRecord(Schema schema,
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
 

@@ -20,14 +20,16 @@
 package org.apache.hudi.common.engine;
 
 /**
- * Helper class that handle cell level operation.
+ * An interface that implements type conversion related functions,
+ * which is expected to extended by different engines to
+ * handle their type conversion accordingly.
  */
-public class ReaderContextTypeConverter {
+public interface ReaderContextTypeConverter {
   /**
    * Cast to Java boolean value.
    * If the object is not compatible with boolean type, throws.
    */
-  public boolean castToBoolean(Object value) {
+  default boolean castToBoolean(Object value) {
     if (value instanceof Boolean) {
       return (boolean) value;
     } else {
@@ -39,7 +41,7 @@ public class ReaderContextTypeConverter {
   /**
    * Cast to Java string value.
    */
-  public String castToString(Object value) {
+  default String castToString(Object value) {
     if (null != value) {
       return value.toString();
     }

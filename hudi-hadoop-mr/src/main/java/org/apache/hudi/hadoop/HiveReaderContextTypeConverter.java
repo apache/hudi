@@ -24,7 +24,7 @@ import org.apache.hudi.common.engine.ReaderContextTypeConverter;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.Text;
 
-public class HiveReaderContextTypeConverter extends ReaderContextTypeConverter {
+public class HiveReaderContextTypeConverter implements ReaderContextTypeConverter {
   @Override
   public boolean castToBoolean(Object value) {
     if (value instanceof BooleanWritable) {

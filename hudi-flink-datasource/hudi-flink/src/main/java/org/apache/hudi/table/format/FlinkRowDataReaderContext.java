@@ -197,7 +197,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public RowData constructEngineRecord(Schema schema,
+  public RowData mergeWithEngineRecord(Schema schema,
                                        Map<Integer, Object> updateValues,
                                        BufferedRecord<RowData> baseRecord) {
     GenericRowData genericRowData = new GenericRowData(schema.getFields().size());

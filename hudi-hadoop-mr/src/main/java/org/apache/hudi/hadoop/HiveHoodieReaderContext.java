@@ -230,7 +230,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public ArrayWritable constructEngineRecord(Schema schema,
+  public ArrayWritable mergeWithEngineRecord(Schema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<ArrayWritable> baseRecord) {
     Writable[] engineRecord = baseRecord.getRecord().get();

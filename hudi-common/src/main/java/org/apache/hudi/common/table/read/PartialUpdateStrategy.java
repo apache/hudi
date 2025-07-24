@@ -119,7 +119,7 @@ public class PartialUpdateStrategy<T> {
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = readerContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
@@ -147,7 +147,7 @@ public class PartialUpdateStrategy<T> {
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = readerContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),

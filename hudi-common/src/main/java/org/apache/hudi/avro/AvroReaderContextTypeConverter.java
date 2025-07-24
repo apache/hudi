@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.StringUtils;
 
 import java.nio.ByteBuffer;
 
-public class AvroReaderContextTypeConverter extends ReaderContextTypeConverter {
+public class AvroReaderContextTypeConverter implements ReaderContextTypeConverter {
   @Override
   public String castToString(Object value) {
     if (value == null) {

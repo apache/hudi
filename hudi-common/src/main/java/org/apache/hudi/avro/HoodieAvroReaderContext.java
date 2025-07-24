@@ -200,7 +200,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public IndexedRecord constructEngineRecord(Schema schema,
+  public IndexedRecord mergeWithEngineRecord(Schema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<IndexedRecord> baseRecord) {
     IndexedRecord engineRecord = baseRecord.getRecord();
