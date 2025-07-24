@@ -84,6 +84,15 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     setupSharedTestData()
   }
 
+  private def cleanUpCachedRDDs(): Unit = {
+    // Unpersist any RDDs tracked by Spark before starting tests
+    val sparkContext = spark.sparkContext
+    val persistentRDDs = sparkContext.getPersistentRDDs
+    persistentRDDs.values.foreach { rdd =>
+      rdd.unpersist(blocking = true)
+    }
+  }
+
   /**
    * Teardown method that runs once after all tests
    */
@@ -194,6 +203,14 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    * Cleanup shared resources
    */
   private def cleanupSharedResources(): Unit = {
+    // Unpersist any RDDs tracked by Spark
+    if (jsc != null) {
+      val persistentRDDs = jsc.sc.getPersistentRDDs
+      persistentRDDs.values.foreach { rdd =>
+        rdd.unpersist(blocking = false)
+      }
+    }
+
     if (hoodieBackedTableMetadata != null) {
       hoodieBackedTableMetadata.close()
       hoodieBackedTableMetadata = null
@@ -204,12 +221,16 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     basePath = null
     metaClient = null
     testData = null
+    jsc = null
+    context = null
   }
 
   /**
    * Test record index with mapping functionality
    */
   protected def testReadRecordIndex(): Unit = {
+    cleanUpCachedRDDs()
+
     // Case 1: Empty input
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
     val emptyResultRDD = hoodieBackedTableMetadata.readRecordIndex(HoodieListData.eager(List.empty[String].asJava))
@@ -293,6 +314,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    * Test secondary index result functionality
    */
   protected def testReadSecondaryIndexResult(): Unit = {
+    cleanUpCachedRDDs()
+
     // Get the secondary index partition name
     val secondaryIndexName = "secondary_index_idx_name"
 
@@ -401,6 +424,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    * Test secondary index records functionality
    */
   protected def testGetSecondaryIndexRecords(): Unit = {
+    cleanUpCachedRDDs()
+
     val secondaryIndexName = "secondary_index_idx_name"
 
     // Test with existing secondary keys
