@@ -401,7 +401,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_8
         displayName: UT FT Spark and SQL (additional)
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
