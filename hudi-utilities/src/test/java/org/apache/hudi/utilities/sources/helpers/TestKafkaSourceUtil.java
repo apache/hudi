@@ -70,15 +70,17 @@ public class TestKafkaSourceUtil {
 
     Map<String, Object> kafkaParams = new HashMap<>();
 
-    kafkaParams.put("custom.config.streamer", "offer");
+    kafkaParams.put("custom1.config.streamer", "offer");
     kafkaParams.put("boostrap.servers", "dns:port");
-    kafkaParams.put("custom.config.capture", "s3://folder1");
-    kafkaParams.put("customconfig.sourceprofile.refresh.mode", "ENABLED");
+    kafkaParams.put("custom2.config.capture", "s3://folder1");
+    kafkaParams.put("custom1config.sourceprofile.refresh.mode", "ENABLED");
 
-    assertEquals(kafkaParams,
-        KafkaSourceUtil.removeIgnorePrefixConfigs(kafkaParams, props));
+    assertEquals(kafkaParams, KafkaSourceUtil.removeIgnorePrefixConfigs(kafkaParams, props));
 
-    props.put(KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST.key(), "custom");
+    props.put(KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST.key(), "custom3;custom4");
+    assertEquals(kafkaParams, KafkaSourceUtil.removeIgnorePrefixConfigs(kafkaParams, props));
+
+    props.put(KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST.key(), "custom1;custom2");
 
     Map<String, Object> filteredParams = KafkaSourceUtil.removeIgnorePrefixConfigs(kafkaParams, props);
     Map<String, Object> expectedParams = new HashMap<>();
