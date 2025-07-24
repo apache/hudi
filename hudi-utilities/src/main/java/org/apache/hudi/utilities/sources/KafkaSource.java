@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
@@ -46,11 +47,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
-import static org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil.filterKafkaParameters;
 
 public abstract class KafkaSource<T> extends Source<T> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
@@ -152,8 +153,8 @@ public abstract class KafkaSource<T> extends Source<T> {
       JavaSparkContext sparkContext,
       KafkaOffsetGen offsetGen,
       OffsetRange[] offsetRanges) {
-    Map<String, Object> kafkaParams = filterKafkaParameters(offsetGen.getKafkaParams(),
-                                                            ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, true));
+    Map<String, Object> kafkaParams =
+        filterKafkaParameters(offsetGen.getKafkaParams(), ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, true));
     LOG.debug("Original kafka params " + offsetGen.getKafkaParams() + "\n After filtering kafka params " + kafkaParams);
     return KafkaUtils.createRDD(sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent());
   }
@@ -165,6 +166,42 @@ public abstract class KafkaSource<T> extends Source<T> {
     if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET)) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
+  }
+
+  /**
+  * Utility method that removes configs with keys that match (start with) any one of the prefixes.
+  *
+  * @param kafkaParams The incoming kafka params
+  * @param semiColonSeparatedPrefixes all configs with keys starting with any one of these semi-colon separated prefixes will be ignored.
+  * @return a new set of kafkaParams with the configs matching the prefixes removed.
+  **/
+  @VisibleForTesting
+  static Map<String, Object> filterKafkaParameters(Map<String, Object> kafkaParams, String semiColonSeparatedPrefixes) {
+    if (semiColonSeparatedPrefixes == null || semiColonSeparatedPrefixes.isEmpty()) {
+      return kafkaParams;
+    }
+
+    String[] prefixes = Arrays.stream(semiColonSeparatedPrefixes.split(";"))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .toArray(String[]::new);
+
+    Map<String, Object> filteredInParams = new HashMap<>();
+    for (Map.Entry<String, Object> entry : kafkaParams.entrySet()) {
+      boolean beginsWithAtleastOnePrefix = false;
+      for (String prefix : prefixes) {
+        if (entry.getKey().startsWith(prefix)) {
+          beginsWithAtleastOnePrefix = true;
+          break;
+        }
+      }
+
+      if (!beginsWithAtleastOnePrefix) {
+        filteredInParams.put(entry.getKey(), entry.getValue());
+      }
+    }
+
+    return filteredInParams;
   }
 
   private boolean hasConfigException(Throwable e) {

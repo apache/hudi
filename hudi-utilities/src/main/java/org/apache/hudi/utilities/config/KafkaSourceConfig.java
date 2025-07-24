@@ -182,7 +182,7 @@ public class KafkaSourceConfig extends HoodieConfig {
       .defaultValue("")
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("Comma separated list of prefixes for config keys that should be dropped from the configs passed to the Kafka consumer.");
+      .withDocumentation("Semi-colon separated list of prefixes for config keys that should be dropped from the configs when passed to the Kafka consumer.");
 
   /**
    * Kafka reset offset strategies.
