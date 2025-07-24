@@ -87,7 +87,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
   protected BufferedRecordMerger<T> bufferedRecordMerger;
-  private long totalLogRecords = 0;
+  protected long totalLogRecords = 0;
 
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
@@ -241,19 +241,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   }
 
   /**
-   * Merge a delete record with another record (data, or delete).
-   *
-   * @param deleteRecord               The delete record
-   * @param existingRecord             The existing {@link BufferedRecord}
-   *
-   * @return The option of new delete record that needs to be updated with.
-   */
-  protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
-    totalLogRecords++;
-    return bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
-  }
-
-  /**
    * Create a record iterator for a data block. The records are filtered by a key set specified by {@code keySpecOpt}.
    *
    * @param dataBlock
@@ -301,23 +288,11 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     return Option.of(Pair.of(readerContext.projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
-  /**
-   * Merge two records using the configured record merger.
-   *
-   * @param olderRecord  old {@link BufferedRecord}
-   * @param newerRecord  newer {@link BufferedRecord}
-   * @return a value pair, left is boolean value `isDelete`, and right is engine row.
-   * @throws IOException
-   */
-  protected Pair<Boolean, T> merge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-    return bufferedRecordMerger.finalMerge(olderRecord, newerRecord);
-  }
-
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
       BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldNames, false);
-      Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
-      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, isDeleteAndRecord.getRight(), isDeleteAndRecord.getLeft());
+      MergeResult<T> isDeleteAndRecord = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
+      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, isDeleteAndRecord.getMergedRecord(), isDeleteAndRecord.isDelete());
       return nextRecord != null;
     }
 

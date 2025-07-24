@@ -103,11 +103,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   @Override
   public void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
     BufferedRecord<T> existingRecord = records.get(recordKey);
-    Option<BufferedRecord<T>> bufferRecord = doProcessNextDataRecord(record, existingRecord);
-
-    if (bufferRecord.isPresent()) {
-      records.put(recordKey, bufferRecord.get().toBinary(readerContext));
-    }
+    totalLogRecords++;
+    bufferedRecordMerger.deltaMerge(record, existingRecord).ifPresent(bufferedRecord ->
+        records.put(recordKey, bufferedRecord.toBinary(readerContext)));
   }
 
   @Override
@@ -120,13 +118,14 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
-    BufferedRecord<T> existingRecord = records.get(recordKey);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
-    if (recordOpt.isPresent()) {
-      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, orderingValue));
-    }
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordIdentifier) {
+    BufferedRecord<T> existingRecord = records.get(recordIdentifier);
+    totalLogRecords++;
+    Option<DeleteRecord> recordOpt = bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
+    recordOpt.ifPresent(deleteRec -> {
+      Comparable orderingValue = getOrderingValue(readerContext, deleteRec);
+      records.put(recordIdentifier, BufferedRecord.forDeleteRecord(deleteRec, orderingValue));
+    });
   }
 
   @Override
