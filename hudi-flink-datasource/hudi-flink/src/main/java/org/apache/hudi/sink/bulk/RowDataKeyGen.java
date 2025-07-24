@@ -127,7 +127,7 @@ public class RowDataKeyGen implements Serializable {
 
   public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
     Option<TimestampBasedAvroKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (TimestampBasedAvroKeyGenerator.class.getName().equals(conf.getString(FlinkOptions.KEYGEN_CLASS_NAME))) {
+    if (TimestampBasedAvroKeyGenerator.class.getName().equals(conf.get(FlinkOptions.KEYGEN_CLASS_NAME))) {
       try {
         keyGeneratorOpt = Option.of(new TimestampBasedAvroKeyGenerator(StreamerUtil.flinkConf2TypedProperties(conf)));
       } catch (IOException e) {
@@ -135,8 +135,8 @@ public class RowDataKeyGen implements Serializable {
       }
     }
     boolean consistentLogicalTimestampEnabled = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
-    return new RowDataKeyGen(Option.of(conf.getString(FlinkOptions.RECORD_KEY_FIELD)), conf.getString(FlinkOptions.PARTITION_PATH_FIELD),
-        rowType, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING),
+    return new RowDataKeyGen(Option.of(conf.get(FlinkOptions.RECORD_KEY_FIELD)), conf.get(FlinkOptions.PARTITION_PATH_FIELD),
+        rowType, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING), conf.get(FlinkOptions.URL_ENCODE_PARTITIONING),
         consistentLogicalTimestampEnabled, keyGeneratorOpt);
   }
 

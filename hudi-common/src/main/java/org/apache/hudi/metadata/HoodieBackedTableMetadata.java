@@ -260,7 +260,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   private HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> doLookup(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
                                                                                SerializableFunctionUnchecked<String, String> keyEncodingFn) {
-
     final int numFileSlices = fileSlices.size();
     if (numFileSlices == 1) {
       List<String> keysList = keys.map(keyEncodingFn::apply).collectAsList();

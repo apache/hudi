@@ -20,6 +20,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -118,7 +119,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public HoodieFlinkWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
-    withInserts(partition, fileId, records, new org.apache.hudi.client.FlinkTaskContextSupplier(null));
+    withInserts(partition, fileId, records, new HoodieFlinkEngineContext.DefaultTaskContextSupplier());
     return this;
   }
 

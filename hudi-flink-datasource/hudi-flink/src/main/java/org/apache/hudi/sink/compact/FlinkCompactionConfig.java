@@ -182,25 +182,25 @@ public class FlinkCompactionConfig extends Configuration {
     Map<String, String> propsMap = new HashMap<String, String>((Map) getProps(config));
     org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
 
-    conf.setString(FlinkOptions.PATH, config.path);
-    conf.setString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);
-    conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
-    conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
-    conf.setString(FlinkOptions.CLEAN_POLICY, config.cleanPolicy);
-    conf.setInteger(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
-    conf.setInteger(FlinkOptions.CLEAN_RETAIN_HOURS, config.cleanRetainHours);
-    conf.setInteger(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS, config.cleanRetainFileVersions);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
-    conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
+    conf.set(FlinkOptions.PATH, config.path);
+    conf.set(FlinkOptions.COMPACTION_TRIGGER_STRATEGY, config.compactionTriggerStrategy);
+    conf.set(FlinkOptions.ARCHIVE_MAX_COMMITS, config.archiveMaxCommits);
+    conf.set(FlinkOptions.ARCHIVE_MIN_COMMITS, config.archiveMinCommits);
+    conf.set(FlinkOptions.CLEAN_POLICY, config.cleanPolicy);
+    conf.set(FlinkOptions.CLEAN_RETAIN_COMMITS, config.cleanRetainCommits);
+    conf.set(FlinkOptions.CLEAN_RETAIN_HOURS, config.cleanRetainHours);
+    conf.set(FlinkOptions.CLEAN_RETAIN_FILE_VERSIONS, config.cleanRetainFileVersions);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, config.compactionDeltaCommits);
+    conf.set(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
+    conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
     // used as compaction memory by file group reader based compaction
-    conf.setInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY, config.compactionMaxMemory);
-    conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
-    conf.setInteger(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
-    conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
+    conf.set(FlinkOptions.WRITE_MERGE_MAX_MEMORY, config.compactionMaxMemory);
+    conf.set(FlinkOptions.COMPACTION_TARGET_IO, config.compactionTargetIo);
+    conf.set(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
+    conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
     // use synchronous compaction always
-    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
     // Map memory
     conf.setString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), config.spillableMapPath);
     // set file group reader
