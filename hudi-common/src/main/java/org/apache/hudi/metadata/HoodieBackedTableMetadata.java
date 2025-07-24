@@ -563,7 +563,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withRecordBufferInitializer(recordBufferInitializer)
         .build();
 
-    return new CloseableIteratorWithReuse<>(fileGroupReader.getClosableIterator(), reuse);
+    return fileGroupReader.getClosableIterator();
   }
 
   private FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord> buildReusableRecordBufferInitializer(FileSlice fileSlice, String latestMetadataInstantTime,
@@ -896,34 +896,5 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(commonConfig.isBitCaskDiskMapCompressionEnabled()));
     return props;
-  }
-
-  private static class CloseableIteratorWithReuse<T> implements ClosableIterator<T> {
-    private final ClosableIterator<T> delegate;
-    private final boolean reuse;
-
-    private CloseableIteratorWithReuse(ClosableIterator<T> delegate, boolean reuse) {
-      this.delegate = delegate;
-      this.reuse = reuse;
-    }
-
-    @Override
-    public boolean hasNext() {
-      return delegate.hasNext();
-    }
-
-    @Override
-    public T next() {
-      return delegate.next();
-    }
-
-    @Override
-    public void close() {
-      if (reuse) {
-        // Do not close the iterator to allow reuse
-        return;
-      }
-      delegate.close();
-    }
   }
 }

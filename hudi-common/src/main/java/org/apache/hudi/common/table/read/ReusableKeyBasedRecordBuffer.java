@@ -31,12 +31,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.expression.Expression;
-import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.expression.Predicates;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -57,29 +55,17 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                RecordMergeMode recordMergeMode, PartialUpdateMode partialUpdateMode,
                                TypedProperties props, Option<String> orderingFieldName,
                                UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records) {
-    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor, records, Collections.emptySet());
-  }
-
-  private ReusableKeyBasedRecordBuffer(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient,
-                                       RecordMergeMode recordMergeMode, PartialUpdateMode partialUpdateMode,
-                                       TypedProperties props, Option<String> orderingFieldName,
-                                       UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records, Set<String> validKeys) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
     this.existingRecords = records;
-    this.validKeys = validKeys;
-  }
-
-  public ReusableKeyBasedRecordBuffer<T> withKeyPredicate(Option<Predicate> keyFilter) {
-    ValidationUtils.checkArgument(keyFilter.get() instanceof Predicates.In, () -> "Key filter should be of type Predicates.In, but found: " + keyFilter.get().getClass().getName());
-    List<Expression> children = ((Predicates.In) keyFilter.get()).getRightChildren();
-    Set<String> validKeys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toSet());
-    return new ReusableKeyBasedRecordBuffer<>(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode,
-        props, orderingFieldName, updateProcessor, existingRecords, validKeys);
+    ValidationUtils.checkArgument(readerContext.getKeyFilterOpt().orElse(null) instanceof Predicates.In,
+        () -> "Key filter should be of type Predicates.In, but found: " + readerContext.getKeyFilterOpt().map(filter -> filter.getClass().getSimpleName()).orElse("NULL"));
+    List<Expression> children = ((Predicates.In) readerContext.getKeyFilterOpt().get()).getRightChildren();
+    this.validKeys = children.stream().map(e -> (String) e.eval(null)).collect(Collectors.toSet());
   }
 
   @Override
   protected ExternalSpillableMap<Serializable, BufferedRecord<T>> initializeRecordsMap(String spillableMapBasePath) {
-    return (ExternalSpillableMap<Serializable, BufferedRecord<T>>) existingRecords;
+    return null;
   }
 
   @Override
@@ -137,7 +123,6 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   @Override
   public void processNextDeletedRecord(DeleteRecord record, Serializable index) {
     throw new UnsupportedOperationException("Reusable record buffer does not process the delete records from the logs");
-
   }
 
   @Override
@@ -174,13 +159,6 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       T result = recordsByKey.get(nextKey);
       nextKey = null;
       return result;
-    }
-  }
-
-  @Override
-  public void close() {
-    if (existingRecords instanceof ExternalSpillableMap) {
-      ((ExternalSpillableMap) existingRecords).close();
     }
   }
 }

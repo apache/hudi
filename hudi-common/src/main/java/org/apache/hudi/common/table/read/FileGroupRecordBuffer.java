@@ -226,7 +226,9 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
 
   @Override
   public void close() {
-    records.close();
+    if (records != null) {
+      records.close();
+    }
   }
 
   /**

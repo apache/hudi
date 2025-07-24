@@ -96,7 +96,7 @@ public interface FileGroupRecordBufferInitializer<T> {
         recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
             readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldName, updateProcessor);
       }
-      return scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, recordBuffer);
+      return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, recordBuffer));
     }
   }
 
@@ -106,7 +106,7 @@ public interface FileGroupRecordBufferInitializer<T> {
    */
   class ReusableFileGroupRecordBufferInitializer<T> implements FileGroupRecordBufferInitializer<T>, Closeable {
     private final HoodieReaderContext<T> readerContextWithoutFilters;
-    private Pair<ReusableKeyBasedRecordBuffer<T>, List<String>> cachedResults;
+    private Pair<KeyBasedFileGroupRecordBuffer<T>, List<String>> cachedResults;
 
     public ReusableFileGroupRecordBufferInitializer(HoodieReaderContext<T> readerContextWithoutFilters) {
       this.readerContextWithoutFilters = readerContextWithoutFilters;
@@ -122,19 +122,19 @@ public interface FileGroupRecordBufferInitializer<T> {
                                                                                      HoodieFileGroupReader.ReaderParameters readerParameters,
                                                                                      HoodieReadStats readStats,
                                                                                      Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
+      UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDelete(), fileGroupUpdateCallback);
+      PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
       if (cachedResults == null) {
-        UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDelete(), fileGroupUpdateCallback);
-        PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
         // Create an initial buffer to process the log files
         KeyBasedFileGroupRecordBuffer<T> initialBuffer = new KeyBasedFileGroupRecordBuffer<>(
             readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldName, updateProcessor);
-        Pair<FileGroupRecordBuffer<T>, List<String>> results = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, initialBuffer);
-        // Create a reusable buffer with the results from the initial scan
-        ReusableKeyBasedRecordBuffer<T> reusableBuffer = new ReusableKeyBasedRecordBuffer<>(
-            readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldName, updateProcessor, initialBuffer.getLogRecords());
-        cachedResults = Pair.of(reusableBuffer, results.getRight());
+        List<String> validInstants = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, initialBuffer);
+        cachedResults = Pair.of(initialBuffer, validInstants);
       }
-      return Pair.of(cachedResults.getLeft().withKeyPredicate(readerContext.getKeyFilterOpt()), cachedResults.getRight());
+      // Create a reusable buffer with the results from the initial scan
+      ReusableKeyBasedRecordBuffer<T> reusableBuffer = new ReusableKeyBasedRecordBuffer<>(
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldName, updateProcessor, cachedResults.getLeft().getLogRecords());
+      return Pair.of(reusableBuffer, cachedResults.getRight());
     }
 
     @Override
@@ -146,10 +146,10 @@ public interface FileGroupRecordBufferInitializer<T> {
     }
   }
 
-  static <T> Pair<FileGroupRecordBuffer<T>, List<String>> scanLogFiles(HoodieReaderContext<T> readerContext, HoodieStorage storage,
-                                                                       HoodieFileGroupReader.InputSplit inputSplit, HoodieTableMetaClient hoodieTableMetaClient,
-                                                                       TypedProperties props, HoodieFileGroupReader.ReaderParameters readerParameters,
-                                                                       HoodieReadStats readStats, FileGroupRecordBuffer<T> recordBuffer) {
+  static <T> List<String> scanLogFiles(HoodieReaderContext<T> readerContext, HoodieStorage storage,
+                                       HoodieFileGroupReader.InputSplit inputSplit, HoodieTableMetaClient hoodieTableMetaClient,
+                                       TypedProperties props, HoodieFileGroupReader.ReaderParameters readerParameters,
+                                       HoodieReadStats readStats, FileGroupRecordBuffer<T> recordBuffer) {
     try (HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
         .withHoodieReaderContext(readerContext)
         .withStorage(storage)
@@ -170,7 +170,7 @@ public interface FileGroupRecordBufferInitializer<T> {
       readStats.setTotalLogBlocks(logRecordReader.getTotalLogBlocks());
       readStats.setTotalCorruptLogBlock(logRecordReader.getTotalCorruptBlocks());
       readStats.setTotalRollbackBlocks(logRecordReader.getTotalRollbacks());
-      return Pair.of(recordBuffer, logRecordReader.getValidBlockInstants());
+      return logRecordReader.getValidBlockInstants();
     }
   }
 }

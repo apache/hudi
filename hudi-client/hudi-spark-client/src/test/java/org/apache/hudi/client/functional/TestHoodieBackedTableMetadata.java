@@ -133,7 +133,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @CsvSource({"true,6", "true,8", "false,6", "false,8"})
   public void testMultiReaderForHoodieBackedTableMetadata(boolean reuse, int tableVersion) throws Exception {
-    final int taskNumber = 6;
+    final int taskNumber = 18;
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     initPath();
     HoodieWriteConfig config = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false)
@@ -175,7 +175,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     executors.shutdown();
     executors.awaitTermination(5, TimeUnit.MINUTES);
     assertFalse(flag.get());
-    assertEquals(12, filesNumber.get()); // 3 files for p3, 2 files for p2, 1 file for p1 and two readers for each partition
+    assertEquals(36, filesNumber.get()); // 3 files for p3, 2 files for p2, 1 file for p1 and two readers for each partition
 
     // validate table version
     HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
