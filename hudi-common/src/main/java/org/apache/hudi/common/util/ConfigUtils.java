@@ -658,4 +658,42 @@ public class ConfigUtils {
   public static TypedProperties loadGlobalProperties() {
     return ((PropertiesConfig) ReflectionUtils.loadClass("org.apache.hudi.common.config.DFSPropertiesConfiguration")).getGlobalProperties();
   }
+
+  /**
+   * Extract all properties whose keys start with a given prefix.
+   * E.g., if the prefix is "a.b.c", and the props contain:
+   * "a.b.c.K1=V1", "a.b.c.K2=V2", "a.b.c.K3=V3".
+   * Then the output is:
+   * Map(K1->V1, K2->V2, K3->V3).
+   */
+  public static Map<String, String> extractWithPrefix(TypedProperties props, String prefix) {
+    if (props == null || props.isEmpty()) {
+      return new HashMap<>();
+    }
+    int prefixLength = prefix.length();
+    int dotOffset = prefixLength + 1; // +1 for the dot after prefix
+
+    Map<String, String> mergeProperties = new HashMap<>();
+    for (Map.Entry<Object, Object> entry : props.entrySet()) {
+      String key = entry.getKey().toString();
+      // Early exit if key is shorter than prefix or doesn't start with prefix
+      if (key.length() <= prefixLength || !key.startsWith(prefix)) {
+        continue;
+      }
+      // Check if the character after prefix is a dot
+      if (key.charAt(prefixLength) != '.') {
+        continue;
+      }
+      // Extract and validate the property key
+      String propKey = key.substring(dotOffset).trim();
+      if (propKey.isEmpty()) {
+        continue;
+      }
+      // Extract and trim the value
+      Object value = entry.getValue();
+      String stringValue = (value != null) ? value.toString().trim() : "";
+      mergeProperties.put(propKey, stringValue);
+    }
+    return mergeProperties;
+  }
 }

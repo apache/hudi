@@ -323,14 +323,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("This property when set, will define how two versions of the record will be "
           + "merged together where the later contains only partial set of values and not entire record.");
 
-  public static final ConfigProperty<String> MERGE_PROPERTIES = ConfigProperty
-      .key("hoodie.table.merge.properties")
+  public static final ConfigProperty<String> MERGE_CUSTOM_PROPERTY_PREFIX = ConfigProperty
+      .key("hoodie.merge.custom.property.prefix")
       .noDefaultValue()
       .sinceVersion("1.1.0")
-      .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'. "
-          + "Each (Ki, Vi) pair represents a property used during merge scenarios. "
-          + "Some merge mode might need some writer properties that are required for readers to function as expected. "
-          + "Hudi stores those properties here so readers can set them while reading.");
+      .withDocumentation("Some merge mode might need writer properties that are required for readers "
+          + "to function as expected, e.g., Ki=Vi. Hudi stores those properties with this prefix so readers "
+          + "can set them while reading, e.g., hoodie.merge.custom.prefix.Ki=Vi.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;

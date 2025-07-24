@@ -20,65 +20,19 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.HoodieTableConfig;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestPartialUpdateStrategy {
   @Test
-  void testParseValidProperties() {
+  void testEmptyProperties() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "a=1,b=2,c=3");
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
-
-    assertEquals(3, result.size());
-    assertEquals("1", result.get("a"));
-    assertEquals("2", result.get("b"));
-    assertEquals("3", result.get("c"));
-  }
-
-  @Test
-  void testHandlesWhitespace() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), " a = 1 , b=  2 ,c=3 ");
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
-
-    assertEquals(3, result.size());
-    assertEquals("1", result.get("a"));
-    assertEquals("2", result.get("b"));
-    assertEquals("3", result.get("c"));
-  }
-
-  @Test
-  void testIgnoresEmptyEntriesAndMissingEquals() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), ",a=1,,b,c=3");
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
-
-    assertEquals(3, result.size());
-    assertEquals("1", result.get("a"));
-    assertEquals("3", result.get("c"));
-    assertEquals("", result.get("b"));
-  }
-
-  @Test
-  void testEmptyInputReturnsEmptyMap() {
-    TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "");
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
-    assertTrue(result.isEmpty());
-  }
-
-  @Test
-  void testMissingKeyReturnsEmptyMap() {
-    TypedProperties props = new TypedProperties(); // no property set
     Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
     assertTrue(result.isEmpty());
   }
