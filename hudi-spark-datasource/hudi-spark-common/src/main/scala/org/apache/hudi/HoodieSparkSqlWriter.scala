@@ -531,7 +531,7 @@ class HoodieSparkSqlWriterInternal {
             } catch {
               case e: HoodieException =>
                 // close the write client in all cases
-                handleWriteClientClosure(client, tableConfig, parameters, jsc.hadoopConfiguration())
+                closeWriteClient(client, tableConfig, parameters, jsc.hadoopConfiguration())
                 throw e
             }
         }
@@ -546,12 +546,12 @@ class HoodieSparkSqlWriterInternal {
 
         (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
       } finally {
-        handleWriteClientClosure(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
+        closeWriteClient(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
       }
     }
   }
 
-  private def handleWriteClientClosure(writeClient: SparkRDDWriteClient[_], tableConfig: HoodieTableConfig, parameters: Map[String, String], configuration: Configuration): Unit = {
+  private def closeWriteClient(writeClient: SparkRDDWriteClient[_], tableConfig: HoodieTableConfig, parameters: Map[String, String], configuration: Configuration): Unit = {
     // close the write client in all cases
     val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
     val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
@@ -854,13 +854,7 @@ class HoodieSparkSqlWriterInternal {
         TableInstantInfo(basePath, instantTime, executor.getCommitActionType, executor.getWriteOperationType), Option.empty)
       (writeSuccessful, HOption.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     } finally {
-      // close the write client in all cases
-      val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
-      val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
-      if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-        log.info("Closing write client")
-        writeClient.close()
-      }
+      closeWriteClient(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
     }
   }
 

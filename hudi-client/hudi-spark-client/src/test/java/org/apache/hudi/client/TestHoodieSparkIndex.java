@@ -18,14 +18,17 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.index.HoodieSparkIndexClient;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -46,6 +49,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SE
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieSparkIndex extends HoodieClientTestBase {
@@ -123,14 +127,15 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
   private void readAndValidateIndexDefn(HoodieIndexDefinition expectedIndexDefn, HoodieTableMetaClient metaClient) {
     assertTrue(metaClient.getIndexMetadata().isPresent());
     assertTrue(!metaClient.getIndexMetadata().get().getIndexDefinitions().isEmpty());
-    assertTrue(metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(expectedIndexDefn.getIndexName()));
-    assertEquals(expectedIndexDefn, metaClient.getIndexMetadata().get().getIndexDefinitions().get(expectedIndexDefn.getIndexName()));
+    Option<HoodieIndexDefinition> indexDefnOpt = metaClient.getIndexForMetadataPartition(expectedIndexDefn.getIndexName());
+    assertTrue(indexDefnOpt.isPresent());
+    assertEquals(expectedIndexDefn, indexDefnOpt.get());
   }
 
   private void readAndValidateIndexDefnNotPresent(HoodieIndexDefinition expectedIndexDefn, HoodieTableMetaClient metaClient) {
     assertTrue(metaClient.getIndexMetadata().isPresent());
     assertTrue(!metaClient.getIndexMetadata().get().getIndexDefinitions().isEmpty());
-    assertTrue(!metaClient.getIndexMetadata().get().getIndexDefinitions().containsKey(expectedIndexDefn.getIndexName()));
+    assertFalse(metaClient.getIndexForMetadataPartition(expectedIndexDefn.getIndexName()).isPresent());
   }
 
   private HoodieIndexDefinition getIndexDefinition(String indexName, String indexType, String sourceField) {
@@ -143,6 +148,7 @@ public class TestHoodieSparkIndex extends HoodieClientTestBase {
     return HoodieIndexDefinition.newBuilder()
         .withIndexName(fullIndexName)
         .withIndexType(indexType)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), fullIndexName))
         .withIndexFunction(indexFunc)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)

@@ -91,7 +91,7 @@ public class HiveSyncContext {
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(storageConf.unwrap());
     if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
-      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
+      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.get(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
     }
     hiveConf.addResource(hadoopConf);
     return new HiveSyncContext(props, hiveConf);
@@ -100,28 +100,28 @@ public class HiveSyncContext {
   @VisibleForTesting
   public static Properties buildSyncConfig(Configuration conf) {
     TypedProperties props = StreamerUtil.flinkConf2TypedProperties(conf);
-    props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), conf.getString(FlinkOptions.PATH));
-    props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), conf.getString(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
+    props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), conf.get(FlinkOptions.PATH));
+    props.setPropertyIfNonNull(META_SYNC_BASE_FILE_FORMAT.key(), conf.get(FlinkOptions.HIVE_SYNC_FILE_FORMAT));
     props.setPropertyIfNonNull(HIVE_USE_PRE_APACHE_INPUT_FORMAT.key(), "false");
-    props.setPropertyIfNonNull(META_SYNC_DATABASE_NAME.key(), conf.getString(FlinkOptions.HIVE_SYNC_DB));
-    props.setPropertyIfNonNull(META_SYNC_TABLE_NAME.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE));
-    props.setPropertyIfNonNull(HIVE_SYNC_MODE.key(), conf.getString(FlinkOptions.HIVE_SYNC_MODE));
-    props.setPropertyIfNonNull(HIVE_USER.key(), conf.getString(FlinkOptions.HIVE_SYNC_USERNAME));
-    props.setPropertyIfNonNull(HIVE_PASS.key(), conf.getString(FlinkOptions.HIVE_SYNC_PASSWORD));
-    props.setPropertyIfNonNull(HIVE_URL.key(), conf.getString(FlinkOptions.HIVE_SYNC_JDBC_URL));
-    props.setPropertyIfNonNull(METASTORE_URIS.key(), conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
-    props.setPropertyIfNonNull(HIVE_TABLE_PROPERTIES.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE_PROPERTIES));
-    props.setPropertyIfNonNull(HIVE_TABLE_SERDE_PROPERTIES.key(), conf.getString(FlinkOptions.HIVE_SYNC_TABLE_SERDE_PROPERTIES));
+    props.setPropertyIfNonNull(META_SYNC_DATABASE_NAME.key(), conf.get(FlinkOptions.HIVE_SYNC_DB));
+    props.setPropertyIfNonNull(META_SYNC_TABLE_NAME.key(), conf.get(FlinkOptions.HIVE_SYNC_TABLE));
+    props.setPropertyIfNonNull(HIVE_SYNC_MODE.key(), conf.get(FlinkOptions.HIVE_SYNC_MODE));
+    props.setPropertyIfNonNull(HIVE_USER.key(), conf.get(FlinkOptions.HIVE_SYNC_USERNAME));
+    props.setPropertyIfNonNull(HIVE_PASS.key(), conf.get(FlinkOptions.HIVE_SYNC_PASSWORD));
+    props.setPropertyIfNonNull(HIVE_URL.key(), conf.get(FlinkOptions.HIVE_SYNC_JDBC_URL));
+    props.setPropertyIfNonNull(METASTORE_URIS.key(), conf.get(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
+    props.setPropertyIfNonNull(HIVE_TABLE_PROPERTIES.key(), conf.get(FlinkOptions.HIVE_SYNC_TABLE_PROPERTIES));
+    props.setPropertyIfNonNull(HIVE_TABLE_SERDE_PROPERTIES.key(), conf.get(FlinkOptions.HIVE_SYNC_TABLE_SERDE_PROPERTIES));
     props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), String.join(",", FilePathUtils.extractHivePartitionFields(conf)));
-    props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME));
-    props.setPropertyIfNonNull(HIVE_USE_JDBC.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_USE_JDBC)));
-    props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(conf.getBoolean(FlinkOptions.METADATA_ENABLED)));
-    props.setPropertyIfNonNull(HIVE_IGNORE_EXCEPTIONS.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS)));
-    props.setPropertyIfNonNull(HIVE_SUPPORT_TIMESTAMP_TYPE.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP)));
-    props.setPropertyIfNonNull(HIVE_AUTO_CREATE_DATABASE.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_AUTO_CREATE_DB)));
-    props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), String.valueOf(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING)));
-    props.setPropertyIfNonNull(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), String.valueOf(conf.getBoolean(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX)));
-    props.setPropertyIfNonNull(HIVE_SYNC_TABLE_STRATEGY.key(), String.valueOf(conf.getString(FlinkOptions.HIVE_SYNC_TABLE_STRATEGY)));
+    props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), conf.get(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS_NAME));
+    props.setPropertyIfNonNull(HIVE_USE_JDBC.key(), String.valueOf(conf.get(FlinkOptions.HIVE_SYNC_USE_JDBC)));
+    props.setPropertyIfNonNull(META_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), String.valueOf(conf.get(FlinkOptions.METADATA_ENABLED)));
+    props.setPropertyIfNonNull(HIVE_IGNORE_EXCEPTIONS.key(), String.valueOf(conf.get(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS)));
+    props.setPropertyIfNonNull(HIVE_SUPPORT_TIMESTAMP_TYPE.key(), String.valueOf(conf.get(FlinkOptions.HIVE_SYNC_SUPPORT_TIMESTAMP)));
+    props.setPropertyIfNonNull(HIVE_AUTO_CREATE_DATABASE.key(), String.valueOf(conf.get(FlinkOptions.HIVE_SYNC_AUTO_CREATE_DB)));
+    props.setPropertyIfNonNull(META_SYNC_DECODE_PARTITION.key(), String.valueOf(conf.get(FlinkOptions.URL_ENCODE_PARTITIONING)));
+    props.setPropertyIfNonNull(HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE.key(), String.valueOf(conf.get(FlinkOptions.HIVE_SYNC_SKIP_RO_SUFFIX)));
+    props.setPropertyIfNonNull(HIVE_SYNC_TABLE_STRATEGY.key(), String.valueOf(conf.get(FlinkOptions.HIVE_SYNC_TABLE_STRATEGY)));
     return props;
   }
 }

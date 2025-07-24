@@ -46,6 +46,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -54,6 +55,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
@@ -189,6 +191,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSIN
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
 
@@ -208,6 +211,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_EXPRESSION_INDEX_PREFIX = "expr_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
+  public static final SerializableFunctionUnchecked<String, String> IDENTITY_ENCODING = key -> key;
 
   private static final Set<Schema.Type> SUPPORTED_TYPES_PARTITION_STATS = new HashSet<>(Arrays.asList(
       Schema.Type.INT, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING, Schema.Type.BOOLEAN, Schema.Type.NULL, Schema.Type.BYTES));
@@ -661,7 +665,7 @@ public class HoodieTableMetadataUtil {
       for (Map.Entry<String, HoodieIndexDefinition> entry : indexDefinitions.entrySet()) {
         String indexName = entry.getKey();
         HoodieIndexDefinition indexDefinition = entry.getValue();
-        if (MetadataPartitionType.EXPRESSION_INDEX.equals(MetadataPartitionType.fromPartitionPath(indexDefinition.getIndexName()))) {
+        if (MetadataPartitionType.EXPRESSION_INDEX.equals(fromPartitionPath(indexDefinition.getIndexName()))) {
           if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
             partitionToRecordsMap.put(indexName, convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism));
           } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
@@ -1336,14 +1340,28 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
-   * Map a record key to a file group in partition of interest.
    * <p>
-   * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
-   * implementation is not guaranteed by the JVM to be consistent across JVM versions and implementations.
+   * This method should be used when processing a batch of records that are guaranteed to have the same key format
+   * (either all containing the secondary index separator or none containing it).
+   * <p>
+   * For secondary index partitions (version >= 2), if the record keys contain the secondary index separator,
+   * the unescaped secondary key portion is used for hashing. Otherwise, the full record key is used.
    *
-   * @param recordKey record key for which the file group index is looked up for.
-   * @return An integer hash of the given string
+   * @param needsSecondaryKeyExtraction Whether to extract secondary key from composite keys (should be determined by caller)
+   *
+   * @return function that maps secondary keys to file group indices.
    */
+  public static SerializableBiFunction<String, Integer, Integer> getSecondaryKeyToFileGroupMappingFunction(boolean needsSecondaryKeyExtraction) {
+    if (needsSecondaryKeyExtraction) {
+      return (recordKey, numFileGroups) -> {
+        String secondaryKey = SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey);
+        return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
+      };
+    }
+    return HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
+  }
+
+  // change to configurable larger group
   public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
     int h = 0;
     for (int i = 0; i < recordKey.length(); ++i) {
@@ -2699,7 +2717,8 @@ public class HoodieTableMetadataUtil {
               .collect(Collectors.toSet());
           // Fetch metadata table COLUMN_STATS partition records for above files
           List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
-              .getRecordsByKeyPrefixes(generateKeyPrefixes(colsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+              .getRecordsByKeyPrefixes(
+                  HoodieListData.lazy(generateKeyPrefixes(colsToIndex, partitionName)), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false, IDENTITY_ENCODING)
               // schema and properties are ignored in getInsertValue, so simply pass as null
               .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
               .filter(Option::isPresent)
@@ -2727,12 +2746,25 @@ public class HoodieTableMetadataUtil {
   }
 
   public static HoodieIndexDefinition getHoodieIndexDefinition(String indexName, HoodieTableMetaClient metaClient) {
-    Option<HoodieIndexMetadata> expressionIndexMetadata = metaClient.getIndexMetadata();
-    if (expressionIndexMetadata.isPresent()) {
-      return expressionIndexMetadata.get().getIndexDefinitions().get(indexName);
-    } else {
-      throw new HoodieIndexException("Expression Index definition is not present");
+    return metaClient.getIndexForMetadataPartition(indexName)
+        .orElseThrow(() -> new HoodieIndexException("Expression Index definition is not present for index: " + indexName));
+  }
+
+  public static Option<HoodieIndexVersion> getIndexVersionOption(String metadataPartitionPath, HoodieTableMetaClient metaClient) {
+    Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
+    if (indexMetadata.isEmpty()) {
+      return Option.empty();
     }
+    Map<String, HoodieIndexDefinition> indexDefs = indexMetadata.get().getIndexDefinitions();
+    if (!indexDefs.containsKey(metadataPartitionPath)) {
+      return Option.empty();
+    }
+    return Option.of(indexDefs.get(metadataPartitionPath).getVersion());
+  }
+
+  public static HoodieIndexVersion existingIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {
+    return getIndexVersionOption(metadataPartitionPath, dataMetaClient).orElseGet(
+        () -> HoodieIndexVersion.getCurrentVersion(dataMetaClient.getTableConfig().getTableVersion(), metadataPartitionPath));
   }
 
   /**
@@ -2853,7 +2885,7 @@ public class HoodieTableMetadataUtil {
             //          - Then we merge records from base-files with the delta ones (coming as a result
             //          of the previous step)
             (oldFileInfo, newFileInfo) -> {
-              // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+              // NOTE: We can't assume that MT update records will be ordered the same way as actual
               //       FS operations (since they are not atomic), therefore MT record merging should be a
               //       _commutative_ & _associative_ operation (ie one that would work even in case records
               //       will get re-ordered), which is
@@ -2861,12 +2893,12 @@ public class HoodieTableMetadataUtil {
               //          take max of the old and new records)
               //          - Not possible for is-deleted flags*
               //
-              //       *However, we’re assuming that the case of concurrent write and deletion of the same
+              //       *However, we're assuming that the case of concurrent write and deletion of the same
               //       file is _impossible_ -- it would only be possible with concurrent upsert and
               //       rollback operation (affecting the same log-file), which is implausible, b/c either
               //       of the following have to be true:
-              //          - We’re appending to failed log-file (then the other writer is trying to
-              //          rollback it concurrently, before it’s own write)
+              //          - We're appending to failed log-file (then the other writer is trying to
+              //          rollback it concurrently, before it's own write)
               //          - Rollback (of completed instant) is running concurrently with append (meaning
               //          that restore is running concurrently with a write, which is also nut supported
               //          currently)
@@ -2953,6 +2985,7 @@ public class HoodieTableMetadataUtil {
       HoodieIndexDefinition.Builder indexDefinitionBuilder = HoodieIndexDefinition.newBuilder()
           .withIndexName(indexName)
           .withIndexType(indexType)
+          .withVersion(existingIndexVersionOrDefault(indexName, dataMetaClient))
           .withSourceFields(Collections.singletonList(indexedColumn));
       if (partitionNamePrefix.equals(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)) {
         indexDefinitionBuilder.withIndexOptions(metadataConfig.getExpressionIndexOptions());

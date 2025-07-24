@@ -90,9 +90,9 @@ public class TestColumnStatsIndex {
   void testTransposeColumnStatsIndex() throws Exception {
     final String path = tempFile.getAbsolutePath();
     Configuration conf = TestConfigurations.getDefaultConf(path);
-    conf.setBoolean(HoodieMetadataConfig.ENABLE.key(), true);
-    conf.setBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
-    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    conf.setString(HoodieMetadataConfig.ENABLE.key(), "true");
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 

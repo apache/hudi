@@ -305,7 +305,7 @@ object DefaultSource {
       } else {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      lazy val hudiOneTable = tableVersion >= HoodieTableVersion.EIGHT.versionCode()
+      lazy val hoodieTableSupportsCompletionTime = tableVersion >= HoodieTableVersion.EIGHT.versionCode()
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
         new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
       } else if (isCdcQuery) {
@@ -333,7 +333,7 @@ object DefaultSource {
               resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
             }
           case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            (hudiOneTable, useNewParquetFileFormat) match {
+            (hoodieTableSupportsCompletionTime, useNewParquetFileFormat) match {
               case (true, true) => new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable, RangeType.CLOSED_CLOSED).build()
               case (true, false) => new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.CLOSED_CLOSED)
@@ -359,7 +359,7 @@ object DefaultSource {
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            (hudiOneTable, useNewParquetFileFormat) match {
+            (hoodieTableSupportsCompletionTime, useNewParquetFileFormat) match {
               case (true, true) => new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
               case (true, false) => MergeOnReadIncrementalRelationV2(sqlContext, parameters, metaClient, userSchema)

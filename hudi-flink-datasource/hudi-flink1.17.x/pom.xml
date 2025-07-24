@@ -75,6 +75,12 @@
         </dependency>
         <dependency>
             <groupId>org.apache.flink</groupId>
+            <artifactId>${flink.connector.kafka.artifactId}</artifactId>
+            <version>${flink.connector.kafka.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
             <artifactId>flink-shaded-guava</artifactId>
             <version>30.1.1-jre-14.0</version>
             <scope>provided</scope>
