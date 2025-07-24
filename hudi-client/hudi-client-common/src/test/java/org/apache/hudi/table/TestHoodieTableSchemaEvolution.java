@@ -245,8 +245,6 @@ public class TestHoodieTableSchemaEvolution {
   @Test
   public void testFixedTypeEvolution() {
     // Test fixed type size changes
-    
-    // Fixed size increase
     String fixed8Schema = "{"
         + "\"type\": \"record\","
         + "\"name\": \"test\","

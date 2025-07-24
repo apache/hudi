@@ -21,7 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.avro.AvroSchemaCompatibility;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -117,6 +116,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -1017,9 +1017,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       Schema.Field writerField = AvroSchemaCompatibility.lookupWriterField(writerSchema, tableField);
       
       if (writerField != null && !tableField.schema().equals(writerField.schema())) {
-        // Check if this is just making the field nullable, which is a backward-compatible change
-        if (AvroSchemaEvolutionUtils.isNullableEvolution(tableField.schema(), writerField.schema())) {
-          // This is allowed - making a field nullable is backward-compatible
+        // Check if this is just making the field nullable/non-nullable, which is safe from SI perspective
+        if (resolveNullableSchema(tableField.schema()).equals(resolveNullableSchema(writerField.schema()))) {
           continue;
         }
         
