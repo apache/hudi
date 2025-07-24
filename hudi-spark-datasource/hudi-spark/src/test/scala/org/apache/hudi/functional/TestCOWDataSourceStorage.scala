@@ -32,8 +32,9 @@ import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationExcepti
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, SparkClientFunctionalTestHarness}
-import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, read}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.apache.spark.sql.functions.{col, lit}
