@@ -62,11 +62,11 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
 
     if (enablePolaris) {
       // In production the class should be org.apache.polaris.spark.SparkCatalog
-      // (which is the default value of the config hoodie.datasource.polaris.catalog.class)
+      // (which is the default value of the config hoodie.spark.polaris.catalog.class)
       // However, in testing, verify if config works by using mock catalog
       val testPolarisCatalogClass = "org.apache.spark.sql.hudi.catalog.MockPolarisSparkCatalog"
       sparkBuilder.config("spark.sql.catalog.polaris_catalog", testPolarisCatalogClass)
-      sparkBuilder.config("hoodie.datasource.polaris.catalog.class", testPolarisCatalogClass)
+      sparkBuilder.config("hoodie.spark.polaris.catalog.class", testPolarisCatalogClass)
     }
 
     // Create SparkSession first so it becomes the active session
