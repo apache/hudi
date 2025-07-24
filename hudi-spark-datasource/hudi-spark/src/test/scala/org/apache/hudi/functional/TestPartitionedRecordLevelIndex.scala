@@ -20,7 +20,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, UPSERT_OPERATION_OPT_VAL}
+import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -32,6 +32,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.TestPartitionedRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
 import org.apache.hudi.index.HoodieIndex.IndexType.PARTITIONED_RECORD_INDEX
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
@@ -39,10 +40,10 @@ import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.functions.lit
-import org.junit.jupiter.api.{Disabled, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 
 import java.util.stream.Collectors
 
@@ -58,7 +59,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     var newRecordKeys: java.util.List[String] = null
   }
 
-  def testPartitionedRecordLevelIndex(tableType: HoodieTableType, holder: testPartitionedRecordLevelIndexHolder): Unit = {
+  def testPartitionedRecordLevelIndex(tableType: HoodieTableType, streamingWriteEnabled: Boolean, holder: testPartitionedRecordLevelIndexHolder): Unit = {
     val dataGen = new HoodieTestDataGenerator();
     val inserts = dataGen.generateInserts("001", 5)
     val latestBatch = recordsToStrings(inserts).asScala.toSeq
@@ -71,7 +72,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       PRECOMBINE_FIELD.key -> "timestamp",
       HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()-> "false",
       HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key() -> "true",
-      HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> "false",
+      HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
       HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
       HoodieIndexConfig.INDEX_TYPE.key() -> PARTITIONED_RECORD_INDEX.name())
     holder.options = options
@@ -196,10 +197,10 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testPartitionedRecordLevelIndexRollback(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexRollback(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
     val holder = new testPartitionedRecordLevelIndexHolder
-    testPartitionedRecordLevelIndex(tableType, holder)
+    testPartitionedRecordLevelIndex(testCase.tableType, testCase.streamingWriteEnabled, holder)
     val writeConfig = getWriteConfig(holder.options)
     new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
       .rollback(metaClient.getActiveTimeline.lastInstant().get().requestedTime())
@@ -212,10 +213,11 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     }
   }
 
-  @Test
-  def testPartitionedRecordLevelIndexCompact(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionedRecordLevelIndexCompact(streamingWriteEnabled: Boolean): Unit = {
     val holder = new testPartitionedRecordLevelIndexHolder
-    testPartitionedRecordLevelIndex(HoodieTableType.MERGE_ON_READ, holder)
+    testPartitionedRecordLevelIndex(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled, holder)
     assertEquals("deltacommit", metaClient.getActiveTimeline.lastInstant().get().getAction)
     val writeConfig = getWriteConfig(holder.options)
     var metadata = metadataWriter(writeConfig).getTableMetadata
@@ -231,11 +233,11 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testPartitionedRecordLevelIndexCluster(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexCluster(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
     val holder = new testPartitionedRecordLevelIndexHolder
-    testPartitionedRecordLevelIndex(tableType, holder)
-    assertEquals(if (tableType.equals(HoodieTableType.MERGE_ON_READ)) "deltacommit" else "commit",
+    testPartitionedRecordLevelIndex(testCase.tableType, testCase.streamingWriteEnabled, holder)
+    assertEquals(if (testCase.tableType.equals(HoodieTableType.MERGE_ON_READ)) "deltacommit" else "commit",
       metaClient.getActiveTimeline.lastInstant().get().getAction)
     val writeConfig = getWriteConfig(holder.options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> HoodieTestDataGenerator.AVRO_SCHEMA.toString))
     var metadata = metadataWriter(writeConfig).getTableMetadata
@@ -302,37 +304,31 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testPartitionedRecordLevelIndexInitializationBasic(tableType: HoodieTableType): Unit = {
-    testPartitionedRecordLevelIndexInitialization(tableType, failWrite = false, failAndDoRollback = false, compact = false, cluster = false)
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexInitializationBasic(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
+    testPartitionedRecordLevelIndexInitialization(testCase.tableType, testCase.streamingWriteEnabled, failAndDoRollback = false, compact = false, cluster = false)
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  @Disabled
-  def testPartitionedRecordLevelIndexInitializationFailedWrite(tableType: HoodieTableType): Unit = {
-    testPartitionedRecordLevelIndexInitialization(tableType, failWrite = true, failAndDoRollback = false, compact = false, cluster = false)
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexInitializationRollback(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
+    testPartitionedRecordLevelIndexInitialization(testCase.tableType, testCase.streamingWriteEnabled, failAndDoRollback = true, compact = false, cluster = false)
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testPartitionedRecordLevelIndexInitializationRollback(tableType: HoodieTableType): Unit = {
-    testPartitionedRecordLevelIndexInitialization(tableType, failWrite = false, failAndDoRollback = true, compact = false, cluster = false)
-  }
-
-  @Test
-  def testPartitionedRecordLevelIndexInitializationCompact(): Unit = {
-    testPartitionedRecordLevelIndexInitialization(HoodieTableType.MERGE_ON_READ, failWrite = false, failAndDoRollback = false, compact = true, cluster = false)
+  @ValueSource(booleans = Array(true, false))
+  def testPartitionedRecordLevelIndexInitializationCompact(streamingWriteEnabled: Boolean): Unit = {
+    testPartitionedRecordLevelIndexInitialization(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled, failAndDoRollback = false, compact = true, cluster = false)
   }
 
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testPartitionedRecordLevelIndexInitializationCluster(tableType: HoodieTableType): Unit = {
-    testPartitionedRecordLevelIndexInitialization(tableType, failWrite = false, failAndDoRollback = false, compact = false, cluster = true)
+  @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
+  def testPartitionedRecordLevelIndexInitializationCluster(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
+    testPartitionedRecordLevelIndexInitialization(testCase.tableType, testCase.streamingWriteEnabled, failAndDoRollback = false, compact = false, cluster = true)
   }
 
   def testPartitionedRecordLevelIndexInitialization(tableType: HoodieTableType,
-                                                    failWrite: Boolean,
+                                                    streamingWriteEnabled: Boolean,
                                                     failAndDoRollback: Boolean,
                                                     compact: Boolean,
                                                     cluster: Boolean): Unit = {
@@ -349,7 +345,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       PRECOMBINE_FIELD.key -> "timestamp",
       HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()-> "false",
       HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key() -> "false",
-      HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> "false",
+      HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
       HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
       HoodieIndexConfig.INDEX_TYPE.key() -> PARTITIONED_RECORD_INDEX.name())
     insertDf.write.format("org.apache.hudi")
@@ -373,7 +369,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
     val tableSchemaResolver = new TableSchemaResolver(metaClient)
     val latestTableSchemaFromCommitMetadata = tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false)
 
-    if (failWrite || failAndDoRollback) {
+    if (failAndDoRollback) {
       val updatesToFail =  dataGen.generateUniqueUpdates("003", 3)
       val batchToFail = recordsToStrings(updatesToFail).asScala.toSeq
       val batchToFailDf = spark.read.json(spark.sparkContext.parallelize(batchToFail, 1))
@@ -390,15 +386,14 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, metaClient.getInstantFileNameGenerator.getFileName(lastInstant))))
       assertEquals(10, spark.read.format("hudi").load(basePath).count())
 
-      if (failAndDoRollback) {
-        val writeConfig = HoodieWriteConfig.newBuilder()
-          .withProps(TypedProperties.fromMap(JavaConverters
-            .mapAsJavaMapConverter(options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestTableSchemaFromCommitMetadata.get().toString)).asJava))
-          .withPath(basePath)
-          .build()
-        new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-          .rollback(lastInstant.requestedTime())
-      }
+      // rollback
+      val writeConfig = HoodieWriteConfig.newBuilder()
+        .withProps(TypedProperties.fromMap(JavaConverters
+          .mapAsJavaMapConverter(options ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestTableSchemaFromCommitMetadata.get().toString)).asJava))
+        .withPath(basePath)
+        .build()
+      new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+        .rollback(lastInstant.requestedTime())
     }
 
     if (compact) {
@@ -436,24 +431,31 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       .build()
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val recordKeys = inserts.asScala.map(i => i.getRecordKey).asJava.stream().collect(Collectors.toList())
-    try {
-      val partition1Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition1"))
-      assertEquals(5, partition1Locations.size)
-      val partition2Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition2"))
-      assertEquals(5, partition2Locations.size)
-      val df = spark.read.format("hudi").load(basePath).collect()
-      validateDFWithLocations(df, partition1Locations, "partition1")
-      validateDFWithLocations(df, partition2Locations, "partition2")
-      if (failWrite) {
-        fail("MDT should not initialize")
-      }
-    } catch {
-      case e: IllegalStateException => assertEquals("Record index is not initialized in MDT",  e.getMessage)
-    }
+    val partition1Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition1"))
+    assertEquals(5, partition1Locations.size)
+    val partition2Locations = readRecordIndex(metadata, recordKeys, HOption.of("partition2"))
+    assertEquals(5, partition2Locations.size)
+    val df = spark.read.format("hudi").load(basePath).collect()
+    validateDFWithLocations(df, partition1Locations, "partition1")
+    validateDFWithLocations(df, partition2Locations, "partition2")
   }
 
   def readRecordIndex(metadata: HoodieBackedTableMetadata, recordKeys: java.util.List[String], dataTablePartition: HOption[String]): Map[String, HoodieRecordGlobalLocation] = {
     metadata.readRecordIndex(HoodieListData.eager(recordKeys), dataTablePartition)
       .collectAsList().asScala.map(p => p.getKey -> p.getValue).toMap
+  }
+}
+
+object TestPartitionedRecordLevelIndex {
+
+  case class TestPartitionedRecordLevelIndexTestCase(tableType: HoodieTableType, streamingWriteEnabled: Boolean)
+
+  def testArgsForPartitionedRecordLevelIndex: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      Arguments.arguments(TestPartitionedRecordLevelIndexTestCase(HoodieTableType.COPY_ON_WRITE, streamingWriteEnabled = true)),
+      Arguments.arguments(TestPartitionedRecordLevelIndexTestCase(HoodieTableType.COPY_ON_WRITE, streamingWriteEnabled = false)),
+      Arguments.arguments(TestPartitionedRecordLevelIndexTestCase(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled = true)),
+      Arguments.arguments(TestPartitionedRecordLevelIndexTestCase(HoodieTableType.MERGE_ON_READ, streamingWriteEnabled = false))
+    )
   }
 }

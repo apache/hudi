@@ -36,6 +36,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -1225,6 +1226,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       return engineContext.emptyHoodieData();
     }
 
+    maybeInitializeNewFileGroupsForPartitionedRLI(writeStatus, instantTime);
     HoodieData<HoodieRecord> untaggedRecords = writeStatus.flatMap(
         new MetadataIndexGenerator.WriteStatusBasedMetadataIndexMapper(mdtPartitionsToTag, dataWriteConfig));
 
@@ -1341,24 +1343,15 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
 
     // For each partition, determine the key format once and create the appropriate mapping function
-    Map<String, SerializableBiFunction<String, Integer, Integer>> indexToMappingFunctions = new HashMap<>();
+    Map<String, SerializableFunction<HoodieRecord, HoodieRecord>> indexToMappingFunctions = new HashMap<>();
     partitionToLatestFileSlices.keySet().forEach(mdtPartition -> {
-      HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(mdtPartition, dataMetaClient);
       // For streaming writes, we can determine the key format based on partition type
       // Secondary index partitions will always have composite keys, others will have simple keys
-      indexToMappingFunctions.put(mdtPartition, MetadataPartitionType.fromPartitionPath(mdtPartition).getFileGroupMappingFunction(indexVersion));
+      indexToMappingFunctions.put(mdtPartition, getRecordTagger(mdtPartition, partitionToLatestFileSlices.get(mdtPartition)));
     });
 
-    HoodieData<HoodieRecord> taggedRecords = untaggedRecords.map(mdtRecord -> {
-      String mdtPartition = mdtRecord.getPartitionPath();
-      List<FileSlice> latestFileSlices = partitionToLatestFileSlices.get(mdtPartition);
-      SerializableBiFunction<String, Integer, Integer> mappingFunction = indexToMappingFunctions.get(mdtPartition);
-      FileSlice slice = latestFileSlices.get(mappingFunction.apply(mdtRecord.getRecordKey(), latestFileSlices.size()));
-      mdtRecord.unseal();
-      mdtRecord.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-      mdtRecord.seal();
-      return mdtRecord;
-    });
+    HoodieData<HoodieRecord> taggedRecords = untaggedRecords.map(mdtRecord ->
+        indexToMappingFunctions.get(mdtRecord.getPartitionPath()).apply(mdtRecord));
     return Pair.of(updatedFileGroupIds, taggedRecords);
   }
 
@@ -1385,24 +1378,35 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    */
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieCommitMetadata commitMetadata, String instantTime) {
     if (dataWriteConfig.isPartitionedRecordIndexEnabled()) {
-      try {
-        Set<String> partitionsFromFilesIndex = new HashSet<>(metadata.getAllPartitionPaths());
-        Set<String> partitionsTouchedByInflightCommit = commitMetadata.getPartitionToWriteStats().keySet();
-        if (!partitionsFromFilesIndex.containsAll(partitionsTouchedByInflightCommit)) {
-          for (String partitionToWrite : partitionsTouchedByInflightCommit) {
-            if (!partitionsFromFilesIndex.contains(partitionToWrite)) {
-              // Always use the min file group count!
-              initializeFileGroups(dataMetaClient, RECORD_INDEX, instantTime,
-                  dataWriteConfig.getPartitionedRecordIndexMinFileGroupCount(),
-                  RECORD_INDEX.getPartitionPath(), Option.of(partitionToWrite), false);
-            }
+      Set<String> partitionsTouchedByInflightCommit = commitMetadata.getPartitionToWriteStats().keySet();
+      initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
+    }
+  }
+
+  private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieData<WriteStatus> writeStatus, String instantTime) {
+    if (dataWriteConfig.isPartitionedRecordIndexEnabled()) {
+      Set<String> partitionsTouchedByInflightCommit = new HashSet<>(writeStatus.map(WriteStatus::getPartitionPath).collectAsList());
+      initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
+    }
+  }
+
+  private void initializeNewFileGroupsForPartitionedRLIHelper(Set<String> partitionsTouchedByInflightCommit, String instantTime) {
+    try {
+      Set<String> partitionsFromFilesIndex = new HashSet<>(metadata.getAllPartitionPaths());
+      if (!partitionsFromFilesIndex.containsAll(partitionsTouchedByInflightCommit)) {
+        for (String partitionToWrite : partitionsTouchedByInflightCommit) {
+          if (!partitionsFromFilesIndex.contains(partitionToWrite)) {
+            // Always use the min file group count!
+            initializeFileGroups(dataMetaClient, RECORD_INDEX, instantTime,
+                dataWriteConfig.getPartitionedRecordIndexMinFileGroupCount(),
+                RECORD_INDEX.getPartitionPath(), Option.of(partitionToWrite), false);
           }
-          initMetadataReader();
         }
-      } catch (IOException e) {
-        LOG.error("Failed to initialize newly added partitions for the partitioned record index", e);
-        throw new HoodieMetadataException("Failed to initialize newly added partitions for the partitioned record index", e);
+        initMetadataReader();
       }
+    } catch (IOException e) {
+      LOG.error("Failed to initialize newly added partitions for the partitioned record index", e);
+      throw new HoodieMetadataException("Failed to initialize newly added partitions for the partitioned record index", e);
     }
   }
 
@@ -1815,32 +1819,30 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionPath);
         }
         hoodieFileGroupIdList.addAll(fileSlices.stream().map(fileSlice -> new HoodieFileGroupId(partitionPath, fileSlice.getFileId())).collect(Collectors.toList()));
-        allPartitionRecords = allPartitionRecords.union(
-            isPartitionedRLI
-                ? tagRecordsPartitionedRLI(records, fileSlices)
-                : tagRecords(records, entry.getKey(), fileSlices)
-        );
+        SerializableFunction<HoodieRecord, HoodieRecord> recordTagger = getRecordTagger(partitionPath, fileSlices);
+        allPartitionRecords = allPartitionRecords.union(records.map(recordTagger));
       }
       return Pair.of(allPartitionRecords, hoodieFileGroupIdList);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
     }
   }
 
-  private HoodieData<HoodieRecord> tagRecords(HoodieData<HoodieRecord> records, String partitionPath, List<FileSlice> fileSlices) {
+  private SerializableFunction<HoodieRecord, HoodieRecord> getRecordTagger(String partitionPath, List<FileSlice> fileSlices) {
+    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionPath, dataMetaClient);
+    MetadataPartitionType partitionType = MetadataPartitionType.fromPartitionPath(partitionPath);
+    // Determine key format once per partition to avoid repeated checks
+    SerializableBiFunction<String, Integer, Integer> mappingFunction = partitionType.getFileGroupMappingFunction(indexVersion);
+    if (partitionType == RECORD_INDEX && dataWriteConfig.isPartitionedRecordIndexEnabled()) {
+      return getRecordTaggerPartitionedRLI(fileSlices, mappingFunction);
+    }
     final int fileGroupCount = fileSlices.size();
     ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionPath));
-    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionPath, dataMetaClient);
-
-    // Determine key format once per partition to avoid repeated checks
-    SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(partitionPath).getFileGroupMappingFunction(indexVersion);
-    return records.map(r -> {
+    return r -> {
       FileSlice slice = fileSlices.get(mappingFunction.apply(r.getRecordKey(), fileGroupCount));
       r.unseal();
       r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
       r.seal();
       return r;
-    });
+    };
   }
 
   /**
@@ -1848,17 +1850,14 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * the number of filegroups can also vary by partition. Therefore, we need to lookup and group the filegroups by partition to understand the number
    * of indexes we can hash into
    *
-   * @param records incoming records
    * @param fileSlices latest fileslices in the mdt rli partition
    * @return the records with the correct location set
    */
-  private HoodieData<HoodieRecord> tagRecordsPartitionedRLI(HoodieData<HoodieRecord> records, List<FileSlice> fileSlices) throws IOException {
+  private SerializableFunction<HoodieRecord, HoodieRecord> getRecordTaggerPartitionedRLI(List<FileSlice> fileSlices, SerializableBiFunction<String, Integer, Integer> mappingFunction) {
     final Map<String, List<HoodieRecordLocation>> fileSlicesPerHudiPartition = new HashMap<>();
     fileSlices.forEach(s -> fileSlicesPerHudiPartition.computeIfAbsent(HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(s.getFileId()), x -> new ArrayList<>())
         .add(new HoodieRecordLocation(s.getBaseInstantTime(), s.getFileId())));
-    HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(RECORD_INDEX.getPartitionPath(), dataMetaClient);
-    SerializableBiFunction<String, Integer, Integer> mappingFunction = MetadataPartitionType.fromPartitionPath(RECORD_INDEX.getPartitionPath()).getFileGroupMappingFunction(indexVersion);
-    return records.map(r -> {
+    return r -> {
       String partitionPath;
       if (r.getData() instanceof EmptyHoodieRecordPayloadWithPartition) {
         partitionPath = ((EmptyHoodieRecordPayloadWithPartition) r.getData()).getPartitionPath();
@@ -1871,7 +1870,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       r.setCurrentLocation(recordLocation);
       r.seal();
       return r;
-    });
+    };
   }
 
   /**
