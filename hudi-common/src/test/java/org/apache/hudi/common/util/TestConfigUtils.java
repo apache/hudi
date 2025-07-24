@@ -36,8 +36,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestConfigUtils {
   public static final ConfigProperty<String> TEST_BOOLEAN_CONFIG_PROPERTY = ConfigProperty
@@ -121,5 +123,207 @@ public class TestConfigUtils {
       return ConfigUtils.toMap(config);
     }
     return ConfigUtils.toMap(config, separator.get());
+  }
+
+  @Test
+  void testParseValidProperties() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".Ki", "Vi");
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(1, result.size());
+    assertEquals("Vi", result.get("Ki"));
+  }
+
+  @Test
+  void testMissingKeyReturnsEmptyMap() {
+    TypedProperties props = new TypedProperties(); // no property set
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testMultipleValidProperties() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".key1", "value1");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".key2", "value2");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".key3", "value3");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(3, result.size());
+    assertEquals("value1", result.get("key1"));
+    assertEquals("value2", result.get("key2"));
+    assertEquals("value3", result.get("key3"));
+  }
+
+  @Test
+  void testPropertiesWithDifferentPrefixes() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".mergeKey", "mergeValue");
+    props.setProperty("other.prefix.key", "otherValue");
+    props.setProperty("hoodie.merge.custom.property.prefix", "directPrefixValue");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(1, result.size());
+    assertEquals("mergeValue", result.get("mergeKey"));
+  }
+
+  @Test
+  void testPropertiesWithEmptyValues() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".emptyKey", "");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(1, result.size());
+    assertEquals("", result.get("emptyKey"));
+  }
+
+  @Test
+  void testPropertiesWithSpecialCharacters() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".key.with.dots", "value.with.dots");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".key_with_underscores", "value_with_underscores");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".key-with-dashes", "value-with-dashes");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(3, result.size());
+    assertEquals("value.with.dots", result.get("key.with.dots"));
+    assertEquals("value_with_underscores", result.get("key_with_underscores"));
+    assertEquals("value-with-dashes", result.get("key-with-dashes"));
+  }
+
+  @Test
+  void testPropertiesWithNumericValues() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".intKey", "123");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".doubleKey", "123.45");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".booleanKey", "true");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(3, result.size());
+    assertEquals("123", result.get("intKey"));
+    assertEquals("123.45", result.get("doubleKey"));
+    assertEquals("true", result.get("booleanKey"));
+  }
+
+  @Test
+  void testPropertiesWithWhitespace() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".  spacedKey  ", "  spacedValue  ");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(1, result.size());
+    assertEquals("spacedValue", result.get("spacedKey")); // Values should be trimmed
+  }
+
+  @Test
+  void testPropertiesWithWhitespaceInKeysAndValues() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".  keyWithSpaces  ", "  valueWithSpaces  ");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".keyWithoutSpaces", "valueWithoutSpaces");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(2, result.size());
+    assertEquals("valueWithSpaces", result.get("keyWithSpaces")); // Both key and value should be trimmed
+    assertEquals("valueWithoutSpaces", result.get("keyWithoutSpaces"));
+  }
+
+  @Test
+  void testPropertiesWithExactPrefixMatch() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key(), "exactPrefixValue");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(0, result.size()); // Exact prefix match should not be included as it has no suffix
+  }
+
+  @Test
+  void testPropertiesWithPrefixFollowedByDot() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".", "valueAfterDot");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(0, result.size()); // Empty key after trimming should be filtered out
+  }
+
+  @Test
+  void testPropertiesWithPrefixWithoutDot() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + "suffix", "valueWithoutDot");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(0, result.size()); // Should not match as it doesn't have the expected format
+  }
+
+  @Test
+  void testPropertiesWithPrefixFollowedBySpace() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + " key", "valueWithSpace");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(0, result.size()); // Should not match as it doesn't have the expected format
+  }
+
+  @Test
+  void testPropertiesWithWhitespaceOnlyKeys() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".   ", "valueForWhitespaceKey");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".  \t  \n  ", "valueForTabNewlineKey");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(0, result.size()); // Keys with only whitespace should be filtered out
+  }
+
+  @Test
+  void testPropertiesWithNullKeys() {
+    TypedProperties props = new TypedProperties();
+    // Note: TypedProperties doesn't allow null keys, but we test the edge case
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".", "valueForNullKey");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(0, result.size()); // Empty key should be filtered out
+  }
+
+  @Test
+  void testPropertiesWithMixedValidAndInvalidKeys() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".validKey", "validValue");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".   ", "invalidValue1");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".", "invalidValue2");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".anotherValidKey", "anotherValidValue");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + "invalidSuffix", "invalidValue3");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(2, result.size()); // Only valid keys should be included
+    assertEquals("validValue", result.get("validKey"));
+    assertEquals("anotherValidValue", result.get("anotherValidKey"));
+  }
+
+  @Test
+  void testPropertiesWithCaseSensitivity() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".Key1", "Value1");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".key1", "value1");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(2, result.size());
+    assertEquals("Value1", result.get("Key1"));
+    assertEquals("value1", result.get("key1"));
+  }
+
+  @Test
+  void testPropertiesWithLeadingAndTrailingWhitespace() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + ".  leadingSpaceKey", "trailingSpaceValue  ");
+    props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX.key() + "trailingSpaceKey  ", "  leadingSpaceValue");
+
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertEquals(1, result.size()); // Only the first one should match due to proper format
+    assertEquals("trailingSpaceValue", result.get("leadingSpaceKey")); // Trimmed
+  }
+
+  @Test
+  void testNullProperties() {
+    Map<String, String> result = ConfigUtils.extractWithPrefix(null, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    assertTrue(result.isEmpty());
   }
 }
