@@ -112,7 +112,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
          |create table $tableName (
          |  id string,
          |  name string,
-         |  price double,
+         |  price int,
          |  ts long
          |) using hudi
          | options (
@@ -157,9 +157,9 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Secondary index is created by default for non record key column when index type is not specified
     testData = Seq(
-      Seq("b1", "b1", 10.0, 1000),
-      Seq("b2", "b2", 20.0, 1000),
-      Seq("$", "$", 30.0, 1000)
+      Seq("b1", "b1", 10, 1000),
+      Seq("b2", "b2", 20, 1000),
+      Seq("$", "$", 30, 1000)
     )
 
     // Create secondary indexes on name and price columns
@@ -316,8 +316,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 6: Test with different secondary index (price column)
     val priceIndexName = "secondary_index_idx_price"
-    // TODO[HUDI-9566]: We must give the exact string that a double number will generate. If we give "10"/"10.00" it will fail.
-    val priceKeys = HoodieListData.eager(List("10.0", "20.0", "30.0").asJava)
+    val priceKeys = HoodieListData.eager(List("10", "20", "30").asJava)
     val priceResult = hoodieBackedTableMetadata.readSecondaryIndexLocations(priceKeys, priceIndexName).collectAsList().asScala
     assert(priceResult.size == 3, s"Should return 3 results for price secondary keys in table version ${getTableVersion}")
 
