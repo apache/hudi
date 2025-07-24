@@ -901,3 +901,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 [ENG-29993][HUDI-9604] Fix batch creation during send acknowledgement flow in GcsEventsSource (#1442)
 [ENG-30015][HUDI-9612] Update schema resolver to inspect files with inserts/updates (#1451)
 [AUDIT-1071]: Changelog for release-v1.149.0 (#1455)
+
+--- [2025-07-24 16:04:09] [release-v1.153.0] ---
+[ENG-30281][HUDI-9633] Implement ability to filter configs based on custom prefixes before passing down to the kafka consumer (#1457)
+[AUDIT-1071]: Changelog for release-v1.152.0 (#1456)
