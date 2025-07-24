@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -162,7 +163,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   @VisibleForTesting
-  Schema generateRequiredSchema() {
+  public Schema generateRequiredSchema() {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {

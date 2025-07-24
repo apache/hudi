@@ -36,7 +36,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, KeyBasedFileGroupRecordBuffer, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
 import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, Option}
 import org.apache.hudi.common.util.collection.{ExternalSpillableMap, ImmutablePair}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -46,6 +46,7 @@ import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow

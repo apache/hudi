@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.table.read.buffer.FileGroupRecordBuffer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 

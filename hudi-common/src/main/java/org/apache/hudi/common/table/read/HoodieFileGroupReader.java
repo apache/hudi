@@ -31,7 +31,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.table.read.buffer.FileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferInitializer;
+import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -54,7 +56,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -114,9 +115,9 @@ public class HoodieFileGroupReader<T> implements Closeable {
     this.storage = storage;
     this.readerParameters = readerParameters;
     this.inputSplit = inputSplit;
-    readerContext.setHasLogFiles(!this.inputSplit.logFiles.isEmpty());
-    readerContext.setPartitionPath(inputSplit.partitionPath);
-    if (readerContext.getHasLogFiles() && inputSplit.start != 0) {
+    readerContext.setHasLogFiles(!this.inputSplit.getLogFiles().isEmpty());
+    readerContext.setPartitionPath(inputSplit.getPartitionPath());
+    if (readerContext.getHasLogFiles() && inputSplit.getStart() != 0) {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
     }
     this.props = props;
@@ -127,7 +128,7 @@ public class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setLatestCommitTime(latestCommitTime);
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     readerContext.setShouldMergeUseRecordPosition(readerParameters.isShouldUseRecordPosition() && !isSkipMerge && readerContext.getHasLogFiles());
-    readerContext.setHasBootstrapBaseFile(inputSplit.baseFileOption.flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
+    readerContext.setHasBootstrapBaseFile(inputSplit.getBaseFileOption().flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
@@ -150,7 +151,7 @@ public class HoodieFileGroupReader<T> implements Closeable {
    */
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
-    if (inputSplit.logFiles.isEmpty()) {
+    if (inputSplit.getLogFiles().isEmpty()) {
       this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
     } else {
       this.baseFileIterator = iter;
@@ -163,11 +164,11 @@ public class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private ClosableIterator<T> makeBaseFileIterator() throws IOException {
-    if (!inputSplit.baseFileOption.isPresent()) {
+    if (!inputSplit.getBaseFileOption().isPresent()) {
       return new EmptyIterator<>();
     }
 
-    HoodieBaseFile baseFile = inputSplit.baseFileOption.get();
+    HoodieBaseFile baseFile = inputSplit.getBaseFileOption().get();
     if (baseFile.getBootstrapBaseFile().isPresent()) {
       return makeBootstrapBaseFileIterator(baseFile);
     }
@@ -176,12 +177,12 @@ public class HoodieFileGroupReader<T> implements Closeable {
     final ClosableIterator<T> recordIterator;
     if (baseFileStoragePathInfo != null) {
       recordIterator = readerContext.getFileRecordIterator(
-          baseFileStoragePathInfo, inputSplit.start, inputSplit.length,
+          baseFileStoragePathInfo, inputSplit.getStart(), inputSplit.getLength(),
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     } else {
       recordIterator = readerContext.getFileRecordIterator(
-          baseFile.getStoragePath(), inputSplit.start, inputSplit.length,
+          baseFile.getStoragePath(), inputSplit.getStart(), inputSplit.getLength(),
           readerContext.getSchemaHandler().getTableSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
@@ -205,11 +206,11 @@ public class HoodieFileGroupReader<T> implements Closeable {
     } else if (!skeletonFileIterator.isPresent()) {
       return dataFileIterator.get().getLeft();
     } else {
-      if (inputSplit.start != 0) {
+      if (inputSplit.getStart() != 0) {
         throw new IllegalArgumentException("Filegroup reader is doing bootstrap merge but we are not reading from the start of the base file");
       }
       PartitionPathParser partitionPathParser = new PartitionPathParser();
-      Object[] partitionValues = partitionPathParser.getPartitionFieldVals(partitionPathFields, inputSplit.partitionPath, readerContext.getSchemaHandler().getTableSchema());
+      Object[] partitionValues = partitionPathParser.getPartitionFieldVals(partitionPathFields, inputSplit.getPartitionPath(), readerContext.getSchemaHandler().getTableSchema());
       // filter out the partition values that are not required by the data schema
       List<Pair<String, Object>> partitionPathFieldsAndValues = partitionPathFields.map(partitionFields -> {
         Schema dataSchema = dataFileIterator.get().getRight();
@@ -532,89 +533,4 @@ public class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  static class InputSplit {
-    private final Option<HoodieBaseFile> baseFileOption;
-    private final List<HoodieLogFile> logFiles;
-    private final String partitionPath;
-    // Byte offset to start reading from the base file
-    private final long start;
-    // Length of bytes to read from the base file
-    private final long length;
-
-    InputSplit(Option<HoodieBaseFile> baseFileOption, Stream<HoodieLogFile> logFiles, String partitionPath, long start, long length) {
-      this.baseFileOption = baseFileOption;
-      this.logFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator())
-          .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-          .collect(Collectors.toList());
-      this.partitionPath = partitionPath;
-      this.start = start;
-      this.length = length;
-    }
-
-    static InputSplit fromFileSlice(FileSlice fileSlice, long start, long length) {
-      return new InputSplit(fileSlice.getBaseFile(), fileSlice.getLogFiles(), fileSlice.getPartitionPath(),
-          start, length);
-    }
-
-    public Option<HoodieBaseFile> getBaseFileOption() {
-      return baseFileOption;
-    }
-
-    public List<HoodieLogFile> getLogFiles() {
-      return logFiles;
-    }
-
-    public String getPartitionPath() {
-      return partitionPath;
-    }
-
-    public long getStart() {
-      return start;
-    }
-
-    public long getLength() {
-      return length;
-    }
-  }
-
-  static class ReaderParameters {
-    private final boolean shouldUseRecordPosition;
-    private final boolean emitDelete;
-    private final boolean sortOutput;
-    // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
-    // The inflight instants need to be considered while updating RLI records. RLI needs to fetch the revived
-    // and deleted keys from the log files written as part of active data commit. During the RLI update,
-    // the allowInflightInstants flag would need to be set to true. This would ensure the HoodieMergedLogRecordReader
-    // considers the log records which are inflight.
-    private final boolean allowInflightInstants;
-    private final boolean enableOptimizedLogBlockScan;
-
-    public ReaderParameters(boolean shouldUseRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants, boolean enableOptimizedLogBlockScan) {
-      this.shouldUseRecordPosition = shouldUseRecordPosition;
-      this.emitDelete = emitDelete;
-      this.sortOutput = sortOutput;
-      this.allowInflightInstants = allowInflightInstants;
-      this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
-    }
-
-    public boolean isShouldUseRecordPosition() {
-      return shouldUseRecordPosition;
-    }
-
-    public boolean isEmitDelete() {
-      return emitDelete;
-    }
-
-    public boolean isSortOutput() {
-      return sortOutput;
-    }
-
-    public boolean isAllowInflightInstants() {
-      return allowInflightInstants;
-    }
-
-    public boolean isEnableOptimizedLogBlockScan() {
-      return enableOptimizedLogBlockScan;
-    }
-  }
 }

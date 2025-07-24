@@ -42,8 +42,9 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.FileGroupRecordBufferInitializer;
+import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferInitializer;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.buffer.ReusableFileGroupRecordBufferInitializer;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieDataUtils;
@@ -123,7 +124,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableFileSystemView metadataFileSystemView;
   // should we reuse the open file handles, across calls
   private final boolean reuse;
-  private final transient Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord>>> reusableFileReaders
+  private final transient Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferInitializer<IndexedRecord>>> reusableFileReaders
       = new ConcurrentHashMap<>();
 
   // Latest file slices in the metadata partitions
@@ -522,9 +523,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     // If reuse is enabled and full scan is allowed for the partition, we can reuse the file readers for base files and the reader context for the log files.
     Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
-    FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord> recordBufferInitializer = null;
+    ReusableFileGroupRecordBufferInitializer<IndexedRecord> recordBufferInitializer = null;
     if (reuse && isFullScanAllowedForPartition(fileSlice.getPartitionPath())) {
-      Pair<HoodieAvroFileReader, FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord>> readers =
+      Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferInitializer<IndexedRecord>> readers =
           reusableFileReaders.computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
             try {
               HoodieAvroFileReader baseFileReader = null;
@@ -566,8 +567,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return fileGroupReader.getClosableIterator();
   }
 
-  private FileGroupRecordBufferInitializer.ReusableFileGroupRecordBufferInitializer<IndexedRecord> buildReusableRecordBufferInitializer(FileSlice fileSlice, String latestMetadataInstantTime,
-                                                                                                                                        Option<InstantRange> instantRangeOption) {
+  private ReusableFileGroupRecordBufferInitializer<IndexedRecord> buildReusableRecordBufferInitializer(FileSlice fileSlice, String latestMetadataInstantTime,
+                                                                                                       Option<InstantRange> instantRangeOption) {
     // initialize without any filters
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,

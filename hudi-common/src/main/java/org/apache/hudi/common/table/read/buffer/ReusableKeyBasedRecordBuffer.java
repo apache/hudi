@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -27,6 +27,8 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -42,7 +44,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * A {@link HoodieFileGroupRecordBuffer<T>} implementation that allows the user to create a record buffer with an existing mapping of key to latest record from the log files.
+ * A {@link HoodieFileGroupRecordBuffer <T>} implementation that allows the user to create a record buffer with an existing mapping of key to latest record from the log files.
  * The implementation is used when point lookups are required for the same file group, such as the metadata table's files partition.
  * As a result, the buffer also requires a set of valid keys to be provided to avoid returning all records in the processed logs when doing these point or small-batch lookups.
  * @param <T> the engine specific record type
