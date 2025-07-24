@@ -95,12 +95,12 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BAS
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
-import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.unescapeSpecialChars;
 
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
@@ -168,7 +168,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
     List<HoodieRecord<HoodieMetadataPayload>> records = getRecordsByKeys(
-        HoodieListData.eager(Collections.singletonList(key)), partitionName, Option.empty())
+        HoodieListData.eager(Collections.singletonList(key)), partitionName, IDENTITY_ENCODING)
         .values().collectAsList();
     ValidationUtils.checkArgument(records.size() <= 1, "Found more than 1 record for record key " + key);
     return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
@@ -213,12 +213,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
                                                                                  String partitionName,
                                                                                  boolean shouldLoadInMemory,
-                                                                                 Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
+                                                                                 SerializableFunctionUnchecked<String, String> keyEncodingFn) {
     ValidationUtils.checkState(keyPrefixes instanceof HoodieListData, "getRecordsByKeyPrefixes only support HoodieListData at the moment");
-    // Apply key encoding if present
-    List<String> sortedKeyPrefixes = keyEncodingFn.isPresent()
-        ? new ArrayList<>(keyPrefixes.map(k -> keyEncodingFn.get().apply(k)).collectAsList())
-        : new ArrayList<>(keyPrefixes.collectAsList());
+    // Apply key encoding
+    List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes.map(keyEncodingFn::apply).collectAsList());
     // Sort the prefixes so that keys are looked up in order
     // Sort must come after encoding.
     Collections.sort(sortedKeyPrefixes);
@@ -263,12 +261,29 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return Predicates.startsWithAny(null, right);
   }
 
+  /**
+   * All keys to be looked up go through the following steps:
+   * 1. [encode] escape/encode the key if needed
+   * 2. [hash to file group] compute the hash of the key to
+   * 3. [lookup within file groups] lookup the key in the file group
+   * 4. the record is returned
+   */
+  /**
+   * Performs lookup of records in the metadata table.
+   *
+   * @param keys               The keys to look up in the metadata table
+   * @param partitionName      The name of the metadata partition to search in
+   * @param fileSlices         The list of file slices to search through
+   * @param isSecondaryIndex   Whether this lookup is for a secondary index
+   * @param keyEncodingFn      Optional function to encode keys before lookup
+   * @return Pair data containing the looked up records keyed by their original keys
+   */
   private HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> doLookup(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
-                                                                               boolean isSecondaryIndex, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
+                                                                               boolean isSecondaryIndex, SerializableFunctionUnchecked<String, String> keyEncodingFn) {
 
     final int numFileSlices = fileSlices.size();
     if (numFileSlices == 1) {
-      List<String> keysList = keyEncodingFn.isPresent() ? keys.map(k -> keyEncodingFn.get().apply(k)).collectAsList() : keys.collectAsList();
+      List<String> keysList = keys.map(keyEncodingFn::apply).collectAsList();
       TreeSet<String> distinctSortedKeys = new TreeSet<>(keysList);
       return lookupKeyRecordPairs(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0), !isSecondaryIndex);
     }
@@ -277,12 +292,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // SI write path concatenates secKey$recordKey, the secKey needs extracted for hashing;
     // SI read path gives secKey only, no need for secKey extraction.
     SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
-    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction);
+    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction, keyEncodingFn);
     HoodiePairData<Integer, String> persistedInitialPairData = keys
-        // Tag key with file group index and apply key encoding
-        .mapToPair(recordKey -> new ImmutablePair<>(
-            mappingFunction.apply(recordKey, numFileSlices),
-            keyEncodingFn.isPresent() ? keyEncodingFn.get().apply(recordKey) : recordKey));
+        // Tag key with file group index
+        .mapToPair(recordKey -> {
+          String encodedKey = keyEncodingFn.apply(recordKey);
+          // Always encode the key before apply mapping.
+          return new ImmutablePair<>(mappingFunction.apply(encodedKey, numFileSlices), encodedKey);
+        });
     persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
     // Use the new processValuesOfTheSameShards API instead of explicit rangeBasedRepartitionForEachKey
     SerializableFunction<Iterator<String>, Iterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>>> processFunction =
@@ -295,7 +312,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             }
             distinctSortedKeyIter.forEachRemaining(keysList::add);
           }
-          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(unescapeSpecialChars(keysList.get(0)), numFileSlices));
+          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
           return lookupKeyRecordPairsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
 
@@ -307,12 +324,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
 
+  /**
+   * All keys to be looked up go through the following steps:
+   * 1. [encode] escape/encode the key if needed
+   * 2. [hash to file group] compute the hash of the key to
+   * 3. [lookup within file groups] lookup the key in the file group
+   * 4. the record is returned
+   */
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> doLookupIndexRecords(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
-                                                                               boolean isSecondaryIndex, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
+                                                                               boolean isSecondaryIndex, SerializableFunctionUnchecked<String, String> keyEncodingFn) {
 
     final int numFileSlices = fileSlices.size();
     if (numFileSlices == 1) {
-      List<String> keysList = keyEncodingFn.isPresent() ? keys.map(k -> keyEncodingFn.get().apply(k)).collectAsList() : keys.collectAsList();
+      List<String> keysList = keys.map(keyEncodingFn::apply).collectAsList();
       TreeSet<String> distinctSortedKeys = new TreeSet<>(keysList);
       return lookupRecords(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0), !isSecondaryIndex);
     }
@@ -321,12 +345,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // SI write path concatenates secKey$recordKey, the secKey needs extracted for hashing;
     // SI read path gives secKey only, no need for secKey extraction.
     SerializableBiFunction<String, Integer, Integer> mappingFunction = HoodieTableMetadataUtil::mapRecordKeyToFileGroupIndex;
-    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction);
+    keys = repartitioningIfNeeded(keys, partitionName, numFileSlices, mappingFunction, keyEncodingFn);
     HoodiePairData<Integer, String> persistedInitialPairData = keys
         // Tag key with file group index
-        .mapToPair(recordKey -> new ImmutablePair<>(
-            mappingFunction.apply(recordKey, numFileSlices),
-            keyEncodingFn.isPresent() ? keyEncodingFn.get().apply(recordKey) : recordKey));
+        .mapToPair(recordKey -> {
+          String encodedKey = keyEncodingFn.apply(recordKey);
+          // Always encode the key before apply mapping.
+          return new ImmutablePair<>(mappingFunction.apply(encodedKey, numFileSlices), encodedKey);
+        });
     persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
 
     // Use the new processValuesOfTheSameShards API instead of explicit rangeBasedRepartitionForEachKey
@@ -340,7 +366,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             }
             distinctSortedKeyIter.forEachRemaining(keysList::add);
           }
-          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(unescapeSpecialChars(keysList.get(0)), numFileSlices));
+          FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
           return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
@@ -367,7 +393,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         "Record index is not initialized in MDT");
 
     // TODO [HUDI-9544]: Metric does not work for rdd based API due to lazy evaluation.
-    return getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), Option.empty())
+    return getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), IDENTITY_ENCODING)
         .mapToPair((Pair<String, HoodieRecord<HoodieMetadataPayload>> p) -> Pair.of(p.getLeft(), p.getRight().getData().getRecordGlobalLocation()));
   }
 
@@ -386,7 +412,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // The caller is required to check for record index existence in MDT before calling this method.
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
-    return readIndexRecords(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), Option.empty())
+    return readIndexRecords(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), IDENTITY_ENCODING)
         .map(r -> r.getData().getRecordGlobalLocation());
   }
 
@@ -432,7 +458,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(
-      HoodieData<String> keys, String partitionName, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
+      HoodieData<String> keys, String partitionName, SerializableFunctionUnchecked<String, String> keyEncodingFn) {
     List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!fileSlices.isEmpty(), "No file slices found for partition: " + partitionName);
@@ -442,7 +468,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   public HoodieData<String> getRecordKeysFromSecondaryKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
-    return readIndexRecords(secondaryKeys, partitionName, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars)).map(
+    return readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::escapeSpecialChars).map(
         hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getRecordKey()));
   }
 
@@ -469,7 +495,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexRecords(HoodieData<String> keys,
                                                                              String partitionName,
-                                                                             Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn) {
+                                                                             SerializableFunctionUnchecked<String, String> keyEncodingFn) {
     List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!fileSlices.isEmpty(), "No file slices found for partition: " + partitionName);
@@ -481,16 +507,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // When testing we noticed that the parallelism can be very low which hurts the performance. so we should start with a reasonable
   // level of parallelism in that case.
   private HoodieData<String> repartitioningIfNeeded(
-      HoodieData<String> keys, String partitionName, int numFileSlices, SerializableBiFunction<String, Integer, Integer> mappingFunction) {
+      HoodieData<String> keys, String partitionName, int numFileSlices, SerializableBiFunction<String, Integer, Integer> mappingFunction,
+      SerializableFunctionUnchecked<String, String> keyEncodingFn) {
     if (keys instanceof HoodieListData) {
-      int parallelism = (int) keys.map(k -> mappingFunction.apply(k, numFileSlices)).distinct().count();
+      int parallelism;
+      parallelism = (int) keys.map(k -> mappingFunction.apply(keyEncodingFn.apply(k), numFileSlices)).distinct().count();
       // In case of empty lookup set, we should avoid RDD with 0 partitions.
       parallelism = Math.max(parallelism, 1);
-      LOG.info("getRecordFast repartition HoodieListData to JavaRDD: exit, partitionName {}, num partitions: {}",
+      LOG.info("Repartitioning keys for partition {} from list data with parallelism: {}",
           partitionName, parallelism);
       keys = getEngineContext().parallelize(keys.collectAsList(), parallelism);
     } else if (keys.getNumPartitions() < metadataConfig.getRepartitionMinPartitionsThreshold()) {
-      LOG.info("getRecordFast repartition HoodieNonListData. partitionName {}, num partitions: {}", partitionName, metadataConfig.getRepartitionDefaultPartitions());
+      LOG.info("Repartitioning keys for partition {} to {} partitions", partitionName, metadataConfig.getRepartitionDefaultPartitions());
       keys = keys.repartition(metadataConfig.getRepartitionDefaultPartitions());
     }
     return keys;
@@ -732,7 +760,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return HoodieListPairData.eager(Collections.emptyList());
     }
 
-    Map<String, Set<String>> res = getRecordsByKeyPrefixes(keys, partitionName, false, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars))
+    Map<String, Set<String>> res = getRecordsByKeyPrefixes(keys, partitionName, false, SecondaryIndexKeyUtils::escapeSpecialChars)
             .map(record -> {
               if (!record.getData().isDeleted()) {
                 return SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(record.getRecordKey());
@@ -761,7 +789,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (secondaryKeys.isEmpty()) {
       return HoodieListPairData.eager(Collections.emptyList());
     }
-    return readIndexRecords(secondaryKeys, partitionName, Option.of(SecondaryIndexKeyUtils::escapeSpecialChars))
+    return readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::escapeSpecialChars)
         .filter(hoodieRecord -> !hoodieRecord.getData().isDeleted())
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeySecondaryKeyPair(hoodieRecord.getRecordKey()))
         .groupByKey()

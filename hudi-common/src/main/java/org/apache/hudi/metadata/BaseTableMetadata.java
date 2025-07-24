@@ -66,6 +66,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
+
 /**
  * Abstract class for implementing common table metadata operations.
  */
@@ -210,7 +212,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     List<String> partitionIDFileIDStringsList = new ArrayList<>(partitionIDFileIDStrings);
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
         HoodieDataUtils.dedupeAndCollectAsMap(
-            getRecordsByKeys(HoodieListData.eager(partitionIDFileIDStringsList), metadataPartitionName, Option.empty()));
+            getRecordsByKeys(HoodieListData.eager(partitionIDFileIDStringsList), metadataPartitionName, IDENTITY_ENCODING));
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
     metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR, partitionIDFileIDStringsList.size()));
 
@@ -330,7 +332,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs =
         HoodieDataUtils.dedupeAndCollectAsMap(
             getRecordsByKeys(HoodieListData.eager(new ArrayList<>(partitionIdToPathMap.keySet())),
-                MetadataPartitionType.FILES.getPartitionPath(), Option.empty()));
+                MetadataPartitionType.FILES.getPartitionPath(), IDENTITY_ENCODING));
     metrics.ifPresent(
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
@@ -387,7 +389,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
         HoodieDataUtils.dedupeAndCollectAsMap(
             getRecordsByKeys(
-                HoodieListData.eager(columnStatKeylist), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), Option.empty()));
+                HoodieListData.eager(columnStatKeylist), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), IDENTITY_ENCODING));
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
     Map<Pair<String, String>, List<HoodieMetadataColumnStats>> fileToColumnStatMap = new HashMap<>();
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
@@ -436,7 +438,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @return A collection of pairs (key -> record)
    */
   public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(
-          HoodieData<String> keys, String partitionName, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn);
+          HoodieData<String> keys, String partitionName, SerializableFunctionUnchecked<String, String> keyEncodingFn);
 
   /**
    * Returns a collection of pairs (secondary-key -> set-of-record-keys) for the provided secondary keys.
