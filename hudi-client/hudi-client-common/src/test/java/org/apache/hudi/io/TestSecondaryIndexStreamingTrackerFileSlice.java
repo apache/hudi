@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -208,6 +209,34 @@ public class TestSecondaryIndexStreamingTrackerFileSlice {
           .filter(s -> !s.isDeleted())
           .count();
       assertEquals(2, insertCount); // key2 new value + key4
+      
+      // Validate detailed stats content
+      // Check key2 update (delete old value + insert new value)
+      assertTrue(stats.stream().anyMatch(s ->
+          s.getRecordKey().equals("key2")
+          && s.getSecondaryKeyValue().equals("200.75")
+          && s.isDeleted()), "Should have delete entry for key2's old value");
+      
+      assertTrue(stats.stream().anyMatch(s -> 
+          s.getRecordKey().equals("key2")
+          && s.getSecondaryKeyValue().equals("250.0")
+          && !s.isDeleted()), "Should have insert entry for key2's new value");
+      
+      // Check key3 deletion
+      assertTrue(stats.stream().anyMatch(s -> 
+          s.getRecordKey().equals("key3")
+          && s.getSecondaryKeyValue().equals("300.0")
+          && s.isDeleted()), "Should have delete entry for key3");
+      
+      // Check key4 insertion
+      assertTrue(stats.stream().anyMatch(s -> 
+          s.getRecordKey().equals("key4")
+          && s.getSecondaryKeyValue().equals("400.5")
+          && !s.isDeleted()), "Should have insert entry for key4");
+      
+      // Verify key1 is not in stats (no change)
+      assertFalse(stats.stream().anyMatch(s -> 
+          s.getRecordKey().equals("key1")), "key1 should not have any stats entries as its value didn't change");
     }
   }
 

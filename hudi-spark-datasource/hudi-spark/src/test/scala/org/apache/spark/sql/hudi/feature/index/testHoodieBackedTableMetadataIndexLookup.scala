@@ -517,12 +517,12 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
     val expectedRows = Seq(
       "\u0000$null_record",
       "\u0000$null_record",
-      "10.0$a1",
-      "20.0$a2",
-      "30.0$a\\$",
-      "b1$a1",
-      "b2$a2",
-      "b\\$$a\\$"
+      "10.0$1",
+      "20.0$2",
+      "30.0$\\$",
+      "\\$$\\$",
+      "b1$1",
+      "b2$2"
     )
 
     assert(mdtRows.length == expectedRows.length, s"Expected ${expectedRows} rows but got ${mdtRows}")
@@ -550,7 +550,7 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
 
     // Test getSecondaryIndexRecords API with null value
     val nullRecordsResult = hoodieBackedTableMetadata.getSecondaryIndexRecords(nullKeys, secondaryIndexName)
-    val nullRecordsMap = HoodieDataUtils.collectAsMapWithOverwriteStrategy(nullRecordsResult)
+    val nullRecordsMap = HoodieDataUtils.dedupeAndCollectAsMap(nullRecordsResult)
 
     // Verify that null key maps to record keys.
     // Assert it is map with key as "null_record" -> value as set of "null"
