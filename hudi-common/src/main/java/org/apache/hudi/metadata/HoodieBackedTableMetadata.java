@@ -126,7 +126,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   /**
    * Track a persisted RDD for the current thread
    */
-  private static void trackPersistedData(HoodiePairData<?, ?> data) {
+  static void trackPersistedData(HoodiePairData<?, ?> data) {
     long threadId = Thread.currentThread().getId();
     THREAD_PERSISTED_DATA.computeIfAbsent(threadId, k -> new ArrayList<>()).add(data);
   }
@@ -169,7 +169,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param <T> The return type of the operation
    * @return The result of the operation
    */
-  private static <T> T ensureDataCleanupOnException(SerializableFunctionUnchecked<Void, T> operation) {
+  static <T> T ensureDataCleanupOnException(SerializableFunctionUnchecked<Void, T> operation) {
     try {
       return operation.apply(null);
     } catch (Exception e) {
