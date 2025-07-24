@@ -126,7 +126,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
-    readerContext.setShouldMergeUseRecordPosition(readerParameters.isShouldUseRecordPosition() && !isSkipMerge && readerContext.getHasLogFiles());
+    readerContext.setShouldMergeUseRecordPosition(readerParameters.useRecordPosition() && !isSkipMerge && readerContext.getHasLogFiles());
     readerContext.setHasBootstrapBaseFile(inputSplit.getBaseFileOption().flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
@@ -521,10 +521,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
       ReaderParameters readerParameters = ReaderParameters.builder()
           .shouldUseRecordPosition(shouldUseRecordPosition)
-          .withEmitDelete(emitDelete)
-          .withSortedOutput(sortOutput)
-          .withAllowInflightInstants(allowInflightInstants)
-          .withEnableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
+          .emitDeletes(emitDelete)
+          .sortOutputs(sortOutput)
+          .allowInflightInstants(allowInflightInstants)
+          .enableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
           .build();
       InputSplit inputSplit = new InputSplit(baseFileOption, logFiles, partitionPath, start, length);
       return new HoodieFileGroupReader<>(

@@ -62,15 +62,15 @@ class DefaultFileGroupRecordBufferInitializer<T> extends LogScanningRecordBuffer
 
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
-    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDelete(), fileGroupUpdateCallback);
+    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
     FileGroupRecordBuffer<T> recordBuffer;
     if (isSkipMerge) {
       recordBuffer = new UnmergedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats);
-    } else if (readerParameters.isSortOutput()) {
+    } else if (readerParameters.sortOutputs()) {
       recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldName, updateProcessor);
-    } else if (readerParameters.isShouldUseRecordPosition() && inputSplit.getBaseFileOption().isPresent()) {
+    } else if (readerParameters.useRecordPosition() && inputSplit.getBaseFileOption().isPresent()) {
       recordBuffer = new PositionBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, inputSplit.getBaseFileOption().get().getCommitTime(), props,
           orderingFieldName, updateProcessor);

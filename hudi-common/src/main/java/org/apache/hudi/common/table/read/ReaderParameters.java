@@ -24,7 +24,7 @@ package org.apache.hudi.common.table.read;
  */
 public class ReaderParameters {
   // Rely on the position of the record in the file instead of the record keys while merging data between base and log files
-  private final boolean shouldUseRecordPosition;
+  private final boolean useRecordPosition;
   // Whether to emit delete records while reading
   private final boolean emitDelete;
   // Whether to sort the output records while reading, this implicitly requires the base file to be sorted
@@ -37,31 +37,31 @@ public class ReaderParameters {
   private final boolean allowInflightInstants;
   private final boolean enableOptimizedLogBlockScan;
 
-  private ReaderParameters(boolean shouldUseRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants, boolean enableOptimizedLogBlockScan) {
-    this.shouldUseRecordPosition = shouldUseRecordPosition;
+  private ReaderParameters(boolean useRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants, boolean enableOptimizedLogBlockScan) {
+    this.useRecordPosition = useRecordPosition;
     this.emitDelete = emitDelete;
     this.sortOutput = sortOutput;
     this.allowInflightInstants = allowInflightInstants;
     this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
   }
 
-  public boolean isShouldUseRecordPosition() {
-    return shouldUseRecordPosition;
+  public boolean useRecordPosition() {
+    return useRecordPosition;
   }
 
-  public boolean isEmitDelete() {
+  public boolean emitDeletes() {
     return emitDelete;
   }
 
-  public boolean isSortOutput() {
+  public boolean sortOutputs() {
     return sortOutput;
   }
 
-  public boolean isAllowInflightInstants() {
+  public boolean allowInflightInstants() {
     return allowInflightInstants;
   }
 
-  public boolean isEnableOptimizedLogBlockScan() {
+  public boolean enableOptimizedLogBlockScan() {
     return enableOptimizedLogBlockScan;
   }
 
@@ -81,22 +81,22 @@ public class ReaderParameters {
       return this;
     }
 
-    public Builder withEmitDelete(boolean emitDelete) {
+    public Builder emitDeletes(boolean emitDelete) {
       this.emitDelete = emitDelete;
       return this;
     }
 
-    public Builder withSortedOutput(boolean sortOutput) {
+    public Builder sortOutputs(boolean sortOutput) {
       this.sortOutput = sortOutput;
       return this;
     }
 
-    public Builder withAllowInflightInstants(boolean allowInflightInstants) {
+    public Builder allowInflightInstants(boolean allowInflightInstants) {
       this.allowInflightInstants = allowInflightInstants;
       return this;
     }
 
-    public Builder withEnableOptimizedLogBlockScan(boolean enableOptimizedLogBlockScan) {
+    public Builder enableOptimizedLogBlockScan(boolean enableOptimizedLogBlockScan) {
       this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
       return this;
     }
