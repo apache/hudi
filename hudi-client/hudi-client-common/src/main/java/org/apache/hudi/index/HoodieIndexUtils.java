@@ -185,6 +185,8 @@ public class HoodieIndexUtils {
               || schema.getLogicalType() == LogicalTypes.timeMicros();
         }
         return true; // Regular LONG
+      case DOUBLE:
+        return true; // Support DOUBLE type
       default:
         return false;
     }
@@ -684,7 +686,7 @@ public class HoodieIndexUtils {
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Column '%s' has unsupported data type '%s'. "
             + "Secondary indexes only support: STRING, CHAR, INT, BIGINT/LONG, SMALLINT, TINYINT, "
-            + "TIMESTAMP (including logical types timestampMillis, timestampMicros), "
+            + "FLOAT, DOUBLE, TIMESTAMP (including logical types timestampMillis, timestampMicros), "
             + "and DATE types. Please choose a column with one of these supported types.",
             userIndexName, columnName, actualType));
       }

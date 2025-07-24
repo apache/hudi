@@ -16,26 +16,23 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.hudi.functional
 import org.apache.hudi.exception.HoodieMetadataIndexException
-import org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.junit.jupiter.api.{Tag, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Tag
 
 /**
  * Test secondary index creation with various data types.
  *
  * Given: A table with all Spark SQL data types
  * When: Creating secondary indexes on each column
- * Then: Should succeed for supported types (String, Int, BigInt, Long, timestamp types)
+ * Then: Should succeed for supported types (String, Int, BigInt, Long, Double, timestamp types)
  *       and fail for unsupported types
  */
 @Tag("functional")
 class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
-
   /**
    * Test secondary index creation with all data types and verify query behavior.
    *
@@ -61,10 +58,10 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
            |  col_tinyint TINYINT,
            |  col_timestamp TIMESTAMP,
            |  col_date DATE,
+           |  col_double DOUBLE,  -- Double is supported for secondary indexes
            |  -- Unsupported types
            |  col_boolean BOOLEAN,
            |  col_float FLOAT,
-           |  col_double DOUBLE,
            |  col_decimal DECIMAL(10,2),
            |  col_binary BINARY,
            |  col_array ARRAY<STRING>,
@@ -157,20 +154,21 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
            |  'p1' as partition_col,
            |  3 as ts
        """.stripMargin)
-      // Define supported and unsupported columns
+      // Define supported columns with multiple test values for comprehensive validation
+      // Filter based on values of string, long, double, int. Spark will take care of the type cast.
       val supportedColumns = Seq(
-        ("col_string", "'string2'"),
-        ("col_int", "200"),
-        ("col_bigint", "2000"),
-        ("col_long", "2000"),
-        ("col_smallint", "20"),
-        ("col_tinyint", "2"),
-        ("col_timestamp", "cast('2023-01-02 10:00:00' as timestamp)"),
-        ("col_date", "cast('2023-01-02' as date)")
+        ("col_string", Seq(("'string3'", 3))),
+        ("col_int", Seq(("'300'", 3), ("200L", 2), (100, 1), (100.00, 1), ("'100.00'", 1))),
+        ("col_bigint", Seq(("'3000'", 3), ("2000L", 2), (1000, 1), (1000.00, 1), ("'1000.00'", 1))),
+        ("col_long", Seq(("'3000'", 3), ("2000L", 2), (1000, 1), (1000.00, 1), ("'1000.00'", 1))),
+        ("col_smallint", Seq(("'30'", 3), ("20L", 2), (10, 1), (10.00, 1), ("'10.00'", 1))),
+        ("col_tinyint", Seq(("'3'", 3), ("2L", 2), (1, 1), (1.0, 1), ("'1.00'", 1))),
+        ("col_timestamp", Seq(("cast('2023-01-03 10:00:00' as timestamp)", 3))),
+        ("col_date", Seq(("cast('2023-01-03' as date)", 3))),
+        ("col_double", Seq(("'1'", 1), ("1L", 1), (2.222220, 2), ("'3.3300'", 3)))
       )
       val unsupportedColumns = Seq(
         "col_float",
-        "col_double",
         "col_decimal",
         "col_boolean",
         "col_binary",
@@ -190,20 +188,21 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
             fail(s"Failed to create index on supported column $colName: ${e.getMessage}")
         }
       }
-      // Test creating indexes on supported columns
-      supportedColumns.foreach { case (colName, testValue) =>
-        // Verify query using the index returns correct results
-        val result = spark.sql(
-          s"""
+      // Test queries with multiple values for each supported column
+      supportedColumns.foreach { case (colName, testValues) =>
+        // Verify query using the index returns correct results for each test value
+        testValues.foreach { case (testValue, expectedId) =>
+          val query = s"""
              |SELECT id, $colName
              |FROM $tableName
              |WHERE $colName = $testValue
-         """.stripMargin
-        ).collect()
-        assertEquals(1, result.length, s"Query on $colName should return exactly one row")
-        assertEquals(2, result(0).getInt(0), s"Query on $colName should return id=2")
-      }
+           """.stripMargin
+          val result = spark.sql(query).collect()
 
+          assertEquals(1, result.length, s"Query on $colName with value $testValue should return exactly one row")
+          assertEquals(expectedId, result(0).getInt(0), s"Query on $colName with value $testValue should return id=$expectedId")
+        }
+      }
       val query = s"select key from hudi_metadata('$tmpPath') where type=7"
       checkAnswer(query)(
         Seq("string3$3"),
@@ -229,7 +228,10 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
         Seq("19359$2"),
         Seq("2000$2"),
         Seq("1000$1"),
-        Seq("3000$3")
+        Seq("3000$3"),
+        Seq("1.0$1"),
+        Seq("2.22222$2"),
+        Seq("3.33$3")
       )
       // Test creating indexes on unsupported columns
       unsupportedColumns.foreach { colName =>
@@ -253,7 +255,6 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
       spark.sql(s"DROP TABLE IF EXISTS $tableName")
     }
   }
-
   /**
    * Test secondary index with logical types.
    *
