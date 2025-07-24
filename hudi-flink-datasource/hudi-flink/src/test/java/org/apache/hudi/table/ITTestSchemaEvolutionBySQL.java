@@ -86,7 +86,7 @@ public abstract class ITTestSchemaEvolutionBySQL {
   void beforeEach() {
     tableEnv = TestTableEnvs.getBatchTableEnv();
     tableEnv.getConfig().getConfiguration()
-        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+        .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
     catalog = createCatalog();
     catalog.open();
     tableEnv.registerCatalog(CATALOG_NAME, catalog);

@@ -106,7 +106,7 @@ public class TestHoodieTableSource {
     // apply partition pruning
     FieldReferenceExpression partRef = new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4);
     ValueLiteralExpression partLiteral = new ValueLiteralExpression("par1", DataTypes.STRING().notNull());
-    CallExpression partFilter = new CallExpression(
+    CallExpression partFilter = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS,
         Arrays.asList(partRef, partLiteral),
         DataTypes.BOOLEAN());
@@ -127,15 +127,15 @@ public class TestHoodieTableSource {
     HoodieTableSource tableSource = new HoodieTableSource(
         SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
         new StoragePath(tempFile.getPath()),
-        Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
+        Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
     InputFormat<RowData, ?> inputFormat = tableSource.getInputFormat();
     assertThat(inputFormat, is(instanceOf(FileInputFormat.class)));
-    conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     inputFormat = tableSource.getInputFormat();
     assertThat(inputFormat, is(instanceOf(MergeOnReadInputFormat.class)));
-    conf.setString(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
     assertDoesNotThrow(
         (ThrowingSupplier<? extends InputFormat<RowData, ?>>) tableSource::getInputFormat,
         "Query type: 'incremental' should be supported");
@@ -162,7 +162,7 @@ public class TestHoodieTableSource {
     HoodieTableSource tableSource = getEmptyStreamingSource();
     FieldReferenceExpression ref = new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0);
     ValueLiteralExpression literal = new ValueLiteralExpression("1", DataTypes.STRING().notNull());
-    ResolvedExpression filterExpr = new CallExpression(
+    ResolvedExpression filterExpr = CallExpression.permanent(
         BuiltInFunctionDefinitions.IN,
         Arrays.asList(ref, literal),
         DataTypes.BOOLEAN());
@@ -178,8 +178,8 @@ public class TestHoodieTableSource {
   void testDataSkippingWithPartitionStatsPruning(List<ResolvedExpression> filters, List<String> expectedPartitions) throws Exception {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
-    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
-    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     HoodieTableSource hoodieTableSource = createHoodieTableSource(conf);
@@ -192,8 +192,8 @@ public class TestHoodieTableSource {
   void testBucketPruning(boolean hiveStylePartitioning) throws Exception {
     String tablePath1 = new Path(tempFile.getAbsolutePath(), "tbl1").toString();
     Configuration conf1 = TestConfigurations.getDefaultConf(tablePath1);
-    conf1.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
-    conf1.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
+    conf1.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf1.set(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
 
     // test single primary key filtering
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf1);
@@ -210,9 +210,9 @@ public class TestHoodieTableSource {
     // test multiple primary keys filtering
     Configuration conf2 = conf1.clone();
     String tablePath2 = new Path(tempFile.getAbsolutePath(), "tbl2").toString();
-    conf2.setString(FlinkOptions.PATH, tablePath2);
-    conf2.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
-    conf2.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
+    conf2.set(FlinkOptions.PATH, tablePath2);
+    conf2.set(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
+    conf2.set(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf2);
     HoodieTableSource tableSource2 = createHoodieTableSource(conf2);
     tableSource2.applyFilters(Arrays.asList(
@@ -234,9 +234,9 @@ public class TestHoodieTableSource {
     // test partial primary keys filtering
     Configuration conf3 = conf1.clone();
     String tablePath3 = new Path(tempFile.getAbsolutePath(), "tbl3").toString();
-    conf3.setString(FlinkOptions.PATH, tablePath3);
-    conf3.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
-    conf3.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
+    conf3.set(FlinkOptions.PATH, tablePath3);
+    conf3.set(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
+    conf3.set(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf3);
     HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
     tableSource3.applyFilters(Collections.singletonList(
@@ -250,7 +250,7 @@ public class TestHoodieTableSource {
     // test single primary keys filtering together with non-primary key predicate
     Configuration conf4 = conf1.clone();
     String tablePath4 = new Path(tempFile.getAbsolutePath(), "tbl4").toString();
-    conf4.setString(FlinkOptions.PATH, tablePath4);
+    conf4.set(FlinkOptions.PATH, tablePath4);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf4);
     HoodieTableSource tableSource4 = createHoodieTableSource(conf4);
     tableSource4.applyFilters(Arrays.asList(
@@ -268,11 +268,11 @@ public class TestHoodieTableSource {
     String tablePath1 = new Path(tempFile.getAbsolutePath(), "tbl1").toString();
     Configuration conf1 = TestConfigurations.getDefaultConf(tablePath1, TestConfigurations.ROW_DATA_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE);
     final String f1 = "f_timestamp";
-    conf1.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
-    conf1.setString(FlinkOptions.RECORD_KEY_FIELD, f1);
-    conf1.setString(FlinkOptions.PRECOMBINE_FIELD, f1);
+    conf1.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf1.set(FlinkOptions.RECORD_KEY_FIELD, f1);
+    conf1.set(FlinkOptions.PRECOMBINE_FIELD, f1);
     conf1.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
-    conf1.setBoolean(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), logicalTimestamp);
+    conf1.setString(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), logicalTimestamp + "");
     int numBuckets = (int)FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
 
     // test timestamp filtering
@@ -290,9 +290,9 @@ public class TestHoodieTableSource {
     Configuration conf2 = conf1.clone();
     final String f2 = "f_date";
     String tablePath2 = new Path(tempFile.getAbsolutePath(), "tbl2").toString();
-    conf2.setString(FlinkOptions.PATH, tablePath2);
-    conf2.setString(FlinkOptions.RECORD_KEY_FIELD, f2);
-    conf2.setString(FlinkOptions.PRECOMBINE_FIELD, f2);
+    conf2.set(FlinkOptions.PATH, tablePath2);
+    conf2.set(FlinkOptions.RECORD_KEY_FIELD, f2);
+    conf2.set(FlinkOptions.PRECOMBINE_FIELD, f2);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf2);
     HoodieTableSource tableSource2 = createHoodieTableSource(conf2);
     tableSource2.applyFilters(Collections.singletonList(
@@ -306,9 +306,9 @@ public class TestHoodieTableSource {
     Configuration conf3 = conf1.clone();
     final String f3 = "f_decimal";
     String tablePath3 = new Path(tempFile.getAbsolutePath(), "tbl3").toString();
-    conf3.setString(FlinkOptions.PATH, tablePath3);
-    conf3.setString(FlinkOptions.RECORD_KEY_FIELD, f3);
-    conf3.setString(FlinkOptions.PRECOMBINE_FIELD, f3);
+    conf3.set(FlinkOptions.PATH, tablePath3);
+    conf3.set(FlinkOptions.RECORD_KEY_FIELD, f3);
+    conf3.set(FlinkOptions.PRECOMBINE_FIELD, f3);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf3);
     HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
     tableSource3.applyFilters(Collections.singletonList(
@@ -334,11 +334,11 @@ public class TestHoodieTableSource {
     List<ResolvedExpression> expressions = new ArrayList<>();
     expressions.add(new FieldReferenceExpression("f_int", DataTypes.INT(), 0, 0));
     expressions.add(new ValueLiteralExpression(10));
-    ResolvedExpression equalsExpression = new CallExpression(
+    ResolvedExpression equalsExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS, expressions, DataTypes.BOOLEAN());
-    CallExpression greaterThanExpression = new CallExpression(
+    CallExpression greaterThanExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.GREATER_THAN, expressions, DataTypes.BOOLEAN());
-    CallExpression orExpression = new CallExpression(
+    CallExpression orExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.OR,
         Arrays.asList(equalsExpression, greaterThanExpression),
         DataTypes.BOOLEAN());
@@ -359,7 +359,7 @@ public class TestHoodieTableSource {
     String expression = "par1|par2|par3|par4,4";
     String rule = "regex";
     Configuration conf1 = TestConfigurations.getDefaultConf(tablePath1);
-    conf1.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf1.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf1.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, bucketNumber);
     conf1.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, expression);
     conf1.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, rule);
@@ -389,12 +389,12 @@ public class TestHoodieTableSource {
     String expression = "par1|par2|par3|par4,4";
     String rule = "regex";
     Configuration conf = TestConfigurations.getDefaultConf(tablePath);
-    conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, bucketNumber);
     conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, expression);
     conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, rule);
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
-    conf.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
+    conf.set(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
 
     HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
     PartitionBucketIndexHashingConfig.saveHashingConfig(metaClient, expression, rule, bucketNumber, null);
@@ -419,12 +419,12 @@ public class TestHoodieTableSource {
     String expression = "par1|par2|par3|par4,4";
     String rule = "regex";
     Configuration conf = TestConfigurations.getDefaultConf(tablePath);
-    conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, bucketNumber);
     conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, expression);
     conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, rule);
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
-    conf.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
+    conf.set(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
 
     HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
     PartitionBucketIndexHashingConfig.saveHashingConfig(metaClient, expression, rule, bucketNumber, null);
@@ -450,7 +450,7 @@ public class TestHoodieTableSource {
     String expression = "par1|par2|par3|par4,4";
     String rule = "regex";
     Configuration conf = TestConfigurations.getDefaultConf(tablePath);
-    conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, bucketNumber);
     conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, expression);
     conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, rule);
@@ -474,7 +474,7 @@ public class TestHoodieTableSource {
 
   private static Stream<Arguments> filtersAndResults() {
     CallExpression filter1 =
-        new CallExpression(
+        CallExpression.permanent(
             BuiltInFunctionDefinitions.GREATER_THAN,
             Arrays.asList(
                 new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
@@ -482,7 +482,7 @@ public class TestHoodieTableSource {
             DataTypes.BOOLEAN());
 
     CallExpression filter2 =
-        new CallExpression(
+        CallExpression.permanent(
             BuiltInFunctionDefinitions.LESS_THAN,
             Arrays.asList(
                 new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4),
@@ -503,8 +503,8 @@ public class TestHoodieTableSource {
   private HoodieTableSource getEmptyStreamingSource() {
     final String path = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(path);
-    conf.setBoolean(FlinkOptions.READ_AS_STREAMING, true);
-    conf.setBoolean(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
 
     return createHoodieTableSource(conf);
   }
@@ -512,8 +512,8 @@ public class TestHoodieTableSource {
   private HoodieTableSource createHoodieTableSource(Configuration conf) {
     return new HoodieTableSource(
         SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
-        new StoragePath(conf.getString(FlinkOptions.PATH)),
-        Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
+        new StoragePath(conf.get(FlinkOptions.PATH)),
+        Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
   }
@@ -521,7 +521,7 @@ public class TestHoodieTableSource {
   private ResolvedExpression createLitEquivalenceExpr(String fieldName, int fieldIdx, DataType dataType, Object val) {
     FieldReferenceExpression ref = new FieldReferenceExpression(fieldName, dataType, fieldIdx, fieldIdx);
     ValueLiteralExpression literal = new ValueLiteralExpression(val, dataType);
-    return new CallExpression(
+    return CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS,
         Arrays.asList(ref, literal),
         DataTypes.BOOLEAN());

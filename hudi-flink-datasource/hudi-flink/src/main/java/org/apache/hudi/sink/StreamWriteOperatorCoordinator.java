@@ -461,7 +461,7 @@ public class StreamWriteOperatorCoordinator
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     this.writeClient.setWriteTimer(tableState.commitAction);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
-        this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
+        this.conf.get(FlinkOptions.TABLE_NAME), conf.get(FlinkOptions.TABLE_TYPE));
     return this.instant;
   }
 
@@ -697,14 +697,14 @@ public class StreamWriteOperatorCoordinator
     final boolean isDeltaTimeCompaction;
 
     private TableState(Configuration conf) {
-      this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+      this.operationType = WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION));
       this.commitAction = CommitUtils.getCommitActionType(this.operationType,
-          HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE).toUpperCase(Locale.ROOT)));
+          HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE).toUpperCase(Locale.ROOT)));
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
       this.scheduleCompaction = OptionsResolver.needsScheduleCompaction(conf);
       this.scheduleClustering = OptionsResolver.needsScheduleClustering(conf);
-      this.syncHive = conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED);
-      this.syncMetadata = conf.getBoolean(FlinkOptions.METADATA_ENABLED);
+      this.syncHive = conf.get(FlinkOptions.HIVE_SYNC_ENABLED);
+      this.syncMetadata = conf.get(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
     }
 

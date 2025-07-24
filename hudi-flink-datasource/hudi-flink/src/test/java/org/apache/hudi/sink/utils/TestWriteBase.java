@@ -133,7 +133,7 @@ public class TestWriteBase {
   @BeforeEach
   public void before() {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
+    conf.set(FlinkOptions.TABLE_TYPE, getTableType().name());
     setUp(conf);
   }
 
