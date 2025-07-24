@@ -694,7 +694,15 @@ public class FlinkOptions extends HoodieConfig {
       .longType()
       .defaultValue(300_000L)
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
-          + "waits for the instant commit success, only for internal use");
+          + "waits for the instant commit success, only for internal use.");
+
+  // this is only for internal use
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_INCREMENTAL_JOB_GRAPH_GENERATION = ConfigOptions
+      .key("write.incremental.job.graph.generation")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Flag saying whether the incremental job graph generation is enabled.");
 
   @AdvancedConfig
   public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_INPUT = ConfigOptions

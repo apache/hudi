@@ -205,7 +205,13 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
       val startInstantArchived = !queryContext.getArchivedInstants.isEmpty
-      val endInstantTime = queryContext.getEndInstant.get()
+      if (queryContext.isEmpty) {
+        // no commits to read
+        // scalastyle:off return
+        return sqlContext.sparkContext.emptyRDD[Row]
+        // scalastyle:on return
+      }
+      val endInstantTime = queryContext.getLastInstant
 
       val scanDf = if (fallbackToFullTableScan && startInstantArchived) {
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived")
@@ -263,7 +269,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
                   .load(filteredRegularFullPaths.toList: _*)
                   .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*)))
               } catch {
-                case e : AnalysisException =>
+                case e: AnalysisException =>
                   if (e.getMessage.contains("Path does not exist")) {
                     throw new HoodieIncrementalPathNotFoundException(e)
                   } else {
