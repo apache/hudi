@@ -98,7 +98,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       TypedProperties props,
       long start, long length, boolean shouldUseRecordPosition) {
     this(readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt,
-        hoodieTableMetaClient, props, new ReaderParameters(shouldUseRecordPosition, false, false, false, false),
+        hoodieTableMetaClient, props, ReaderParameters.builder().shouldUseRecordPosition(shouldUseRecordPosition).build(),
         InputSplit.fromFileSlice(fileSlice, start, length), Option.empty(), FileGroupRecordBufferInitializer.createDefault());
   }
 
@@ -519,12 +519,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         recordBufferInitializer = FileGroupRecordBufferInitializer.createDefault();
       }
 
-      ReaderParameters readerParameters = new ReaderParameters(
-          shouldUseRecordPosition,
-          emitDelete,
-          sortOutput,
-          allowInflightInstants,
-          enableOptimizedLogBlockScan);
+      ReaderParameters readerParameters = ReaderParameters.builder()
+          .shouldUseRecordPosition(shouldUseRecordPosition)
+          .withEmitDelete(emitDelete)
+          .withSortedOutput(sortOutput)
+          .withAllowInflightInstants(allowInflightInstants)
+          .withEnableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
+          .build();
       InputSplit inputSplit = new InputSplit(baseFileOption, logFiles, partitionPath, start, length);
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,

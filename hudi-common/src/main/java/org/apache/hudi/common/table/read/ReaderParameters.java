@@ -19,9 +19,15 @@
 
 package org.apache.hudi.common.table.read;
 
+/**
+ * Parameters for how the reader should process the FileGroup while reading.
+ */
 public class ReaderParameters {
+  // Rely on the position of the record in the file instead of the record keys while merging data between base and log files
   private final boolean shouldUseRecordPosition;
+  // Whether to emit delete records while reading
   private final boolean emitDelete;
+  // Whether to sort the output records while reading, this implicitly requires the base file to be sorted
   private final boolean sortOutput;
   // Allows to consider inflight instants while merging log records using HoodieMergedLogRecordReader
   // The inflight instants need to be considered while updating RLI records. RLI needs to fetch the revived
@@ -31,7 +37,7 @@ public class ReaderParameters {
   private final boolean allowInflightInstants;
   private final boolean enableOptimizedLogBlockScan;
 
-  ReaderParameters(boolean shouldUseRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants, boolean enableOptimizedLogBlockScan) {
+  private ReaderParameters(boolean shouldUseRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants, boolean enableOptimizedLogBlockScan) {
     this.shouldUseRecordPosition = shouldUseRecordPosition;
     this.emitDelete = emitDelete;
     this.sortOutput = sortOutput;
@@ -57,5 +63,46 @@ public class ReaderParameters {
 
   public boolean isEnableOptimizedLogBlockScan() {
     return enableOptimizedLogBlockScan;
+  }
+
+  static Builder builder() {
+    return new Builder();
+  }
+
+  static class Builder {
+    private boolean shouldUseRecordPosition = false;
+    private boolean emitDelete = false;
+    private boolean sortOutput = false;
+    private boolean allowInflightInstants = false;
+    private boolean enableOptimizedLogBlockScan = false;
+
+    public Builder shouldUseRecordPosition(boolean shouldUseRecordPosition) {
+      this.shouldUseRecordPosition = shouldUseRecordPosition;
+      return this;
+    }
+
+    public Builder withEmitDelete(boolean emitDelete) {
+      this.emitDelete = emitDelete;
+      return this;
+    }
+
+    public Builder withSortedOutput(boolean sortOutput) {
+      this.sortOutput = sortOutput;
+      return this;
+    }
+
+    public Builder withAllowInflightInstants(boolean allowInflightInstants) {
+      this.allowInflightInstants = allowInflightInstants;
+      return this;
+    }
+
+    public Builder withEnableOptimizedLogBlockScan(boolean enableOptimizedLogBlockScan) {
+      this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
+      return this;
+    }
+
+    public ReaderParameters build() {
+      return new ReaderParameters(shouldUseRecordPosition, emitDelete, sortOutput, allowInflightInstants, enableOptimizedLogBlockScan);
+    }
   }
 }

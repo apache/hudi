@@ -29,6 +29,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Represents a split of input data for reading, which includes the partition path the data belongs to along with an optional base file and a list of log files.
+ * If there is only a base file, it is possible for the reader to specify a particular range of the file with the start and length parameters.
+ */
 public class InputSplit {
   private final Option<HoodieBaseFile> baseFileOption;
   private final List<HoodieLogFile> logFiles;
