@@ -21,8 +21,12 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 /**
  * Utility class for HoodieData operations.
@@ -44,12 +48,66 @@ public class HoodieDataUtils {
   public static <K, V> Map<K, V> dedupeAndCollectAsMap(HoodiePairData<K, V> pairData) {
     // Deduplicate locally before shuffling to reduce data movement
     // If there are multiple entries sharing the same key, use the incoming one
-    return pairData.reduceByKey((existing, incoming) -> incoming, pairData.deduceNumPartitions())
-            .collectAsList()
-            .stream()
-            .collect(Collectors.toMap(
-                    Pair::getKey,
-                    Pair::getValue
-            ));
+    // Filter out null keys before reduceByKey as it cannot handle null keys
+    pairData.persist("MEMORY_AND_DISK_SER");
+    Map<K, V> res;
+    try {
+      // Reduce by key could not handle null for some of the engines like spark. Handle non-null key first.
+      res = pairData.filter((key, value) -> key != null)
+          .reduceByKey((existing, incoming) -> incoming, pairData.deduceNumPartitions())
+          .collectAsList()
+          .stream()
+          .collect(HashMap::new,
+              (map, pair) -> map.put(pair.getKey(), pair.getValue()),
+              HashMap::putAll);
+      // Get values for the null key. Add a random one to the result map.
+      List<V> valuesForNullKey = pairData.filter((key, value) -> key == null).values().distinct().collectAsList();
+      if (!valuesForNullKey.isEmpty()) {
+        res.put(null, valuesForNullKey.get(0));
+      }
+    } finally {
+      pairData.unpersist();
+    }
+    return res;
   }
-} 
+
+  /**
+   * Collects results of the pair data into a {@link Map<K, Set<V>>} where values with the same key
+   * are grouped into a set.
+   *
+   * @param pairData Hoodie Pair Data to be collected
+   * @param <K> type of the key
+   * @param <V> type of the value
+   * @return a Map containing keys mapped to sets of values
+   */
+  public static <K, V> Map<K, Set<V>> dedupeAndCollectAsMapOfSet(HoodiePairData<K, V> pairData) {
+    // Deduplicate locally before shuffling to reduce data movement
+    // If there are multiple entries sharing the same key, use the incoming one
+    // Filter out null keys before reduceByKey as it cannot handle null keys
+    pairData.persist("MEMORY_AND_DISK_SER");
+    Map<K, Set<V>> res;
+    try {
+      // Reduce by key could not handle null for some of the engines like spark. Handle non-null key first.
+      res = pairData.filter((key, value) -> key != null)
+          .mapToPair(pair -> Pair.of(pair.getKey(), Collections.singleton(pair.getValue())))
+          .reduceByKey((set1, set2) -> {
+            Set<V> combined = new HashSet<>(set1);
+            combined.addAll(set2);
+            return combined;
+          }, pairData.deduceNumPartitions())
+          .collectAsList()
+          .stream()
+          .collect(HashMap::new,
+              (map, pair) -> map.put(pair.getKey(), pair.getValue()),
+              HashMap::putAll);
+      // Get values for the null key. Add a random one to the result map.
+      List<V> valuesForNullKey = pairData.filter((key, value) -> key == null).values().distinct().collectAsList();
+      if (!valuesForNullKey.isEmpty()) {
+        res.put(null, new HashSet<>(valuesForNullKey));
+      }
+    } finally {
+      pairData.unpersist();
+    }
+    return res;
+  }
+}

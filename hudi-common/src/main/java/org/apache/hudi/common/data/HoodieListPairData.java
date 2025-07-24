@@ -85,14 +85,31 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
     return collectAsList();
   }
 
+  private List<Pair<K, V>> persistedData = null;
+
+  @Override
+  protected Stream<Pair<K, V>> asStream() {
+    // If data is persisted, use it instead of the original stream
+    if (persistedData != null) {
+      return persistedData.parallelStream();
+    }
+    return super.asStream();
+  }
+
   @Override
   public void persist(String cacheConfig) {
-    // no-op
+    // Convert lazy computation to eager by materializing the data
+    // Store the materialized data to ensure subsequent operations use it
+    if (persistedData == null) {
+      persistedData = collectAsList();
+    }
+    // For subsequent calls, the data is already persisted
   }
 
   @Override
   public void unpersist() {
-    // no-op
+    // Clear the persisted data to free memory
+    persistedData = null;
   }
 
   @Override
@@ -254,11 +271,19 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
 
   @Override
   public long count() {
+    // If data is persisted, use its size
+    if (persistedData != null) {
+      return persistedData.size();
+    }
     return super.count();
   }
 
   @Override
   public List<Pair<K, V>> collectAsList() {
+    // If data is persisted, return it directly
+    if (persistedData != null) {
+      return persistedData;
+    }
     return super.collectAsList();
   }
 

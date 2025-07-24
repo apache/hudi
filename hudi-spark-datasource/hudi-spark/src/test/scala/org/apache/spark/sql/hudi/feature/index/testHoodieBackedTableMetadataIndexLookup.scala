@@ -154,7 +154,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
          |create table $tableName (
          |  id string,
          |  name string,
-         |  price int,
+         |  price double,
          |  ts long
          |) using hudi
          | options (
@@ -289,7 +289,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     }
 
     // Case 3: Non-existing keys, some matches the prefix of the existing records.
-    val nonExistKeys = HoodieListData.eager(List("", "a", "a100", "200", "$", "a$$", "$$a", "$a$").asJava)
+    val nonExistKeys = HoodieListData.eager(List("", "a", "a100", "200", "$", "a$$", "$$a", "$a$", "b$$").asJava)
     val nonExistResult = hoodieBackedTableMetadata.readRecordIndex(nonExistKeys).collectAsList().asScala
     assert(nonExistResult.isEmpty, "Non-existing keys should return empty result, $ should not cause partial matches")
 
@@ -301,7 +301,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     assert(mixedResultKeys == Set("a1", "a2"), "Should only return existing keys")
 
     // Case 5: Duplicate keys including those with $ characters
-    val dupKeys = HoodieListData.eager(List("a1", "a1", "a2", "a2", "a$", "a$", "$a", "$a", "$$", "$$").asJava)
+    val dupKeys = HoodieListData.eager(List("a1", "a1", "a2", "a2", "a$", "a$", "$a", "a$a", "a$a", "$a", "$$", "$$").asJava)
     val dupResult = hoodieBackedTableMetadata.readRecordIndex(dupKeys).collectAsList().asScala
     assert(dupResult.size == 6, "Should return 6 unique results for duplicate keys")
     val dupResultKeys = dupResult.map(_.getKey()).toSet
@@ -364,7 +364,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 6: Test with different secondary index (price column)
     val priceIndexName = "secondary_index_idx_price"
-    val priceKeys = HoodieListData.eager(List("10", "20", "30").asJava)
+    val priceKeys = HoodieListData.eager(List("10.0", "20.0", "30.0").asJava)
     val priceResult = hoodieBackedTableMetadata.readSecondaryIndexLocations(priceKeys, priceIndexName).collectAsList().asScala
     assert(priceResult.size == 3, s"Should return 3 results for price secondary keys in table version ${getTableVersion}")
 
@@ -403,7 +403,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     // Test with existing secondary keys including those with $ characters
     val existingKeys = HoodieListData.eager(List("b1", "b2", "b$", "sec$key", "$sec$", "$$").asJava)
     val result = hoodieBackedTableMetadata.getSecondaryIndexRecords(existingKeys, secondaryIndexName)
-    val resultMap = HoodieDataUtils.dedupeAndCollectAsMap(result)
+    val resultMap = HoodieDataUtils.dedupeAndCollectAsMapOfSet(result)
 
     assert(resultMap.size == 6, s"Should return 6 results for existing secondary keys in table version ${getTableVersion}")
 
@@ -412,19 +412,19 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
       assert(recordKeys.asScala.nonEmpty, s"Secondary key $secondaryKey should map to at least one record key")
       assert(recordKeys.size == 1, s"Secondary key $secondaryKey should map to exactly one record key in this test")
     }
-    
+
     // Validate specific mappings for records with $ characters
-    assert(resultMap.asScala("a$").asScala.toSet == Set("b$"))
-    assert(resultMap.asScala("$a").asScala.toSet == Set("sec$key"))
-    assert(resultMap.asScala("a$a").asScala.toSet == Set("$sec$"))
+    assert(resultMap.asScala("b$").asScala.toSet == Set("a$"))
+    assert(resultMap.asScala("sec$key").asScala.toSet == Set("$a"))
+    assert(resultMap.asScala("$sec$").asScala.toSet == Set("a$a"))
     assert(resultMap.asScala("$$").asScala.toSet == Set("$$"))
-    assert(resultMap.asScala("a1").asScala.toSet == Set("b1"))
-    assert(resultMap.asScala("a2").asScala.toSet == Set("b2"))
+    assert(resultMap.asScala("b1").asScala.toSet == Set("a1"))
+    assert(resultMap.asScala("b2").asScala.toSet == Set("a2"))
 
     // Test with non-existing secondary keys
     val nonExistingKeys = HoodieListData.eager(List("non_exist_1", "non_exist_2").asJava)
     val nonExistingResult = hoodieBackedTableMetadata.getSecondaryIndexRecords(nonExistingKeys, secondaryIndexName)
-    val nonExistingMap = HoodieDataUtils.dedupeAndCollectAsMap(nonExistingResult)
+    val nonExistingMap = HoodieDataUtils.dedupeAndCollectAsMapOfSet(nonExistingResult)
     assert(nonExistingMap.isEmpty, s"Should return empty result for non-existing secondary keys in table version ${getTableVersion}")
   }
 }
@@ -530,14 +530,14 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
     val expectedRows = Seq(
       "\u0000$null_record",
       "\u0000$null_record",
-      "$sec$$a$a",
-      "\\$\\$$\\$",
       "10.0$a1",
       "20.0$a2",
       "30.0$a\\$",
       "40.0$\\$a",
       "50.0$a\\$a",
       "60.0$\\$\\$",
+      "\\$\\$$\\$\\$",
+      "\\$sec\\$$a\\$a",
       "b1$a1",
       "b2$a2",
       "b\\$$a\\$",
@@ -569,12 +569,12 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
 
     // Test getSecondaryIndexRecords API with null value
     val nullRecordsResult = hoodieBackedTableMetadata.getSecondaryIndexRecords(nullKeys, secondaryIndexName)
-    val nullRecordsMap = HoodieDataUtils.dedupeAndCollectAsMap(nullRecordsResult)
+    val nullRecordsMap = HoodieDataUtils.dedupeAndCollectAsMapOfSet(nullRecordsResult)
 
     // Verify that null key maps to record keys.
     // Assert it is map with key as "null_record" -> value as set of "null"
-    assert(nullRecordsMap.keySet().asScala.toList.equals(Seq("null_record")))
-    assert(nullRecordsMap.get("null_record").asScala.toList.equals(Seq(null)))
+    assert(nullRecordsMap.size() == 1)
+    assert(nullRecordsMap.get(null).asScala.equals(Set("null_record")))
     // Clean up the test data
     spark.sql(s"delete from $tableName where id = 'null_record'")
     hoodieBackedTableMetadata.reset()
