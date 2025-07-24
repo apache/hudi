@@ -260,13 +260,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   private HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> doLookup(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
                                                                                SerializableFunctionUnchecked<String, String> keyEncodingFn) {
-
-    final int numFileSlices = fileSlices.size();
-    if (numFileSlices == 1) {
-      List<String> keysList = keys.map(keyEncodingFn::apply).collectAsList();
-      TreeSet<String> distinctSortedKeys = new TreeSet<>(keysList);
-      return lookupKeyRecordPairs(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0));
-    }
+      final int numFileSlices = fileSlices.size();
+      if (numFileSlices == 1) {
+        List<String> keysList = keys.map(keyEncodingFn::apply).collectAsList();
+        TreeSet<String> distinctSortedKeys = new TreeSet<>(keysList);
+        return lookupKeyRecordPairs(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0));
+      }
 
     // For SI v2, there are 2 cases require different implementation:
     // SI write path concatenates secKey$recordKey, the secKey needs extracted for hashing;
@@ -302,6 +301,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             .mapToPair(p -> Pair.of(p.getLeft(), p.getRight()));
     return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
+
 
   /**
    * All keys to be looked up go through the following steps:

@@ -201,12 +201,12 @@ public class QuickstartConfigurations {
 
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
-    conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+    conf.set(FlinkOptions.PATH, tablePath);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
-    conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     return conf;
   }
 

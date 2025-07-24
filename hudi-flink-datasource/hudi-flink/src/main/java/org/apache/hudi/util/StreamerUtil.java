@@ -174,9 +174,9 @@ public class StreamerUtil {
    */
   public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
     return HoodiePayloadConfig.newBuilder()
-        .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
-        .withPayloadOrderingField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
-        .withPayloadEventTimeField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadClass(conf.get(FlinkOptions.PAYLOAD_CLASS_NAME))
+        .withPayloadOrderingField(conf.get(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadEventTimeField(conf.get(FlinkOptions.PRECOMBINE_FIELD))
         .build();
   }
 
@@ -186,8 +186,8 @@ public class StreamerUtil {
   public static HoodieIndexConfig getIndexConfig(Configuration conf) {
     return HoodieIndexConfig.newBuilder()
         .withIndexType(OptionsResolver.getIndexType(conf))
-        .withBucketNum(String.valueOf(conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
-        .withRecordKeyField(conf.getString(FlinkOptions.RECORD_KEY_FIELD))
+        .withBucketNum(String.valueOf(conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
+        .withRecordKeyField(conf.get(FlinkOptions.RECORD_KEY_FIELD))
         .withIndexKeyField(OptionsResolver.getIndexKeyField(conf))
         .withBucketIndexEngineType(OptionsResolver.getBucketEngineType(conf))
         .withEngineType(EngineType.FLINK)
@@ -201,7 +201,7 @@ public class StreamerUtil {
     if (OptionsResolver.isLockRequired(conf) && !conf.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
       // configure the fs lock provider by default
       return Option.of(HoodieLockConfig.newBuilder()
-          .fromProperties(FileSystemBasedLockProvider.getLockConfig(conf.getString(FlinkOptions.PATH)))
+          .fromProperties(FileSystemBasedLockProvider.getLockConfig(conf.get(FlinkOptions.PATH)))
           .withConflictResolutionStrategy(OptionsResolver.getConflictResolutionStrategy(conf))
           .build());
     }
@@ -221,7 +221,7 @@ public class StreamerUtil {
     }
 
     return HoodieTimeGeneratorConfig.newBuilder()
-        .withPath(conf.getString(FlinkOptions.PATH))
+        .withPath(conf.get(FlinkOptions.PATH))
         .fromProperties(properties)
         .build();
   }
@@ -244,8 +244,24 @@ public class StreamerUtil {
         properties.put(option.key(), option.defaultValue());
       }
     }
-    properties.put(HoodieTableConfig.TYPE.key(), conf.getString(FlinkOptions.TABLE_TYPE));
+    properties.put(HoodieTableConfig.TYPE.key(), conf.get(FlinkOptions.TABLE_TYPE));
     return properties;
+  }
+
+  public static void initTableFromClientIfNecessary(Configuration conf) {
+    // Since Flink 2.0, the adaptive execution for batch job will generate job graph incrementally
+    // for multiple stages (FLIP-469). And the write coordinator is initialized along with write
+    // operator in the final stage, so hudi table should be initialized if necessary during the plan
+    // compilation phase when adaptive execution is enabled.
+    if (OptionsResolver.isIncrementalJobGraph(conf)
+        || OptionsResolver.isPartitionLevelSimpleBucketIndex(conf)) {
+      // init table, create if not exists.
+      try {
+        StreamerUtil.initTableIfNotExists(conf);
+      } catch (IOException e) {
+        throw new HoodieException("Failed to initialize table.", e);
+      }
+    }
   }
 
   /**
@@ -267,34 +283,34 @@ public class StreamerUtil {
   public static HoodieTableMetaClient initTableIfNotExists(
       Configuration conf,
       org.apache.hadoop.conf.Configuration hadoopConf) throws IOException {
-    final String basePath = conf.getString(FlinkOptions.PATH);
+    final String basePath = conf.get(FlinkOptions.PATH);
     if (!tableExists(basePath, hadoopConf)) {
       HoodieTableMetaClient.newTableBuilder()
-          .setTableCreateSchema(conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA))
-          .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
-          .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
-          .setTableVersion(conf.getInteger(FlinkOptions.WRITE_TABLE_VERSION))
-          .setTableFormat(conf.getString(FlinkOptions.WRITE_TABLE_FORMAT))
+          .setTableCreateSchema(conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA))
+          .setTableType(conf.get(FlinkOptions.TABLE_TYPE))
+          .setTableName(conf.get(FlinkOptions.TABLE_NAME))
+          .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
+          .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
           .setRecordMergeMode(getMergeMode(conf))
           .setRecordMergeStrategyId(getMergeStrategyId(conf))
           .setPayloadClassName(getPayloadClass(conf))
-          .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
-          .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
+          .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
+          .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
-          .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
+          .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
           .setKeyGeneratorClassProp(
               conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))
-          .setHiveStylePartitioningEnable(conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING))
-          .setUrlEncodePartitioning(conf.getBoolean(FlinkOptions.URL_ENCODE_PARTITIONING))
-          .setCDCEnabled(conf.getBoolean(FlinkOptions.CDC_ENABLED))
-          .setCDCSupplementalLoggingMode(conf.getString(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
+          .setHiveStylePartitioningEnable(conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING))
+          .setUrlEncodePartitioning(conf.get(FlinkOptions.URL_ENCODE_PARTITIONING))
+          .setCDCEnabled(conf.get(FlinkOptions.CDC_ENABLED))
+          .setCDCSupplementalLoggingMode(conf.get(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(OptionsResolver.isPopulateMetaFields(conf))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
       LOG.info("Table initialized under base path {}", basePath);
     } else {
       LOG.info("Table [path={}, name={}] already exists, no need to initialize the table",
-          basePath, conf.getString(FlinkOptions.TABLE_NAME));
+          basePath, conf.get(FlinkOptions.TABLE_NAME));
     }
 
     return StreamerUtil.createMetaClient(conf, hadoopConf);
@@ -444,8 +460,8 @@ public class StreamerUtil {
   public static HoodieTableMetaClient metaClientForReader(
       Configuration conf,
       org.apache.hadoop.conf.Configuration hadoopConf) {
-    final String basePath = conf.getString(FlinkOptions.PATH);
-    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && !tableExists(basePath, hadoopConf)) {
+    final String basePath = conf.get(FlinkOptions.PATH);
+    if (conf.get(FlinkOptions.READ_AS_STREAMING) && !tableExists(basePath, hadoopConf)) {
       return null;
     } else {
       return createMetaClient(basePath, hadoopConf);
@@ -474,7 +490,7 @@ public class StreamerUtil {
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf, org.apache.hadoop.conf.Configuration hadoopConf) {
     return HoodieTableMetaClient.builder()
-        .setBasePath(conf.getString(FlinkOptions.PATH))
+        .setBasePath(conf.get(FlinkOptions.PATH))
         .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
         .setTimeGeneratorConfig(getTimeGeneratorConfig(conf))
         .build();
@@ -594,7 +610,7 @@ public class StreamerUtil {
    * Returns the max compaction memory in bytes with given conf.
    */
   public static long getMaxCompactionMemoryInBytes(Configuration conf) {
-    return (long) conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
+    return (long) conf.get(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024;
   }
 
   public static Schema getTableAvroSchema(HoodieTableMetaClient metaClient, boolean includeMetadataFields) throws Exception {
@@ -648,7 +664,7 @@ public class StreamerUtil {
                 + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
       }
       if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
+        conf.set(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
       } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
         throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
                 + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
@@ -661,7 +677,7 @@ public class StreamerUtil {
    */
   public static void checkKeygenGenerator(boolean isComplexHoodieKey, Configuration conf) {
     if (isComplexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
@@ -674,7 +690,7 @@ public class StreamerUtil {
     Properties properties = new Properties();
 
     // set up metadata.enabled=true in table DDL to enable metadata listing
-    properties.put(HoodieMetadataConfig.ENABLE.key(), conf.getBoolean(FlinkOptions.METADATA_ENABLED));
+    properties.put(HoodieMetadataConfig.ENABLE.key(), conf.get(FlinkOptions.METADATA_ENABLED));
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
   }

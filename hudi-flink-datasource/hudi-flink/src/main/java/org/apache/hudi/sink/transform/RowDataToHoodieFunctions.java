@@ -36,7 +36,7 @@ public abstract class RowDataToHoodieFunctions {
    * Creates a {@link RowDataToHoodieFunction} instance based on the given configuration.
    */
   public static RowDataToHoodieFunction<RowData, HoodieFlinkInternalRow> create(RowType rowType, Configuration conf) {
-    if (conf.getLong(FlinkOptions.WRITE_RATE_LIMIT) > 0) {
+    if (conf.get(FlinkOptions.WRITE_RATE_LIMIT) > 0) {
       return new RowDataToHoodieFunctionWithRateLimit<>(rowType, conf);
     } else {
       return new RowDataToHoodieFunction<>(rowType, conf);

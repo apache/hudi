@@ -42,6 +42,11 @@ import org.apache.spark.sql.types.StructType
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 
+trait MergeOnReadIncrementalRelation {
+  def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]]
+  def getRequiredFilters: Seq[Filter]
+}
+
 case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
                                             override val optParams: Map[String, String],
                                             override val metaClient: HoodieTableMetaClient,
@@ -49,7 +54,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
                                             private val prunedDataSchema: Option[StructType] = None,
                                             override val rangeType: RangeType = RangeType.CLOSED_CLOSED)
   extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
-    with HoodieIncrementalRelationV2Trait {
+    with HoodieIncrementalRelationV2Trait with MergeOnReadIncrementalRelation {
 
   override type Relation = MergeOnReadIncrementalRelationV2
 
@@ -120,7 +125,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     }
   }
 
-  def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]] = {
+  override def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]] = {
     val slices = if (includedCommits.isEmpty) {
       List()
     } else {
@@ -149,7 +154,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     })
   }
 
-  def getRequiredFilters: Seq[Filter] = {
+  override def getRequiredFilters: Seq[Filter] = {
     if (includedCommits.isEmpty) {
       Seq.empty
     } else {

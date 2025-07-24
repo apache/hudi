@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
+import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
 import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -35,8 +37,6 @@ import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
-import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
-import org.apache.flink.table.connector.source.DataStreamScanProvider;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.FactoryUtil;
@@ -241,7 +241,7 @@ public class HoodiePipeline {
   private static DataStreamSink<?> sink(DataStream<RowData> input, ObjectIdentifier tablePath, ResolvedCatalogTable catalogTable, boolean isBounded) {
     FactoryUtil.DefaultDynamicTableContext context = Utils.getTableContext(tablePath, catalogTable, Configuration.fromMap(catalogTable.getOptions()));
     HoodieTableFactory hoodieTableFactory = new HoodieTableFactory();
-    return ((DataStreamSinkProvider) hoodieTableFactory.createDynamicTableSink(context)
+    return ((DataStreamSinkProviderAdapter) hoodieTableFactory.createDynamicTableSink(context)
         .getSinkRuntimeProvider(new SinkRuntimeProviderContext(isBounded)))
         .consumeDataStream(input);
   }
@@ -256,7 +256,7 @@ public class HoodiePipeline {
   private static DataStream<RowData> source(StreamExecutionEnvironment execEnv, ObjectIdentifier tablePath, ResolvedCatalogTable catalogTable) {
     FactoryUtil.DefaultDynamicTableContext context = Utils.getTableContext(tablePath, catalogTable, Configuration.fromMap(catalogTable.getOptions()));
     HoodieTableFactory hoodieTableFactory = new HoodieTableFactory();
-    DataStreamScanProvider dataStreamScanProvider = (DataStreamScanProvider) ((ScanTableSource) hoodieTableFactory
+    DataStreamScanProviderAdapter dataStreamScanProvider = (DataStreamScanProviderAdapter) ((ScanTableSource) hoodieTableFactory
         .createDynamicTableSource(context))
         .getScanRuntimeProvider(new ScanRuntimeProviderContext());
     return dataStreamScanProvider.produceDataStream(execEnv);

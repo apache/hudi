@@ -33,21 +33,21 @@ import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 
-class HoodieCDCFileIndex (override val spark: SparkSession,
-                          override val metaClient: HoodieTableMetaClient,
-                          override val schemaSpec: Option[StructType],
-                          override val options: Map[String, String],
-                          @transient override val fileStatusCache: FileStatusCache = NoopCache,
-                          override val includeLogFiles: Boolean,
-                          override val shouldEmbedFileSlices: Boolean)
+class HoodieCDCFileIndex(override val spark: SparkSession,
+                         override val metaClient: HoodieTableMetaClient,
+                         override val schemaSpec: Option[StructType],
+                         override val options: Map[String, String],
+                         @transient override val fileStatusCache: FileStatusCache = NoopCache,
+                         override val includeLogFiles: Boolean)
   extends HoodieFileIndex(
-    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices
+    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices = true
   ) with FileIndex  {
   private val emptyPartitionPath: String = "empty_partition_path";
   val cdcRelation: CDCRelation = CDCRelation.getCDCRelation(spark.sqlContext, metaClient, options)
   val cdcExtractor: HoodieCDCExtractor = cdcRelation.cdcExtractor
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    hasPushedDownPartitionPredicates = true
     cdcExtractor.extractCDCFileSplits().asScala.map {
       case (fileGroupId, fileSplits) =>
         val partitionPath = if (fileGroupId.getPartitionPath.isEmpty) emptyPartitionPath else fileGroupId.getPartitionPath

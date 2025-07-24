@@ -57,7 +57,7 @@ public class TestWriterWithPartitionTTl extends TestWriteBase {
 
   @Override
   protected void setUp(Configuration conf) {
-    conf.setBoolean(HoodieTTLConfig.INLINE_PARTITION_TTL.key(), true);
+    conf.setString(HoodieTTLConfig.INLINE_PARTITION_TTL.key(), "true");
     conf.setString(HoodieTTLConfig.DAYS_RETAIN.key(), "1");
     conf.setString(HoodieTTLConfig.PARTITION_TTL_STRATEGY_CLASS_NAME.key(), FlinkPartitionTTLTestStrategy.class.getName());
   }

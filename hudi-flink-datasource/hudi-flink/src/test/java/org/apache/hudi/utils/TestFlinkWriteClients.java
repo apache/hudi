@@ -68,7 +68,7 @@ public class TestFlinkWriteClients {
 
   @Test
   void testAutoSetupLockProvider() throws Exception {
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
     StreamerUtil.initTableIfNotExists(conf);
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     assertThat(writeConfig.getLockProviderClass(), is(FileSystemBasedLockProvider.class.getName()));
