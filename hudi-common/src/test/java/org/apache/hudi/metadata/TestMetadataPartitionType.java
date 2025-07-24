@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -188,10 +189,17 @@ public class TestMetadataPartitionType {
   @EnumSource(MetadataPartitionType.class)
   public void testGetNonExpressionIndexPath(MetadataPartitionType partitionType) {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    String expressionIndexName = "dummyExpressionIndex";
-    String secondaryIndexName = "dummySecondaryIndex";
+    String expressionIndexName = "expr_index_dummyExpressionIndex";
+    String secondaryIndexName = "secondary_index_dummySecondaryIndex";
     HoodieIndexMetadata indexMetadata = getIndexMetadata(expressionIndexName, secondaryIndexName);
     when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+    
+    // Mock getIndexForMetadataPartition for both index names
+    when(metaClient.getIndexForMetadataPartition(expressionIndexName))
+        .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(expressionIndexName)));
+    when(metaClient.getIndexForMetadataPartition(secondaryIndexName))
+        .thenReturn(Option.of(indexMetadata.getIndexDefinitions().get(secondaryIndexName)));
+    
     if (partitionType == MetadataPartitionType.EXPRESSION_INDEX) {
       assertEquals(expressionIndexName, partitionType.getPartitionPath(metaClient, expressionIndexName));
     } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
@@ -207,12 +215,14 @@ public class TestMetadataPartitionType {
         .withIndexName(expressionIndexName)
         .withIndexType("column_stats")
         .withIndexFunction("lower")
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), expressionIndexName))
         .withSourceFields(Collections.singletonList("name"))
         .build();
     indexDefinitions.put(expressionIndexName, expressionIndexDefinition);
     HoodieIndexDefinition secondaryIndexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(secondaryIndexName)
-        .withIndexType(null)
+        .withIndexType(MetadataPartitionType.COLUMN_STATS.name())
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), secondaryIndexName))
         .withIndexFunction(null)
         .withSourceFields(Collections.singletonList("name"))
         .build();
@@ -225,6 +235,7 @@ public class TestMetadataPartitionType {
     MetadataPartitionType partitionType = MetadataPartitionType.EXPRESSION_INDEX;
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+    when(metaClient.getIndexForMetadataPartition("testIndex")).thenReturn(Option.empty());
 
     assertThrows(IllegalArgumentException.class,
         () -> partitionType.getPartitionPath(metaClient, "testIndex"));
@@ -234,12 +245,12 @@ public class TestMetadataPartitionType {
   public void testIndexNameWithoutPrefix() {
     for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
       String userIndexName = MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()) ? "idx" : "";
-      HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName, null, null, null, null);
+      HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName, partitionType.name(), null, null, null);
       assertEquals(partitionType.getIndexNameWithoutPrefix(indexDefinition), userIndexName);
     }
 
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieIndexDefinition indexDefinition = createIndexDefinition(MetadataPartitionType.RECORD_INDEX, "", null, null, null, null);
+      HoodieIndexDefinition indexDefinition = createIndexDefinition(MetadataPartitionType.RECORD_INDEX, "", MetadataPartitionType.RECORD_INDEX.name(), null, null, null);
       MetadataPartitionType.EXPRESSION_INDEX.getIndexNameWithoutPrefix(indexDefinition);
     });
   }
@@ -247,12 +258,14 @@ public class TestMetadataPartitionType {
   private HoodieIndexDefinition createIndexDefinition(MetadataPartitionType partitionType, String userIndexName, String indexType, String indexFunction, List<String> sourceFields,
                                                       Map<String, String> indexOptions) {
     String indexSuffix = StringUtils.nonEmpty(userIndexName) ? userIndexName : "";
+    String indexName = partitionType.getPartitionPath() + indexSuffix;
     return HoodieIndexDefinition.newBuilder()
-        .withIndexName(partitionType.getPartitionPath() + indexSuffix)
+        .withIndexName(indexName)
         .withIndexType(indexType)
         .withIndexFunction(indexFunction)
         .withSourceFields(sourceFields)
         .withIndexOptions(indexOptions)
+        .withVersion(HoodieIndexVersion.getCurrentVersion(HoodieTableVersion.current(), indexName))
         .build();
   }
 

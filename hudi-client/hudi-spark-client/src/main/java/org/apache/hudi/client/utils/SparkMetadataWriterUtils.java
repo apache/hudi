@@ -27,6 +27,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -107,6 +108,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_COUNT;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createBloomFilterMetadataRecord;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createColumnStatsRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemViewForMetadataTable;
@@ -399,7 +401,8 @@ public class SparkMetadataWriterUtils {
             .collect(Collectors.toSet());
         // Fetch EI column stat records for above files
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
-            tableMetadata.getRecordsByKeyPrefixes(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName), indexPartition, false)
+            tableMetadata.getRecordsByKeyPrefixes(
+                    HoodieListData.lazy(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName)), indexPartition, false, IDENTITY_ENCODING)
                 // schema and properties are ignored in getInsertValue, so simply pass as null
                 .map(record -> record.getData().getInsertValue(null, null))
                 .filter(Option::isPresent)

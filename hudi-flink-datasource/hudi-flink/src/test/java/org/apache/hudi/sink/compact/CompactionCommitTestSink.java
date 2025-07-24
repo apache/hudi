@@ -24,6 +24,7 @@ import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utils.RuntimeContextUtils;
 
 import org.apache.flink.configuration.Configuration;
 
@@ -42,7 +43,7 @@ public class CompactionCommitTestSink extends CompactionCommitSink {
     super.invoke(event, context);
     List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
     boolean compactCommitted = instants.stream().anyMatch(i -> i.requestedTime().equals(event.getInstant()) && i.isCompleted());
-    if (compactCommitted && getRuntimeContext().getAttemptNumber() == 0) {
+    if (compactCommitted && RuntimeContextUtils.getAttemptNumber(getRuntimeContext()) == 0) {
       // archive compact instant
       this.writeClient.getConfig().setValue(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP, "1");
       this.writeClient.getConfig().setValue(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP, "1");
