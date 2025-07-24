@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal.schema.utils;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
@@ -213,6 +214,33 @@ public class AvroSchemaEvolutionUtils {
 
 
     return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternalSchema, schemaChange), sourceSchema.getFullName());
+  }
+
+  /**
+   * Checks if the schema evolution is just making a field nullable.
+   *
+   * @param tableFieldSchema the original field schema
+   * @param writerFieldSchema the new field schema
+   * @return true if this is just a nullable evolution, false otherwise
+   */
+  public static boolean isNullableEvolution(Schema tableFieldSchema, Schema writerFieldSchema) {
+    // Check if writer schema is nullable but table schema is not
+    if (!AvroSchemaUtils.isNullable(tableFieldSchema) && AvroSchemaUtils.isNullable(writerFieldSchema)) {
+      // For a valid nullable evolution, the union must have exactly 2 types: NULL and one other type
+      if (writerFieldSchema.getTypes().size() != 2) {
+        return false;
+      }
+      
+      // Extract the non-null type from the union
+      Schema writerNonNullSchema = writerFieldSchema.getTypes().stream()
+          .filter(s -> s.getType() != Schema.Type.NULL)
+          .findFirst()
+          .orElse(null);
+      
+      // Check if the non-null part of the writer schema matches the table schema
+      return writerNonNullSchema != null && tableFieldSchema.equals(writerNonNullSchema);
+    }
+    return false;
   }
 }
 

@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.avro.AvroSchemaCompatibility;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -1016,6 +1017,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       Schema.Field writerField = AvroSchemaCompatibility.lookupWriterField(writerSchema, tableField);
       
       if (writerField != null && !tableField.schema().equals(writerField.schema())) {
+        // Check if this is just making the field nullable, which is a backward-compatible change
+        if (AvroSchemaEvolutionUtils.isNullableEvolution(tableField.schema(), writerField.schema())) {
+          // This is allowed - making a field nullable is backward-compatible
+          continue;
+        }
+        
         String errorMessage = String.format(
             "Column '%s' has secondary index '%s' and cannot evolve from schema '%s' to '%s'. "
             + "Please drop the secondary index before changing the column type.",

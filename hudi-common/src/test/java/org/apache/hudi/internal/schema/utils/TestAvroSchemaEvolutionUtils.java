@@ -36,6 +36,9 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -46,6 +49,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -503,6 +507,135 @@ public class TestAvroSchemaEvolutionUtils {
                 Types.Field.get(16, true, "nest2", Types.BooleanType.get())))
     );
     Assertions.assertEquals(result.getRecord(), checkedRecord);
+  }
+
+  @ParameterizedTest(name = "{index}: {0}")
+  @MethodSource("provideNullableEvolutionTestCases")
+  public void testIsNullableEvolution(String testName, Schema tableSchema, Schema writerSchema, boolean expectedResult) {
+    boolean actualResult = AvroSchemaEvolutionUtils.isNullableEvolution(tableSchema, writerSchema);
+    Assertions.assertEquals(expectedResult, actualResult, 
+        String.format("Test '%s' failed: expected %s but was %s", testName, expectedResult, actualResult));
+  }
+
+  private static Stream<Arguments> provideNullableEvolutionTestCases() {
+    List<Arguments> testCases = new ArrayList<>();
+    
+    // Basic type evolutions
+    Schema nonNullableString = Schema.create(Schema.Type.STRING);
+    Schema nullableString = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING));
+    testCases.add(Arguments.of("Non-nullable string to nullable string", nonNullableString, nullableString, true));
+    
+    Schema nonNullableInt = Schema.create(Schema.Type.INT);
+    Schema nullableInt = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT));
+    testCases.add(Arguments.of("Non-nullable int to nullable int", nonNullableInt, nullableInt, true));
+    
+    // Logical types
+    Schema nonNullableDate = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+    Schema nullableDate = Schema.createUnion(Schema.create(Schema.Type.NULL), 
+        LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)));
+    testCases.add(Arguments.of("Non-nullable date to nullable date", nonNullableDate, nullableDate, true));
+    
+    // No change scenarios
+    testCases.add(Arguments.of("Nullable string to nullable string (no change)", nullableString, nullableString, false));
+    testCases.add(Arguments.of("Non-nullable string to non-nullable string (no change)", nonNullableString, nonNullableString, false));
+    
+    // Type changes (should be false)
+    Schema nullableLong = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG));
+    testCases.add(Arguments.of("Non-nullable int to nullable long (type change)", nonNullableInt, nullableLong, false));
+    
+    // Reverse evolution (should be false)
+    testCases.add(Arguments.of("Nullable to non-nullable", nullableString, nonNullableString, false));
+    
+    // Complex types
+    Schema recordSchema = Schema.createRecord("testRecord", null, null, false, Arrays.asList(
+        new Schema.Field("field1", Schema.create(Schema.Type.STRING), null, null),
+        new Schema.Field("field2", Schema.create(Schema.Type.INT), null, null)));
+    Schema nullableRecord = Schema.createUnion(Schema.create(Schema.Type.NULL), recordSchema);
+    testCases.add(Arguments.of("Non-nullable record to nullable record", recordSchema, nullableRecord, true));
+    
+    // Union with multiple non-null types
+    Schema multiTypeUnion = Schema.createUnion(
+        Schema.create(Schema.Type.NULL), 
+        Schema.create(Schema.Type.STRING), 
+        Schema.create(Schema.Type.INT));
+    testCases.add(Arguments.of("Union with multiple non-null types", nonNullableString, multiTypeUnion, false));
+    
+    // Using AvroInternalSchemaConverter API
+    Schema nonNullableLong = Schema.create(Schema.Type.LONG);
+    Schema nullableLongViaAPI = AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.LONG));
+    testCases.add(Arguments.of("Using AvroInternalSchemaConverter.nullableSchema", nonNullableLong, nullableLongViaAPI, true));
+    
+    // Fixed type
+    Schema fixedSchema = Schema.createFixed("MD5", null, null, 16);
+    Schema nullableFixedViaAPI = AvroInternalSchemaConverter.nullableSchema(fixedSchema);
+    testCases.add(Arguments.of("Fixed type to nullable fixed", fixedSchema, nullableFixedViaAPI, true));
+    
+    // Array and Map evolution (element changes, not direct nullable evolution)
+    Schema arrayOfStrings = Schema.createArray(Schema.create(Schema.Type.STRING));
+    Schema arrayOfNullableStrings = Schema.createArray(
+        AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.STRING)));
+    testCases.add(Arguments.of("Array of non-nullable to array of nullable elements", arrayOfStrings, arrayOfNullableStrings, false));
+    
+    Schema mapOfStrings = Schema.createMap(Schema.create(Schema.Type.STRING));
+    Schema mapOfNullableStrings = Schema.createMap(
+        AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.STRING)));
+    testCases.add(Arguments.of("Map with non-nullable to nullable values", mapOfStrings, mapOfNullableStrings, false));
+    
+    // Decimal type
+    Schema decimalSchema = LogicalTypes.decimal(10, 2)
+        .addToSchema(Schema.createFixed("decimal", null, null, 5));
+    Schema nullableDecimal = AvroInternalSchemaConverter.nullableSchema(decimalSchema);
+    testCases.add(Arguments.of("Decimal type to nullable decimal", decimalSchema, nullableDecimal, true));
+    
+    // Timestamp types
+    Schema timestampSchema = LogicalTypes.timestampMillis()
+        .addToSchema(Schema.create(Schema.Type.LONG));
+    Schema nullableTimestamp = SchemaBuilder.nullable().longType();
+    testCases.add(Arguments.of("Timestamp to nullable long (loses logical type)", timestampSchema, nullableTimestamp, false));
+    
+    Schema correctNullableTimestamp = AvroInternalSchemaConverter.nullableSchema(timestampSchema);
+    testCases.add(Arguments.of("Timestamp to nullable timestamp (preserves logical type)", timestampSchema, correctNullableTimestamp, true));
+    
+    // SchemaBuilder test cases
+    // Test with SchemaBuilder to create nullable fields in records
+    Schema recordWithNonNullableField = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("name").type().stringType().noDefault()
+        .endRecord();
+    
+    Schema recordWithNullableField = SchemaBuilder.record("TestRecord")
+        .fields()
+        .name("id").type().intType().noDefault()
+        .name("name").type().nullable().stringType().noDefault()
+        .endRecord();
+    
+    // Check evolution of the name field
+    Schema.Field nonNullNameField = recordWithNonNullableField.getField("name");
+    Schema.Field nullableNameField = recordWithNullableField.getField("name");
+    testCases.add(Arguments.of("SchemaBuilder: field evolution in record", 
+        nonNullNameField.schema(), nullableNameField.schema(), true));
+
+    // Using SchemaBuilder's optional() method
+    Schema schemaWithOptional = SchemaBuilder.record("TestRecord3")
+        .fields()
+        .name("field1").type().optional().intType()
+        .endRecord();
+    
+    Schema.Field optionalIntField = schemaWithOptional.getField("field1");
+    testCases.add(Arguments.of("SchemaBuilder: optional() method",
+        Schema.create(Schema.Type.INT), optionalIntField.schema(), true));
+    
+    // Using Schema.Field creation with nullable/non-nullable schemas
+    Schema.Field nonNullField = new Schema.Field("test", Schema.create(Schema.Type.STRING), 
+        "Test field", null);
+    Schema.Field nullableFieldDirect = new Schema.Field("test", 
+        AvroInternalSchemaConverter.nullableSchema(Schema.create(Schema.Type.STRING)), 
+        "Test field", JsonProperties.NULL_VALUE);
+    testCases.add(Arguments.of("Schema.Field direct creation",
+        nonNullField.schema(), nullableFieldDirect.schema(), true));
+    
+    return testCases.stream();
   }
 
   @Test

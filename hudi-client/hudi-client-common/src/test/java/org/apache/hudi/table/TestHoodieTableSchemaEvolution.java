@@ -203,12 +203,9 @@ public class TestHoodieTableSchemaEvolution {
     HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_name", "name");
     HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
     
-    // Making a field nullable changes its schema, so this should fail
-    SchemaCompatibilityException exception = assertThrows(SchemaCompatibilityException.class, () -> 
+    // Making a field nullable is a backward-compatible change and should be allowed
+    assertDoesNotThrow(() -> 
         HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata));
-    
-    assertTrue(exception.getMessage().contains("name"));
-    assertTrue(exception.getMessage().contains("secondary_index_name"));
   }
 
   @Test
@@ -243,6 +240,55 @@ public class TestHoodieTableSchemaEvolution {
     // Should not throw because it's not a secondary index
     assertDoesNotThrow(() -> 
         HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata));
+  }
+
+  @Test
+  public void testFixedTypeEvolution() {
+    // Test fixed type size changes
+    
+    // Fixed size increase
+    String fixed8Schema = "{"
+        + "\"type\": \"record\","
+        + "\"name\": \"test\","
+        + "\"fields\": ["
+        + "  {\"name\": \"id\", \"type\": \"int\"},"
+        + "  {\"name\": \"fixed_field\", \"type\": {\"type\": \"fixed\", \"name\": \"FixedField\", \"size\": 8}}"
+        + "]}";
+    
+    String fixed16Schema = "{"
+        + "\"type\": \"record\","
+        + "\"name\": \"test\","
+        + "\"fields\": ["
+        + "  {\"name\": \"id\", \"type\": \"int\"},"
+        + "  {\"name\": \"fixed_field\", \"type\": {\"type\": \"fixed\", \"name\": \"FixedField\", \"size\": 16}}"
+        + "]}";
+    
+    Schema tableSchema = new Schema.Parser().parse(fixed8Schema);
+    Schema writerSchema = new Schema.Parser().parse(fixed16Schema);
+    
+    HoodieIndexDefinition indexDef = createSecondaryIndexDefinition("secondary_index_fixed", "fixed_field");
+    HoodieIndexMetadata indexMetadata = createIndexMetadata(indexDef);
+    
+    final Schema tableSchemaFixed1 = tableSchema;
+    final Schema writerSchemaFixed1 = writerSchema;
+    final HoodieIndexMetadata indexMetadataFixed = indexMetadata;
+    SchemaCompatibilityException exception = assertThrows(SchemaCompatibilityException.class, () -> 
+        HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchemaFixed1, writerSchemaFixed1, indexMetadataFixed));
+    
+    assertTrue(exception.getMessage().contains("fixed_field"));
+    assertTrue(exception.getMessage().contains("secondary index"));
+    
+    // Fixed size decrease
+    tableSchema = new Schema.Parser().parse(fixed16Schema);
+    writerSchema = new Schema.Parser().parse(fixed8Schema);
+    
+    final Schema tableSchemaFixed2 = tableSchema;
+    final Schema writerSchemaFixed2 = writerSchema;
+    exception = assertThrows(SchemaCompatibilityException.class, () -> 
+        HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchemaFixed2, writerSchemaFixed2, indexMetadataFixed));
+    
+    assertTrue(exception.getMessage().contains("fixed_field"));
+    assertTrue(exception.getMessage().contains("secondary index"));
   }
 
   private HoodieIndexDefinition createSecondaryIndexDefinition(String indexName, String... sourceFields) {
