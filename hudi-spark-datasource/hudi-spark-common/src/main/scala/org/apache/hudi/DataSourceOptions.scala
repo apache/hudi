@@ -258,7 +258,7 @@ object DataSourceReadOptions {
     .key("hoodie.spark.polaris.catalog.class")
     .defaultValue("org.apache.polaris.spark.SparkCatalog")
     .markAdvanced()
-    .sinceVersion("1.0.3")
+    .sinceVersion("1.1.0")
     .withDocumentation("Fully qualified class name of the catalog that is used by the Polaris spark client.")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */

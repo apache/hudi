@@ -75,8 +75,8 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
     // Get the HoodieCatalog instance from the session
     val hoodieCatalog = customSession.sessionState.catalogManager.v2SessionCatalog.asInstanceOf[HoodieCatalog]
 
-    // Set the mock delegate if Polaris is enabled
     if (enablePolaris) {
+      // If enabled, we mimic Polaris's Spark catalog behavior by setting the delegate
       hoodieCatalog.setDelegateCatalog(mockPolarisDelegate)
     }
     (customSession, hoodieCatalog, mockPolarisDelegate)
