@@ -152,7 +152,8 @@ public abstract class KafkaSource<T> extends Source<T> {
       JavaSparkContext sparkContext,
       KafkaOffsetGen offsetGen,
       OffsetRange[] offsetRanges) {
-    Map<String, Object> kafkaParams = filterKafkaParameters(offsetGen.getKafkaParams(), ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST));
+    Map<String, Object> kafkaParams = filterKafkaParameters(offsetGen.getKafkaParams(),
+                                                            ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, true));
     LOG.debug("Original kafka params " + offsetGen.getKafkaParams() + "\n After filtering kafka params " + kafkaParams);
     return KafkaUtils.createRDD(sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent());
   }
