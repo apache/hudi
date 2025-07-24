@@ -70,17 +70,15 @@ public class TestKafkaSourceUtil {
 
     Map<String, Object> kafkaParams = new HashMap<>();
 
-    kafkaParams.put("onehouse.hoodie.streamer", "offer");
+    kafkaParams.put("custom.config.streamer", "offer");
     kafkaParams.put("boostrap.servers", "dns:port");
-    kafkaParams.put("onehouse.stream.capture", "s3://folder1");
-    kafkaParams.put("onehousedataplane.streamer.sourceprofile.refresh.mode", "ENABLED");
+    kafkaParams.put("custom.config.capture", "s3://folder1");
+    kafkaParams.put("customconfig.sourceprofile.refresh.mode", "ENABLED");
 
     assertEquals(kafkaParams,
         KafkaSourceUtil.removeIgnorePrefixConfigs(kafkaParams, props));
 
-    props.put(KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, "onehouse");
-
-
+    props.put(KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST.key(), "custom");
 
     Map<String, Object> filteredParams = KafkaSourceUtil.removeIgnorePrefixConfigs(kafkaParams, props);
     Map<String, Object> expectedParams = new HashMap<>();

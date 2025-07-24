@@ -148,8 +148,7 @@ public class KafkaSourceConfig extends HoodieConfig {
   public static final ConfigProperty<String> IGNORE_PREFIX_CONFIG_LIST = ConfigProperty
           .key(PREFIX + "ignore.prefix.config.list")
           .defaultValue("")
-          .withDocumentation("Please add prefixes to ignore using semi-colon separated values "
-                  + "such as onehouse;one");
+          .withDocumentation("Comma separated list of prefixes for config keys that should be dropped from the configs passed to the Kafka consumer.");
 
   /**
    * Kafka reset offset strategies.

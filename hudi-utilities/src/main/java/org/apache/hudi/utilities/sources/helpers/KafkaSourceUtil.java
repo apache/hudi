@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
@@ -52,8 +53,7 @@ public class KafkaSourceUtil {
   }
 
   public static Map<String, Object> removeIgnorePrefixConfigs(Map<String, Object> kafkaParams, TypedProperties props) {
-    String prefixConfigList = props.getOrDefault(
-        KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, "").toString();
+    String prefixConfigList = ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, true);
 
     if (prefixConfigList.isEmpty()) {
       return kafkaParams;
