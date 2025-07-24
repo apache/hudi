@@ -66,7 +66,7 @@ import java.util.stream.Stream;
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow}
  *            in Spark and {@code RowData} in Flink.
  */
-public class HoodieFileGroupReader<T> implements Closeable {
+public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final HoodieTableMetaClient metaClient;
   private final InputSplit inputSplit;

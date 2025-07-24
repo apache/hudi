@@ -163,7 +163,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   @VisibleForTesting
-  public Schema generateRequiredSchema() {
+  Schema generateRequiredSchema() {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {
