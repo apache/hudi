@@ -1,4 +1,3 @@
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -24,13 +23,17 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -206,7 +209,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     List<String> partitionIDFileIDStringsList = new ArrayList<>(partitionIDFileIDStrings);
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
-        getRecordsByKeys(partitionIDFileIDStringsList, metadataPartitionName);
+        HoodieDataUtils.dedupeAndCollectAsMap(
+            getRecordsByKeys(HoodieListData.eager(partitionIDFileIDStringsList), metadataPartitionName, Option.empty()));
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
     metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR, partitionIDFileIDStringsList.size()));
 
@@ -252,60 +256,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     Map<String, Pair<String, String>> columnStatKeyToFileNameMap = computeColStatKeyToFileName(partitionNameFileNameList, columnNames);
     return computeFileToColumnStatsMap(columnStatKeyToFileNameMap);
-  }
-
-  /**
-   * Reads record keys from record-level index.
-   * <p>
-   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
-   *
-   * @param recordKeys The list of record keys to read
-   */
-  @Override
-  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
-    // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
-    // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
-    // to existing records being inserted again causing duplicates.
-    // The caller is required to check for record index existence in MDT before calling this method.
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
-        "Record index is not initialized in MDT");
-
-    HoodieTimer timer = HoodieTimer.start();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-    Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
-    result.forEach((key, record) -> {
-      if (!record.getData().isDeleted()) {
-        recordKeyToLocation.put(key, record.getData().getRecordGlobalLocation());
-      }
-    });
-
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_TIME_STR, timer.endTimer()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_COUNT_STR, recordKeys.size()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR, recordKeyToLocation.size()));
-
-    return recordKeyToLocation;
-  }
-
-  /**
-   * Get record-location using secondary-index and record-index
-   * <p>
-   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
-   *
-   * @param secondaryKeys The list of secondary keys to read
-   */
-  @Override
-  public Map<String, HoodieRecordGlobalLocation> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
-        "Record index is not initialized in MDT");
-    ValidationUtils.checkState(
-        dataMetaClient.getTableConfig().getMetadataPartitions().contains(partitionName),
-        "Secondary index is not initialized in MDT for: " + partitionName);
-    // Fetch secondary-index records
-    Map<String, Set<String>> secondaryKeyRecords = getSecondaryIndexRecords(secondaryKeys, partitionName);
-    // Now collect the record-keys and fetch the RLI records
-    List<String> recordKeys = new ArrayList<>();
-    secondaryKeyRecords.values().forEach(recordKeys::addAll);
-    return readRecordIndex(recordKeys);
   }
 
   /**
@@ -378,8 +328,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     HoodieTimer timer = HoodieTimer.start();
     Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs =
-        getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()),
-            MetadataPartitionType.FILES.getPartitionPath());
+        HoodieDataUtils.dedupeAndCollectAsMap(
+            getRecordsByKeys(HoodieListData.eager(new ArrayList<>(partitionIdToPathMap.keySet())),
+                MetadataPartitionType.FILES.getPartitionPath(), Option.empty()));
     metrics.ifPresent(
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
@@ -395,7 +346,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
               List<StoragePathInfo> files = metadataPayload.getFileList(dataMetaClient.getStorage(), partitionPath);
               return Pair.of(partitionPath.toString(), files);
             })
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     LOG.info("Listed files in {} partitions from metadata", partitionPaths.size());
 
@@ -434,7 +385,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     List<String> columnStatKeylist = new ArrayList<>(columnStatKeyToFileNameMap.keySet());
     HoodieTimer timer = HoodieTimer.start();
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
-        getRecordsByKeys(columnStatKeylist, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+        HoodieDataUtils.dedupeAndCollectAsMap(
+            getRecordsByKeys(
+                HoodieListData.eager(columnStatKeylist), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), Option.empty()));
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
     Map<Pair<String, String>, List<HoodieMetadataColumnStats>> fileToColumnStatMap = new HashMap<>();
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
@@ -466,14 +419,33 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     }
   }
 
+  /**
+   * Retrieves a single record from the metadata table by its key.
+   *
+   * @param key The escaped/encoded key to look up in the metadata table
+   * @param partitionName The partition name where the record is stored
+   * @return Option containing the record if found, empty Option if not found
+   */
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
 
-  protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
+  /**
+   * Retrieves a collection of pairs (key -> record) from the metadata table by its keys.
+   *
+   * @param keys The to look up in the metadata table
+   * @param partitionName The partition name where the records are stored
+   * @return A collection of pairs (key -> record)
+   */
+  public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(
+          HoodieData<String> keys, String partitionName, Option<SerializableFunctionUnchecked<String, String>> keyEncodingFn);
 
   /**
-   * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.
+   * Returns a collection of pairs (secondary-key -> set-of-record-keys) for the provided secondary keys.
+   *
+   * @param keys The unescaped/decoded secondary keys to look up in the metadata table
+   * @param partitionName The partition name where the secondary index records are stored
+   * @return A collection of pairs where each key is a secondary key and the value is a set of record keys that are indexed by that secondary key
    */
-  public abstract Map<String, Set<String>> getSecondaryIndexRecords(List<String> keys, String partitionName);
+  public abstract HoodiePairData<String, Set<String>> getSecondaryIndexRecords(HoodieData<String> keys, String partitionName);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;

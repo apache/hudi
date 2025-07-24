@@ -35,11 +35,13 @@ import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
+import org.apache.hudi.data.partitioner.ConditionalRangePartitioner;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
@@ -268,5 +270,80 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   public <T> JavaRDD<T> emptyRDD() {
     return javaSparkContext.emptyRDD();
+  }
+
+  /**
+   * Maps groups by key with automatic repartitioning based on sample key ranges.
+   *
+   * This Spark-specific implementation performs range-based repartitioning of the input data
+   * before applying the process function. The repartitioning ensures a statistically even distribution
+   * of data across partitions based on the provided key space, which can significantly improve
+   * performance for skewed datasets.
+   *
+   * Note:
+   * 1. This repartitioning behavior is specific to the Spark engine context and is not
+   * applicable to other engine contexts like HoodieLocalEngineContext.
+   * 2. The algorithm is not deterministic across different runs since the sample seed is based on current time.
+   *
+   * @param data The input key-value pair data
+   * @param processFunc Function to apply to each group of values
+   * @param keySpace List of keys to define the partitioning ranges
+   * @param preservesPartitioning Whether the operation preserves partitioning
+   * @return Processed data after grouping by key and applying the process function
+   */
+  @Override
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
+                                                                                            SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                            List<K> keySpace,
+                                                                                            boolean preservesPartitioning) {
+    HoodiePairData<K, V> repartitionedData = rangeBasedRepartitionForEachKey(
+        data, keySpace, 0.02, 100000, System.nanoTime());
+    return repartitionedData.values().mapPartitions(processFunc, preservesPartitioning);
+  }
+
+  /**
+   * Performs range-based repartitioning of data based on key distribution to optimize partition sizes.
+   *
+   * <p>This method achieves efficient data distribution by:</p>
+   * <ol>
+   *   <li><strong>Sampling:</strong> Samples a fraction of data for each key to understand the distribution
+   *       without processing the entire dataset</li>
+   *   <li><strong>Range Analysis:</strong> Analyzes the sampled data to determine optimal partition boundaries
+   *       that ensure each partition contains a balanced number of keys</li>
+   *   <li><strong>Repartitioning:</strong> Redistributes the original data across partitions based on the
+   *       computed range boundaries, ensuring keys within the same range are co-located</li>
+   *   <li><strong>Sorting:</strong> Sorts data within each partition for efficient processing</li>
+   * </ol>
+   *
+   * <p>The method is particularly useful for: Balancing workload across partitions for better parallel processing</p>
+   *
+   * @param data The input data as key-value pairs where keys are integers and values are of type V
+   * @param partitioningKeySpace The set must cover all possible keys of the given data
+   * @param sampleFraction The fraction of data to sample for each key (between 0 and 1).
+   *                       A higher fraction provides better distribution analysis but increases sampling overhead.
+   *                       It typically should be smaller than 0.05 for large datasets.
+   * @param maxKeyPerBucket The maximum number of keys allowed per partition to prevent partition skew
+   * @param seed The random seed for reproducible sampling results
+   * @param <V> Type of the value in the input data (must be Comparable)
+   * @return A repartitioned and sorted HoodiePairData with optimized key distribution across partitions
+   * @throws IllegalArgumentException if sampleFraction is not between 0 and 1
+   */
+  public <S extends Comparable<S>, V extends Comparable<V>> HoodiePairData<S, V> rangeBasedRepartitionForEachKey(
+      HoodiePairData<S, V> data, List<S> partitioningKeySpace, double sampleFraction, int maxKeyPerBucket, long seed) {
+    ValidationUtils.checkState(sampleFraction > 0 && sampleFraction <= 1, "sampleFraction must be between 0 and 1");
+    Map<S, Double> samplingFractions = new HashMap<>();
+    for (S s : partitioningKeySpace) {
+      samplingFractions.put(s, sampleFraction);
+    }
+    JavaPairRDD<S, V> pairRddDataSKV = HoodieJavaPairRDD.getJavaPairRDD(data);
+    JavaPairRDD<S, V> sampled = pairRddDataSKV.sampleByKeyExact(false, samplingFractions, seed);
+    Map<S, List<V>> splitPointsMap = ConditionalRangePartitioner.computeSplitPointMapDistributed(sampled, sampleFraction, maxKeyPerBucket);
+    ConditionalRangePartitioner<S, V> partitioner = new ConditionalRangePartitioner<>(splitPointsMap);
+    JavaPairRDD<Tuple2<S, V>, V> compositeKeyRdd = pairRddDataSKV.mapToPair(t -> new Tuple2<>(t, null));
+    return HoodieJavaPairRDD.of(
+        compositeKeyRdd.repartitionAndSortWithinPartitions(
+                partitioner,
+                new ConditionalRangePartitioner.CompositeKeyComparator<>())
+            .mapToPair(e -> e._1));
   }
 }
