@@ -19,29 +19,43 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
 import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.getDataBlock;
@@ -49,6 +63,13 @@ import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests {@link TableSchemaResolver}.
@@ -97,6 +118,68 @@ class TestTableSchemaResolver {
     StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema);
     assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
         logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
+  }
+
+  @Test
+  void testHasOperationFieldFileInspectionOrdering() throws IOException {
+    StorageConfiguration conf = new HadoopStorageConfiguration(false);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(metaClient.getStorageConf()).thenReturn(conf);
+
+    when(metaClient.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath("/tmp/hudi_table"));
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    // create 3 base files and 2 log files
+    HoodieWriteStat baseFileWriteStat = buildWriteStat("partition1/baseFile1.parquet", 10, 100);
+    HoodieWriteStat logFileWriteStat = buildWriteStat("partition1/" + FSUtils.makeLogFileName("001", ".log", "100", 2, "1-0-1"), 0, 10);
+    // we don't expect any interactions with this write stat since the code should exit as soon as a valid schema is found
+    HoodieWriteStat baseFileWriteStat2 = mock(HoodieWriteStat.class);
+    // files that only have deletes will be skipped
+    HoodieWriteStat logFileWithOnlyDeletes = buildWriteStat("partition1/" + FSUtils.makeLogFileName("002", ".log", "100", 2, "1-0-1"), 0, 0);
+    HoodieWriteStat baseFileWithOnlyDeletes = buildWriteStat("partition2/baseFile2.parquet", 0, 0);
+
+    commitMetadata.addWriteStat("partition1", baseFileWriteStat);
+    commitMetadata.addWriteStat("partition1", logFileWithOnlyDeletes);
+    commitMetadata.addWriteStat("partition1", logFileWriteStat);
+    commitMetadata.addWriteStat("partition1", baseFileWriteStat2);
+    commitMetadata.addWriteStat("partition2", baseFileWithOnlyDeletes);
+    HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "001", InstantComparatorV2.COMPLETION_TIME_BASED_COMPARATOR);
+    HoodieTimeline timeline = mock(HoodieTimeline.class);
+    when(metaClient.getCommitsTimeline().filterCompletedInstants()).thenReturn(timeline);
+    when(timeline.getReverseOrderedInstants()).thenReturn(Stream.of(instant));
+    when(timeline.readCommitMetadata(instant)).thenReturn(commitMetadata);
+
+    // mock calls to read schema
+    try (MockedStatic<HoodieIOFactory> ioFactoryMockedStatic = mockStatic(HoodieIOFactory.class);
+         MockedStatic<TableSchemaResolver> tableSchemaResolverMockedStatic = mockStatic(TableSchemaResolver.class)) {
+      // return null for first parquet file to force iteration to inspect the next file
+      Schema schema = Schema.createRecord("test_schema", null, "test_namespace", false);
+      schema.setFields(Arrays.asList(new Schema.Field("int_field", Schema.create(Schema.Type.INT)), new Schema.Field("_hoodie_operation", Schema.create(Schema.Type.STRING))));
+
+      // mock parquet file schema reading to return null for the first base file to force iteration
+      HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
+      FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
+      StoragePath parquetPath = new StoragePath("/tmp/hudi_table/partition1/baseFile1.parquet");
+      when(ioFactory.getFileFormatUtils(parquetPath)).thenReturn(fileFormatUtils);
+      when(fileFormatUtils.readAvroSchema(any(), eq(parquetPath))).thenReturn(null);
+      ioFactoryMockedStatic.when(() -> HoodieIOFactory.getIOFactory(any())).thenReturn(ioFactory);
+      // mock log file schema reading to return the expected schema
+      tableSchemaResolverMockedStatic.when(() -> TableSchemaResolver.readSchemaFromLogFile(any(), eq(new StoragePath("/tmp/hudi_table/" + logFileWriteStat.getPath()))))
+          .thenReturn(schema);
+
+      assertTrue(schemaResolver.hasOperationField());
+    }
+    verifyNoInteractions(baseFileWriteStat2);
+  }
+
+  private static HoodieWriteStat buildWriteStat(String path, int numInserts, int numUpdateWrites) {
+    HoodieWriteStat logFileWriteStat = new HoodieWriteStat();
+    logFileWriteStat.setPath(path);
+    logFileWriteStat.setNumInserts(numInserts);
+    logFileWriteStat.setNumUpdateWrites(numUpdateWrites);
+    logFileWriteStat.setNumDeletes(1);
+    return logFileWriteStat;
   }
 
   private String initTestDir(String folderName) throws IOException {

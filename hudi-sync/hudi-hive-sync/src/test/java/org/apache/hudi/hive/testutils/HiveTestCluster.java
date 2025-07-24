@@ -209,6 +209,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setFileId(fileId);
       writeStat.setPath(filePath.toString());
+      writeStat.setNumInserts(10);
       writeStats.add(writeStat);
     }
     return writeStats;
