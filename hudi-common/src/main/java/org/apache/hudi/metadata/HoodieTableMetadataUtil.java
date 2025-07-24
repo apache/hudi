@@ -161,7 +161,6 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
@@ -2455,20 +2454,6 @@ public class HoodieTableMetadataUtil {
     mergedFields.addAll(partitionFields);
     mergedFields.addAll(sourceFields);
     return addMetadataFields(projectSchema(tableSchema, mergedFields));
-  }
-
-  /**
-   * Given table schema and fields to index, checks if each field's data type are supported.
-   *
-   * @param sourceFields fields to index
-   * @param tableSchema  table schema
-   * @return true if each field's data type are supported, false otherwise
-   */
-  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, Schema tableSchema) {
-    return sourceFields.stream().anyMatch(fieldToIndex -> {
-      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
-      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
-    });
   }
 
   public static StoragePath filePath(StoragePath basePath, String partition, String filename) {

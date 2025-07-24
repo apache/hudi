@@ -72,7 +72,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
              |create table $tableName (
              |  id int,
              |  name string,
-             |  price double,
+             |  price int,
              |  ts long
              |) using hudi
              | options (
@@ -104,7 +104,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           Seq("record_index", "record_index", "")
         )
 
-        // Secondary index can not be created for two columns at once
+        // Secondary index cannot be created for two columns at once
         checkException(s"create index idx_name_price on $tableName (name,price)")(
           "Only one column can be indexed for functional or secondary index."
         )
@@ -263,7 +263,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
              |create table $tableName (
              |  id int,
              |  name string,
-             |  price double,
+             |  price int,
              |  ts long
              |) using hudi
              | options (
@@ -295,9 +295,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
         // Create and validate secondary indexes for version 8
         dropRecreateIdxAndValidate(tableName, basePath, 8, 1, dropRecreate = false, Seq(
-          Seq(1, "a1", 10.0, 1000),
-          Seq(2, "a2", 20.0, 1000),
-          Seq(3, "a3", 30.0, 1000)
+          Seq(1, "a1", 10, 1000),
+          Seq(2, "a2", 20, 1000),
+          Seq(3, "a3", 30, 1000)
         ))
 
         // Upgrade table to version 9 and verify secondary indexes are dropped
@@ -312,9 +312,9 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             Seq("record_index", "record_index", "")
           )
           val expected = Seq(
-            Seq(1, "a1", 11.0, 1001),
-            Seq(2, "a2", 20.0, 1000),
-            Seq(3, "a3", 30.0, 1000)
+            Seq(1, "a1", 11, 1001),
+            Seq(2, "a2", 20, 1000),
+            Seq(3, "a3", 30, 1000)
           )
           verifyData(tableName, expected)
           verifyIndexVersion(basePath, 9, 1)
