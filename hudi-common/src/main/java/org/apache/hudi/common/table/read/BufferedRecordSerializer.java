@@ -20,7 +20,6 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.RecordSerializer;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -37,10 +36,10 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
   // Caching kryo serializer to avoid creating kryo instance for every serde operation
   private static final ThreadLocal<InternalSerializerInstance> SERIALIZER_REF =
       ThreadLocal.withInitial(InternalSerializerInstance::new);
-  private final Option<RecordSerializer<T>> recordSerializer;
+  private final RecordSerializer<T> recordSerializer;
 
   public BufferedRecordSerializer(RecordSerializer<T> recordSerializer) {
-    this.recordSerializer = Option.ofNullable(recordSerializer);
+    this.recordSerializer = recordSerializer;
   }
 
   private static class InternalSerializerInstance {
@@ -56,7 +55,7 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
       this.kryo.setRegistrationRequired(false);
     }
 
-    <T> byte[] serialize(BufferedRecord<T> record, Option<RecordSerializer<T>> recordSerializer) {
+    <T> byte[] serialize(BufferedRecord<T> record, RecordSerializer<T> recordSerializer) {
       kryo.reset();
       baos.reset();
       try (Output output = new Output(baos)) {
@@ -69,18 +68,14 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
         output.writeBoolean(record.isDelete());
         kryo.writeClassAndObject(output, record.getOrderingValue());
 
-        if (recordSerializer.isEmpty()) {
-          kryo.writeClassAndObject(output, record.getRecord());
-        } else {
-          byte[] recordBytes = record.getRecord() == null ? new byte[0] : recordSerializer.get().serialize(record.getRecord());
-          output.writeVarInt(recordBytes.length, true);
-          output.writeBytes(recordBytes);
-        }
+        byte[] recordBytes = record.getRecord() == null ? new byte[0] : recordSerializer.serialize(record.getRecord());
+        output.writeVarInt(recordBytes.length, true);
+        output.writeBytes(recordBytes);
       }
       return baos.toByteArray();
     }
 
-    <T> BufferedRecord<T> deserialize(byte[] bytes, Option<RecordSerializer<T>> recordSerializer) {
+    <T> BufferedRecord<T> deserialize(byte[] bytes, RecordSerializer<T> recordSerializer) {
       try (Input input = new Input(bytes)) {
         String recordKey = input.readString();
         boolean hasSchemaId = input.readBoolean();
@@ -92,16 +87,12 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
         Comparable orderingValue = (Comparable) kryo.readClassAndObject(input);
 
         T record;
-        if (recordSerializer.isEmpty()) {
-          record = (T) kryo.readClassAndObject(input);
+        // Read the length of the serialized record
+        int recordLength = input.readVarInt(true);
+        if (recordLength == 0) {
+          record = null;
         } else {
-          // Read the length of the serialized record
-          int recordLength = input.readVarInt(true);
-          if (recordLength == 0) {
-            record = null;
-          } else {
-            record = recordSerializer.get().deserialize(input.readBytes(recordLength), schemaId);
-          }
+          record = recordSerializer.deserialize(input.readBytes(recordLength), schemaId);
         }
         return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
       }
