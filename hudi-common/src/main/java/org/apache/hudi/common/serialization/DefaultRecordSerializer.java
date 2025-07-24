@@ -18,15 +18,27 @@
 
 package org.apache.hudi.common.serialization;
 
+import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.exception.HoodieIOException;
+
 import java.io.IOException;
 
 /**
- * Allows custom serialization for spillable map values.
- * @param <T>
+ * A record serializer that delegates to the Kryo Serializer in {@link SerializationUtils}.
+ * @param <T> the record type
  */
-public interface CustomSerializer<T> {
+public class DefaultRecordSerializer<T> implements RecordSerializer<T> {
+  @Override
+  public byte[] serialize(T record) {
+    try {
+      return SerializationUtils.serialize(record);
+    } catch (IOException ex) {
+      throw new HoodieIOException("Failed to serialize record", ex);
+    }
+  }
 
-  byte[] serialize(T input) throws IOException;
-
-  T deserialize(byte[] bytes);
+  @Override
+  public T deserialize(byte[] bytes, int schemaId) {
+    return SerializationUtils.deserialize(bytes);
+  }
 }
