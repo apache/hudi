@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SQLContext
@@ -68,6 +68,48 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    * Get the expected index version for this test implementation
    */
   protected def getExpectedIndexVersion: String
+
+  /**
+   * Override test method to ensure table exists before each test runs
+   * This compensates for the parent class dropping tables after each test
+   */
+  override protected def test(testName: String, testTags: org.scalatest.Tag*)(testFun: => Any)(implicit pos: org.scalactic.source.Position): Unit = {
+    super.test(testName, testTags: _*) {
+      // Ensure table exists before running the test
+      ensureTableExists()
+      // Run the actual test
+      testFun
+    }
+  }
+
+  /**
+   * Ensure table exists - compensates for parent class cleanup
+   */
+  private def ensureTableExists(): Unit = {
+    spark.sql(
+      s"""
+         |create table if not exists $tableName (
+         |  id string,
+         |  name string,
+         |  price double,
+         |  ts long
+         |) using hudi
+         | options (
+         |  primaryKey ='id',
+         |  type = 'cow',
+         |  preCombineField = 'ts',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.metadata.index.column.stats.enable = 'true',
+         |  hoodie.metadata.index.secondary.enable = 'true',
+         |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
+         |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
+         |  hoodie.write.table.version = '${getTableVersion}',
+         |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
+         | )
+         | location '$basePath'
+       """.stripMargin)
+  }
 
   /**
    * Setup method that runs once before all tests
@@ -270,7 +312,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
   /**
    * Test secondary index result functionality
    */
-  protected def testReadSecondaryIndexResult(): Unit = {
+  protected def testReadSecondaryIndexLocations(): Unit = {
     // Get the secondary index partition name
     val secondaryIndexName = "secondary_index_idx_name"
 
@@ -412,9 +454,8 @@ class HoodieBackedTableMetadataIndexLookupV8Test1Fg extends HoodieBackedTableMet
   }
 
   test("Exhaustive test for readSecondaryIndexResult - Version 8") {
-    testReadSecondaryIndexResult()
+    testReadSecondaryIndexLocations()
   }
-
 }
 
 class HoodieBackedTableMetadataIndexLookupV8Test10Fg extends HoodieBackedTableMetadataIndexLookupV8TestBase {
@@ -431,7 +472,7 @@ class HoodieBackedTableMetadataIndexLookupV8Test10Fg extends HoodieBackedTableMe
   }
 
   test("Exhaustive test for readSecondaryIndexResult - Version 8") {
-    testReadSecondaryIndexResult()
+    testReadSecondaryIndexLocations()
   }
 }
 
@@ -451,7 +492,72 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
     val context = new HoodieSparkEngineContext(jsc, new SQLContext(spark))
     val rddKeys = HoodieJavaRDD.of(List("b1", "b2", "$").asJava, context, 2)
     val rddResult = hoodieBackedTableMetadata.readSecondaryIndexLocations(rddKeys, secondaryIndexName)
-    assert(rddResult.collectAsList().asScala.size == 3, "Version 2 should support RDD input")
+    val locations = rddResult.collectAsList()
+    assert(locations.asScala.size == 3, "Version 2 should support RDD input")
+
+    // Test case for null values in secondary index
+    testNullValueInSecondaryIndex()
+  }
+
+  /**
+   * Test case for handling null values in secondary index
+   */
+  def testNullValueInSecondaryIndex(): Unit = {
+    val secondaryIndexName = "secondary_index_idx_name"
+
+    // Insert record with null value for the indexed column
+    spark.sql(s"insert into $tableName values('null_record', null, null, 1002)")
+    // Everytime we insert need to manually reset the MDT object.
+    hoodieBackedTableMetadata.reset()
+    // Read MDT SI records using hudi_metadata() to verify records are successfully written
+    val mdtResult = spark.sql(s"select key from hudi_metadata('$tableName') where type=${MetadataPartitionType.SECONDARY_INDEX.getRecordType} order by key")
+    val mdtRows = mdtResult.collect()
+
+    val expectedRows = Seq(
+      "\u0000$null_record",
+      "\u0000$null_record",
+      "10.0$1",
+      "20.0$2",
+      "30.0$\\$",
+      "\\$$\\$",
+      "b1$1",
+      "b2$2"
+    )
+
+    assert(mdtRows.length == expectedRows.length, s"Expected ${expectedRows} rows but got ${mdtRows}")
+    mdtRows.map(_.getString(0)).zip(expectedRows).foreach { case (actual, expected) =>
+      assert(actual == expected, s"Row mismatch: expected $expected but got $actual")
+    }
+
+    // Test SI index lookup API searching for null value
+    val nullKeys = HoodieListData.eager(List(null.asInstanceOf[String]).asJava)
+    val nullResult = hoodieBackedTableMetadata.readSecondaryIndexLocations(nullKeys, secondaryIndexName)
+    val nullLocations = nullResult.collectAsList().asScala
+
+    // Verify that null lookup returns exactly 1 result (for the null_record we inserted)
+    assert(nullLocations.size == 1, s"Secondary index lookup should return exactly 1 result for null value, but found ${nullLocations.size}")
+
+    // Verify that the returned locations are valid
+    nullLocations.foreach { location =>
+      assert(location != null, "Location for null key should not be null")
+      assert(location.getPartitionPath != null, "Partition path for null key should not be null")
+      assert(location.getInstantTime != null, "Instant time for null key should not be null")
+      assert(location.getFileId != null, "File ID for null key should not be null")
+      assert(location.getPosition >= HoodieRecordLocation.INVALID_POSITION,
+        "Position for null key should be >= INVALID_POSITION")
+    }
+
+    // Test getSecondaryIndexRecords API with null value
+    val nullRecordsResult = hoodieBackedTableMetadata.getSecondaryIndexRecords(nullKeys, secondaryIndexName)
+    val nullRecordsMap = HoodieDataUtils.dedupeAndCollectAsMap(nullRecordsResult)
+
+    // Verify that null key maps to record keys.
+    // Assert it is map with key as "null_record" -> value as set of "null"
+    assert(nullRecordsMap.keySet().asScala.toList.equals(Seq("null_record")))
+    assert(nullRecordsMap.get("null_record").asScala.toList.equals(Seq(null)))
+    // Clean up the test data
+    spark.sql(s"delete from $tableName where id = 'null_record'")
+    hoodieBackedTableMetadata.reset()
   }
 }
 
@@ -469,7 +575,7 @@ class HoodieBackedTableMetadataIndexLookupV9Test1Fg extends HoodieBackedTableMet
   }
 
   test("Exhaustive test for readSecondaryIndexResult - Version 9") {
-    testReadSecondaryIndexResult()
+    testReadSecondaryIndexLocations()
   }
 }
 
@@ -487,6 +593,6 @@ class HoodieBackedTableMetadataIndexLookupV9Test10Fg extends HoodieBackedTableMe
   }
 
   test("Exhaustive test for readSecondaryIndexResult - Version 9") {
-    testReadSecondaryIndexResult()
+    testReadSecondaryIndexLocations()
   }
 }
