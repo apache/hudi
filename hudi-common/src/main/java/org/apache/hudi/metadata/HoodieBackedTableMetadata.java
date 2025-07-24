@@ -95,6 +95,7 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BAS
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
@@ -254,7 +255,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param keys               The keys to look up in the metadata table
    * @param partitionName      The name of the metadata partition to search in
    * @param fileSlices         The list of file slices to search through
-   * @param isSecondaryIndex   Whether this lookup is for a secondary index
    * @param keyEncodingFn      Optional function to encode keys before lookup
    * @return Pair data containing the looked up records keyed by their original keys
    */
@@ -603,13 +603,26 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
   }
 
+  /**
+   * Builds a predicate for querying metadata partitions based on the partition type and lookup strategy.
+   * 
+   * Secondary index partitions are treated as a special case where the isFullKey parameter is ignored.
+   * This is because secondary index lookups are neither pure prefix lookups nor full key lookups, 
+   * but rather use a customized key format: {secondary_key}+${record_key}. The lookup always uses
+   * prefix matching to find all record keys associated with a given secondary key value.
+   * 
+   * @param partitionName The name of the metadata partition
+   * @param sortedKeys The list of keys to search for
+   * @param isFullKey Whether to perform exact key matching (ignored for secondary index partitions)
+   * @return A predicate for filtering records
+   */
   static Predicate buildPredicate(String partitionName, List<String> sortedKeys, boolean isFullKey) {
     if (MetadataPartitionType.fromPartitionPath(partitionName)
           .equals(MetadataPartitionType.SECONDARY_INDEX)) {
       // For secondary index, always use prefix matching
       return Predicates.startsWithAny(null,
           sortedKeys.stream()
-          .map(SecondaryIndexKeyUtils::constructSecondaryIndexKeyPrefix)
+          .map(escapedKey -> escapedKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR)
           .map(Literal::from)
           .collect(Collectors.toList()));
     } else if (isFullKey) {

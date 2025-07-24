@@ -69,10 +69,6 @@ public class SecondaryIndexKeyUtils {
     return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
   }
 
-  public static String constructSecondaryIndexKeyPrefix(String escapedKey) {
-    return escapedKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
-  }
-
   public static String escapeSpecialChars(String str) {
     StringBuilder escaped = new StringBuilder();
     for (char c : str.toCharArray()) {
