@@ -185,6 +185,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           "Missing field field_not_exist"
         )
       }
+      assertNoPersistentRDDs()
     }
   }
 
@@ -323,6 +324,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           dropRecreateIdxAndValidate(tableName, basePath, 9, 2, dropRecreate = true, expected)
         }
       }
+      assertNoPersistentRDDs()
     }
   }
 
@@ -333,6 +335,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
         createTempTableAndInsert(tableName, basePath)
+        assertNoPersistentRDDs()
 
         // validate record_index created successfully
         val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
@@ -343,6 +346,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .setConf(HoodieTestUtils.getDefaultStorageConf)
           .build()
         assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
+        assertNoPersistentRDDs()
         // create secondary index
         spark.sql(s"create index idx_city on $tableName (city)")
         metaClient = HoodieTableMetaClient.builder()
@@ -351,12 +355,14 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .build()
         assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_city"))
         assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
+        assertNoPersistentRDDs()
 
         checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
           Seq(s"austin${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}e96c4396-3fad-413a-a942-4cb36106d720", false),
           Seq(s"san_francisco${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}334e26e9-8355-45cc-97c6-c31daf0df330", false)
         )
       }
+        assertNoPersistentRDDs()
     }
   }
 
@@ -381,6 +387,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         checkException(sql = s"create index idx_city on $tableName (city,state)")(
           "Only one column can be indexed for functional or secondary index."
         )
+        assertNoPersistentRDDs()
       }
     }
   }
@@ -472,6 +479,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       validateSecondaryIndex(basePath, tableName, nonDeletedKeys)
       validateSecondaryIndex(basePath, tableName, finalUpdateKeys)
       dataGen.close()
+      assertNoPersistentRDDs()
     }
   }
 
@@ -510,6 +518,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .mode(SaveMode.Append)
           .save(basePath)
         dataGen.close()
+        assertNoPersistentRDDs()
       }
     }
   }
@@ -603,6 +612,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         .load(basePath).count())(s"${dataFile.toString} is not a Parquet file")
 
       dataGen.close()
+      assertNoPersistentRDDs()
     }
   }
 
@@ -669,6 +679,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       actualSecondaryKeys = spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7 AND key LIKE '%$SECONDARY_INDEX_RECORD_KEY_SEPARATOR%'")
         .collect().map(indexKey => indexKey.getString(0))
       assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet)
+      assertNoPersistentRDDs()
     }
   }
 

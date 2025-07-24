@@ -34,8 +34,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -368,6 +368,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         HoodieInMemoryHashIndex.clear()
       }
     }
+  }
+
+  def assertNoPersistentRDDs(): Unit = {
+    HoodieSparkClientTestHarness.assertNoPersistentRDDs(spark, 2)
   }
 }
 

@@ -19,10 +19,9 @@ package org.apache.spark.execution.datasources
 
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.SparkSession
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 

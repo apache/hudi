@@ -116,6 +116,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     assertThrows[HoodieMetadataIndexException] {
       spark.sql(s"create index idx_not_record_key_col on $tableName (not_record_key_col)")
     }
+    assertNoPersistentRDDs()
   }
 
   @ParameterizedTest
@@ -218,6 +219,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     )
     verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
     verifyQueryPredicate(hudiOpts, "ts")
+    assertNoPersistentRDDs()
   }
 
   @Test
@@ -275,6 +277,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     assert(!metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
     // query metadata table and check no records for secondary index
     assert(spark.sql(s"select * from hudi_metadata('$basePath') where type=7").count() == 0)
+    assertNoPersistentRDDs()
   }
 
   @ParameterizedTest
@@ -351,6 +354,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(1, "row1", "xyz", "p1")
     )
     verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
+    assertNoPersistentRDDs()
   }
 
   @ParameterizedTest
@@ -441,6 +445,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2"),
       Seq(s"def${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3")
     )
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -536,6 +541,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(s"value1_1${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
       Seq(s"value2_2${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false)
     )
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -627,6 +633,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(1, "row1", "xyz", "p1")
     )
     verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -708,6 +715,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'abc'")(
       Seq(1, "row1", "abc", "p1")
     )
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -783,6 +791,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(s"cde${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
       Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
     )
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -858,6 +867,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(s"A${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}1", false),
       Seq(s"B${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}2", false)
     )
+    assertNoPersistentRDDs()
   }
 
   @Test
@@ -928,6 +938,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(3, "row3", "xyz2", "p2")
     )
     verifyQueryPredicate(hudiOpts, "not_record_key_col", "xyz2")
+    assertNoPersistentRDDs()
   }
 
   @Test
@@ -978,7 +989,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
       Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false),
       Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
-      Seq(s"hjk${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3",false)
+      Seq(s"hjk${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row3", false)
     )
 
     // do a hard delete
@@ -991,6 +1002,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(1, "row1", "abc", "p1")
     )
     verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
+    assertNoPersistentRDDs()
   }
 
   @Test
@@ -1065,6 +1077,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(3, "row3", "xyz1", "p1")
     )
     verifyQueryPredicate(hudiOpts, "not_record_key_col")
+    assertNoPersistentRDDs()
   }
 
   @Test
@@ -1132,6 +1145,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(3, "row3", "abc", "p2")
     )
     verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -1253,6 +1267,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(s"fgh${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row2", false),
       Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
     )
+    assertNoPersistentRDDs()
   }
 
   private def confirmLastCommitType(actionType: ActionType): Unit = {
@@ -1337,6 +1352,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
       Seq(s"xyz${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1", false)
     )
+    assertNoPersistentRDDs()
   }
 
   @ParameterizedTest
@@ -1440,6 +1456,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(1695516137, "trip4", "rider-E", "driver-Q", 34.15, "houston", "texas")
     )
     verifyQueryPredicate(hudiOpts, "rider")
+    assertNoPersistentRDDs()
   }
 
   @Test
@@ -1537,6 +1554,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       }
     }
     spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.partition.stats.enable")
+    assertNoPersistentRDDs()
   }
 
   @Test
@@ -1580,6 +1598,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         spark.sql(s"create index idx_$col on $tableName ($col)")
       }
     }
+    assertNoPersistentRDDs()
   }
 
   @Test
@@ -1641,6 +1660,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     checkAnswer(s"select record_key_col, student.name.last_name, ts from $tableName where student.name.last_name = 'Brown'")(
       Seq("id1", "Brown", 1)
     )
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -1718,6 +1738,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(s"John Doe${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id1", false),
       Seq(s"Jane${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id2", false)
     )
+    assertNoPersistentRDDs()
   }
 
   private def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String], metaClient: HoodieTableMetaClient): Unit = {

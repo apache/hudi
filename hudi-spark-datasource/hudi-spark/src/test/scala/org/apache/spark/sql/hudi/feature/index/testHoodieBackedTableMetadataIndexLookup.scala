@@ -207,7 +207,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     if (jsc != null) {
       val persistentRDDs = jsc.sc.getPersistentRDDs
       persistentRDDs.values.foreach { rdd =>
-        rdd.unpersist(blocking = false)
+        rdd.unpersist(blocking = true)
       }
     }
 
@@ -237,7 +237,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val emptyResult = emptyResultRDD.collectAsList()
     assert(emptyResult.isEmpty, "Empty input should return empty result")
     emptyResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 2: All existing keys
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
@@ -277,7 +277,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val nonExistResult = nonExistResultRDD.collectAsList().asScala
     assert(nonExistResult.isEmpty, "Non-existing keys should return empty result")
     nonExistResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 4: Mix of existing and non-existing keys
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
@@ -288,7 +288,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val mixedResultKeys = mixedResult.map(_.getKey()).toSet
     assert(mixedResultKeys == Set("1", "2"), "Should only return existing keys")
     mixedResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 5: Duplicate keys
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
@@ -299,7 +299,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val dupResultKeys = dupResult.map(_.getKey()).toSet
     assert(dupResultKeys == Set("1", "2", "$"), "Should deduplicate keys")
     dupResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 6: Use parallelized RDD with RDD persistence validation
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs")
@@ -307,7 +307,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val rddResult = hoodieBackedTableMetadata.readRecordIndex(rddKeys)
     assert(rddResult.collectAsList().asScala.size == 3, "RDD input should return 3 results")
     rddResult.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -326,7 +326,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val emptyResult = emptyResultRDD.collectAsList()
     assert(emptyResult.isEmpty, s"Empty input should return empty result for table version ${getTableVersion}")
     emptyResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 2: All existing secondary keys
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
@@ -350,7 +350,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
         s"Position should be >= INVALID_POSITION for table version ${getTableVersion}")
     }
     allResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 3: Non-existing secondary keys
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
@@ -359,7 +359,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val nonExistResult = nonExistResultRDD.collectAsList().asScala
     assert(nonExistResult.isEmpty, s"Non-existing secondary keys should return empty result for table version ${getTableVersion}")
     nonExistResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 4: Mix of existing and non-existing secondary keys
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
@@ -368,19 +368,17 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val mixedResult = mixedResultRDD.collectAsList().asScala
     assert(mixedResult.size == 2, s"Should return 2 results for 2 existing secondary keys in table version ${getTableVersion}")
     mixedResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 5: Duplicate secondary keys
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
     val dupKeys = HoodieListData.eager(List("b1", "b1", "b2", "b2", "$", "$").asJava)
     val dupResultRDD = hoodieBackedTableMetadata.readSecondaryIndexLocations(dupKeys, secondaryIndexName)
     val dupResult = dupResultRDD.collectAsList().asScala
     assert(dupResult.size == 3, s"Should return 3 unique results for duplicate secondary keys in table version ${getTableVersion}")
     dupResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 6: Test with different secondary index (price column)
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
     val priceIndexName = "secondary_index_idx_price"
     // TODO[HUDI-9566]: We must give the exact string that a double number will generate. If we give "10"/"10.00" it will fail.
     val priceKeys = HoodieListData.eager(List("10.0", "20.0", "30.0").asJava)
@@ -388,7 +386,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val priceResult = priceResultRDD.collectAsList().asScala
     assert(priceResult.size == 3, s"Should return 3 results for price secondary keys in table version ${getTableVersion}")
     priceResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Case 7: Test invalid secondary index partition name
     val invalidIndexName = "non_existent_index"
@@ -401,7 +399,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     testVersionSpecificBehavior()
 
     // Case 9: Test large number of keys to exercise multiple file slices path
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
     val largeKeyList = (1 to 100).map(i => s"large_key_$i").asJava
     val largeKeys = HoodieListData.eager(largeKeyList)
     val largeResultRDD = hoodieBackedTableMetadata.readSecondaryIndexLocations(largeKeys, secondaryIndexName)
@@ -409,7 +406,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val largeResult = largeResultRDD.collectAsList()
     assert(largeResult.isEmpty, "Large key list should return empty result for non-existing keys")
     largeResultRDD.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
   }
 
   /**
@@ -451,10 +448,9 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
           case _ =>
         }
     }
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
     // Test with non-existing secondary keys
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
     val nonExistingKeys = HoodieListData.eager(List("non_exist_1", "non_exist_2").asJava)
     val nonExistingResultRDD = hoodieBackedTableMetadata.getSecondaryIndexRecords(nonExistingKeys, secondaryIndexName)
     val nonExistingMap = HoodieDataUtils.dedupeAndCollectAsMap(nonExistingResultRDD)
@@ -468,9 +464,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
           nonExistingResultRDD.asInstanceOf[org.apache.hudi.common.data.HoodiePairData[_, _]].unpersistWithDependencies()
         }
     }
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies")
+    assertNoPersistentRDDs()
 
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs for getSecondaryIndexRecords test")
     val rddKeys = HoodieJavaRDD.of(List("b1", "b2", "$").asJava, context, 2)
     val rddResult = hoodieBackedTableMetadata.getSecondaryIndexRecords(rddKeys, secondaryIndexName)
 
@@ -488,10 +483,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
           rddResult.asInstanceOf[org.apache.hudi.common.data.HoodiePairData[_, _]].unpersistWithDependencies()
         }
     }
-
     // Verify all RDDs are cleaned up
-    assert(jsc.sc.getPersistentRDDs.isEmpty,
-      "All RDDs should be unpersisted after unpersistWithDependencies for getSecondaryIndexRecords")
+    assertNoPersistentRDDs()
   }
 }
 
@@ -517,7 +510,7 @@ class HoodieBackedTableMetadataIndexLookupV8TestBase extends HoodieBackedTableMe
     checkExceptionContain(() => {
       hoodieBackedTableMetadata.readSecondaryIndexLocations(rddKeys, secondaryIndexName)
     })("only support HoodieListData")
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "No RDDs should be persisted")
+    assertNoPersistentRDDs()
   }
 }
 
@@ -569,7 +562,6 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
   override protected def testVersionSpecificBehavior(): Unit = {
     // For version 2, test that it supports both HoodieListData and RDD
     val secondaryIndexName = "secondary_index_idx_name"
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
 
     val rddKeys = HoodieJavaRDD.of(List("b1", "b2", "$").asJava, context, 2)
     val rddResult = hoodieBackedTableMetadata.readSecondaryIndexLocations(rddKeys, secondaryIndexName)
@@ -577,7 +569,7 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
     // Collect and validate results
     assert(rddResult.collectAsList().asScala.size == 3, "Version 2 should support RDD input")
     rddResult.unpersistWithDependencies()
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "All RDDs should be unpersisted after unpersistWithDependencies test")
+    assertNoPersistentRDDs()
   }
 }
 

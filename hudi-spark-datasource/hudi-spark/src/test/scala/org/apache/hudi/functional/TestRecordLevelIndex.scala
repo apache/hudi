@@ -125,6 +125,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     deletedDf3.cache()
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateDataAndRecordIndices(hudiOpts, deletedDf3)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   private def getNewInstantTime(): String = {
@@ -141,6 +142,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -153,6 +155,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -174,6 +177,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -191,6 +195,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Append)
     rollbackLastInstant(hudiOpts)
     validateDataAndRecordIndices(hudiOpts)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -209,6 +214,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -226,6 +232,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -250,6 +257,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
     validateDataAndRecordIndices(hudiOpts, deleteDf)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @Test
@@ -271,6 +279,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
     validateDataAndRecordIndices(hudiOpts, deleteDf)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -293,6 +302,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete)
     validateDataAndRecordIndices(hudiOpts, deleteDf)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -314,6 +324,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       val deletedDf = latestSnapshot.filter(s"partition = $deletingPartition")
       validateDataAndRecordIndices(hudiOpts, deletedDf)
     }
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -337,6 +348,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -378,6 +390,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
     }
     validateDataAndRecordIndices(hudiOpts)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @Test
@@ -414,6 +427,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
     }
     validateDataAndRecordIndices(hudiOpts)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -453,6 +467,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     // We are validating rollback of a DT clustering instant here
     rollbackLastInstant(hudiOpts)
     validateDataAndRecordIndices(hudiOpts)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -483,6 +498,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
     assertTrue(metadataWriter(getWriteConfig(hudiOpts)).getEnabledPartitionTypes.containsAll(metadataPartitions.asJava))
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -524,6 +540,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
     validateDataAndRecordIndices(hudiOpts)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -555,6 +572,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().requestedTime)))
       .findAny()
     assertTrue(compactionBaseFile.isPresent)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -581,6 +599,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     // Rolling back clean instant from MDT
     rollbackLastInstant(hudiOpts)
     validateDataAndRecordIndices(hudiOpts)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -628,6 +647,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertTrue(f1.value.get.get || f2.value.get.get)
     executor.shutdownNow()
     validateDataAndRecordIndices(hudiOpts)
+    assertNoPersistentRDDs(sparkSession)
   }
 }
 

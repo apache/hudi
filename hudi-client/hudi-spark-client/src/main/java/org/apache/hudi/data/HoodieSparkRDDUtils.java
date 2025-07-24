@@ -45,14 +45,14 @@ public class HoodieSparkRDDUtils {
     if (rdd == null || visitedRddIds.contains(rdd.id())) {
       return;
     }
-    
+
     visitedRddIds.add(rdd.id());
-    
+
     // Unpersist if cached
     if (rdd.getStorageLevel() != StorageLevel.NONE()) {
       rdd.unpersist(false);
     }
-    
+
     // Recursively unpersist dependencies
     scala.collection.Iterator<org.apache.spark.Dependency<?>> iter = rdd.dependencies().iterator();
     while (iter.hasNext()) {

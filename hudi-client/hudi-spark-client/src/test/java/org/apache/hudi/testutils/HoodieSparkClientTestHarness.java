@@ -704,4 +704,28 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected HoodieTableMetaClient createMetaClient(JavaSparkContext context, String basePath) {
     return HoodieClientTestUtils.createMetaClient(context, basePath);
   }
+
+  public static void assertNoPersistentRDDs(SparkSession spark, int timeoutSeconds) {
+    long startTime = System.currentTimeMillis();
+    long timeout = timeoutSeconds * 1000L;
+
+    while (!spark.sparkContext().getPersistentRDDs().isEmpty()) {
+      if (System.currentTimeMillis() - startTime > timeout) {
+        int remainingCount = spark.sparkContext().getPersistentRDDs().size();
+        assertFalse(false, "Timeout: " + remainingCount + " RDDs still persistent after " +
+            timeoutSeconds + " seconds");
+      }
+      try {
+        Thread.sleep(50); // Check every 50ms
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        assertFalse(false, "Interrupted while waiting for RDD unpersist");
+      }
+    }
+  }
+
+  // Overloaded method with default 3-second timeout
+  public void assertNoPersistentRDDs(SparkSession spark) {
+    assertNoPersistentRDDs(spark, 3);
+  }
 }

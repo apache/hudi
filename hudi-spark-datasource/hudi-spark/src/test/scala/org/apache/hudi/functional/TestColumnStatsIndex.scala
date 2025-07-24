@@ -38,7 +38,6 @@ import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, 
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -56,7 +55,6 @@ import java.math.{BigDecimal => JBigDecimal}
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
@@ -184,6 +182,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateNonExistantColumnsToIndexDefn(metaClient)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   /**
@@ -247,6 +246,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue", "`c9.c9_1_car_brand_maxValue`", "`c9.c9_1_car_brand_minValue`",
         "`c10.c10_1.c10_2_1_nested_lvl2_field2_maxValue`","`c10.c10_1.c10_2_1_nested_lvl2_field2_minValue`")),
       addNestedFiled = true)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -364,6 +364,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       smallFileLimit = 0))
 
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -444,6 +445,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
 
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   def simulateFailureForLatestCommit(tableType: HoodieTableType, partitionCol: String) : Unit = {
@@ -493,6 +495,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.requestedTime + "/9/" + baseFileName + ".marker.MERGE"))
       }
     }
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -552,6 +555,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -618,6 +622,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -688,6 +693,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     assertTrue(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -737,6 +743,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       assertTrue(result.getLong(0) == 4)
       assertTrue(result.getLong(1) == 1)
     }
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -834,6 +841,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       Collections.sort(targetDFFileNameSet)
       assertEquals(expectedFileNames1, targetDFFileNameSet)
     }
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -949,6 +957,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         assertEquals(asJson(sort(manualUpdatedColStatsTableDF)), asJson(sort(transposedUpdatedColStatsDF)))
       }
     }
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -1044,6 +1053,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         assertEquals(Literal("true").toString(), orConditionActualFilter.toString())
       }
     }
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @Test
@@ -1083,6 +1093,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       assertNotNull(max)
       assertTrue(r.getMinValue.asInstanceOf[Comparable[Object]].compareTo(r.getMaxValue.asInstanceOf[Object]) <= 0)
     })
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest

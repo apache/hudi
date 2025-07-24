@@ -464,4 +464,8 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return df1Normalized.except(df2Normalized).isEmpty()
         && df2Normalized.except(df1Normalized).isEmpty();
   }
+
+  public void assertNoPersistentRDDs() {
+    HoodieSparkClientTestHarness.assertNoPersistentRDDs(spark, 2);
+  }
 }
