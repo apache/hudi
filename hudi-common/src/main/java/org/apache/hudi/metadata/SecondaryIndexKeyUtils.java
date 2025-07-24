@@ -55,8 +55,14 @@ public class SecondaryIndexKeyUtils {
   public static String getSecondaryKeyFromSecondaryIndexKey(String key) {
     // the payload key is in the format of "secondaryKey$primaryKey"
     // we need to extract the secondary key from the payload key
+    return unescapeSpecialChars(getUnescapedSecondaryKeyFromSecondaryIndexKey(key));
+  }
+
+  public static String getUnescapedSecondaryKeyFromSecondaryIndexKey(String key) {
+    // the payload key is in the format of "secondaryKey$primaryKey"
+    // we need to extract the secondary key from the payload key
     int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return unescapeSpecialChars(key.substring(0, delimiterIndex));
+    return key.substring(0, delimiterIndex);
   }
 
   public static String constructSecondaryIndexKey(String secondaryKey, String recordKey) {

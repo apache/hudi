@@ -24,7 +24,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -64,6 +63,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_DATA_TYPE;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_TARGET_POS;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.METADATA_DATA_TYPE;
@@ -397,7 +397,7 @@ public class FileStatsIndex implements ColumnStatsIndex {
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
         getMetadataTable().getRecordsByKeyPrefixes(
-            HoodieListData.lazy(encodedTargetColumnNames), getIndexPartitionName(), false, Option.empty());
+            HoodieListData.lazy(encodedTargetColumnNames), getIndexPartitionName(), false, IDENTITY_ENCODING);
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());

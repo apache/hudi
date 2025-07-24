@@ -118,7 +118,7 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
                                                                                  String partitionName,
                                                                                  boolean shouldLoadInMemory,
-                                                                                 Option<SerializableFunctionUnchecked<String, String>> keyEncoder) {
+                                                                                 SerializableFunctionUnchecked<String, String> keyEncoder) {
     throw new HoodieMetadataException("Unsupported operation: getRecordsByKeyPrefixes!");
   }
 

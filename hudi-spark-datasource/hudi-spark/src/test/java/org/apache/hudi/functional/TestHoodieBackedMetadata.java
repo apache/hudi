@@ -193,6 +193,7 @@ import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_D
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -1999,7 +2000,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       ColumnIndexID columnIndexID = new ColumnIndexID(HoodieRecord.RECORD_KEY_METADATA_FIELD);
       List<HoodieRecord<HoodieMetadataPayload>> result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString())),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, Option.empty()).collectAsList();
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.
       assertEquals(result.size(), 6);
@@ -2008,7 +2009,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
       result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, Option.empty()).collectAsList();
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
       result.forEach(entry -> {
@@ -2027,7 +2028,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       columnIndexID = new ColumnIndexID(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
       result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, Option.empty()).collectAsList();
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
 
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
@@ -3016,7 +3017,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetadata tableMetadata = metadata(client, storage);
       assertTrue(tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.lazy(Collections.singletonList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)),
-          FILES.getPartitionPath(), false, Option.empty()).isEmpty());
+          FILES.getPartitionPath(), false, IDENTITY_ENCODING).isEmpty());
       assertTrue(tableMetadata.getAllPartitionPaths().contains(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH));
       assertFalse(tableMetadata.getAllPartitionPaths().contains(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH));
       // above upsert would have triggered clean

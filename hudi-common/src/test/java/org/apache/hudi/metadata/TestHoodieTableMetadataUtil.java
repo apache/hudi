@@ -22,31 +22,39 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 
 import org.junit.jupiter.api.Test;
 
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.constructSecondaryIndexKey;
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.escapeSpecialChars;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class TestHoodieTableMetadataUtil {
 
   @Test
-  public void testGetRecordKeyToFileGroupIndexFunctionOptimized() {
+  public void testGetRecordKeyToFileGroupIndexFunction() {
     // Test with secondary key format
     String compositeKey = "secondaryKey$recordKey";
 
-    SerializableBiFunction<String, Integer, Integer> optimizedFunction =
+    SerializableBiFunction<String, Integer, Integer> hashOnSecKeyOnly =
         HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(true);
+    SerializableBiFunction<String, Integer, Integer> hashOnFullKey =
+        HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(false);
 
-    int result1 = optimizedFunction.apply(compositeKey, 10);
-    int result2 = optimizedFunction.apply("anotherSecondaryKey$anotherRecordKey", 10);
+    int result1 = hashOnSecKeyOnly.apply(compositeKey, 10);
+    int result2 = hashOnSecKeyOnly.apply("anotherSecondaryKey$anotherRecordKey", 10);
 
     // Both should hash the secondary key portion
     assertNotEquals(result1, result2);
 
     // Test with regular key format
-    optimizedFunction = HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(false);
-
-    int result3 = optimizedFunction.apply("simpleKey", 10);
-    int result4 = optimizedFunction.apply("anotherSimpleKey", 10);
+    int result3 = hashOnFullKey.apply("simpleKey", 10);
+    int result4 = hashOnFullKey.apply("anotherSimpleKey", 10);
 
     // Both should hash the full key
     assertNotEquals(result3, result4);
+
+    // Hash on Sec key only <=> Hash full key if key equals to UNESCAPED sec key
+    assertEquals(hashOnSecKeyOnly.apply("secKey$recKey", 10), hashOnFullKey.apply("secKey", 10));
+    assertEquals(hashOnSecKeyOnly.apply(constructSecondaryIndexKey("seckey", "reckey"), 10), hashOnFullKey.apply("seckey", 10));
+    assertEquals(hashOnSecKeyOnly.apply(constructSecondaryIndexKey("$", "reckey"), 10), hashOnFullKey.apply(escapeSpecialChars("$"), 10));
   }
 }
