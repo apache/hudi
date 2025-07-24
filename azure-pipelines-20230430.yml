@@ -81,11 +81,6 @@ parameters:
     type: object
     default:
       - '!hudi-examples/hudi-examples-k8s'
-      - '!hudi-flink-datasource/hudi-flink1.15.x'
-      - '!hudi-flink-datasource/hudi-flink1.16.x'
-      - '!hudi-flink-datasource/hudi-flink1.17.x'
-      - '!hudi-flink-datasource/hudi-flink1.19.x'
-      - '!hudi-flink-datasource/hudi-flink1.20.x'
       - '!packaging/hudi-aws-bundle'
       - '!packaging/hudi-cli-bundle'
       - '!packaging/hudi-datahub-sync-bundle'

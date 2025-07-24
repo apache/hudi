@@ -191,7 +191,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
 
     long numErrorRecords = statuses.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
 
-    if (numErrorRecords > 0 && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+    if (numErrorRecords > 0 && !this.conf.get(FlinkOptions.IGNORE_FAILED)) {
       // handle failure case
       LOG.error("Got {} error records during clustering of instant {},\n"
           + "option '{}' is configured as false,"
@@ -221,7 +221,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
 
     clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering
-    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
+    if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
       LOG.info("Running inline clean");
       this.writeClient.clean();
     }

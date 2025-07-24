@@ -44,6 +44,8 @@ ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 ln -sf $JARS_DIR/hudi-cli-bundle*.jar $JARS_DIR/cli.jar
+# workaround for solving dependency conflict issues of Flink sql client (FLINK-33358)
+ln -sf $FLINK_HOME/opt/flink-sql-client*.jar $FLINK_HOME/lib/flink-sql-client.jar
 
 ##
 # Function to change Java runtime version by changing JAVA_HOME
@@ -338,6 +340,17 @@ test_cli_bundle() {
 ############################
 # Execute tests
 ############################
+
+# run flink bundle test only for flink2.0 case, since there is problem for java 11 and spark3.5 bundle (HUDI-8608).
+if [[ "${FLINK_HOME}" == *"2.0"* ]]; then
+    echo "::warning::validate.sh validating flink 2.0 bundle"
+    test_flink_bundle
+    if [ "$?" -ne 0 ]; then
+        exit 1
+    fi
+    echo "::warning::validate.sh done validating flink 2.0 bundle"
+    exit 0
+fi
 
 echo "::warning::validate.sh validating spark & hadoop-mr bundle"
 test_spark_hadoop_mr_bundles

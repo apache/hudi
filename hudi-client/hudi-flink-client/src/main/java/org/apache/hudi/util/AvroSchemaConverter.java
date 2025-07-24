@@ -18,12 +18,14 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.util.ReflectionUtils;
+
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.types.AtomicDataType;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
@@ -36,7 +38,6 @@ import org.apache.flink.table.types.logical.MultisetType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.table.types.logical.TimestampType;
-import org.apache.flink.table.types.logical.TypeInformationRawType;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -103,9 +104,12 @@ public class AvroSchemaConverter {
           nullable = schema.getTypes().size() > nonNullTypes.size();
 
           // use Kryo for serialization
-          DataType rawDataType = new AtomicDataType(
-              new TypeInformationRawType<>(false, Types.GENERIC(Object.class)))
-              .notNull();
+          DataType rawDataType = (DataType) ReflectionUtils.invokeStaticMethod(
+              "org.apache.hudi.utils.DataTypeUtils",
+              "createAtomicRawType",
+              new Object[] {false, Types.GENERIC(Object.class)},
+              Boolean.class,
+              TypeInformation.class);
 
           if (recordTypesOfSameNumFields(nonNullTypes)) {
             DataType converted = DataTypes.ROW(

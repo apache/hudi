@@ -18,9 +18,9 @@
 
 package org.apache.hudi.sink.v2;
 
+import org.apache.hudi.adapter.SinkAdapter;
 import org.apache.hudi.sink.v2.utils.PipelinesV2;
 
-import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.connector.sink2.SupportsPreWriteTopology;
@@ -31,7 +31,7 @@ import org.apache.flink.table.types.logical.RowType;
 /**
  * Hoodie sink based on Flink sink V2 API.
  */
-public class HoodieSink implements Sink<RowData>, SupportsPreWriteTopology<RowData> {
+public class HoodieSink implements SinkAdapter<RowData>, SupportsPreWriteTopology<RowData> {
   private final Configuration conf;
   private final RowType rowType;
   private final boolean overwrite;
@@ -45,7 +45,7 @@ public class HoodieSink implements Sink<RowData>, SupportsPreWriteTopology<RowDa
   }
 
   @Override
-  public SinkWriter<RowData> createWriter(InitContext context) {
+  public SinkWriter<RowData> createWriter() {
     return DummySinkWriter.INSTANCE;
   }
 

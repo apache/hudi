@@ -110,7 +110,7 @@ public class TestRowDataKeyGen {
   @Test
   void testTimestampBasedKeyGenerator() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "ts");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "ts");
     HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.TIMESTAMP(3));
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(7200000), StringData.fromString("par1"));
@@ -139,7 +139,7 @@ public class TestRowDataKeyGen {
 
     // TimestampType.DATE_STRING case, we use another string type `partition` column instead of `ts`
     conf = TestConfigurations.getDefaultConf("path1");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     conf.setString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), TimestampBasedAvroKeyGenerator.class.getName());
     conf.setString(TIMESTAMP_TYPE_FIELD.key(), TimestampBasedAvroKeyGenerator.TimestampType.DATE_STRING.name());
     conf.setString(TIMESTAMP_INPUT_DATE_FORMAT.key(), "yyyy-MM-dd HH:mm:ss");
@@ -155,8 +155,8 @@ public class TestRowDataKeyGen {
   void testDateBasedKeyGenerator(String partitionFormat) {
     boolean dashed = partitionFormat.equals(FlinkOptions.PARTITION_FORMAT_DASHED_DAY);
     Configuration conf = TestConfigurations.getDefaultConf("path1", TestConfigurations.ROW_DATA_TYPE_DATE);
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "dt");
-    conf.setString(FlinkOptions.PARTITION_FORMAT, partitionFormat);
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "dt");
+    conf.set(FlinkOptions.PARTITION_FORMAT, partitionFormat);
     HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.DATE());
     final RowData rowData1 = insertRow(TestConfigurations.ROW_TYPE_DATE,
         StringData.fromString("id1"), StringData.fromString("Danny"), 23, 1);
@@ -189,7 +189,7 @@ public class TestRowDataKeyGen {
   @Test
   void testPrimaryKeylessWrite() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     final int taskId = 3;
@@ -211,7 +211,7 @@ public class TestRowDataKeyGen {
   @Test
   void testRecordKeyContainsTimestamp() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "uuid,ts");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid,ts");
     conf.setString(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
     Timestamp ts = new Timestamp(1675841687000L);
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,

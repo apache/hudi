@@ -43,8 +43,8 @@ public class TestTableEnvs {
     // the index records must be loaded first before data records for BucketAssignFunction to keep upsert semantics correct,
     // so we suggest disabling these 2 options to use streaming state-backend for batch execution mode
     // to keep the strategy before 1.14.
-    conf.setBoolean("execution.sorted-inputs.enabled", false);
-    conf.setBoolean("execution.batch-state-backend.enabled", false);
+    conf.setString("execution.sorted-inputs.enabled", "false");
+    conf.setString("execution.batch-state-backend.enabled", "false");
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment(conf);
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     return StreamTableEnvironment.create(execEnv, settings);

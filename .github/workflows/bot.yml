@@ -817,12 +817,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - flinkProfile: "flink1.15"
-            flinkAvroVersion: "1.11.4"
-            flinkParquetVersion: '1.12.2'
-          - flinkProfile: "flink1.16"
-            flinkAvroVersion: "1.11.4"
-            flinkParquetVersion: '1.12.2'
           - flinkProfile: "flink1.17"
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.12.3'
@@ -835,12 +829,15 @@ jobs:
           - flinkProfile: "flink1.20"
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.13.1'
+          - flinkProfile: "flink2.0"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.14.4'
     steps:
       - uses: actions/checkout@v3
-      - name: Set up JDK 8
+      - name: Set up JDK 11
         uses: actions/setup-java@v3
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
       - name: Build Project
@@ -963,26 +960,15 @@ jobs:
             flinkProfile: 'flink1.18'
             flinkAvroVersion: '1.11.4'
             flinkParquetVersion: '1.13.1'
-            sparkProfile: 'spark3.5'
-            sparkRuntime: 'spark3.5.1'
+            sparkProfile: 'spark3.4'
+            sparkRuntime: 'spark3.4.3'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink1.17'
             flinkAvroVersion: '1.11.4'
             flinkParquetVersion: '1.12.3'
-            sparkProfile: 'spark3.5'
-            sparkRuntime: 'spark3.5.1'
-          - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.16'
-            flinkAvroVersion: '1.11.4'
-            flinkParquetVersion: '1.12.2'
-            sparkProfile: 'spark3.4'
-            sparkRuntime: 'spark3.4.3'
-          - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.15'
-            flinkAvroVersion: '1.11.4'
-            flinkParquetVersion: '1.12.2'
             sparkProfile: 'spark3.3'
             sparkRuntime: 'spark3.3.4'
+
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -1002,7 +988,7 @@ jobs:
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
           else
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
@@ -1016,6 +1002,55 @@ jobs:
         run: |
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java8 $HUDI_VERSION openjdk8
+      - name: IT - Bundle Validation - OpenJDK 11
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run: |
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
+      - name: IT - Bundle Validation - OpenJDK 17
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run: |
+          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
+
+  # flink 2.0 only support Java 11 and above version
+  validate-bundles-java11:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.0'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.14.4'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          architecture: x64
+      - name: Build Project
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
+          FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
+        run: |
+          mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
       - name: IT - Bundle Validation - OpenJDK 11
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1095,6 +1130,7 @@ jobs:
       matrix:
         include:
           - sparkProfile: 'spark3.5'
+            flinkProfile: 'flink1.20'
             sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
     steps:
       - uses: actions/checkout@v3
@@ -1109,9 +1145,10 @@ jobs:
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
-          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}

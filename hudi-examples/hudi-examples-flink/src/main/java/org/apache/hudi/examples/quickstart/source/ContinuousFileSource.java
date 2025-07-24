@@ -19,6 +19,7 @@
 package org.apache.hudi.examples.quickstart.source;
 
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
+import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.util.JsonDeserializationFunction;
 
 import org.apache.flink.api.common.state.CheckpointListener;
@@ -26,9 +27,9 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.connector.ProviderContext;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.data.RowData;
@@ -85,7 +86,7 @@ public class ContinuousFileSource implements ScanTableSource {
       @Override
       public DataStream<RowData> produceDataStream(StreamExecutionEnvironment execEnv) {
         final RowType rowType = (RowType) tableSchema.toSourceRowDataType().getLogicalType();
-        return execEnv.addSource(new BoundedSourceFunction(path, conf.getInteger(CHECKPOINTS)))
+        return execEnv.addSource(new BoundedSourceFunction(path, conf.get(CHECKPOINTS)))
             .name("continuous_file_source")
             .setParallelism(1)
             .map(JsonDeserializationFunction.getInstance(rowType), InternalTypeInfo.of(rowType));
@@ -111,7 +112,7 @@ public class ContinuousFileSource implements ScanTableSource {
   /**
    * Source function that partition the data into given number checkpoints batches.
    */
-  public static class BoundedSourceFunction implements SourceFunction<String>, CheckpointListener {
+  public static class BoundedSourceFunction implements SourceFunctionAdapter<String>, CheckpointListener {
     private final Path path;
     private List<String> dataBuffer;
 
