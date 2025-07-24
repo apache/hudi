@@ -392,7 +392,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> READ_SPLITS_LIMIT = ConfigOptions
       .key("read.splits.limit")
       .intType()
-      .noDefaultValue()
+      .defaultValue(Integer.MAX_VALUE)
       .withDescription("The maximum number of splits allowed to read in each instant check, if it is streaming read, "
           + "the avg read splits number per-second would be 'read.splits.limit'/'read.streaming.check-interval', by "
           + "default no limit and limit takes effect only when it is greater than 0");

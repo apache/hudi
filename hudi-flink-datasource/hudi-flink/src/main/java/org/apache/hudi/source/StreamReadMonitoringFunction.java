@@ -48,7 +48,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -102,13 +104,16 @@ public class StreamReadMonitoringFunction
 
   private String issuedOffset;
 
+  /**
+   * the size of inputSplits
+   */
   private int totalSplits = -1;
 
-  private List<MergeOnReadInputSplit> remainingSplits = new ArrayList<>();
+  private transient List<MergeOnReadInputSplit> remainingSplits = new ArrayList<>();
 
   private transient ListState<String> instantState;
 
-  private transient ListState<MergeOnReadInputSplit> inputSplitsState;
+  private transient ListState<SplitState> inputSplitsState;
 
   private final Configuration conf;
 
@@ -128,7 +133,7 @@ public class StreamReadMonitoringFunction
     this.path = path;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
     this.cdcEnabled = conf.getBoolean(FlinkOptions.CDC_ENABLED);
-    this.splitsLimit = OptionsResolver.hasReadSplitsLimit(conf) ? conf.getInteger(FlinkOptions.READ_SPLITS_LIMIT) : 0;
+    this.splitsLimit = conf.getInteger(FlinkOptions.READ_SPLITS_LIMIT);
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(conf)
         .path(path)
@@ -159,7 +164,7 @@ public class StreamReadMonitoringFunction
     this.inputSplitsState = context.getOperatorStateStore().getListState(
         new ListStateDescriptor<>(
             "file-monitoring-splits",
-            TypeInformation.of(MergeOnReadInputSplit.class)));
+            TypeInformation.of(SplitState.class)));
 
     if (context.isRestored()) {
       LOG.info("Restoring state for the class {} with table {} and base path {}.",
@@ -170,7 +175,7 @@ public class StreamReadMonitoringFunction
         retrievedStates.add(entry);
       }
 
-      ValidationUtils.checkArgument(retrievedStates.size() <= 3,
+      ValidationUtils.checkArgument(retrievedStates.size() <= 2,
           getClass().getSimpleName() + " retrieved invalid state.");
 
       if (retrievedStates.size() == 1 && issuedInstant != null) {
@@ -194,20 +199,14 @@ public class StreamReadMonitoringFunction
           LOG.debug("{} retrieved an issued instant of time [{}, {}] for table {} with path {}.",
               getClass().getSimpleName(), issuedInstant, issuedOffset, conf.get(FlinkOptions.TABLE_NAME), path);
         }
-      } else if (retrievedStates.size() == 3) {
-        this.issuedInstant = retrievedStates.get(0);
-        this.issuedOffset = retrievedStates.get(1);
-        this.totalSplits = Integer.parseInt(retrievedStates.get(2));
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("{} retrieved an issued instant of time [{}, {}] and total inputsplit is {} for table {} with path {}.",
-              getClass().getSimpleName(), issuedInstant, issuedOffset, totalSplits, conf.get(FlinkOptions.TABLE_NAME), path);
-        }
       }
-      Iterable<MergeOnReadInputSplit> inputSplitsIterable = inputSplitsState.get();
-      if (inputSplitsIterable != null) {
-        for (MergeOnReadInputSplit split : inputSplitsIterable) {
+      Iterator<SplitState> inputSplitsIterable = inputSplitsState.get().iterator();
+      if (inputSplitsIterable.hasNext()) {
+        SplitState splitState = inputSplitsIterable.next();
+        for (MergeOnReadInputSplit split : splitState.getRemainingSplits()) {
           remainingSplits.add(split);
         }
+        this.totalSplits = splitState.getTotalSplits();
       }
     }
   }
@@ -247,7 +246,7 @@ public class StreamReadMonitoringFunction
 
     IncrementalInputSplits.Result result = remainingSplits.isEmpty()
         ? incrementalInputSplits.inputSplits(metaClient, this.issuedOffset, this.cdcEnabled)
-        : IncrementalInputSplits.Result.instance(remainingSplits, issuedInstant);
+        : IncrementalInputSplits.Result.instance(remainingSplits, issuedInstant, issuedOffset);
 
     if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
@@ -257,19 +256,12 @@ public class StreamReadMonitoringFunction
 
     List<MergeOnReadInputSplit> inputSplits = result.getInputSplits();
     LOG.info("Table {} : Read {} inputsplits for current instant", conf.getString(FlinkOptions.TABLE_NAME), inputSplits.size());
-    if (splitsLimit > 0) {
-      int endIndex = splitsLimit < inputSplits.size() ? splitsLimit : inputSplits.size();
-      for (int index = 0; index < endIndex; index++) {
-        context.collect(inputSplits.get(index));
-      }
-      remainingSplits = inputSplits.stream().skip(endIndex).collect(Collectors.toList());
-      if (totalSplits < 0 || !result.getEndInstant().equals(issuedInstant)) {
-        totalSplits = inputSplits.size();
-      }
-    } else {
-      for (MergeOnReadInputSplit split : inputSplits) {
-        context.collect(split);
-      }
+    int endIndex = Math.min(splitsLimit, inputSplits.size());
+    for (int index = 0; index < endIndex; index++) {
+      context.collect(inputSplits.get(index));
+    }
+    remainingSplits = inputSplits.stream().skip(endIndex).collect(Collectors.toList());
+    if (totalSplits < 0 || !result.getEndInstant().equals(issuedInstant)) {
       totalSplits = inputSplits.size();
     }
 
@@ -330,11 +322,13 @@ public class StreamReadMonitoringFunction
     if (this.issuedOffset != null) {
       this.instantState.add(this.issuedOffset);
     }
+    SplitState splitState = new SplitState();
     if (totalSplits > 0) {
-      this.instantState.add(String.valueOf(totalSplits));
+      splitState.setTotalSplits(totalSplits);
     }
     inputSplitsState.clear();
-    inputSplitsState.addAll(remainingSplits);
+    splitState.setRemainingSplits(remainingSplits);
+    inputSplitsState.add(splitState);
   }
 
   private void registerMetrics() {
@@ -345,6 +339,27 @@ public class StreamReadMonitoringFunction
 
   public String getIssuedOffset() {
     return issuedOffset;
+  }
+
+  private static class SplitState implements Serializable {
+    private int totalSplits;
+    private List<MergeOnReadInputSplit> remainingSplits;
+
+    public List<MergeOnReadInputSplit> getRemainingSplits() {
+      return remainingSplits;
+    }
+
+    public void setRemainingSplits(List<MergeOnReadInputSplit> remainingSplits) {
+      this.remainingSplits = remainingSplits;
+    }
+
+    public int getTotalSplits() {
+      return totalSplits;
+    }
+
+    public void setTotalSplits(int totalSplits) {
+      this.totalSplits = totalSplits;
+    }
   }
 
 }
