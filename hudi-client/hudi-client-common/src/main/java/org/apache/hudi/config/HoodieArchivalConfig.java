@@ -102,6 +102,13 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits."
           + " If disabled, archival will stop at the earliest savepoint commit.");
 
+  public static final ConfigProperty<Boolean> ARCHIVE_KEEP_CLEAN_PLAN_RETAIN_INSTANT = ConfigProperty
+      .key("hoodie.archive.keep.clean.plan.retain.instant")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("If enabled, archival will consider to keep `earliest retain instant` in the clean plan.");
+
   /**
    * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
    */
@@ -190,6 +197,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
 
     public Builder withArchiveBeyondSavepoint(boolean archiveBeyondSavepoint) {
       archivalConfig.setValue(ARCHIVE_BEYOND_SAVEPOINT, String.valueOf(archiveBeyondSavepoint));
+      return this;
+    }
+
+    public Builder withArchiveKeepCleanPlanRetainInstant(boolean archiveKeepCleanPlanRetainInstant) {
+      archivalConfig.setValue(ARCHIVE_KEEP_CLEAN_PLAN_RETAIN_INSTANT, String.valueOf(archiveKeepCleanPlanRetainInstant));
       return this;
     }
 
