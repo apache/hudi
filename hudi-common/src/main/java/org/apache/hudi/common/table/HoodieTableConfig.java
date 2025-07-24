@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -37,7 +38,11 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -71,6 +76,7 @@ import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +100,8 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
@@ -125,6 +133,28 @@ public class HoodieTableConfig extends HoodieConfig {
   // and Hudi stores properties with this prefix so the reader parses these properties,
   // and produces a map of key value pairs (Key1->Value1, Key2->Value2, ...) to use.
   public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.prefix.";
+
+  public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          DefaultHoodieRecordPayload.class.getName(),
+          OverwriteWithLatestAvroPayload.class.getName(),
+          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+          PartialUpdateAvroPayload.class.getName(),
+          MySqlDebeziumAvroPayload.class.getName(),
+          PostgresDebeziumAvroPayload.class.getName(),
+          EventTimeAvroPayload.class.getName())));
+  public static final Set<String> EVENT_TIME_BASED_PAYLOADS = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          DefaultHoodieRecordPayload.class.getName(),
+          PartialUpdateAvroPayload.class.getName(),
+          MySqlDebeziumAvroPayload.class.getName(),
+          PostgresDebeziumAvroPayload.class.getName(),
+          EventTimeAvroPayload.class.getName())));
+
+  public static final Set<String> COMMIT_TIME_BASED_PAYLOADS = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          OverwriteWithLatestAvroPayload.class.getName(),
+          OverwriteNonDefaultsWithLatestAvroPayload.class.getName())));
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -229,6 +259,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
+
+  public static final ConfigProperty<String> LEGACY_PAYLOAD_CLASS_NAME = ConfigProperty
+      .key("hoodie.legacy.payload.class")
+      .noDefaultValue()
+      .deprecatedAfter("1.1.0")
+      .withDocumentation("Payload class to indicate the payload class that is used to create the table and is not used anymore.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
   public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
@@ -803,6 +839,85 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getRecordMergeStrategyId() {
     return getString(RECORD_MERGE_STRATEGY_ID);
+  }
+
+  /**
+   * Handle table config creation logic when creating a table for Table Version 9,
+   * since it has some different logic from previous versions.
+   */
+  public static Map<ConfigProperty, String> getMergingConfigs(RecordMergeMode recordMergeMode,
+                                                              String payloadClassName,
+                                                              String recordMergeStrategyId,
+                                                              String orderingFieldName,
+                                                              HoodieTableVersion tableVersion) {
+    RecordMergeMode finalRecordMergeMode = recordMergeMode;
+    String finalPayloadClassName = payloadClassName;
+    String finalRecordMergeStrategyId = recordMergeStrategyId;
+
+    Map<ConfigProperty, String> finalConfigs = new HashMap<>();
+    // All tables should have initial partial update mode, and merge properties with default values.
+    finalConfigs.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name());
+    finalConfigs.put(MERGE_PROPERTIES, StringUtils.EMPTY_STRING);
+
+    if (tableVersion.versionCode() == HoodieTableVersion.NINE.versionCode()) {
+      // For tables using merge mode, or mergers.
+      // Their merging configs are the same as version 8.
+      if (StringUtils.isNullOrEmpty(payloadClassName)) {
+        Triple<RecordMergeMode, String, String> mergingConfig =
+            inferCorrectMergingBehavior(
+                recordMergeMode,
+                payloadClassName,
+                recordMergeStrategyId,
+                orderingFieldName,
+                tableVersion);
+        finalConfigs.put(RECORD_MERGE_MODE, mergingConfig.getLeft().name());
+        finalConfigs.put(RECORD_MERGE_STRATEGY_ID, mergingConfig.getRight());
+        // No payload class is set.
+      } else {
+        // For tables using custom payload classes.
+        if (!PAYLOADS_UNDER_DEPRECATION.contains(payloadClassName)) {
+          finalConfigs.put(RECORD_MERGE_MODE, CUSTOM.toString());
+          finalConfigs.put(PAYLOAD_CLASS_NAME, payloadClassName);
+          finalConfigs.put(RECORD_MERGE_STRATEGY_ID, PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+        } else {
+          // Merge mode.
+          if (EVENT_TIME_BASED_PAYLOADS.contains(payloadClassName)) {
+            finalConfigs.put(RECORD_MERGE_MODE, EVENT_TIME_ORDERING.name());
+            finalConfigs.put(LEGACY_PAYLOAD_CLASS_NAME, payloadClassName);
+            finalConfigs.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+          } else {
+            finalConfigs.put(RECORD_MERGE_MODE, COMMIT_TIME_ORDERING.name());
+            finalConfigs.put(LEGACY_PAYLOAD_CLASS_NAME, payloadClassName);
+            finalConfigs.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+          }
+          // Partial upate mode.
+          if (payloadClassName.equals(PartialUpdateAvroPayload.class.getName())
+              || payloadClassName.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
+            finalConfigs.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_DEFAULTS.name());
+          } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
+            finalConfigs.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_MARKERS.name());
+          }
+          // Merge properties.
+          if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
+            finalConfigs.put(MERGE_PROPERTIES, PARTIAL_UPDATE_CUSTOM_MARKER + "=" + DEBEZIUM_UNAVAILABLE_VALUE);
+          } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
+            finalConfigs.put(MERGE_PROPERTIES, DELETE_KEY + "=Op," + DELETE_MARKER + "=D");
+          }
+        }
+      }
+    } else {
+      // For rest versions, go through standard inference process.
+      Triple<RecordMergeMode, String, String> mergingConfig =
+          inferCorrectMergingBehavior(
+              recordMergeMode,
+              payloadClassName,
+              recordMergeStrategyId,
+              orderingFieldName,
+              tableVersion);
+      finalConfigs.put(RECORD_MERGE_MODE, mergingConfig.getLeft().name());
+      finalConfigs.put(PAYLOAD_CLASS_NAME, mergingConfig.getMiddle());
+      finalConfigs.put(RECORD_MERGE_STRATEGY_ID, mergingConfig.getRight());
+    }
   }
 
   /**
