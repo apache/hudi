@@ -26,6 +26,8 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import com.google.crypto.tink.subtle.Base64;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
@@ -47,4 +49,36 @@ public class KafkaSourceUtil {
         : StringUtils.concatenateWithThreshold(String.format("%s_", groupId), schemaHash, GROUP_ID_MAX_BYTES_LENGTH);
     props.put(NATIVE_KAFKA_CONSUMER_GROUP_ID, updatedConsumerGroup);
   }
+
+  /**
+   * Utility method that removes configs with keys that match (start with) any one of the prefixes.
+   *
+   * @param kafkaParams The incoming kafka params
+   * @param commaSeparatedPrefixes all configs with keys starting with any one of these comma-separated prefixes will be ignored.
+   * @return a new set of kafkaParams with the configs matching the prefixes removed.
+   */
+  public static Map<String, Object> filterKafkaParameters(Map<String, Object> kafkaParams, String commaSeparatedPrefixes) {
+    if (commaSeparatedPrefixes.isEmpty()) {
+      return kafkaParams;
+    }
+
+    String[] prefixes = commaSeparatedPrefixes.split(";");
+    Map<String, Object> filteredInParams = new HashMap<>();
+    for (Map.Entry<String, Object> entry : kafkaParams.entrySet()) {
+      boolean beginsWithAtleastOnePrefix = false;
+      for (String prefix : prefixes) {
+        if (!prefix.isEmpty() && entry.getKey().startsWith(prefix)) {
+          beginsWithAtleastOnePrefix = true;
+          break;
+        }
+      }
+
+      if (!beginsWithAtleastOnePrefix) {
+        filteredInParams.put(entry.getKey(), entry.getValue());
+      }
+    }
+
+    return filteredInParams;
+  }
+
 }

@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
@@ -32,18 +33,24 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.streaming.kafka010.KafkaUtils;
+import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Map;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil.filterKafkaParameters;
 
 public abstract class KafkaSource<T> extends Source<T> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
@@ -126,6 +133,28 @@ public abstract class KafkaSource<T> extends Source<T> {
     metrics.updateStreamerSourceNewMessageCount(METRIC_NAME_KAFKA_MESSAGE_IN_COUNT, totalNewMsgs);
     T newBatch = toBatch(offsetRanges);
     return new InputBatch<>(Option.of(newBatch), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
+  }
+
+  /**
+   * Creates a Kafka RDD with the specified key-value deserialization types.
+   *
+   * @param props        Configuration properties for the Kafka source, including topic, bootstrap servers, etc.
+   * @param sparkContext Spark context used to create the RDD.
+   * @param offsetGen    Generator that provides Kafka parameters and helps map offset ranges.
+   * @param offsetRanges Kafka offset ranges to read data from.
+   *
+   * @param <K>          Type of the Kafka record key.
+   * @param <V>          Type of the Kafka record value.
+   * @return JavaRDD containing Kafka ConsumerRecord entries with deserialized key-value pairs.
+   */
+  public static <K, V> JavaRDD<ConsumerRecord<K, V>> createKafkaRDD(
+      TypedProperties props,
+      JavaSparkContext sparkContext,
+      KafkaOffsetGen offsetGen,
+      OffsetRange[] offsetRanges) {
+    Map<String, Object> kafkaParams = filterKafkaParameters(offsetGen.getKafkaParams(), ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST));
+    LOG.debug("Original kafka params " + offsetGen.getKafkaParams() + "\n After filtering kafka params " + kafkaParams);
+    return KafkaUtils.createRDD(sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent());
   }
 
   protected abstract T toBatch(OffsetRange[] offsetRanges);

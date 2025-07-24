@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.hash.HashID;
+import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
@@ -29,6 +30,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
 import static org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil.GROUP_ID_MAX_BYTES_LENGTH;
@@ -62,5 +66,24 @@ public class TestKafkaSourceUtil {
     assertEquals(props.getString(KAFKA_VALUE_DESERIALIZER_SCHEMA.key()), avroSchemaJson);
     String schemaHash = Base64.encode(HashID.hash(avroSchemaJson, HashID.Size.BITS_128));
     assertEquals(props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, ""), schemaHash);
+  }
+
+  @Test
+  public void testFilterKafkaParameters() {
+    Map<String, Object> kafkaParams = new HashMap<>();
+
+    kafkaParams.put("custom1.config.streamer", "offer");
+    kafkaParams.put("boostrap.servers", "dns:port");
+    kafkaParams.put("custom2.config.capture", "s3://folder1");
+    kafkaParams.put("custom1config.sourceprofile.refresh.mode", "ENABLED");
+    // Case 1: No prefixes are configured.
+    assertEquals(kafkaParams, KafkaSourceUtil.filterKafkaParameters(kafkaParams, ""));
+    // Case 2: Ensure only the appropriate configs are filtered out.
+    Map<String, Object> filteredParams = KafkaSourceUtil.filterKafkaParameters(kafkaParams, "custom1,custom2");
+    Map<String, Object> expectedParams = new HashMap<>();
+    expectedParams.put("boostrap.servers", "dns:port");
+    assertEquals(expectedParams, filteredParams);
+    // Case 3: There are no configs with the given prefixes.
+    assertEquals(kafkaParams, KafkaSourceUtil.filterKafkaParameters(kafkaParams, "custom3,custom4"));
   }
 }

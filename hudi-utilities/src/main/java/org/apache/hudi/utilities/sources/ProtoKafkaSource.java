@@ -93,11 +93,11 @@ public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
           className.isPresent(),
           ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key() + " config must be present.");
       ProtoDeserializer deserializer = new ProtoDeserializer(className.get());
-      return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-          LocationStrategies.PreferConsistent()).map(obj -> deserializer.parse(obj.value()));
+      JavaRDD<ConsumerRecord<String, byte[]>> kafkaRDD = createKafkaRDD(this.props, sparkContext, offsetGen, offsetRanges);
+      return kafkaRDD.map(obj -> deserializer.parse(obj.value()));
     } else {
-      return KafkaUtils.<String, Message>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-          LocationStrategies.PreferConsistent()).map(ConsumerRecord::value);
+      JavaRDD<ConsumerRecord<String, Message>> kafkaRDD = createKafkaRDD(this.props, sparkContext, offsetGen, offsetRanges);
+      return kafkaRDD.map(ConsumerRecord::value);
     }
   }
 
