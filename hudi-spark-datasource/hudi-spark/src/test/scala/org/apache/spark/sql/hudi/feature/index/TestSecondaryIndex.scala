@@ -748,4 +748,334 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
          | """.stripMargin
     )
   }
+
+
+  /**
+   * Test secondary index with nullable columns covering comprehensive scenarios for both COW and MOR:
+   * - Initial creation with null values
+   * - Delete by record key, read by data column
+   * - Update data column (null to non-null, non-null to null, null to null)
+   * - Insert data column (null/non-null)
+   * - Validate data at each step
+   * - Verify null value indexing behavior (new in HUDI-9543)
+   * - Test delete records in log files having null secondary keys
+   * - Test index reinitialization filtering delete records
+   */
+  test("Test Secondary Index With Nullable Columns") {
+    Seq("cow", "mor").foreach { tableType =>
+      testSecondaryIndexWithNullableColumns(tableType)
+    }
+  }
+
+  /**
+   * Helper method to test secondary index with nullable columns for both COW and MOR table types
+   */
+  private def testSecondaryIndexWithNullableColumns(tableType: String): Unit = {
+    withSparkSqlSessionConfig(
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "9",
+      "hoodie.embed.timeline.server" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName + s"_nullable_${tableType}"
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+        // Create table with nullable column
+        spark.sql(
+          s"""
+             |CREATE TABLE $tableName (
+             |  id INT,
+             |  name STRING,
+             |  description STRING,
+             |  ts LONG
+             |) USING HUDI
+             |options(
+             |  primaryKey = 'id',
+             |  type = '$tableType',
+             |  preCombineField = 'ts',
+             |  hoodie.metadata.enable = 'true',
+             |  hoodie.metadata.record.index.enable = 'true',
+             |  hoodie.metadata.index.secondary.enable = 'true',
+             |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
+             |)
+             |location '$basePath'
+             |""".stripMargin)
+
+        // Step 1: Initial Insertion with null values
+        spark.sql(
+          s"""
+             |INSERT INTO $tableName VALUES
+             |  (1, 'record1', 'description1', 1000),
+             |  (2, 'record2', NULL, 1001),
+             |  (3, 'record3', 'description3', 1002),
+             |  (4, 'record4', NULL, 1003)
+             |""".stripMargin)
+
+        // Verify initial data
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+          Seq(1, "record1", "description1", 1000),
+          Seq(2, "record2", null, 1001),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", null, 1003)
+        )
+
+        // Create secondary index on nullable column
+        spark.sql(s"CREATE INDEX idx_description ON $tableName (description)")
+
+        // Verify index is created
+        checkAnswer(s"SHOW INDEXES FROM $tableName")(
+          Seq("column_stats", "column_stats", ""),
+          Seq("secondary_index_idx_description", "secondary_index", "description"),
+          Seq("record_index", "record_index", "")
+        )
+
+        // Validate initial secondary index entries
+        validateSecondaryIndexEntries(basePath, tableName)
+
+        // Verify null entries are indexed (new behavior)
+        val initialIndexEntries = getSecondaryIndexEntriesDirectly(basePath)
+        assertEquals(4, initialIndexEntries.length, "Should have 4 secondary index entries including nulls")
+        val nullEntries = initialIndexEntries.filter(_.contains(s"${SecondaryIndexKeyUtils.NULL_CHAR}${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}"))
+        assertEquals(2, nullEntries.length, "Should have 2 null secondary index entries")
+
+        // Test initial queries using secondary index
+        // TODO [HUDI-9549] predicate of is null / not null will not leverage index lookup as of today
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NULL ORDER BY id")(
+          Seq(2, "record2", null, 1001),
+          Seq(4, "record4", null, 1003)
+        )
+
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NOT NULL ORDER BY id")(
+          Seq(1, "record1", "description1", 1000),
+          Seq(3, "record3", "description3", 1002)
+        )
+
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description = 'description1'")(
+          Seq(1, "record1", "description1", 1000)
+        )
+
+        // Step 2: Delete by record key whose secondary index is null and validate secondary index
+        spark.sql(s"DELETE FROM $tableName WHERE id = 2")
+
+        // Verify data after delete
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+          Seq(1, "record1", "description1", 1000),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", null, 1003)
+        )
+
+        // Validate secondary index after delete
+        validateSecondaryIndexEntries(basePath, tableName)
+
+        // Test queries after delete
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NULL ORDER BY id")(
+          Seq(4, "record4", null, 1003)
+        )
+
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NOT NULL ORDER BY id")(
+          Seq(1, "record1", "description1", 1000),
+          Seq(3, "record3", "description3", 1002)
+        )
+
+        // Step 3: Update null to non-null
+        spark.sql(s"UPDATE $tableName SET description = 'updated_description' WHERE id = 4")
+
+        // Verify data after null to non-null update
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+          Seq(1, "record1", "description1", 1000),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", "updated_description", 1003)
+        )
+
+        // Validate secondary index after null to non-null update
+        validateSecondaryIndexEntries(basePath, tableName)
+
+        // Test queries after null to non-null update
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NULL ORDER BY id")(
+          // Should return empty result
+        )
+
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NOT NULL ORDER BY id")(
+          Seq(1, "record1", "description1", 1000),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", "updated_description", 1003)
+        )
+
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description = 'updated_description'")(
+          Seq(4, "record4", "updated_description", 1003)
+        )
+
+        // Step 4: Update non-null to null
+        spark.sql(s"UPDATE $tableName SET description = NULL WHERE id = 1")
+
+        // Verify data after non-null to null update
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+          Seq(1, "record1", null, 1000),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", "updated_description", 1003)
+        )
+
+        // Validate secondary index after non-null to null update
+        validateSecondaryIndexEntries(basePath, tableName)
+
+        // Test queries after non-null to null update
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NULL ORDER BY id")(
+          Seq(1, "record1", null, 1000)
+        )
+
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NOT NULL ORDER BY id")(
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", "updated_description", 1003)
+        )
+
+        // Step 5: Update null to null (should be no-op but validate)
+        spark.sql(s"UPDATE $tableName SET description = NULL WHERE id = 1")
+
+        // Verify data after null to null update (should remain same)
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+          Seq(1, "record1", null, 1000),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", "updated_description", 1003)
+        )
+
+        // Validate secondary index after null to null update
+        validateSecondaryIndexEntries(basePath, tableName)
+
+        // Step 6: Insert new record with null description
+        spark.sql(s"INSERT INTO $tableName VALUES (5, 'record5', NULL, 1004)")
+
+        // Verify data after inserting null
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+          Seq(1, "record1", null, 1000),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", "updated_description", 1003),
+          Seq(5, "record5", null, 1004)
+        )
+
+        // Validate secondary index after inserting null
+        validateSecondaryIndexEntries(basePath, tableName)
+
+        // Test queries after inserting null
+        // TODO [HUDI-9549]
+        // checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NULL ORDER BY id")(
+        //   Seq(1, "record1", null, 1000),
+        //   Seq(5, "record5", null, 1004)
+        // )
+
+        // Step 7: Insert new record with non-null description
+        spark.sql(s"INSERT INTO $tableName VALUES (6, 'record6', 'new_description', 1005)")
+
+        // Verify data after inserting non-null
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+          Seq(1, "record1", null, 1000),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", "updated_description", 1003),
+          Seq(5, "record5", null, 1004),
+          Seq(6, "record6", "new_description", 1005)
+        )
+
+        // Validate secondary index after inserting non-null
+        validateSecondaryIndexEntries(basePath, tableName)
+
+        // Final comprehensive test queries
+        // TODO [HUDI-9549]
+        // checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NULL ORDER BY id")(
+        //   Seq(1, "record1", null, 1000),
+        //   Seq(5, "record5", null, 1004)
+        // )
+        // checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description IS NOT NULL ORDER BY id")(
+        //   Seq(3, "record3", "description3", 1002),
+        //   Seq(4, "record4", "updated_description", 1003),
+        //   Seq(6, "record6", "new_description", 1005)
+        // )
+
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description = 'new_description'")(
+          Seq(6, "record6", "new_description", 1005)
+        )
+
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName WHERE description = 'description3'")(
+          Seq(3, "record3", "description3", 1002)
+        )
+
+        // Test index reinitialization behavior
+        // Drop and recreate index to test initialization from file slices
+        spark.sql(s"DROP INDEX idx_description ON $tableName")
+        spark.sql(s"CREATE INDEX idx_description ON $tableName (description)")
+        checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+          Seq(1, "record1", null, 1000),
+          Seq(3, "record3", "description3", 1002),
+          Seq(4, "record4", "updated_description", 1003),
+          Seq(5, "record5", null, 1004),
+          Seq(6, "record6", "new_description", 1005)
+        )
+        validateSecondaryIndexEntries(basePath, tableName)
+
+        // Additional MOR specific validations
+        if (tableType == "mor") {
+
+          // Step 8: Test delete record behavior in log files (MOR specific)
+          // Delete records in log files will have null secondary key even if the original record had a non-null value.
+          // This is important because the delete record only contains the record key, not the full record data
+
+          // First, test deleting a record with null secondary key
+          spark.sql(s"DELETE FROM $tableName WHERE id = 5")
+          checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+            Seq(1, "record1", null, 1000),
+            Seq(3, "record3", "description3", 1002),
+            Seq(4, "record4", "updated_description", 1003),
+            Seq(6, "record6", "new_description", 1005)
+          )
+          validateSecondaryIndexEntries(basePath, tableName)
+
+          // Now test deleting a record with non-null secondary key
+          spark.sql(s"DELETE FROM $tableName WHERE id = 3")
+          checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+            Seq(1, "record1", null, 1000),
+            Seq(4, "record4", "updated_description", 1003),
+            Seq(6, "record6", "new_description", 1005)
+          )
+          validateSecondaryIndexEntries(basePath, tableName)
+
+          // Insert a new record with the same secondary key as a deleted record to test behavior
+          spark.sql(s"INSERT INTO $tableName VALUES (7, 'record7', 'description3', 1006)")
+          checkAnswer(s"SELECT id, name, description, ts FROM $tableName ORDER BY id")(
+            Seq(1, "record1", null, 1000),
+            Seq(4, "record4", "updated_description", 1003),
+            Seq(6, "record6", "new_description", 1005),
+            Seq(7, "record7", "description3", 1006)
+          )
+          // Test compaction behavior
+          spark.sql(s"CALL run_compaction(table => '$tableName', op => 'schedule')")
+          spark.sql(s"CALL run_compaction(table => '$tableName', op => 'run')")
+
+          validateSecondaryIndexEntries(basePath, tableName)
+        }
+      }
+    }
+  }
+
+  /**
+   * Helper method to validate secondary index entries in metadata
+   */
+  private def validateSecondaryIndexEntries(basePath: String, tableName: String): Unit = {
+    val expectedSecondaryKeys = spark.sql(s"SELECT _hoodie_record_key, description FROM $tableName")
+      .collect().map(row => {
+        val recordKey = row.getString(0)
+        val description = if (row.isNullAt(1)) null else row.getString(1)
+        SecondaryIndexKeyUtils.constructSecondaryIndexKey(description, recordKey)
+      })
+    val actualSecondaryKeys = spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7 AND key LIKE '%$SECONDARY_INDEX_RECORD_KEY_SEPARATOR%'")
+      .collect().map(indexKey => indexKey.getString(0))
+
+    assertEquals(expectedSecondaryKeys.toSet, actualSecondaryKeys.toSet,
+      s"Secondary index entries mismatch for table $tableName")
+  }
+
+  /**
+   * Helper method to get secondary index entries directly for inspection
+   */
+  private def getSecondaryIndexEntriesDirectly(basePath: String): Array[String] = {
+    spark.sql(s"SELECT key FROM hudi_metadata('$basePath') WHERE type=7")
+      .collect()
+      .map(_.getString(0))
+      .filter(_.contains(SECONDARY_INDEX_RECORD_KEY_SEPARATOR))
+  }
 }

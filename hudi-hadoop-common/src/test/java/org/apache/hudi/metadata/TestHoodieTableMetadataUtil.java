@@ -800,25 +800,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             V1,
             0  // Calculated using the explicit hashing algorithm
         )
-    // [HUDI-9543] need to support null value for SI.
-    //        // Test case 10: Record key with special characters
-    //        Arguments.of(
-    //            "Null str handling sec idx v2",
-    //            null,
-    //            10,
-    //            "secondary_index_idx_ts",
-    //            V2,
-    //            0  // Calculated using the explicit hashing algorithm
-    //        ),
-    //        // Test case 10: Record key with special characters
-    //        Arguments.of(
-    //            "Null str handling sec idx v2",
-    //            null,
-    //            10,
-    //            "secondary_index_idx_ts",
-    //            V2,
-    //            0  // Calculated using the explicit hashing algorithm
-    //        )
     );
   }
 

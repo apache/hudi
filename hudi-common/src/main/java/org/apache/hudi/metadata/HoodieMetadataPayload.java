@@ -172,7 +172,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * HoodieMetadata secondary index payload field ids
    */
   public static final String SECONDARY_INDEX_RECORD_KEY_ESCAPE_CHAR = "\\";
-  public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = "$";
+  public static final char SECONDARY_INDEX_RECORD_KEY_SEPARATOR_CHAR = '$';
+  public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = String.valueOf(SECONDARY_INDEX_RECORD_KEY_SEPARATOR_CHAR);
   public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   /**
