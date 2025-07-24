@@ -172,15 +172,22 @@ case class HoodieFileIndex(spark: SparkSession,
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val prunedPartitionsAndFilteredFileSlices = filterFileSlices(dataFilters, partitionFilters).flatMap(
+    val slices = filterFileSlices(dataFilters, partitionFilters).flatMap(
       { case (partitionOpt, fileSlices) =>
-        fileSlices.filter(!_.isEmpty).map(fs => (partitionOpt, fs))
+        fileSlices.filter(!_.isEmpty).map(fs => ( InternalRow.fromSeq(partitionOpt.get.values), fs))
       }
-    ).map {
-      case (partitionOpt, fileSlice) =>
+    )
+    prepareFileSlices(slices)
+  }
+
+  protected def prepareFileSlices(slices: Seq[(InternalRow, FileSlice)]): Seq[PartitionDirectory] = {
+    hasPushedDownPartitionPredicates = true
+
+    val prunedPartitionsAndFilteredFileSlices = slices.map {
+      case (partitionValues, fileSlice) =>
         if (shouldEmbedFileSlices) {
           PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(
-            partitionOpt,
+            partitionValues,
             fileSlice,
             options)
         } else {
@@ -189,13 +196,10 @@ case class HoodieFileIndex(spark: SparkSession,
           val files = logPathInfoStream.collect(Collectors.toList[StoragePathInfo]).asScala
           baseFileStatusOpt.foreach(f => files.append(f))
           val allCandidateFiles = files.map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
-              fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))).toSeq
-          sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-            InternalRow.fromSeq(partitionOpt.get.values), allCandidateFiles)
+            fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))).toSeq
+          sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(partitionValues, allCandidateFiles)
         }
     }
-
-    hasPushedDownPartitionPredicates = true
 
     if (shouldReadAsPartitionedTable()) {
       prunedPartitionsAndFilteredFileSlices
