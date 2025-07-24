@@ -74,6 +74,20 @@ public class BufferedRecord<T> implements Serializable {
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
+  /**
+   * When HoodieRecord is given, recordKey is definitely available.
+   */
+  public static <T> BufferedRecord<T> forRecordWithContext(String recordKey,
+                                                           T record,
+                                                           Schema schema,
+                                                           HoodieReaderContext<T> readerContext,
+                                                           Option<String> orderingFieldName,
+                                                           boolean isDelete) {
+    Integer schemaId = readerContext.encodeAvroSchema(schema);
+    Comparable orderingValue = readerContext.getOrderingValue(record, schema, orderingFieldName);
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
+  }
+
   public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue) {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
   }

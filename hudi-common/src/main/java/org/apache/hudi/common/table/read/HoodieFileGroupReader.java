@@ -172,7 +172,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                    HoodieReadStats readStats,
                                                    boolean emitDelete,
                                                    boolean sortOutput,
-                                                   Option<Iterator<T>> inputRecordOpt) {
+                                                   Option<Iterator<HoodieRecord<T>>> inputRecordOpt) {
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, emitDelete, fileGroupUpdateCallbacks);
     if (inputSplit.logFiles.isEmpty()) {
       if (inputRecordOpt.isPresent()) {
@@ -204,7 +204,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (inputSplit.logFiles.isEmpty()) {
-      this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
+      if (inputSplit.recordIterator.isPresent()) {
+        this.baseFileIterator = iter;
+        recordBuffer.setBaseFileIterator(baseFileIterator);
+      } else {
+        this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
+      }
     } else {
       this.baseFileIterator = iter;
       scanLogFiles();
@@ -385,7 +390,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(
+          nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
       return readerContext.constructHoodieRecord(bufferedRecord);
     });
   }
@@ -463,7 +469,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean sortOutput = false;
     private boolean enableOptimizedLogBlockScan = false;
     private List<BaseFileUpdateCallback<T>> fileGroupUpdateCallbacks = Collections.emptyList();
-    private Option<Iterator<T>> recordIterator = Option.empty();
+    private Option<Iterator<HoodieRecord<T>>> recordIterator = Option.empty();
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -569,7 +575,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withRecordIterator(Option<Iterator<T>> iterator) {
+    public Builder<T> withRecordIterator(Option<Iterator<HoodieRecord<T>>> iterator) {
       this.recordIterator = iterator;
       return this;
     }
@@ -606,14 +612,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     // Length of bytes to read from the base file
     private final long length;
     // For input record case.
-    private Option<Iterator<T>> recordIterator;
+    private Option<Iterator<HoodieRecord<T>>> recordIterator;
 
     InputSplit(Option<HoodieBaseFile> baseFileOption,
                Stream<HoodieLogFile> logFiles,
                String partitionPath,
                long start,
                long length,
-               Option<Iterator<T>> recordIterator) {
+               Option<Iterator<HoodieRecord<T>>> recordIterator) {
       this(baseFileOption, logFiles, partitionPath, start, length);
       this.recordIterator = recordIterator;
     }

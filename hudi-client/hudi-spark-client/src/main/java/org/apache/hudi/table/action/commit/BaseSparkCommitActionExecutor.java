@@ -178,7 +178,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       LOG.info("RDD PreppedRecords was persisted at: {}", inputRDD.getStorageLevel());
     }
 
-    // Handle records update with clustering
+    // Handle records update with clustering.
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
     LOG.info("Num spark partitions for inputRecords before triggering workload profile {}", inputRecordsWithClusteringUpdate.getNumPartitions());
 
@@ -391,7 +391,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     HoodieMergeHandle mergeHandle;
     if (config.getMergeHandleClassName().equals(FileGroupReaderBasedMergeHandle.class.getName())) {
-      HoodieReaderContext<T> readerContext = table.getContext().<T>getReaderContextFactory(table.getMetaClient()).getContext();
+      HoodieReaderContext<T> readerContext =
+          table.getContext().<T>getReaderContextFactory(table.getMetaClient()).getContext();
       mergeHandle = new FileGroupReaderBasedMergeHandle(
           config, instantTime, table, Option.of(recordItr), partitionPath, fileId, taskContextSupplier, keyGeneratorOpt,
           readerContext, instantTime, table.getConfig().getRecordMerger().getRecordType(), Option.empty());

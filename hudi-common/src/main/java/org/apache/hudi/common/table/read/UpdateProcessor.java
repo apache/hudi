@@ -122,7 +122,7 @@ public interface UpdateProcessor<T> {
         try {
           invoker.invoke(callback);
         } catch (Exception e) {
-          LOG.error(String.format("Callback %s failed: ", callback.getName()), e);
+          LOG.error("Callback {} failed: ", callback.getName(), e);
         }
       }
     }

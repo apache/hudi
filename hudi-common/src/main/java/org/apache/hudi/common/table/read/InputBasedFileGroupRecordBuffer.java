@@ -23,20 +23,26 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
 
+/**
+ * This is a special record buffer that caches input records,
+ * which is used to merge with records from base file.
+ */
 public class InputBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
-  private final Iterator<T> inputRecordIterator;
+  private final Iterator<HoodieRecord<T>> inputRecordIterator;
 
   public InputBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                          HoodieTableMetaClient hoodieTableMetaClient,
@@ -44,7 +50,7 @@ public class InputBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordB
                                          PartialUpdateMode partialUpdateMode,
                                          TypedProperties props,
                                          Option<String> orderingFieldName,
-                                         Iterator<T> inputRecordIterator,
+                                         Iterator<HoodieRecord<T>> inputRecordIterator,
                                          UpdateProcessor<T> updateProcessor) {
     super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
     this.inputRecordIterator = inputRecordIterator;
@@ -59,15 +65,19 @@ public class InputBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordB
     }
 
     while (inputRecordIterator.hasNext()) {
-      T engineRecord = inputRecordIterator.next();
-      String recordKey = readerContext.getRecordKey(nextRecord, readerSchema);
-      boolean isDelete =
-          isBuiltInDeleteRecord(engineRecord)
-          || isCustomDeleteRecord(engineRecord)
-          || isDeleteHoodieOperation(engineRecord);
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(
-          engineRecord, readerSchema, readerContext, orderingFieldName, isDelete);
-      records.put(recordKey, bufferedRecord);
+      HoodieRecord<T> hoodieRecord = inputRecordIterator.next();
+      try {
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(
+            hoodieRecord.getRecordKey(),
+            hoodieRecord.getData(),
+            readerContext.getSchemaHandler().tableSchema,
+            readerContext,
+            orderingFieldName,
+            hoodieRecord.isDelete(readerContext.getSchemaHandler().tableSchema, props));
+        records.put(hoodieRecord.getRecordKey(), bufferedRecord);
+      } catch (IOException e) {
+        throw new HoodieException("Failed to populate data into the record buffer", e);
+      }
     }
   }
 
