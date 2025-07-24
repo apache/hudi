@@ -124,8 +124,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableFileSystemView metadataFileSystemView;
   // should we reuse the open file handles, across calls
   private final boolean reuse;
-  private final transient Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferInitializer<IndexedRecord>>> reusableFileReaders
-      = new ConcurrentHashMap<>();
+  private final transient Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferInitializer<IndexedRecord>>> reusableFileReaders = new ConcurrentHashMap<>();
 
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();

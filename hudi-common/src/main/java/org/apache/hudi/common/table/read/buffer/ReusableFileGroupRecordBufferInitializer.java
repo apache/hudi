@@ -30,15 +30,15 @@ public class ReusableFileGroupRecordBufferInitializer<T> extends LogScanningReco
   }
 
   @Override
-  public synchronized Pair<FileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                                                   HoodieStorage storage,
-                                                                                   InputSplit inputSplit,
-                                                                                   Option<String> orderingFieldName,
-                                                                                   HoodieTableMetaClient hoodieTableMetaClient,
-                                                                                   TypedProperties props,
-                                                                                   ReaderParameters readerParameters,
-                                                                                   HoodieReadStats readStats,
-                                                                                   Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
+  public synchronized Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+                                                                                         HoodieStorage storage,
+                                                                                         InputSplit inputSplit,
+                                                                                         Option<String> orderingFieldName,
+                                                                                         HoodieTableMetaClient hoodieTableMetaClient,
+                                                                                         TypedProperties props,
+                                                                                         ReaderParameters readerParameters,
+                                                                                         HoodieReadStats readStats,
+                                                                                         Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDelete(), fileGroupUpdateCallback);
     PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     if (cachedResults == null) {

@@ -50,15 +50,15 @@ class DefaultFileGroupRecordBufferInitializer<T> extends LogScanningRecordBuffer
   }
 
   @Override
-  public Pair<FileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                                      HoodieStorage storage,
-                                                                      InputSplit inputSplit,
-                                                                      Option<String> orderingFieldName,
-                                                                      HoodieTableMetaClient hoodieTableMetaClient,
-                                                                      TypedProperties props,
-                                                                      ReaderParameters readerParameters,
-                                                                      HoodieReadStats readStats,
-                                                                      Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
+  public Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+                                                                            HoodieStorage storage,
+                                                                            InputSplit inputSplit,
+                                                                            Option<String> orderingFieldName,
+                                                                            HoodieTableMetaClient hoodieTableMetaClient,
+                                                                            TypedProperties props,
+                                                                            ReaderParameters readerParameters,
+                                                                            HoodieReadStats readStats,
+                                                                            Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
 
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();

@@ -38,7 +38,7 @@ import java.util.List;
  */
 public interface FileGroupRecordBufferInitializer<T> {
 
-  Pair<FileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                HoodieStorage storage,
                                                                InputSplit inputSplit,
                                                                Option<String> orderingFieldName,

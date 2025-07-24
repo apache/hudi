@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
-import org.apache.hudi.common.table.read.buffer.FileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferInitializer;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -155,7 +154,7 @@ public class HoodieFileGroupReader<T> implements Closeable {
       this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
     } else {
       this.baseFileIterator = iter;
-      Pair<FileGroupRecordBuffer<T>, List<String>> intializationResult = recordBufferInitializer.getRecordBuffer(
+      Pair<HoodieFileGroupRecordBuffer<T>, List<String>> intializationResult = recordBufferInitializer.getRecordBuffer(
           readerContext, storage, inputSplit, orderingFieldName, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback);
       recordBuffer = intializationResult.getLeft();
       validBlockInstants = intializationResult.getRight();
