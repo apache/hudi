@@ -54,7 +54,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
   protected var hoodieBackedTableMetadata: HoodieBackedTableMetadata = _
   protected var testData: Seq[Seq[Any]] = _
   protected var tmpDir: File = _
-  private val createTableStmtProvider = () =>
+  private val createTableStatementProvider = () =>
     s"""
        |create table if not exists $tableName (
        |  id string,
@@ -108,7 +108,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    * Ensure table exists - compensates for parent class cleanup
    */
   private def ensureTableExists(): Unit = {
-    spark.sql(createTableStmtProvider.apply())
+    spark.sql(createTableStatementProvider.apply())
   }
 
   /**
@@ -149,7 +149,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     spark.sql("set hoodie.embed.timeline.server=false")
 
     // Create table with specified version
-    spark.sql(createTableStmtProvider.apply())
+    spark.sql(createTableStatementProvider.apply())
 
     // Insert initial test data
     spark.sql(s"insert into $tableName values('1', 'b1', 10, 1000)")
