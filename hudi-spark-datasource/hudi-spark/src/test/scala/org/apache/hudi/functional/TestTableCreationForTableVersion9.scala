@@ -25,8 +25,8 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.hudi.dml.TestInsertDupPolicy.withTempDir
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
