@@ -54,7 +54,11 @@ public class BufferedRecord<T> implements Serializable {
     this.isDelete = isDelete;
   }
 
-  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record, Schema schema, HoodieReaderContext<T> readerContext, Properties props) {
+  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record,
+                                                           Schema schema,
+                                                           HoodieReaderContext<T> readerContext,
+                                                           Option<String> orderingFieldName,
+                                                           Properties props) {
     HoodieKey hoodieKey = record.getKey();
     String recordKey = hoodieKey == null ? readerContext.getRecordKey(record.getData(), schema) : hoodieKey.getRecordKey();
     Integer schemaId = readerContext.encodeAvroSchema(schema);
@@ -64,25 +68,12 @@ public class BufferedRecord<T> implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Failed to get isDelete from record.", e);
     }
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props), record.getData(), schemaId, isDelete);
+    T row = record.getData();
+    return new BufferedRecord<>(recordKey, readerContext.getOrderingValue(row, schema, orderingFieldName), row, schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, HoodieReaderContext<T> readerContext, Option<String> orderingFieldName, boolean isDelete) {
     String recordKey = readerContext.getRecordKey(record, schema);
-    Integer schemaId = readerContext.encodeAvroSchema(schema);
-    Comparable orderingValue = readerContext.getOrderingValue(record, schema, orderingFieldName);
-    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
-  }
-
-  /**
-   * When HoodieRecord is given, recordKey is definitely available.
-   */
-  public static <T> BufferedRecord<T> forRecordWithContext(String recordKey,
-                                                           T record,
-                                                           Schema schema,
-                                                           HoodieReaderContext<T> readerContext,
-                                                           Option<String> orderingFieldName,
-                                                           boolean isDelete) {
     Integer schemaId = readerContext.encodeAvroSchema(schema);
     Comparable orderingValue = readerContext.getOrderingValue(record, schema, orderingFieldName);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);

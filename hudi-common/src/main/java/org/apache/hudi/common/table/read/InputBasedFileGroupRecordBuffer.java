@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import java.io.IOException;
@@ -66,18 +65,13 @@ public class InputBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordB
 
     while (inputRecordIterator.hasNext()) {
       HoodieRecord<T> hoodieRecord = inputRecordIterator.next();
-      try {
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(
-            hoodieRecord.getRecordKey(),
-            hoodieRecord.getData(),
-            readerContext.getSchemaHandler().tableSchema,
-            readerContext,
-            orderingFieldName,
-            hoodieRecord.isDelete(readerContext.getSchemaHandler().tableSchema, props));
-        records.put(hoodieRecord.getRecordKey(), bufferedRecord);
-      } catch (IOException e) {
-        throw new HoodieException("Failed to populate data into the record buffer", e);
-      }
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(
+          hoodieRecord,
+          readerContext.getSchemaHandler().tableSchema,
+          readerContext,
+          orderingFieldName,
+          props);
+      records.put(hoodieRecord.getRecordKey(), bufferedRecord);
     }
   }
 

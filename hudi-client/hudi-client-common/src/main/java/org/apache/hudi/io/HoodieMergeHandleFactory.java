@@ -124,10 +124,12 @@ public class HoodieMergeHandleFactory {
     String mergeHandleClass = config.getCompactionMergeHandleClassName();
     String logContext = String.format("for fileId %s and partitionPath %s at commit %s", operation.getFileId(), operation.getPartitionPath(), instantTime);
     LOG.info("Create HoodieMergeHandle implementation {} {}", mergeHandleClass, logContext);
+
     Class<?>[] constructorParamTypes = new Class<?>[] {
         HoodieWriteConfig.class, String.class, HoodieTable.class, CompactionOperation.class,
         TaskContextSupplier.class, HoodieReaderContext.class, String.class, HoodieRecord.HoodieRecordType.class
     };
+
     return instantiateMergeHandle(
         isFallbackEnabled, mergeHandleClass, COMPACT_MERGE_HANDLE_CLASS_NAME.defaultValue(), logContext, constructorParamTypes,
         config, instantTime, hoodieTable, operation, taskContextSupplier, readerContext, maxInstantTime, recordType);

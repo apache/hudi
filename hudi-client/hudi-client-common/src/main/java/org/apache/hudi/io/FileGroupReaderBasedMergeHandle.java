@@ -203,7 +203,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         .withProps(props)
         .withShouldUseRecordPosition(usePosition)
         .withSortOutput(hoodieTable.requireSortedRecords())
-        .withFileGroupUpdateCallback(createCallbacks())
+        .withFileGroupUpdateCallback(createCallback())
         .withRecordIterator(recordIterator).build()) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
@@ -242,7 +242,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
-  private List<BaseFileUpdateCallback<T>> createCallbacks() {
+  private Option<BaseFileUpdateCallback<T>> createCallback() {
     List<BaseFileUpdateCallback<T>> callbacks = new ArrayList<>();
     // Handle CDC workflow.
     if (cdcLogger.isPresent()) {
@@ -261,7 +261,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           config
       ));
     }
-    return callbacks;
+    return callbacks.isEmpty()
+        ? Option.empty()
+        : callbacks.size() == 1 ? Option.of(callbacks.get(0)) : Option.of(new CompositeCallback<>(callbacks));
   }
 
   @Override
@@ -329,11 +331,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     public void onDelete(String recordKey, T previousRecord) {
       cdcLogger.put(recordKey, convertOutput(previousRecord), Option.empty());
 
-    }
-
-    @Override
-    public String getName() {
-      return "CDCCallback";
     }
 
     private GenericRecord convertOutput(T record) {
@@ -425,10 +422,28 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           keyGeneratorOpt,
           config);
     }
+  }
+
+  private static class CompositeCallback<T> implements BaseFileUpdateCallback<T> {
+    private final List<BaseFileUpdateCallback<T>> callbacks;
+
+    public CompositeCallback(List<BaseFileUpdateCallback<T>> callbacks) {
+      this.callbacks = callbacks;
+    }
 
     @Override
-    public String getName() {
-      return "SecondaryIndexCallback";
+    public void onUpdate(String recordKey, T previousRecord, T mergedRecord) {
+      this.callbacks.forEach(callback -> callback.onUpdate(recordKey, previousRecord, mergedRecord));
+    }
+
+    @Override
+    public void onInsert(String recordKey, T newRecord) {
+      this.callbacks.forEach(callback -> callback.onInsert(recordKey, newRecord));
+    }
+
+    @Override
+    public void onDelete(String recordKey, T previousRecord) {
+      this.callbacks.forEach(callback -> callback.onDelete(recordKey, previousRecord));
     }
   }
 }
