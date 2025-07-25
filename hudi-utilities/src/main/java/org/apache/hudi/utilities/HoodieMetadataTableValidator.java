@@ -1845,8 +1845,9 @@ public class HoodieMetadataTableValidator implements Serializable {
             StoragePath storagePartitionPath = new StoragePath(metaClient.getBasePath(), partitionPath);
             String filePath = new StoragePath(storagePartitionPath, filename).toString();
             try {
+              boolean enableOptimizeLogBlocksScan = ConfigUtils.getBooleanWithAltKeys(props, HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
               return getLogFileColumnRangeMetadata(filePath, partitionPath, metaClient, allColumnNameList, Option.of(readerSchema),
-                  metadataConfig.getMaxReaderBufferSize(), metadataConfig.isOptimizedLogBlocksScanEnabled())
+                  metadataConfig.getMaxReaderBufferSize(), enableOptimizeLogBlocksScan)
                   .stream()
                   // We need to convert file path and use only the file name instead of the complete file path
                   .map(m -> (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.create(filename, m.getColumnName(), m.getMinValue(), m.getMaxValue(),

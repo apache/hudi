@@ -243,13 +243,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     hoodieTestTable = hoodieTestTable.addCommit(instant2);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
     List<String> columnsToIndex = Arrays.asList("rider", "driver");
-    // Create metadata config for both log file column range metadata and partition stats
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true)
-        .withMetadataIndexColumnStats(true)
-        .withMetadataIndexPartitionStats(true)
-        .withColumnStatsIndexForColumns("rider,driver")
-        .withPartitionStatsIndexParallelism(1)
-        .build();
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
@@ -282,7 +275,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             columnsToIndex,
             Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
             HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue(),
-            metadataConfig.isOptimizedLogBlocksScanEnabled());
+            Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()));
         // there must be two ranges for rider and driver
         assertEquals(2, columnRangeMetadataLogFile.size());
       } catch (Exception e) {
@@ -293,7 +286,12 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext,
         partitionFileSlicePairs,
-        metadataConfig,
+        HoodieMetadataConfig.newBuilder().enable(true)
+                .withMetadataIndexColumnStats(true)
+                .withMetadataIndexPartitionStats(true)
+                .withColumnStatsIndexForColumns("rider,driver")
+                .withPartitionStatsIndexParallelism(1)
+                .build(),
         metaClient,
         Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty(), Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()));
