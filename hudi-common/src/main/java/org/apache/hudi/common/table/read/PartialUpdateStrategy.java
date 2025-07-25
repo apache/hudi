@@ -174,6 +174,6 @@ public class PartialUpdateStrategy<T> {
   }
 
   static Map<String, String> parseMergeProperties(TypedProperties props) {
-    return extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX.key());
+    return extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX);
   }
 }
