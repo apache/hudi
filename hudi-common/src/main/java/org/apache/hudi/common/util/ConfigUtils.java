@@ -695,6 +695,7 @@ public class ConfigUtils {
     if (props == null || props.isEmpty()) {
       return Collections.emptyMap();
     }
+
     int prefixLength = prefix.length();
     Map<String, String> mergeProperties = new HashMap<>();
     for (Map.Entry<Object, Object> entry : props.entrySet()) {
