@@ -228,19 +228,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   }
 
   /**
-   * Merge two log data records if needed.
-   *
-   * @param newRecord      The new incoming record
-   * @param existingRecord The existing record
-   * @return the {@link BufferedRecord} that needs to be updated, returns empty to skip the update.
-   */
-  protected Option<BufferedRecord<T>> doProcessNextDataRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord)
-      throws IOException {
-    totalLogRecords++;
-    return bufferedRecordMerger.deltaMerge(newRecord, existingRecord);
-  }
-
-  /**
    * Create a record iterator for a data block. The records are filtered by a key set specified by {@code keySpecOpt}.
    *
    * @param dataBlock
