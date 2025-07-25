@@ -18,28 +18,20 @@
 
 package org.apache.hudi.adapter;
 
-import org.apache.flink.table.catalog.Column;
-import org.apache.flink.table.connector.RowLevelModificationScanContext;
-import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
-
-import javax.annotation.Nullable;
-
-import java.util.List;
+import org.apache.flink.streaming.api.datastream.DataStream;
 
 /**
- * Adapter clazz for {@link org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate}.
+ * {@code SupportsPreWriteTopology} is introduced for Sink V2 since Flink 1.19,
+ * We add the adapter here to just make the compilation successful for earlier
+ * Flink versions (< 1.19).
  */
-public interface SupportsRowLevelUpdateAdapter extends SupportsRowLevelUpdate {
-  @Override
-  default RowLevelUpdateInfo applyRowLevelUpdate(List<Column> updatedColumns, @Nullable RowLevelModificationScanContext context) {
-    return applyRowLevelUpdate(updatedColumns);
-  }
-
-  RowLevelUpdateInfoAdapter applyRowLevelUpdate(List<Column> updatedColumns);
-
+public interface SupportsPreWriteTopologyAdapter<InputT> {
   /**
-   * Adapter clazz for {@link SupportsRowLevelUpdate.RowLevelUpdateInfo}.
+   * Adds an arbitrary topology before the writer. The topology may be used to repartition the
+   * data.
+   *
+   * @param inputDataStream the stream of input records.
+   * @return the custom topology before {@code SinkWriter}.
    */
-  interface RowLevelUpdateInfoAdapter extends RowLevelUpdateInfo {
-  }
+  DataStream<InputT> addPreWriteTopology(DataStream<InputT> inputDataStream);
 }

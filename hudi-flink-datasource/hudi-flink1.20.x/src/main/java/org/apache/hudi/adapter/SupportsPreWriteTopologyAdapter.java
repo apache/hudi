@@ -18,25 +18,10 @@
 
 package org.apache.hudi.adapter;
 
-import org.apache.flink.table.connector.RowLevelModificationScanContext;
-import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
-
-import javax.annotation.Nullable;
+import org.apache.flink.streaming.api.connector.sink2.SupportsPreWriteTopology;
 
 /**
- * Adapter clazz for {@link org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete}.
+ * Adapter clazz for {@link SupportsPreWriteTopology}.
  */
-public interface SupportsRowLevelDeleteAdapter extends SupportsRowLevelDelete {
-  @Override
-  default RowLevelDeleteInfo applyRowLevelDelete(@Nullable RowLevelModificationScanContext context) {
-    return applyRowLevelDelete();
-  }
-
-  RowLevelDeleteInfoAdapter applyRowLevelDelete();
-
-  /**
-   * Adapter clazz for {@link SupportsRowLevelDelete.RowLevelDeleteInfo}.
-   */
-  interface RowLevelDeleteInfoAdapter extends RowLevelDeleteInfo {
-  }
+public interface SupportsPreWriteTopologyAdapter<InputT> extends SupportsPreWriteTopology<InputT> {
 }
