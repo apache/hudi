@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.data;
 
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,9 +35,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -462,6 +465,65 @@ public class TestHoodieListDataPairData {
     HoodiePairData<String, String> filtered = emptyPairData.filter((key, value) -> true);
     
     assertEquals(Collections.emptyList(), filtered.collectAsList());
+  }
+
+  @Test
+  public void testHoodieDataUtilsDedupeAndCollectAsMap() {
+    // Given: A lazy HoodieListPairData with duplicate keys and null keys
+    List<Pair<String, String>> testData = Arrays.asList(
+        Pair.of("key1", "value1"),
+        Pair.of("key1", "value2"),  // Duplicate key
+        Pair.of("key2", "value3"),
+        Pair.of(null, "nullValue1"),
+        Pair.of(null, "nullValue2"),  // Duplicate null key
+        Pair.of("key3", "value4")
+    );
+    HoodiePairData<String, String> lazyPairData = HoodieListPairData.lazy(testData);
+
+    Map<String, String> result = HoodieDataUtils.dedupeAndCollectAsMap(lazyPairData);
+
+    // hard code another map and assert equals
+    Map<String, String> expectedMap = new HashMap<>();
+    expectedMap.put("key1", "value2");  // Last value wins for duplicate keys
+    expectedMap.put("key2", "value3");
+    expectedMap.put("key3", "value4");
+    expectedMap.put(null, "nullValue2");  // Last value wins for null key too
+    
+    assertEquals(expectedMap, result);
+  }
+
+  @Test
+  public void testHoodieDataUtilsCollectPairDataAsMap() {
+    // Given: A lazy HoodieListPairData with duplicate keys and values
+    List<Pair<String, String>> testData = Arrays.asList(
+        Pair.of("key1", "value1a"),
+        Pair.of("key1", "value1b"),
+        Pair.of("key2", "value2"),
+        Pair.of(null, "nullValue1"),
+        Pair.of(null, "nullValue2"),
+        Pair.of(null, "nullValue1")  // Duplicate null value
+    );
+    HoodiePairData<String, String> lazyPairData = HoodieListPairData.lazy(testData);
+
+    Map<String, Set<String>> result = HoodieDataUtils.collectPairDataAsMap(lazyPairData);
+
+    // hard code another map and assert equals
+    Map<String, Set<String>> expectedMap = new HashMap<>();
+    Set<String> key1Values = new HashSet<>();
+    key1Values.add("value1a");
+    key1Values.add("value1b");
+    expectedMap.put("key1", key1Values);
+    
+    Set<String> key2Values = new HashSet<>();
+    key2Values.add("value2");
+    expectedMap.put("key2", key2Values);
+    
+    Set<String> nullKeyValues = new HashSet<>();
+    nullKeyValues.add("nullValue1");
+    nullKeyValues.add("nullValue2");
+    expectedMap.put(null, nullKeyValues);
+    
+    assertEquals(expectedMap, result);
   }
 
   private static List<Pair<String, String>> constructPairs() {

@@ -447,7 +447,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param partitionName The partition name where the secondary index records are stored
    * @return A collection of pairs where each key is a secondary key and the value is a set of record keys that are indexed by that secondary key
    */
-  public abstract HoodiePairData<String, Set<String>> getSecondaryIndexRecords(HoodieData<String> keys, String partitionName);
+  public abstract HoodiePairData<String, String> getSecondaryIndexRecords(HoodieData<String> keys, String partitionName);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;
