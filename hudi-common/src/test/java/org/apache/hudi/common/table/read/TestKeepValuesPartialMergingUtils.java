@@ -80,22 +80,6 @@ class TestKeepValuesPartialMergingUtils {
   }
 
   @Test
-  void testGetCachedFieldIdToNameMapping() {
-    Map<Integer, String> fieldIdToNameMapping = KeepValuesPartialMergingUtils.getCachedFieldIdToNameMapping(fullSchema);
-
-    assertNotNull(fieldIdToNameMapping);
-    assertEquals(4, fieldIdToNameMapping.size());
-    assertEquals("id", fieldIdToNameMapping.get(0));
-    assertEquals("name", fieldIdToNameMapping.get(1));
-    assertEquals("age", fieldIdToNameMapping.get(2));
-    assertEquals("city", fieldIdToNameMapping.get(3));
-
-    // Test caching - should return the same map for the same schema
-    Map<Integer, String> cachedMapping = KeepValuesPartialMergingUtils.getCachedFieldIdToNameMapping(fullSchema);
-    assertSame(fieldIdToNameMapping, cachedMapping);
-  }
-
-  @Test
   void testGetCachedFieldNameToIdMapping() {
     Map<String, Integer> fieldNameToIdMapping = KeepValuesPartialMergingUtils.getCachedFieldNameToIdMapping(fullSchema);
 

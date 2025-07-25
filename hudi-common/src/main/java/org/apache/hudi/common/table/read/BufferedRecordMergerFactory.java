@@ -108,9 +108,8 @@ public class BufferedRecordMergerFactory {
    * based on {@code COMMIT_TIME_ORDERING} merge mode and partial update mode.
    */
   private static class CommitTimeBufferedRecordPartialUpdateMerger<T> extends CommitTimeBufferedRecordMerger<T> {
-    private final PartialUpdateStrategy<T> partialUpdateStrategy;
+    private final PartialUpdateHandler<T> partialUpdateHandler;
     private final HoodieReaderContext<T> readerContext;
-    private final TypedProperties props;
     private final Schema readerSchema;
 
     public CommitTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
@@ -118,9 +117,8 @@ public class BufferedRecordMergerFactory {
                                                        TypedProperties props,
                                                        Schema readerSchema) {
       super();
-      this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
+      this.partialUpdateHandler = new PartialUpdateHandler<>(readerContext, partialUpdateMode, props);
       this.readerContext = readerContext;
-      this.props = props;
       this.readerSchema = readerSchema;
     }
 
@@ -128,14 +126,13 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
                                                 BufferedRecord<T> existingRecord) {
       if (existingRecord != null) {
-        newRecord = partialUpdateStrategy.partialMerge(
+        newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
             readerContext.getSchemaFromBufferRecord(newRecord),
             readerContext.getSchemaFromBufferRecord(existingRecord),
             readerSchema,
-            false,
-            props);
+            false);
       }
       return Option.of(newRecord);
     }
@@ -143,14 +140,13 @@ public class BufferedRecordMergerFactory {
     @Override
     public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord,
                                        BufferedRecord<T> newerRecord) {
-      newerRecord = partialUpdateStrategy.partialMerge(
+      newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
           readerContext.getSchemaFromBufferRecord(newerRecord),
           readerContext.getSchemaFromBufferRecord(olderRecord),
           readerSchema,
-          false,
-          props);
+          false);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }
@@ -187,18 +183,16 @@ public class BufferedRecordMergerFactory {
    * based on {@code EVENT_TIME_ORDERING} merge mode and partial update mode.
    */
   private static class EventTimeBufferedRecordPartialUpdateMerger<T> extends EventTimeBufferedRecordMerger<T> {
-    private final PartialUpdateStrategy<T> partialUpdateStrategy;
+    private final PartialUpdateHandler<T> partialUpdateHandler;
     private final HoodieReaderContext<T> readerContext;
-    private final TypedProperties props;
     private final Schema readerSchema;
 
     public EventTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
                                                       PartialUpdateMode partialUpdateMode,
                                                       TypedProperties props,
                                                       Schema readerSchema) {
-      this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
+      this.partialUpdateHandler = new PartialUpdateHandler<>(readerContext, partialUpdateMode, props);
       this.readerContext = readerContext;
-      this.props = props;
       this.readerSchema = readerSchema;
     }
 
@@ -207,25 +201,23 @@ public class BufferedRecordMergerFactory {
       if (existingRecord == null) {
         return Option.of(newRecord);
       } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
-        newRecord = partialUpdateStrategy.partialMerge(
+        newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
             readerContext.getSchemaFromBufferRecord(newRecord),
             readerContext.getSchemaFromBufferRecord(existingRecord),
             readerSchema,
-            false,
-            props);
+            false);
         return Option.of(newRecord);
       } else {
         // Use existing record as the base record since existing record has higher ordering value.
-        existingRecord = partialUpdateStrategy.partialMerge(
+        existingRecord = partialUpdateHandler.partialMerge(
             existingRecord,
             newRecord,
             readerContext.getSchemaFromBufferRecord(existingRecord),
             readerContext.getSchemaFromBufferRecord(newRecord),
             readerSchema,
-            true,
-            props);
+            true);
         return Option.of(existingRecord);
       }
     }
@@ -241,25 +233,23 @@ public class BufferedRecordMergerFactory {
       if (!olderRecord.isCommitTimeOrderingDelete()
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         // Use old record as the base record since old record has higher ordering value.
-        olderRecord = partialUpdateStrategy.partialMerge(
+        olderRecord = partialUpdateHandler.partialMerge(
             olderRecord,
             newerRecord,
             readerContext.getSchemaFromBufferRecord(olderRecord),
             readerContext.getSchemaFromBufferRecord(newerRecord),
             readerSchema,
-            true,
-            props);
+            true);
         return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
       }
 
-      newerRecord = partialUpdateStrategy.partialMerge(
+      newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
           readerContext.getSchemaFromBufferRecord(newerRecord),
           readerContext.getSchemaFromBufferRecord(olderRecord),
           readerSchema,
-          false,
-          props);
+          false);
       return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
     }
   }

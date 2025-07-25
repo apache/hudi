@@ -33,11 +33,6 @@ public enum PartialUpdateMode {
   IGNORE_DEFAULTS,
 
   @EnumFieldDescription(
-      "For columns having default values or nulls set in current record, pick the value from previous version of the record."
-          + "Only top level data type default is checked, which means this mode does not check nested fields.")
-  IGNORE_DEFAULTS_NULLS,
-
-  @EnumFieldDescription(
       "For columns having unavailable values in the current record, pick value from previous version of the record during write."
       + "Unavailable value can be defined using `hoodie.write.partial.update.unavailable.value`, which should be added to"
       + "the value of table config `hoodie.write.partial.update.properties`.")

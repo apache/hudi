@@ -316,7 +316,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARTIAL_UPDATE_MODE = ConfigProperty
       .key("hoodie.table.partial.update.mode")
-      .defaultValue(PartialUpdateMode.KEEP_VALUES.name())
+      .noDefaultValue()
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
@@ -1099,7 +1099,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public Option<PartialUpdateMode> getPartialUpdateMode() {
     if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
       if (contains(PARTIAL_UPDATE_MODE)) {
-        return Option.of(PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE)));
+        return Option.of(PartialUpdateMode.valueOf(getString(PARTIAL_UPDATE_MODE)));
       } else {
         return Option.empty();
       }

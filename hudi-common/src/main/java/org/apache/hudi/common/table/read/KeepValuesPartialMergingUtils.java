@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.ArrayList;
@@ -31,11 +32,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Generic util class to merge records of type T that may contain partial updates.
+ * Class to assist with merging two versions of the record that may contain partial updates using
+ * {@link org.apache.hudi.common.table.PartialUpdateMode#KEEP_VALUES} mode.
  */
 public class KeepValuesPartialMergingUtils<T> {
-  private static final Map<Schema, Map<Integer, String>>
-      FIELD_ID_TO_NAME_MAPPING_CACHE = new ConcurrentHashMap<>();
+  static KeepValuesPartialMergingUtils INSTANCE = new KeepValuesPartialMergingUtils();
   private static final Map<Schema, Map<String, Integer>>
       FIELD_NAME_TO_ID_MAPPING_CACHE = new ConcurrentHashMap<>();
   private static final Map<Pair<Pair<Schema, Schema>, Schema>, Schema>
@@ -53,7 +54,7 @@ public class KeepValuesPartialMergingUtils<T> {
    * @param readerContext ReaderContext instance.
    * @return The merged record and schema.
    */
-  public Pair<BufferedRecord<T>, Schema> mergePartialRecords(BufferedRecord<T> older,
+  Pair<BufferedRecord<T>, Schema> mergePartialRecords(BufferedRecord<T> older,
                                                              Schema oldSchema,
                                                              BufferedRecord<T> newer,
                                                              Schema newSchema,
@@ -71,8 +72,8 @@ public class KeepValuesPartialMergingUtils<T> {
     // Collect field values.
     List<Object> values = new ArrayList<>();
     List<Schema.Field> mergedSchemaFields = mergedSchema.getFields();
-    for (int index = 0; index < mergedSchemaFields.size(); index++) {
-      String fieldName = mergedSchemaFields.get(index).name();
+    for (Schema.Field mergedSchemaField : mergedSchemaFields) {
+      String fieldName = mergedSchemaField.name();
       if (fieldNamesInNewRecord.contains(fieldName)) { // field present in newer record.
         values.add(readerContext.getValue(newer.getRecord(), newSchema, fieldName));
       } else { // if not present in newer record pick from old record
@@ -92,25 +93,9 @@ public class KeepValuesPartialMergingUtils<T> {
 
   /**
    * @param avroSchema Avro schema.
-   * @return The field ID to field name mapping.
-   */
-  public static Map<Integer, String> getCachedFieldIdToNameMapping(Schema avroSchema) {
-    return FIELD_ID_TO_NAME_MAPPING_CACHE.computeIfAbsent(avroSchema, schema -> {
-      Map<Integer, String> schemaFieldIdMapping = new HashMap<>();
-      int fieldId = 0;
-      for (Schema.Field field : schema.getFields()) {
-        schemaFieldIdMapping.put(fieldId, field.name());
-        fieldId++;
-      }
-      return schemaFieldIdMapping;
-    });
-  }
-
-  /**
-   * @param avroSchema Avro schema.
    * @return The field name to ID mapping.
    */
-  public static Map<String, Integer> getCachedFieldNameToIdMapping(Schema avroSchema) {
+  static Map<String, Integer> getCachedFieldNameToIdMapping(Schema avroSchema) {
     return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(avroSchema, schema -> {
       Map<String, Integer> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
@@ -131,7 +116,7 @@ public class KeepValuesPartialMergingUtils<T> {
    * @param readerSchema Reader schema containing all the fields to read.
    * @return             The merged Avro schema.
    */
-  public static Schema getCachedMergedSchema(Schema oldSchema,
+  static Schema getCachedMergedSchema(Schema oldSchema,
                                              Schema newSchema,
                                              Schema readerSchema) {
     return MERGED_SCHEMA_CACHE.computeIfAbsent(
@@ -169,6 +154,7 @@ public class KeepValuesPartialMergingUtils<T> {
    * @param mergedSchema The merged schema for the merged record.
    * @return whether the Avro schema is partial compared to the merged schema.
    */
+  @VisibleForTesting
   public static boolean isPartial(Schema schema, Schema mergedSchema) {
     return !schema.equals(mergedSchema);
   }
