@@ -121,10 +121,10 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
   // This prefix is used to set merging related properties.
-  // A reader might need to read some merger properties to function as expected,
+  // A reader might need to read some writer properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties,
   // and produces a map of key value pairs (Key1->Value1, Key2->Value2, ...) to use.
-  public static final String MERGE_PROPERTIES_PREFIX = "hoodie.table.merge.properties.";
+  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.prefix.";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -327,14 +327,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be "
           + "merged together where the later contains only partial set of values and not entire record.");
-
-  public static final ConfigProperty<String> MERGE_CUSTOM_PROPERTY_PREFIX = ConfigProperty
-      .key("hoodie.merge.custom.property.prefix")
-      .noDefaultValue()
-      .sinceVersion("1.1.0")
-      .withDocumentation("Some merge mode might need writer properties that are required for readers "
-          + "to function as expected, e.g., Ki=Vi. Hudi stores those properties with this prefix so readers "
-          + "can set them while reading, e.g., hoodie.merge.custom.prefix.Ki=Vi.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
