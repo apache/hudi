@@ -42,6 +42,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -661,18 +662,17 @@ public class ConfigUtils {
 
   /**
    * Extract all properties whose keys start with a given prefix.
-   * E.g., if the prefix is "a.b.c", and the props contain:
+   * E.g., if the prefix is "a.b.c.", and the props contain:
    * "a.b.c.K1=V1", "a.b.c.K2=V2", "a.b.c.K3=V3".
    * Then the output is:
    * Map(K1->V1, K2->V2, K3->V3).
    */
   public static Map<String, String> extractWithPrefix(TypedProperties props, String prefix) {
     if (props == null || props.isEmpty()) {
-      return new HashMap<>();
+      return Collections.emptyMap();
     }
-    int prefixLength = prefix.length();
-    int dotOffset = prefixLength + 1; // +1 for the dot after prefix
 
+    int prefixLength = prefix.length();
     Map<String, String> mergeProperties = new HashMap<>();
     for (Map.Entry<Object, Object> entry : props.entrySet()) {
       String key = entry.getKey().toString();
@@ -680,12 +680,8 @@ public class ConfigUtils {
       if (key.length() <= prefixLength || !key.startsWith(prefix)) {
         continue;
       }
-      // Check if the character after prefix is a dot
-      if (key.charAt(prefixLength) != '.') {
-        continue;
-      }
       // Extract and validate the property key
-      String propKey = key.substring(dotOffset).trim();
+      String propKey = key.substring(prefixLength).trim();
       if (propKey.isEmpty()) {
         continue;
       }
