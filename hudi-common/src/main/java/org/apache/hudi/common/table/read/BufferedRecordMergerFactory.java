@@ -69,7 +69,7 @@ public class BufferedRecordMergerFactory {
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
           readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
-      return new PartialUpdateBufferedRecordMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
+      return new PartialUpdateBufferedRecordMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, orderingFieldName, props);
     }
 
     switch (recordMergeMode) {
@@ -88,7 +88,7 @@ public class BufferedRecordMergerFactory {
           return new CustomPayloadBufferedRecordMerger<>(
               readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
         } else {
-          return new CustomBufferedRecordMerger<>(readerContext, recordMerger, readerSchema, props);
+          return new CustomBufferedRecordMerger<>(readerContext, recordMerger, readerSchema, orderingFieldName, props);
         }
     }
   }
@@ -262,6 +262,7 @@ public class BufferedRecordMergerFactory {
     private final Option<HoodieRecordMerger> recordMerger;
     private final BufferedRecordMerger<T> deleteRecordMerger;
     private final Schema readerSchema;
+    private final Option<String> orderingFieldName;
     private final TypedProperties props;
 
     public PartialUpdateBufferedRecordMerger(
@@ -269,10 +270,12 @@ public class BufferedRecordMergerFactory {
         Option<HoodieRecordMerger> recordMerger,
         BufferedRecordMerger<T> deleteRecordMerger,
         Schema readerSchema,
+        Option<String> orderingFieldName,
         TypedProperties props) {
       this.readerContext = readerContext;
       this.recordMerger = recordMerger;
       this.deleteRecordMerger = deleteRecordMerger;
+      this.orderingFieldName = orderingFieldName;
       this.readerSchema = readerSchema;
       this.props = props;
     }
@@ -300,7 +303,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
+        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, props));
       }
       return Option.empty();
     }
@@ -341,8 +344,9 @@ public class BufferedRecordMergerFactory {
         HoodieReaderContext<T> readerContext,
         Option<HoodieRecordMerger> recordMerger,
         Schema readerSchema,
+        Option<String> orderingFieldName,
         TypedProperties props) {
-      super(readerContext, recordMerger, readerSchema, props);
+      super(readerContext, recordMerger, readerSchema, orderingFieldName, props);
     }
 
     @Override
@@ -364,7 +368,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
+        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, props));
       }
       return Option.empty();
     }
@@ -391,7 +395,6 @@ public class BufferedRecordMergerFactory {
    * based on {@code CUSTOM} merge mode and a given record payload class.
    */
   private static class CustomPayloadBufferedRecordMerger<T> extends BaseCustomMerger<T> {
-    private final Option<String> orderingFieldName;
     private final String payloadClass;
 
     public CustomPayloadBufferedRecordMerger(
@@ -401,8 +404,7 @@ public class BufferedRecordMergerFactory {
         String payloadClass,
         Schema readerSchema,
         TypedProperties props) {
-      super(readerContext, recordMerger, readerSchema, props);
-      this.orderingFieldName = orderingFieldName;
+      super(readerContext, recordMerger, readerSchema, orderingFieldName, props);
       this.payloadClass = payloadClass;
     }
 
@@ -477,16 +479,19 @@ public class BufferedRecordMergerFactory {
     protected final HoodieReaderContext<T> readerContext;
     protected final Option<HoodieRecordMerger> recordMerger;
     protected final Schema readerSchema;
+    protected final Option<String> orderingFieldName;
     protected final TypedProperties props;
 
     public BaseCustomMerger(
         HoodieReaderContext<T> readerContext,
         Option<HoodieRecordMerger> recordMerger,
         Schema readerSchema,
+        Option<String> orderingFieldName,
         TypedProperties props) {
       this.readerContext = readerContext;
       this.recordMerger = recordMerger;
       this.readerSchema = readerSchema;
+      this.orderingFieldName = orderingFieldName;
       this.props = props;
     }
 

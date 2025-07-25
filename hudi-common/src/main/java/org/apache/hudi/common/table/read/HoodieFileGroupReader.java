@@ -55,6 +55,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -74,7 +75,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final HoodieTableMetaClient metaClient;
-  private final InputSplit inputSplit;
+  private final InputSplit<T> inputSplit;
   private final Option<String[]> partitionPathFields;
   private final Option<String> orderingFieldName;
   private final HoodieStorage storage;
@@ -91,7 +92,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
   // Callback to run custom logic on updates to the base files for the file group
-  private final Option<BaseFileUpdateCallback> fileGroupUpdateCallback;
+  private final Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback;
   private final boolean enableOptimizedLogBlockScan;
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
   private List<String> validBlockInstants = Collections.emptyList();
@@ -116,7 +117,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
-                                InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan) {
+                                InputSplit<T> inputSplit, Option<BaseFileUpdateCallback<T>> updateCallback, boolean enableOptimizedLogBlockScan) {
     this.readerContext = readerContext;
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
@@ -154,7 +155,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readStats = new HoodieReadStats();
     this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient,
         readerContext.getMergeMode(), tableConfig.getPartialUpdateMode(), props,
-        isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput);
+        isSkipMerge, shouldUseRecordPosition, readStats, emitDelete, sortOutput, inputSplit.recordIterator);
     this.allowInflightInstants = allowInflightInstants;
   }
 
@@ -170,11 +171,17 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                                    boolean shouldUseRecordPosition,
                                                    HoodieReadStats readStats,
                                                    boolean emitDelete,
-                                                   boolean sortOutput) {
+                                                   boolean sortOutput,
+                                                   Option<Iterator<HoodieRecord<T>>> inputRecordOpt) {
+    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, emitDelete, fileGroupUpdateCallback);
     if (inputSplit.logFiles.isEmpty()) {
+      if (inputRecordOpt.isPresent()) {
+        return new InputBasedFileGroupRecordBuffer<>(
+            readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode,
+            props, orderingFieldName, inputRecordOpt.get(), updateProcessor);
+      }
       return null;
     }
-    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, emitDelete, fileGroupUpdateCallback);
     if (isSkipMerge) {
       return new UnmergedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, readStats);
@@ -183,7 +190,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
     } else if (shouldUseRecordPosition && inputSplit.baseFileOption.isPresent()) {
       return new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, inputSplit.baseFileOption.get().getCommitTime(), props, orderingFieldName, updateProcessor);
+          readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, inputSplit.baseFileOption.get().getCommitTime(),
+          props, orderingFieldName, updateProcessor);
     } else {
       return new KeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
@@ -196,7 +204,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (inputSplit.logFiles.isEmpty()) {
-      this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
+      if (inputSplit.recordIterator.isPresent()) {
+        this.baseFileIterator = iter;
+        recordBuffer.setBaseFileIterator(baseFileIterator);
+      } else {
+        this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
+      }
     } else {
       this.baseFileIterator = iter;
       scanLogFiles();
@@ -377,7 +390,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(
+          nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
       return readerContext.constructHoodieRecord(bufferedRecord);
     });
   }
@@ -454,7 +468,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean emitDelete;
     private boolean sortOutput = false;
     private boolean enableOptimizedLogBlockScan = false;
-    private Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
+    private Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback = Option.empty();
+    private Option<Iterator<HoodieRecord<T>>> recordIterator = Option.empty();
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
@@ -539,8 +554,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withFileGroupUpdateCallback(Option<BaseFileUpdateCallback> fileGroupUpdateCallback) {
-      this.fileGroupUpdateCallback = fileGroupUpdateCallback;
+    public Builder<T> withFileGroupUpdateCallback(Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallbacks) {
+      this.fileGroupUpdateCallback = fileGroupUpdateCallbacks;
       return this;
     }
 
@@ -560,6 +575,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
+    public Builder<T> withRecordIterator(Option<Iterator<HoodieRecord<T>>> iterator) {
+      this.recordIterator = iterator;
+      return this;
+    }
+
     public HoodieFileGroupReader<T> build() {
       ValidationUtils.checkArgument(readerContext != null, "Reader context is required");
       ValidationUtils.checkArgument(hoodieTableMetaClient != null, "Hoodie table meta client is required");
@@ -576,14 +596,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(logFiles != null, "Log files stream is required");
       ValidationUtils.checkArgument(partitionPath != null, "Partition path is required");
 
-      InputSplit inputSplit = new InputSplit(baseFileOption, logFiles, partitionPath, start, length);
+      InputSplit<T> inputSplit = new InputSplit<>(baseFileOption, logFiles, partitionPath, start, length, recordIterator);
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
           props, shouldUseRecordPosition, allowInflightInstants, emitDelete, sortOutput, inputSplit, fileGroupUpdateCallback, enableOptimizedLogBlockScan);
     }
   }
 
-  private static class InputSplit {
+  private static class InputSplit<T> {
     private final Option<HoodieBaseFile> baseFileOption;
     private final List<HoodieLogFile> logFiles;
     private final String partitionPath;
@@ -591,6 +611,18 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private final long start;
     // Length of bytes to read from the base file
     private final long length;
+    // For input record case.
+    private Option<Iterator<HoodieRecord<T>>> recordIterator;
+
+    InputSplit(Option<HoodieBaseFile> baseFileOption,
+               Stream<HoodieLogFile> logFiles,
+               String partitionPath,
+               long start,
+               long length,
+               Option<Iterator<HoodieRecord<T>>> recordIterator) {
+      this(baseFileOption, logFiles, partitionPath, start, length);
+      this.recordIterator = recordIterator;
+    }
 
     InputSplit(Option<HoodieBaseFile> baseFileOption, Stream<HoodieLogFile> logFiles, String partitionPath, long start, long length) {
       this.baseFileOption = baseFileOption;
@@ -603,8 +635,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     static InputSplit fromFileSlice(FileSlice fileSlice, long start, long length) {
-      return new InputSplit(fileSlice.getBaseFile(), fileSlice.getLogFiles(), fileSlice.getPartitionPath(),
-          start, length);
+      return new InputSplit(fileSlice.getBaseFile(), fileSlice.getLogFiles(), fileSlice.getPartitionPath(), start, length);
     }
   }
 }

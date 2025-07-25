@@ -38,7 +38,7 @@ public interface UpdateProcessor<T> {
   T processUpdate(String recordKey, T previousRecord, T mergedRecord, boolean isDelete);
 
   static <T> UpdateProcessor<T> create(HoodieReadStats readStats, HoodieReaderContext<T> readerContext,
-                                       boolean emitDeletes, Option<BaseFileUpdateCallback> updateCallback) {
+                                       boolean emitDeletes, Option<BaseFileUpdateCallback<T>> updateCallback) {
     UpdateProcessor<T> handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
     if (updateCallback.isPresent()) {
       return new CallbackProcessor<>(updateCallback.get(), handler);
@@ -83,13 +83,14 @@ public interface UpdateProcessor<T> {
 
   /**
    * A processor that wraps the standard update processor and invokes a customizable callback for each update.
-   * @param <T> the engine specific record type
+   *
+   * @param <T> the engine-specific record type
    */
   class CallbackProcessor<T> implements UpdateProcessor<T> {
     private final BaseFileUpdateCallback<T> callback;
     private final UpdateProcessor<T> delegate;
 
-    public CallbackProcessor(BaseFileUpdateCallback callback, UpdateProcessor<T> delegate) {
+    public CallbackProcessor(BaseFileUpdateCallback<T> callback, UpdateProcessor<T> delegate) {
       this.callback = callback;
       this.delegate = delegate;
     }
@@ -105,6 +106,7 @@ public interface UpdateProcessor<T> {
       } else {
         callback.onInsert(recordKey, currentRecord);
       }
+
       return result;
     }
   }
