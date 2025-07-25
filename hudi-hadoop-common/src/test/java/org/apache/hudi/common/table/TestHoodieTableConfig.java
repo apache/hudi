@@ -31,6 +31,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -87,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
@@ -627,15 +629,104 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
       HoodieTableConfig.inferMergingConfigsForVersion9(
           EVENT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, HoodieTableVersion.NINE);
     });
-
     assertThrows(HoodieException.class, () -> {
       HoodieTableConfig.inferMergingConfigsForVersion9(
           COMMIT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, HoodieTableVersion.NINE);
     });
-
     assertThrows(HoodieException.class, () -> {
       HoodieTableConfig.inferMergingConfigsForVersion9(
           CUSTOM, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, HoodieTableVersion.NINE);
+    });
+    // Test case: Both recordMergeMode and recordMergeStrategyId are null should throw exception
+    assertThrows(HoodieException.class, () -> {
+      HoodieTableConfig.inferMergingConfigsForVersion9(
+          null, null, null, HoodieTableVersion.NINE);
+    });
+  }
+
+  // Unit tests for inferMergeModeOrStrategyId function (only for table version 9 usage)
+  private static Stream<Arguments> argumentsForInferMergeModeOrStrategyId() {
+    return Stream.of(
+        // Both mode and strategyId are provided and consistent
+        arguments("Both provided - COMMIT_TIME_ORDERING consistent", 
+            COMMIT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, false, COMMIT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments("Both provided - EVENT_TIME_ORDERING consistent", 
+            EVENT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, false, EVENT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments("Both provided - CUSTOM consistent with CUSTOM_MERGE_STRATEGY_UUID", 
+            CUSTOM, CUSTOM_MERGE_STRATEGY_UUID, null, false, CUSTOM, CUSTOM_MERGE_STRATEGY_UUID),
+        arguments("Both provided - CUSTOM consistent with PAYLOAD_BASED_MERGE_STRATEGY_UUID", 
+            CUSTOM, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null, false, CUSTOM, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+
+        // Both mode and strategyId are provided but inconsistent - should throw exception
+        arguments("Both provided - COMMIT_TIME_ORDERING inconsistent", 
+            COMMIT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, true, null, null),
+        arguments("Both provided - EVENT_TIME_ORDERING inconsistent", 
+            EVENT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, true, null, null),
+        arguments("Both provided - CUSTOM inconsistent", 
+            CUSTOM, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, true, null, null),
+
+        // Only strategyId is provided - mode should be inferred
+        arguments("Only strategyId - COMMIT_TIME_BASED_MERGE_STRATEGY_UUID", 
+            null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, false, COMMIT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments("Only strategyId - EVENT_TIME_BASED_MERGE_STRATEGY_UUID", 
+            null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, false, EVENT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments("Only strategyId - CUSTOM_MERGE_STRATEGY_UUID", 
+            null, CUSTOM_MERGE_STRATEGY_UUID, null, false, CUSTOM, CUSTOM_MERGE_STRATEGY_UUID),
+        arguments("Only strategyId - PAYLOAD_BASED_MERGE_STRATEGY_UUID", 
+            null, PAYLOAD_BASED_MERGE_STRATEGY_UUID, null, false, CUSTOM, PAYLOAD_BASED_MERGE_STRATEGY_UUID),
+
+        // Only mode is provided - strategyId should be inferred
+        arguments("Only mode - COMMIT_TIME_ORDERING", 
+            COMMIT_TIME_ORDERING, null, null, false, COMMIT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments("Only mode - EVENT_TIME_ORDERING", 
+            EVENT_TIME_ORDERING, null, null, false, EVENT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        arguments("Only mode - CUSTOM", 
+            CUSTOM, null, null, false, CUSTOM, CUSTOM_MERGE_STRATEGY_UUID)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsForInferMergeModeOrStrategyId")
+  void testInferMergeModeOrStrategyId(String testName, RecordMergeMode mode, String strategyId, String payloadClass,
+                                     boolean shouldThrow, RecordMergeMode expectedMode, String expectedStrategyId) {
+    if (shouldThrow) {
+      assertThrows(HoodieException.class, () -> {
+        HoodieTableConfig.inferMergeModeOrStrategyId(mode, strategyId, payloadClass);
+      }, "Should throw exception for: " + testName);
+    } else {
+      Pair<RecordMergeMode, String> result = HoodieTableConfig.inferMergeModeOrStrategyId(mode, strategyId, payloadClass);
+      assertEquals(expectedMode, result.getLeft(), "Mode mismatch for: " + testName);
+      assertEquals(expectedStrategyId, result.getRight(), "Strategy ID mismatch for: " + testName);
+    }
+  }
+
+  @Test
+  void testCheckIfConsistent() {
+    // Test consistent combinations
+    assertDoesNotThrow(() -> {
+      HoodieTableConfig.checkIfConsistent(COMMIT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+    });
+    assertDoesNotThrow(() -> {
+      HoodieTableConfig.checkIfConsistent(EVENT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+    });
+    assertDoesNotThrow(() -> {
+      HoodieTableConfig.checkIfConsistent(CUSTOM, CUSTOM_MERGE_STRATEGY_UUID);
+    });
+    assertDoesNotThrow(() -> {
+      HoodieTableConfig.checkIfConsistent(CUSTOM, PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+    });
+    // Test inconsistent combinations
+    assertThrows(HoodieException.class, () -> {
+      HoodieTableConfig.checkIfConsistent(COMMIT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+    });
+    assertThrows(HoodieException.class, () -> {
+      HoodieTableConfig.checkIfConsistent(EVENT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+    });
+    assertThrows(HoodieException.class, () -> {
+      HoodieTableConfig.checkIfConsistent(CUSTOM, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+    });
+    assertThrows(HoodieException.class, () -> {
+      HoodieTableConfig.checkIfConsistent(CUSTOM, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
     });
   }
 }

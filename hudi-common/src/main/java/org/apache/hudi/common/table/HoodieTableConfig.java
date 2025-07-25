@@ -52,6 +52,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -857,14 +858,18 @@ public class HoodieTableConfig extends HoodieConfig {
       return finalConfigs;
     }
 
+    // Infer merge mode and strategy id if needed.
+    Pair<RecordMergeMode, String> mergeModeAndStrategyId =
+        inferMergeModeOrStrategyId(recordMergeMode, recordMergeStrategyId, payloadClassName);
+    recordMergeMode = mergeModeAndStrategyId.getLeft();
+    recordMergeStrategyId = mergeModeAndStrategyId.getRight();
+
     // Properties for all tables.
     // Since PARTIAL_UPDATE_MODE does not have default value, do not set it.
     // For tables using MERGE MODEs (event time/commit time), or CUSTOM mergers.
     if (StringUtils.isNullOrEmpty(payloadClassName)) {
-      checkIfConsistent(recordMergeMode, recordMergeStrategyId);
       finalConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
       finalConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
-      // TODO: We need to make sure these two are consistent.
       // NOTE: No payload class should be set.
     } else { // For tables using custom payload classes.
       // For tables using CUSTOM payload classes.
@@ -903,7 +908,38 @@ public class HoodieTableConfig extends HoodieConfig {
     return finalConfigs;
   }
 
-  private static void checkIfConsistent(RecordMergeMode mode, String strategyId) {
+  static Pair<RecordMergeMode, String> inferMergeModeOrStrategyId(RecordMergeMode mode,
+                                                                  String strategyId,
+                                                                  String payloadClass) {
+    if (mode == null && strategyId == null) {
+      throw new HoodieException("Merge mode and strategy id cannot be NULL at the same time");
+    }
+
+    if (mode != null && strategyId != null) {
+      checkIfConsistent(mode, strategyId);
+    } else if (mode == null) {
+      if (strategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+        mode = COMMIT_TIME_ORDERING;
+      } else if (strategyId.equals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+        mode = EVENT_TIME_ORDERING;
+      } else {
+        mode = CUSTOM;
+      }
+    } else {
+      if (mode == COMMIT_TIME_ORDERING) {
+        strategyId = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+      } else if (mode == EVENT_TIME_ORDERING) {
+        strategyId = EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+      } else if (!StringUtils.isNullOrEmpty(payloadClass)) {
+        strategyId = PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+      } else {
+        strategyId = CUSTOM_MERGE_STRATEGY_UUID;
+      }
+    }
+    return Pair.of(mode, strategyId);
+  }
+
+  static void checkIfConsistent(RecordMergeMode mode, String strategyId) {
     boolean isConsistent;
     if (mode == COMMIT_TIME_ORDERING) {
       isConsistent = strategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
