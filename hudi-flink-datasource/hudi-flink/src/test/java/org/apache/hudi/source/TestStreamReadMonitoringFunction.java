@@ -493,11 +493,12 @@ public class TestStreamReadMonitoringFunction {
       CountDownLatch latch = new CountDownLatch(6);
       CollectingSourceContext sourceContext = new CollectingSourceContext(latch);
       runAsync(sourceContext, function2);
+      state = harness.snapshot(2, 1);
       assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       // Stop the stream task.
-      function.close();
+      function2.close();
       assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
-      assertThat("Should produce the expected splits", sourceContext.getPartitionPaths(), is("par1,par2,par3,par3,par4,par4"));
+      assertThat("Should produce the expected splits", sourceContext.getPartitionPaths(), is("par1,par2,par3,par4"));
       assertTrue(sourceContext.splits.stream().allMatch(split -> split.getInstantRange().isPresent()),
           "All the instants should have range limit");
     }
