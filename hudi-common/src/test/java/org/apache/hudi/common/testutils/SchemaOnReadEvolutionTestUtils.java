@@ -33,6 +33,7 @@ import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -199,6 +200,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
   }
 
 
+
   // Helper class to reduce repetitive code
   private static class SchemaModifier {
     private final SchemaOnReadConfigs configs;
@@ -236,33 +238,40 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       this.configs = configs;
     }
 
-    public void addFields(TableChanges.ColumnAddChange columnAddChange,
-                          FieldNameHolder fieldNames) {
-      for (StructureType structure : StructureType.values()) {
-        if (structure.isEnabled(configs)) {
-          String fieldName = structure.fieldExtractor.apply(fieldNames);
-          if (structure.parent == null) {
-            columnAddChange.addColumns(fieldName, Types.StringType.get(), "");
-          } else {
-            columnAddChange.addColumns(structure.parent, fieldName, Types.StringType.get(), "");
+    public InternalSchema addFields(InternalSchema schema, List<FieldNameHolder> fieldNamesList) {
+      TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
+
+      for (FieldNameHolder fieldNames : fieldNamesList) {
+        for (StructureType structure : StructureType.values()) {
+          if (structure.isEnabled(configs)) {
+            String fieldName = structure.fieldExtractor.apply(fieldNames);
+            if (structure.parent == null) {
+              columnAddChange.addColumns(fieldName, Types.StringType.get(), "");
+            } else {
+              columnAddChange.addColumns(structure.parent, fieldName, Types.StringType.get(), "");
+            }
           }
         }
       }
+
+      return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
     }
 
-    public void deleteFields(TableChanges.ColumnDeleteChange columnDeleteChange,
-                             FieldNameHolder fieldNames) {
+    public InternalSchema deleteFields(InternalSchema schema, FieldNameHolder fieldNames) {
+      TableChanges.ColumnDeleteChange columnDeleteChange = TableChanges.ColumnDeleteChange.get(schema);
       for (StructureType structure : StructureType.values()) {
         if (structure.isEnabled(configs)) {
           String fieldName = structure.fieldExtractor.apply(fieldNames);
           columnDeleteChange.deleteColumn(structure.prefix + fieldName);
         }
       }
+      return SchemaChangeUtils.applyTableChanges2Schema(schema, columnDeleteChange);
     }
 
-    public void renameFields(TableChanges.ColumnUpdateChange columnUpdateChange,
-                             FieldNameHolder oldFieldNames,
-                             FieldNameHolder newFieldNames) {
+    public InternalSchema renameFields(InternalSchema schema,
+                                       FieldNameHolder oldFieldNames,
+                                       FieldNameHolder newFieldNames) {
+      TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(schema);
       for (StructureType structure : StructureType.values()) {
         if (structure.isEnabled(configs)) {
           String oldFieldName = structure.fieldExtractor.apply(oldFieldNames);
@@ -270,12 +279,15 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
           columnUpdateChange.renameColumn(structure.prefix + oldFieldName, newFieldName);
         }
       }
+
+      return SchemaChangeUtils.applyTableChanges2Schema(schema, columnUpdateChange);
     }
 
-    public void repositionFields(TableChanges.ColumnUpdateChange columnUpdateChange,
-                                 FieldNameHolder fieldNames,
-                                 FieldNameHolder refFieldNames,
-                                 TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+    public InternalSchema repositionFields(InternalSchema schema,
+                                           FieldNameHolder fieldNames,
+                                           FieldNameHolder refFieldNames,
+                                           TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+      TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(schema);
       for (StructureType structure : StructureType.values()) {
         if (structure.isEnabled(configs)) {
           String fieldName = structure.fieldExtractor.apply(fieldNames);
@@ -286,6 +298,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
               positionType);
         }
       }
+      return SchemaChangeUtils.applyTableChanges2Schema(schema, columnUpdateChange);
     }
   }
 
@@ -363,68 +376,47 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
   }
 
   private InternalSchema addInitialReorderFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-
+    // Collects all FieldNameHolders into a list
+    List<FieldNameHolder> fieldNamesList = new ArrayList<>();
     for (int i = 0; i < configs.numRoundsSupported; i++) {
-      FieldNameHolder reorderFields = FieldNames.reorderField(i);
-      modifier.addFields(columnAddChange, reorderFields);
+      fieldNamesList.add(FieldNames.reorderField(i));
     }
-
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
+    // Calls new modifier method that takes schema and List<FieldNameHolder>
+    return modifier.addFields(schema, fieldNamesList);
   }
 
   private InternalSchema addInitialNonEndFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-
-    FieldNameHolder addFields = FieldNames.addField(0);
-    modifier.addFields(columnAddChange, addFields);
-
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
+    return modifier.addFields(schema, Collections.singletonList(FieldNames.addField(0)));
   }
 
   private InternalSchema addInitialRenameFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-
+    List<FieldNameHolder> renameFields = new ArrayList<>(configs.numRoundsSupported );
     for (int i = 0; i < configs.numRoundsSupported; i++) {
-      FieldNameHolder renameFields = FieldNames.renameField(i, 0);
-      modifier.addFields(columnAddChange, renameFields);
+      renameFields.add(FieldNames.renameField(i, 0));
     }
 
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
+    return modifier.addFields(schema, renameFields);
   }
 
   private InternalSchema addInitialRemoveFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-
+    List<FieldNameHolder> removeFields = new ArrayList<>(configs.numRoundsSupported - 1);
     for (int i = 0; i < configs.numRoundsSupported - 1; i++) {
-      FieldNameHolder removeFields = FieldNames.removeField(i);
-      modifier.addFields(columnAddChange, removeFields);
+      removeFields.add(FieldNames.removeField(i));
     }
-
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
+    return modifier.addFields(schema, removeFields);
   }
 
   private InternalSchema addInitialRenameAsRemovedFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-
+    List<FieldNameHolder> renameAsRemovedFields = new ArrayList<>(configs.numRoundsSupported - 1);
     for (int i = 0; i < configs.numRoundsSupported - 1; i++) {
-      FieldNameHolder removedForRenameFields = FieldNames.removedForRenameField(i);
-      modifier.addFields(columnAddChange, removedForRenameFields);
-
-      FieldNameHolder renameToRemovedFields = FieldNames.renameToRemovedField(i);
-      modifier.addFields(columnAddChange, renameToRemovedFields);
+      renameAsRemovedFields.add(FieldNames.removedForRenameField(i));
+      renameAsRemovedFields.add(FieldNames.renameToRemovedField(i));
     }
-
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
+    return modifier.addFields(schema, renameAsRemovedFields);
   }
 
   private InternalSchema addInitialEndFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-
-    FieldNameHolder endFields = FieldNames.addEndField(0);
-    modifier.addFields(columnAddChange, endFields);
-
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
+    return modifier.addFields(schema, Collections.singletonList(FieldNames.addEndField(0)));
   }
 
   private InternalSchema applyIterativeModifications(InternalSchema schema, SchemaOnReadConfigs configs,
@@ -470,40 +462,28 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
 
   private InternalSchema applyReorderModifications(InternalSchema schema, SchemaOnReadConfigs configs,
                                                    SchemaModifier modifier, int iteration) {
-    TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(schema);
-
     int sourceIndex = configs.numRoundsSupported - iteration;
     int targetIndex = (configs.numRoundsSupported + 1 - iteration) % configs.numRoundsSupported;
 
     FieldNameHolder sourceFields = FieldNames.reorderField(sourceIndex);
     FieldNameHolder targetFields = FieldNames.reorderField(targetIndex);
 
-    modifier.repositionFields(columnUpdateChange,
-        sourceFields, targetFields,
+    return modifier.repositionFields(schema, sourceFields, targetFields,
         TableChange.ColumnPositionChange.ColumnPositionType.BEFORE);
-
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnUpdateChange);
   }
 
   private InternalSchema applyNonEndFieldModifications(InternalSchema schema, SchemaOnReadConfigs configs,
                                                        SchemaModifier modifier, int iteration) {
     // Add new fields
-    TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-    FieldNameHolder addFields = FieldNames.addField(iteration);
-    modifier.addFields(columnAddChange, addFields);
-
-    InternalSchema tempSchema = SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
+    InternalSchema tempSchema = modifier.addFields(schema, Collections.singletonList(FieldNames.addField(iteration)));
 
     // Position the new fields
-    TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(tempSchema);
     FieldNameHolder currentFields = FieldNames.addField(iteration);
     FieldNameHolder previousFields = FieldNames.addField(iteration - 1);
 
-    modifier.repositionFields(columnUpdateChange,
+   return modifier.repositionFields(tempSchema,
         currentFields, previousFields,
         TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
-
-    return SchemaChangeUtils.applyTableChanges2Schema(tempSchema, columnUpdateChange);
   }
 
   private InternalSchema applyRenameModifications(InternalSchema schema, SchemaOnReadConfigs configs,
@@ -511,17 +491,11 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     InternalSchema result = schema;
 
     for (int j = 0; j < iteration; j++) {
-      TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(result);
-
       int oldRevision = iteration - 1 - j;
       int newRevision = iteration - j;
-
       FieldNameHolder oldFields = FieldNames.renameField(j, oldRevision);
       FieldNameHolder newFields = FieldNames.renameField(j, newRevision);
-
-      modifier.renameFields(columnUpdateChange, oldFields, newFields);
-
-      result = SchemaChangeUtils.applyTableChanges2Schema(result, columnUpdateChange);
+      result = modifier.renameFields(result, oldFields, newFields);
     }
 
     return result;
@@ -529,14 +503,9 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
 
   private InternalSchema applyRemoveModifications(InternalSchema schema, SchemaOnReadConfigs configs,
                                                   SchemaModifier modifier, int iteration) {
-    TableChanges.ColumnDeleteChange columnDeleteChange = TableChanges.ColumnDeleteChange.get(schema);
-
     int indexToRemove = iteration - 1;
     FieldNameHolder fieldsToRemove = FieldNames.removeField(indexToRemove);
-
-    modifier.deleteFields(columnDeleteChange, fieldsToRemove);
-
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnDeleteChange);
+    return modifier.deleteFields(schema, fieldsToRemove);
   }
 
   private InternalSchema applyRenameAsRemovedModifications(InternalSchema schema, SchemaOnReadConfigs configs,
@@ -544,29 +513,19 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     int index = iteration - 1;
 
     // First delete the fields
-    TableChanges.ColumnDeleteChange columnDeleteChange = TableChanges.ColumnDeleteChange.get(schema);
     FieldNameHolder fieldsToDelete = FieldNames.removedForRenameField(index);
-    modifier.deleteFields(columnDeleteChange, fieldsToDelete);
-
-    InternalSchema tempSchema = SchemaChangeUtils.applyTableChanges2Schema(schema, columnDeleteChange);
+    InternalSchema tempSchema = modifier.deleteFields(schema, fieldsToDelete);
 
     // Then rename the other fields
-    TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(tempSchema);
     FieldNameHolder oldFields = FieldNames.renameToRemovedField(index);
     FieldNameHolder newFields = FieldNames.removedForRenameField(index);
 
-    modifier.renameFields(columnUpdateChange, oldFields, newFields);
-
-    return SchemaChangeUtils.applyTableChanges2Schema(tempSchema, columnUpdateChange);
+    return modifier.renameFields(tempSchema, oldFields, newFields);
   }
 
   private InternalSchema applyEndFieldModifications(InternalSchema schema, SchemaOnReadConfigs configs,
                                                     SchemaModifier modifier, int iteration) {
-    TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-
     FieldNameHolder endFields = FieldNames.addEndField(iteration);
-    modifier.addFields(columnAddChange, endFields);
-
-    return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
+    return modifier.addFields(schema, Collections.singletonList(endFields));
   }
 }
