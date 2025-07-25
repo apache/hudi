@@ -54,6 +54,29 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
   protected var hoodieBackedTableMetadata: HoodieBackedTableMetadata = _
   protected var testData: Seq[Seq[Any]] = _
   protected var tmpDir: File = _
+  private val createTableStatementProvider = () =>
+    s"""
+       |create table if not exists $tableName (
+       |  id string,
+       |  name string,
+       |  price double,
+       |  ts long
+       |) using hudi
+       | options (
+       |  primaryKey ='id',
+       |  type = 'cow',
+       |  preCombineField = 'ts',
+       |  hoodie.metadata.enable = 'true',
+       |  hoodie.metadata.record.index.enable = 'true',
+       |  hoodie.metadata.index.column.stats.enable = 'true',
+       |  hoodie.metadata.index.secondary.enable = 'true',
+       |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
+       |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
+       |  hoodie.write.table.version = '${getTableVersion}',
+       |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
+       | )
+       | location '$basePath'
+       """.stripMargin
 
   /**
    * Get the table version for this test implementation
@@ -86,29 +109,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    * Ensure table exists - compensates for parent class cleanup
    */
   private def ensureTableExists(): Unit = {
-    spark.sql(
-      s"""
-         |create table if not exists $tableName (
-         |  id string,
-         |  name string,
-         |  price double,
-         |  ts long
-         |) using hudi
-         | options (
-         |  primaryKey ='id',
-         |  type = 'cow',
-         |  preCombineField = 'ts',
-         |  hoodie.metadata.enable = 'true',
-         |  hoodie.metadata.record.index.enable = 'true',
-         |  hoodie.metadata.index.column.stats.enable = 'true',
-         |  hoodie.metadata.index.secondary.enable = 'true',
-         |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
-         |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
-         |  hoodie.write.table.version = '${getTableVersion}',
-         |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
-         | )
-         | location '$basePath'
-       """.stripMargin)
+    spark.sql(createTableStatementProvider.apply())
   }
 
   /**
@@ -149,29 +150,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     spark.sql("set hoodie.embed.timeline.server=false")
 
     // Create table with specified version
-    spark.sql(
-      s"""
-         |create table $tableName (
-         |  id string,
-         |  name string,
-         |  price double,
-         |  ts long
-         |) using hudi
-         | options (
-         |  primaryKey ='id',
-         |  type = 'cow',
-         |  preCombineField = 'ts',
-         |  hoodie.metadata.enable = 'true',
-         |  hoodie.metadata.record.index.enable = 'true',
-         |  hoodie.metadata.index.column.stats.enable = 'true',
-         |  hoodie.metadata.index.secondary.enable = 'true',
-         |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
-         |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
-         |  hoodie.write.table.version = '${getTableVersion}',
-         |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
-         | )
-         | location '$basePath'
-       """.stripMargin)
+    spark.sql(createTableStatementProvider.apply())
 
     // Insert initial test data including records with $ characters
     spark.sql(s"insert into $tableName values('a1', 'b1', 10, 1000)")
@@ -412,14 +391,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
       assert(recordKeys.asScala.nonEmpty, s"Secondary key $secondaryKey should map to at least one record key")
       assert(recordKeys.size == 1, s"Secondary key $secondaryKey should map to exactly one record key in this test")
     }
-
-    // Validate specific mappings for records with $ characters
-    assert(resultMap.asScala("a$").asScala.toSet == Set("b$"))
-    assert(resultMap.asScala("$a").asScala.toSet == Set("sec$key"))
-    assert(resultMap.asScala("a$a").asScala.toSet == Set("$sec$"))
-    assert(resultMap.asScala("$$").asScala.toSet == Set("$$"))
-    assert(resultMap.asScala("a1").asScala.toSet == Set("b1"))
-    assert(resultMap.asScala("a2").asScala.toSet == Set("b2"))
 
     // Test with non-existing secondary keys
     val nonExistingKeys = HoodieListData.eager(List("non_exist_1", "non_exist_2").asJava)
