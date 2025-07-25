@@ -38,9 +38,8 @@ public enum PartialUpdateMode {
   IGNORE_DEFAULTS_NULLS,
 
   @EnumFieldDescription(
-      "For columns having marker in the current record, pick value from previous version of the record during write."
-      + "Marker value can be defined using `hoodie.write.partial.update.custom.marker`, which should be added to"
-      + "the value of table config `hoodie.write.partial.update.properties`. During upgrade, it could be"
-      + "added automatically for some payload classes, e.g., `PostgresDebeziumAvroPayload`.")
-  IGNORE_MARKERS
+      "For columns having unavailable values in the current record, pick value from previous version of the record during write."
+      + "Unavailable value can be defined using `hoodie.write.partial.update.unavailable.value`, which should be added to"
+      + "the value of table config `hoodie.write.partial.update.properties`.")
+  FILL_UNAVAILABLE
 }

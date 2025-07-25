@@ -23,7 +23,10 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 
@@ -45,6 +48,7 @@ public class PartialUpdateStrategy<T> {
   private final HoodieReaderContext<T> readerContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
+  private final KeepValuesPartialMergingUtils keepValuesPartialMergingUtils;
 
   public PartialUpdateStrategy(HoodieReaderContext<T> readerContext,
                                PartialUpdateMode partialUpdateMode,
@@ -52,6 +56,7 @@ public class PartialUpdateStrategy<T> {
     this.readerContext = readerContext;
     this.partialUpdateMode = partialUpdateMode;
     this.mergeProperties = parseMergeProperties(props);
+    this.keepValuesPartialMergingUtils = new KeepValuesPartialMergingUtils();
   }
 
   /**
@@ -63,7 +68,9 @@ public class PartialUpdateStrategy<T> {
                                  BufferedRecord<T> oldRecord,
                                  Schema newSchema,
                                  Schema oldSchema,
-                                 boolean keepOldMetadataColumns) {
+                                 Schema readerSchema,
+                                 boolean keepOldMetadataColumns,
+                                 TypedProperties props) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
     if (null == oldRecord
@@ -74,16 +81,52 @@ public class PartialUpdateStrategy<T> {
 
     switch (partialUpdateMode) {
       case KEEP_VALUES:
-        return newRecord;
+        return reconcileBasedOnKeepValues(newRecord, oldRecord, newSchema, oldSchema, readerSchema, props);
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(
-            newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns);
-      case IGNORE_MARKERS:
+            newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns, false);
+      case IGNORE_DEFAULTS_NULLS:
+        return reconcileDefaultValues(newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns, true);
+      case FILL_UNAVAILABLE:
         return reconcileMarkerValues(
             newRecord, oldRecord, newSchema, oldSchema);
       default:
-        return newRecord;
+        throw new HoodieIOException("Unsupported PartialUpdateMode " + partialUpdateMode + " detected");
     }
+  }
+
+  BufferedRecord<T> reconcileBasedOnKeepValues(BufferedRecord<T> newRecord,
+                                               BufferedRecord<T> oldRecord,
+                                               Schema newSchema,
+                                               Schema oldSchema,
+                                               Schema readerSchema,
+                                               TypedProperties props) {
+
+    // Merge and store the combined record
+    Option<Pair<BufferedRecord, Schema>> deleteHandlingResult = handleDeletes(oldRecord, oldSchema, newRecord, newSchema, props);
+    if (deleteHandlingResult != null) {
+      return newRecord; // if deleted, return newRecord. newRecord.isDelete() will return anyways.
+    }
+
+    return (BufferedRecord<T>) keepValuesPartialMergingUtils.mergePartialRecords(oldRecord, oldSchema, newRecord, newSchema, readerSchema, readerContext).getLeft();
+  }
+
+  /**
+   * Basic handling of deletes that is used by many of the spark mergers
+   * returns null if merger specific logic should be used
+   */
+  protected Option<Pair<BufferedRecord, Schema>> handleDeletes(BufferedRecord older, Schema oldSchema, BufferedRecord newer, Schema newSchema, TypedProperties props) {
+
+    if (newer.isDelete()) {
+      // Delete record
+      return Option.empty();
+    }
+
+    // old record
+    if (older.isDelete()) {
+      return Option.of(Pair.of(newer, newSchema));
+    }
+    return null;
   }
 
   /**
@@ -92,13 +135,15 @@ public class PartialUpdateStrategy<T> {
    * @param newSchema              The schema of the newer record.
    * @param oldSchema              The schema of the older record.
    * @param keepOldMetadataColumns Keep the metadata columns from the older record.
+   * @param includeNulls           true if nulls are expected to be ignored as well. false otherwise.
    * @return
    */
   BufferedRecord<T> reconcileDefaultValues(BufferedRecord<T> newRecord,
                                            BufferedRecord<T> oldRecord,
                                            Schema newSchema,
                                            Schema oldSchema,
-                                           boolean keepOldMetadataColumns) {
+                                           boolean keepOldMetadataColumns,
+                                           boolean includeNulls) {
     List<Schema.Field> fields = newSchema.getFields();
     Map<Integer, Object> updateValues = new HashMap<>();
     T engineRecord;
@@ -109,7 +154,7 @@ public class PartialUpdateStrategy<T> {
       Object defaultValue = field.defaultVal();
       Object newValue = readerContext.getValue(
           newRecord.getRecord(), newSchema, fieldName);
-      if (defaultValue == newValue
+      if (defaultValue == newValue || (!includeNulls || (newValue == null))
           || (keepOldMetadataColumns && HOODIE_META_COLUMNS_NAME_TO_POS.containsKey(fieldName))) {
         updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
@@ -117,7 +162,7 @@ public class PartialUpdateStrategy<T> {
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = readerContext.mergeEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
@@ -145,7 +190,7 @@ public class PartialUpdateStrategy<T> {
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = readerContext.mergeEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),

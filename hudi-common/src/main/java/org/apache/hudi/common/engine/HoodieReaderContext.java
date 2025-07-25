@@ -413,9 +413,18 @@ public abstract class HoodieReaderContext<T> {
    * @param baseRecord       The record based on which the engine record is built.
    * @return A new instance of engine record type {@link T}.
    */
-  public abstract T constructEngineRecord(Schema schema,
-                                          Map<Integer, Object> updateValues,
-                                          BufferedRecord<T> baseRecord);
+  public abstract T mergeEngineRecord(Schema schema,
+                                      Map<Integer, Object> updateValues,
+                                      BufferedRecord<T> baseRecord);
+
+  /**
+   * Creates a new Engine based record based on a given schema and its field values.
+   *
+   * @param schema           The schema of the new record.
+   * @param values           The list of values.
+   * @return A new instance of engine record type {@link T}.
+   */
+  public abstract T createEngineRecord(Schema schema, List<Object> values);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.

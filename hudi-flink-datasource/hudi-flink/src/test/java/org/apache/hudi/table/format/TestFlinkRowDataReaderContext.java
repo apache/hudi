@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +71,7 @@ class TestFlinkRowDataReaderContext {
     RowData base = createBaseRow(1, "Alice", true);
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, false);
     Map<Integer, Object> updates = new HashMap<>();
-    RowData result = readerContext.constructEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.mergeEngineRecord(AVRO_SCHEMA, updates, record);
 
     assertEquals(1, result.getInt(0));
     assertEquals("Alice", result.getString(1).toString());
@@ -84,7 +85,7 @@ class TestFlinkRowDataReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, StringData.fromString("Bob"));
 
-    RowData result = readerContext.constructEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.mergeEngineRecord(AVRO_SCHEMA, updates, record);
 
     assertEquals(1, result.getInt(0)); // unchanged
     assertEquals("Bob", result.getString(1).toString()); // updated
@@ -99,7 +100,7 @@ class TestFlinkRowDataReaderContext {
     updates.put(0, 42);
     updates.put(1, StringData.fromString("Zoe"));
     updates.put(2, false);
-    RowData result = readerContext.constructEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.mergeEngineRecord(AVRO_SCHEMA, updates, record);
 
     assertEquals(42, result.getInt(0));
     assertEquals("Zoe", result.getString(1).toString());
@@ -112,11 +113,70 @@ class TestFlinkRowDataReaderContext {
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, false);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, null);
-    RowData result = readerContext.constructEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.mergeEngineRecord(AVRO_SCHEMA, updates, record);
 
     assertEquals(5, result.getInt(0));
     assertTrue(result.isNullAt(1));
     assertTrue(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesList() {
+    List<Object> values = Arrays.asList(100, StringData.fromString("TestUser"), false);
+    RowData result = readerContext.createEngineRecord(AVRO_SCHEMA, values);
+
+    assertEquals(100, result.getInt(0));
+    assertEquals("TestUser", result.getString(1).toString());
+    assertFalse(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesListWithNull() {
+    List<Object> values = Arrays.asList(200, null, true);
+    RowData result = readerContext.createEngineRecord(AVRO_SCHEMA, values);
+
+    assertEquals(200, result.getInt(0));
+    assertTrue(result.isNullAt(1));
+    assertTrue(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesListMismatchSize() {
+    List<Object> values = Arrays.asList(300, "Incomplete");
+    // Should throw IllegalArgumentException when value count doesn't match field count
+    try {
+      readerContext.createEngineRecord(AVRO_SCHEMA, values);
+      // If we reach here, the test should fail
+      assertTrue(false, "Expected IllegalArgumentException was not thrown");
+    } catch (IllegalArgumentException e) {
+      assertEquals("Value count (2) does not match field count (3)", e.getMessage());
+    }
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesListEmpty() {
+    List<Object> values = Arrays.asList();
+    // Should throw IllegalArgumentException when value count doesn't match field count
+    try {
+      readerContext.createEngineRecord(AVRO_SCHEMA, values);
+      // If we reach here, the test should fail
+      assertTrue(false, "Expected IllegalArgumentException was not thrown");
+    } catch (IllegalArgumentException e) {
+      assertEquals("Value count (0) does not match field count (3)", e.getMessage());
+    }
+  }
+
+  @Test
+  void testConstructEngineRecordWithValuesListExcessValues() {
+    List<Object> values = Arrays.asList(400, StringData.fromString("Excess"), true, "ExtraValue");
+    // Should throw IllegalArgumentException when value count doesn't match field count
+    try {
+      readerContext.createEngineRecord(AVRO_SCHEMA, values);
+      // If we reach here, the test should fail
+      assertTrue(false, "Expected IllegalArgumentException was not thrown");
+    } catch (IllegalArgumentException e) {
+      assertEquals("Value count (4) does not match field count (3)", e.getMessage());
+    }
   }
 
   private GenericRowData createBaseRow(int id, String name, boolean active) {

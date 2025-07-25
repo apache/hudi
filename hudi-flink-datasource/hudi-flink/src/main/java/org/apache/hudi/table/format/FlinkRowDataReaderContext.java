@@ -197,9 +197,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public RowData constructEngineRecord(Schema schema,
-                                       Map<Integer, Object> updateValues,
-                                       BufferedRecord<RowData> baseRecord) {
+  public RowData mergeEngineRecord(Schema schema,
+                                   Map<Integer, Object> updateValues,
+                                   BufferedRecord<RowData> baseRecord) {
     GenericRowData genericRowData = new GenericRowData(schema.getFields().size());
     for (Schema.Field field : schema.getFields()) {
       int pos = field.pos();
@@ -210,6 +210,21 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       }
     }
     return genericRowData;
+  }
+
+  @Override
+  public RowData createEngineRecord(Schema schema, List<Object> values) {
+    List<Schema.Field> fields = schema.getFields();
+    if (fields.size() != values.size()) {
+      throw new IllegalArgumentException(
+          "Value count (" + values.size() + ") does not match field count (" + fields.size() + ")");
+    }
+
+    GenericRowData genericRowData = new GenericRowData(values.size());
+    for (int index = 0; index < fields.size(); index++) {
+      genericRowData.setField(index, values.get(index));
+    }
+    return toBinaryRow(schema, genericRowData);
   }
 
   @Override
