@@ -50,7 +50,7 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
   }
 
   private def buildCustomSparkSession(tempDir: File, enablePolaris: Boolean = false): (SparkSession, HoodieCatalog, MockPolarisSparkCatalog) = {
-    val mockPolarisDelegate = spy(new MockPolarisSparkCatalog())
+    val mockPolarisDelegate = spy[MockPolarisSparkCatalog](new MockPolarisSparkCatalog())
 
     val sparkBuilder = SparkSession.builder()
       .appName("TestPolarisHoodieCatalogDelegation")
