@@ -328,6 +328,12 @@ class HoodieCatalog extends DelegatingCatalogExtension
       new CreateHoodieTableCommand(tableDesc, false).run(spark)
     }
 
+    // Check if Polaris catalog is enabled
+    if (HoodieSqlCommonUtils.isUsingPolarisCatalog(spark)) {
+      // if so then invoke the delegate catalog by calling super, in this case it should be PolarisSparkCatalog
+      // this should handle creation of table entry in catalog
+      super.createTable(ident, schema, partitions, allTableProperties)
+    }
     loadTable(ident)
   }
 
