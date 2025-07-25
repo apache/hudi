@@ -251,7 +251,6 @@ public class HoodieLogFileCommand {
           .withLatestCommitTime(client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(HoodieInstantTimeGenerator.getCurrentInstantTimeStr()))
           .withProps(fileGroupReaderProperties)
           .withShouldUseRecordPosition(false)
-          .withEnableOptimizedLogBlockScan(getEnableOptimizedLogBlocksScan(fileGroupReaderProperties))
           .build();
            ClosableIterator<IndexedRecord> recordIterator = fileGroupReader.getClosableIterator()) {
         recordIterator.forEachRemaining(record -> {
@@ -319,14 +318,5 @@ public class HoodieLogFileCommand {
         ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue());
 
     return props;
-  }
-
-  /**
-   * Gets the enableOptimizedLogBlocksScan value from configuration.
-   */
-  private boolean getEnableOptimizedLogBlocksScan(TypedProperties props) {
-    return props.getBoolean(
-        ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-        Boolean.parseBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()));
   }
 }

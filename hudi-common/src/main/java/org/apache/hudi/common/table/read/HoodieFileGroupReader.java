@@ -92,7 +92,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final boolean allowInflightInstants;
   // Callback to run custom logic on updates to the base files for the file group
   private final Option<BaseFileUpdateCallback> fileGroupUpdateCallback;
-  private final boolean enableOptimizedLogBlockScan;
+  private final Boolean enableOptimizedLogBlockScan;
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
   private List<String> validBlockInstants = Collections.emptyList();
 
@@ -116,7 +116,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 boolean shouldUseRecordPosition, boolean allowInflightInstants, boolean emitDelete, boolean sortOutput,
-                                InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, boolean enableOptimizedLogBlockScan) {
+                                InputSplit inputSplit, Option<BaseFileUpdateCallback> updateCallback, Boolean enableOptimizedLogBlockScan) {
     this.readerContext = readerContext;
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
@@ -453,7 +453,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
     private boolean sortOutput = false;
-    private boolean enableOptimizedLogBlockScan = false;
+    private Boolean enableOptimizedLogBlockScan;
     private Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
 
     public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
@@ -544,7 +544,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withEnableOptimizedLogBlockScan(boolean enableOptimizedLogBlockScan) {
+    public Builder<T> withEnableOptimizedLogBlockScan(Boolean enableOptimizedLogBlockScan) {
       this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
       return this;
     }
@@ -575,6 +575,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(baseFileOption != null, "Base file option is required");
       ValidationUtils.checkArgument(logFiles != null, "Log files stream is required");
       ValidationUtils.checkArgument(partitionPath != null, "Partition path is required");
+      if (enableOptimizedLogBlockScan == null) {
+        // check to see if props contains this key if not explicitly set
+        // otherwise use the default value from the config itself
+        enableOptimizedLogBlockScan = props.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
+                Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()));
+      }
 
       InputSplit inputSplit = new InputSplit(baseFileOption, logFiles, partitionPath, start, length);
       return new HoodieFileGroupReader<>(

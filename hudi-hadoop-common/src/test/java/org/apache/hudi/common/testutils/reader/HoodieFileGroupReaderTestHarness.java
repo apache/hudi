@@ -149,7 +149,6 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
         .withProps(properties)
         .withShouldUseRecordPosition(shouldReadPositions)
         .withAllowInflightInstants(allowInflightCommits)
-        .withEnableOptimizedLogBlockScan(properties.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key()))
         .build();
 
     return fileGroupReader.getClosableIterator();

@@ -22,7 +22,7 @@ import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieReaderConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
@@ -200,7 +200,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
-              props.put(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue())
               val baseFileLength = if (fileSlice.getBaseFile.isPresent) {
                 fileSlice.getBaseFile.get.getFileSize
               } else {
@@ -218,7 +217,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                 .withStart(file.start)
                 .withLength(baseFileLength)
                 .withShouldUseRecordPosition(shouldUseRecordPosition)
-                .withEnableOptimizedLogBlockScan(props.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue().toBoolean))
                 .build()
               // Append partition values to rows and project to output schema
               appendPartitionAndProject(

@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -175,7 +176,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .build(),
         metaClient,
         Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
-        Option.empty());
+        Option.empty(), Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()));
     // Validate the result.
     validatePartitionStats(result, instant1, instant2);
   }
@@ -281,7 +282,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             columnsToIndex,
             Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS),
             HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue(),
-            metadataConfig);
+            metadataConfig.isOptimizedLogBlocksScanEnabled());
         // there must be two ranges for rider and driver
         assertEquals(2, columnRangeMetadataLogFile.size());
       } catch (Exception e) {
@@ -295,7 +296,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         metadataConfig,
         metaClient,
         Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
-        Option.empty());
+        Option.empty(), Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()));
     // Validate the result.
     validatePartitionStats(result, instant1, instant2, 6);
   }

@@ -487,7 +487,6 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withInternalSchema(toJavaOption(originTableSchema.internalSchema))
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
-      .withEnableOptimizedLogBlockScan(readerProperties.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key()))
       .build()
     CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator).asScala
   }
@@ -518,7 +517,6 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withPartition(partitionPath)
       .withMetaClient(metaClient)
       .withRecordBuffer(recordBuffer)
-      .withOptimizedLogBlocksScan(readerProperties.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key()))
       .build
 
     CloseableIteratorListener.addListener(recordBuffer.getLogRecordIterator).asScala

@@ -51,7 +51,8 @@ public class LogFileColStatsTestUtil {
           .fromProperties(datasetMetaClient.getTableConfig().getProps())
           .build();
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
-          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize, metadataConfig);
+          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt,
+                  maxBufferSize, metadataConfig.isOptimizedLogBlocksScanEnabled());
       return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {
       throw new HoodieException("Writer schema needs to be set");
