@@ -287,11 +287,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         engineContext,
         partitionFileSlicePairs,
         HoodieMetadataConfig.newBuilder().enable(true)
-                .withMetadataIndexColumnStats(true)
-                .withMetadataIndexPartitionStats(true)
-                .withColumnStatsIndexForColumns("rider,driver")
-                .withPartitionStatsIndexParallelism(1)
-                .build(),
+            .withMetadataIndexColumnStats(true)
+            .withMetadataIndexPartitionStats(true)
+            .withColumnStatsIndexForColumns("rider,driver")
+            .withPartitionStatsIndexParallelism(1)
+            .build(),
         metaClient,
         Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)),
         Option.empty(), Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()));
