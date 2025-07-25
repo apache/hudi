@@ -86,22 +86,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
   private List<String> validBlockInstants = Collections.emptyList();
 
-  /**
-   * Constructs an instance of the HoodieFileGroupReader.
-   * @deprecated use {@link #newBuilder()} instead.
-   */
-  @Deprecated
-  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage,
-      String tablePath,
-      String latestCommitTime, FileSlice fileSlice, Schema dataSchema, Schema requestedSchema,
-      Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient,
-      TypedProperties props,
-      long start, long length, boolean shouldUseRecordPosition) {
-    this(readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt,
-        hoodieTableMetaClient, props, ReaderParameters.builder().shouldUseRecordPosition(shouldUseRecordPosition).build(),
-        InputSplit.fromFileSlice(fileSlice, start, length), Option.empty(), FileGroupRecordBufferLoader.createDefault());
-  }
-
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
