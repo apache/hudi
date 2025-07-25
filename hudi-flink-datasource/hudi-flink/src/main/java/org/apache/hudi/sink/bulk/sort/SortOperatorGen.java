@@ -18,8 +18,6 @@
 
 package org.apache.hudi.sink.bulk.sort;
 
-import org.apache.hudi.adapter.SortCodeGeneratorAdapter;
-
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.table.api.TableConfig;
@@ -56,6 +54,6 @@ public class SortOperatorGen {
     for (int sortIndex : sortIndices) {
       builder.addField(sortIndex, true, true);
     }
-    return new SortCodeGeneratorAdapter(tableConfig, rowType, builder.build());
+    return new SortCodeGenerator(tableConfig, Thread.currentThread().getContextClassLoader(), rowType, builder.build());
   }
 }

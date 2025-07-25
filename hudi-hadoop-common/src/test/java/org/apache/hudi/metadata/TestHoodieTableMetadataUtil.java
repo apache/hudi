@@ -76,7 +76,6 @@ import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.apache.hudi.metadata.HoodieIndexVersion.V2;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -164,7 +163,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
       }
     });
 
-    List<String> columnsToIndex = Arrays.asList("rider", "driver");
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext,
         partitionFileSlicePairs,
@@ -364,29 +362,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
     result = getFileIDForFileGroup(MetadataPartitionType.EXPRESSION_INDEX, 5, "expr_index_ts", Option.empty());
     assertEquals("expr-index-ts-0005-0", result);
-  }
-
-  @Test
-  public void testValidateDataTypeForSecondaryOrExpressionIndex() {
-    // Create a dummy schema with both complex and primitive types
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .optionalInt("intField")
-        .name("arrayField").type().array().items().stringType().noDefault()
-        .name("mapField").type().map().values().intType().noDefault()
-        .name("structField").type().record("NestedRecord")
-        .fields()
-        .requiredString("nestedString")
-        .endRecord()
-        .noDefault()
-        .endRecord();
-
-    // Test for primitive fields
-    assertTrue(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("stringField", "intField"), schema));
-
-    // Test for complex fields
-    assertFalse(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("arrayField", "mapField", "structField"), schema));
   }
 
   @Test
@@ -830,25 +805,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             V1,
             0  // Calculated using the explicit hashing algorithm
         )
-    // [HUDI-9543] need to support null value for SI.
-    //        // Test case 10: Record key with special characters
-    //        Arguments.of(
-    //            "Null str handling sec idx v2",
-    //            null,
-    //            10,
-    //            "secondary_index_idx_ts",
-    //            V2,
-    //            0  // Calculated using the explicit hashing algorithm
-    //        ),
-    //        // Test case 10: Record key with special characters
-    //        Arguments.of(
-    //            "Null str handling sec idx v2",
-    //            null,
-    //            10,
-    //            "secondary_index_idx_ts",
-    //            V2,
-    //            0  // Calculated using the explicit hashing algorithm
-    //        )
     );
   }
 

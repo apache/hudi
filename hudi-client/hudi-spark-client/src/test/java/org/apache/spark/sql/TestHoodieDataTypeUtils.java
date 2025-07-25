@@ -52,7 +52,7 @@ class TestHoodieDataTypeUtils {
             new Schema.Field("listField", listSchema, null, null)));
     Schema schemaWithSmallDecimalAndMap = Schema.createRecord("schemaWithSmallDecimalAndMap", null, null, false,
         Arrays.asList(new Schema.Field("smallDecimal", SMALL_DECIMAL_SCHEMA, null, null), new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
-            new Schema.Field("mapField", mapSchema,null, null)));
+            new Schema.Field("mapField", mapSchema, null, null)));
     Schema schemaWithLargeDecimalAndList = Schema.createRecord("schemaWithLargeDecimalAndList", null, null, false,
         Arrays.asList(new Schema.Field("largeDecimal", LARGE_DECIMAL_SCHEMA, null, null), new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
             new Schema.Field("listField", listSchema, null, null)));
@@ -88,9 +88,9 @@ class TestHoodieDataTypeUtils {
 
   private static Stream<Arguments> testAutoModifyParquetWriteLegacyFormatParameterParams() {
     return Arrays.stream(new Object[][] {
-            {true, null, true},   {false, null, null},
+            {true, null, true}, {false, null, null},
             {true, false, false}, {true, true, true},
-            {false, true, true},  {false, false, false}})
+            {false, true, true}, {false, false, false}})
         // add useMap option to test both entry-points
         .map(Arguments::of);
   }
