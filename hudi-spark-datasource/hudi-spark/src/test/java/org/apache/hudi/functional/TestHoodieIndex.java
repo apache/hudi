@@ -560,7 +560,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestampSec));
 
     // With a sec format instant time checkIfValid should return false assuming its > first entry in the active timeline
-    Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
+    Thread.sleep(2010); // sleep required so that new timestamp differs in the seconds rather than msec
     instantTimestamp = WriteClientTestUtils.createNewInstantTime();
     instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     assertFalse(timeline.empty());
@@ -572,7 +572,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Timestamp contain in inflight timeline, checkContainsInstant() should return true
     String checkInstantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     String checkInstantTimestamp = checkInstantTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT;
-    Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
+    Thread.sleep(2010); // sleep required so that new timestamp differs in the seconds rather than msec
     String newTimestamp = WriteClientTestUtils.createNewInstantTime();
     String newTimestampSec = newTimestamp.substring(0, newTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestamp);
