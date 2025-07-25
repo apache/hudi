@@ -29,22 +29,10 @@ public interface ReaderContextTypeConverter {
    * Cast to Java boolean value.
    * If the object is not compatible with boolean type, throws.
    */
-  default boolean castToBoolean(Object value) {
-    if (value instanceof Boolean) {
-      return (boolean) value;
-    } else {
-      throw new IllegalArgumentException(
-          "Input value type " + value.getClass() + ", cannot be cast to boolean");
-    }
-  }
+  boolean castToBoolean(Object value);
 
   /**
    * Cast to Java string value.
    */
-  default String castToString(Object value) {
-    if (null != value) {
-      return value.toString();
-    }
-    return null;
-  }
+  String castToString(Object value);
 }

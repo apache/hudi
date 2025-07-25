@@ -113,7 +113,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
-    this.typeConverter = new ReaderContextTypeConverter() {};
+    this.typeConverter = new ReaderContextBaseTypeConverter();
   }
 
   // Getter and Setter for schemaHandler
