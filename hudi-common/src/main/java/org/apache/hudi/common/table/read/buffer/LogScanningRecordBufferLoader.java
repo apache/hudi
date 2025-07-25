@@ -32,7 +32,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
-abstract class LogScanningRecordBufferInitializer {
+abstract class LogScanningRecordBufferLoader {
 
   protected <T> List<String> scanLogFiles(HoodieReaderContext<T> readerContext, HoodieStorage storage,
                                           InputSplit inputSplit, HoodieTableMetaClient hoodieTableMetaClient,

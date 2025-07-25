@@ -36,23 +36,23 @@ import java.util.List;
  * The implementation is expected to establish the record buffer and populate it with the records from the log files.
  * @param <T> the engine specific record type
  */
-public interface FileGroupRecordBufferInitializer<T> {
+public interface FileGroupRecordBufferLoader<T> {
 
   Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                               HoodieStorage storage,
-                                                               InputSplit inputSplit,
-                                                               Option<String> orderingFieldName,
-                                                               HoodieTableMetaClient hoodieTableMetaClient,
-                                                               TypedProperties props,
-                                                               ReaderParameters readerParameters,
-                                                               HoodieReadStats readStats,
-                                                               Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback);
+                                                                     HoodieStorage storage,
+                                                                     InputSplit inputSplit,
+                                                                     Option<String> orderingFieldName,
+                                                                     HoodieTableMetaClient hoodieTableMetaClient,
+                                                                     TypedProperties props,
+                                                                     ReaderParameters readerParameters,
+                                                                     HoodieReadStats readStats,
+                                                                     Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback);
 
-  static <T> FileGroupRecordBufferInitializer<T> createDefault() {
-    return DefaultFileGroupRecordBufferInitializer.getInstance();
+  static <T> FileGroupRecordBufferLoader<T> createDefault() {
+    return DefaultFileGroupRecordBufferLoader.getInstance();
   }
 
-  static <T> ReusableFileGroupRecordBufferInitializer<T> createReusable(HoodieReaderContext<T> readerContextWithoutFilters) {
-    return new ReusableFileGroupRecordBufferInitializer<>(readerContextWithoutFilters);
+  static <T> ReusableFileGroupRecordBufferLoader<T> createReusable(HoodieReaderContext<T> readerContextWithoutFilters) {
+    return new ReusableFileGroupRecordBufferLoader<>(readerContextWithoutFilters);
   }
 }

@@ -36,17 +36,17 @@ import org.apache.hudi.storage.HoodieStorage;
 import java.util.List;
 
 /**
- * Default implementation of {@link FileGroupRecordBufferInitializer} that initializes a buffer based on the reader parameters.
+ * Default implementation of {@link FileGroupRecordBufferLoader} that initializes a buffer based on the reader parameters.
  * @param <T> the engine specific record type
  */
-class DefaultFileGroupRecordBufferInitializer<T> extends LogScanningRecordBufferInitializer implements FileGroupRecordBufferInitializer<T> {
-  private static final DefaultFileGroupRecordBufferInitializer INSTANCE = new DefaultFileGroupRecordBufferInitializer<>();
+class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoader implements FileGroupRecordBufferLoader<T> {
+  private static final DefaultFileGroupRecordBufferLoader INSTANCE = new DefaultFileGroupRecordBufferLoader<>();
 
-  static <T> DefaultFileGroupRecordBufferInitializer<T> getInstance() {
+  static <T> DefaultFileGroupRecordBufferLoader<T> getInstance() {
     return INSTANCE;
   }
 
-  private DefaultFileGroupRecordBufferInitializer() {
+  private DefaultFileGroupRecordBufferLoader() {
   }
 
   @Override

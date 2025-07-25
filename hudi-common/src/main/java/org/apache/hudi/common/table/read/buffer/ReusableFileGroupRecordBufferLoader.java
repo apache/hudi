@@ -40,11 +40,11 @@ import java.util.List;
  *
  * @param <T> the engine specific record type
  */
-public class ReusableFileGroupRecordBufferInitializer<T> extends LogScanningRecordBufferInitializer implements FileGroupRecordBufferInitializer<T>, Closeable {
+public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoader implements FileGroupRecordBufferLoader<T>, Closeable {
   private final HoodieReaderContext<T> readerContextWithoutFilters;
   private Pair<KeyBasedFileGroupRecordBuffer<T>, List<String>> cachedResults;
 
-  ReusableFileGroupRecordBufferInitializer(HoodieReaderContext<T> readerContextWithoutFilters) {
+  ReusableFileGroupRecordBufferLoader(HoodieReaderContext<T> readerContextWithoutFilters) {
     this.readerContextWithoutFilters = readerContextWithoutFilters;
   }
 
