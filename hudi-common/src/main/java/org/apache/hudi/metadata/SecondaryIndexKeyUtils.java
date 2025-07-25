@@ -97,10 +97,6 @@ public class SecondaryIndexKeyUtils {
     return escapeSpecialChars(unescapedSecKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(unescapedRecordKey);
   }
 
-  public static String constructSecondaryIndexKeyPrefix(String escapedSecKey) {
-    return escapedSecKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
-  }
-
   /**
    * Escapes special characters in a string. If the input is null, returns a string containing only the null character.
    * For non-null strings, escapes backslash, dollar sign, and null character.
