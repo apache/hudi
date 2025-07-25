@@ -905,3 +905,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-07-24 16:04:09] [release-v1.153.0] ---
 [ENG-30281][HUDI-9633] Implement ability to filter configs based on custom prefixes before passing down to the kafka consumer (#1457)
 [AUDIT-1071]: Changelog for release-v1.152.0 (#1456)
+
+--- [2025-07-25 16:04:15] [release-v1.154.0] ---
+[ENG-30281][INTERNAL] Fix the config desc for kafka prefix configs (#1458)
+[AUDIT-1071]: Changelog for release-v1.153.0 (#1459)
