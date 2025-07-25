@@ -60,6 +60,7 @@
     <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
+    <module>hudi-flink-datasource/${hudi.flink.module}</module>
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
@@ -2568,9 +2569,6 @@
         <flink.format.parquet.version>1.14.4</flink.format.parquet.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink2.0.x</module>
-      </modules>
       <activation>
         <property>
           <name>flink2.0</name>
@@ -2589,9 +2587,6 @@
         <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.20.x</module>
-      </modules>
       <activation>
         <activeByDefault>true</activeByDefault>
         <property>
@@ -2611,9 +2606,6 @@
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.19.x</module>
-      </modules>
       <activation>
         <property>
           <name>flink1.19</name>
@@ -2632,9 +2624,6 @@
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.18.x</module>
-      </modules>
       <activation>
         <property>
           <name>flink1.18</name>
@@ -2653,9 +2642,6 @@
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.17.x</module>
-      </modules>
       <activation>
         <property>
           <name>flink1.17</name>
