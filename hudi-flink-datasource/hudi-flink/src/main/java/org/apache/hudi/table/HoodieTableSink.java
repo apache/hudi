@@ -19,8 +19,6 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.adapter.DataStreamSinkProviderAdapter;
-import org.apache.hudi.adapter.SupportsRowLevelDeleteAdapter;
-import org.apache.hudi.adapter.SupportsRowLevelUpdateAdapter;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -38,11 +36,15 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.connector.RowLevelModificationScanContext;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
+import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
+import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -54,8 +56,8 @@ public class HoodieTableSink implements
     DynamicTableSink,
     SupportsPartitioning,
     SupportsOverwrite,
-    SupportsRowLevelDeleteAdapter,
-    SupportsRowLevelUpdateAdapter {
+    SupportsRowLevelDelete,
+    SupportsRowLevelUpdate {
 
   private final Configuration conf;
   private final ResolvedSchema schema;
@@ -178,13 +180,13 @@ public class HoodieTableSink implements
   }
 
   @Override
-  public RowLevelDeleteInfoAdapter applyRowLevelDelete() {
+  public RowLevelDeleteInfo applyRowLevelDelete(@Nullable RowLevelModificationScanContext rowLevelModificationScanContext) {
     this.conf.set(FlinkOptions.OPERATION, WriteOperationType.DELETE.value());
     return DataModificationInfos.DEFAULT_DELETE_INFO;
   }
 
   @Override
-  public RowLevelUpdateInfoAdapter applyRowLevelUpdate(List<Column> list) {
+  public RowLevelUpdateInfo applyRowLevelUpdate(List<Column> list, @Nullable RowLevelModificationScanContext rowLevelModificationScanContext) {
     this.conf.set(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
     return DataModificationInfos.DEFAULT_UPDATE_INFO;
   }

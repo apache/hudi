@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.adapter.OperatorCoordinatorAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -112,7 +111,7 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  * @see AbstractStreamWriteFunction for the bootstrap event sending workflow
  */
 public class StreamWriteOperatorCoordinator
-    implements OperatorCoordinatorAdapter, CoordinationRequestHandler {
+    implements OperatorCoordinator, CoordinationRequestHandler {
   private static final Logger LOG = LoggerFactory.getLogger(StreamWriteOperatorCoordinator.class);
 
   /**
@@ -318,7 +317,12 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
+  public void handleEventFromOperator(int subtask, int attemptNumber, OperatorEvent operatorEvent) {
+    handleEventFromOperator(subtask, operatorEvent);
+  }
+
+  @VisibleForTesting
+  public void handleEventFromOperator(int subtask, OperatorEvent operatorEvent) {
     ValidationUtils.checkState(operatorEvent instanceof WriteMetadataEvent,
         "The coordinator can only handle WriteMetaEvent");
     WriteMetadataEvent event = (WriteMetadataEvent) operatorEvent;
@@ -340,7 +344,7 @@ public class StreamWriteOperatorCoordinator
     }
   }
 
-  @Override
+  @VisibleForTesting
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
     // no operation
   }
@@ -350,9 +354,19 @@ public class StreamWriteOperatorCoordinator
     // no operation
   }
 
-  @Override
+  @VisibleForTesting
   public void subtaskReady(int i, SubtaskGateway subtaskGateway) {
     this.gateways[i] = subtaskGateway;
+  }
+
+  @Override
+  public void executionAttemptFailed(int i, int attemptNumber, Throwable reason) {
+    subtaskReady(i, null);
+  }
+
+  @Override
+  public void executionAttemptReady(int i, int attemptNumber, SubtaskGateway gateway) {
+    subtaskReady(i, gateway);
   }
 
   @Override
