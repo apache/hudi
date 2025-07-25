@@ -280,7 +280,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // all keys will be from the same shard index so just calculate the first key and reduce partitionFileSlices to 1
       List<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys, keyEncodingFn);
       int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.get(0), fileSlicesForDataPartition.size());
-      return lookupKeyRecordPairs(partitionName, distinctSortedKeys, fileSlicesForDataPartition.get(fileGroupIndex), !isSecondaryIndex);
+      return lookupKeyRecordPairs(partitionName, distinctSortedKeys, fileSlicesForDataPartition.get(fileGroupIndex));
     } else if (partitionName.equals(RECORD_INDEX.getPartitionPath()) && !fileSlices.isEmpty() && HoodieTableMetadataUtil.verifyRLIFile(fileSlices.get(0).getFileId(), true)) {
       if (keys.isEmpty()) {
         return HoodieListPairData.lazy(Collections.emptyList());
@@ -334,12 +334,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * 3. [lookup within file groups] lookup the key in the file group
    * 4. the record is returned
    */
-  private HoodieData<HoodieRecord<HoodieMetadataPayload>> doLookupIndexRecords(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices, SerializableFunctionUnchecked<String, String> keyEncodingFn) {
+  private HoodieData<HoodieRecord<HoodieMetadataPayload>> doLookupIndexRecords(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
+                                                                               SerializableFunctionUnchecked<String, String> keyEncodingFn) {
     final int numFileSlices = fileSlices.size();
     if (numFileSlices == 1) {
-      List<String> keysList = keys.map(keyEncodingFn::apply).collectAsList();
-      TreeSet<String> distinctSortedKeys = new TreeSet<>(keysList);
-      return lookupRecords(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0));
+      return lookupRecords(partitionName, getDistinctSortedKeysForSingleSlice(keys, keyEncodingFn), fileSlices.get(0));
     }
 
     // For SI v2, there are 2 cases require different implementation:
