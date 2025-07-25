@@ -54,7 +54,29 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
   protected var hoodieBackedTableMetadata: HoodieBackedTableMetadata = _
   protected var testData: Seq[Seq[Any]] = _
   protected var tmpDir: File = _
-
+  private val createTableStmtProvider = () =>
+    s"""
+       |create table if not exists $tableName (
+       |  id string,
+       |  name string,
+       |  price double,
+       |  ts long
+       |) using hudi
+       | options (
+       |  primaryKey ='id',
+       |  type = 'cow',
+       |  preCombineField = 'ts',
+       |  hoodie.metadata.enable = 'true',
+       |  hoodie.metadata.record.index.enable = 'true',
+       |  hoodie.metadata.index.column.stats.enable = 'true',
+       |  hoodie.metadata.index.secondary.enable = 'true',
+       |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
+       |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
+       |  hoodie.write.table.version = '${getTableVersion}',
+       |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
+       | )
+       | location '$basePath'
+       """.stripMargin
   /**
    * Get the table version for this test implementation
    */
@@ -86,29 +108,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    * Ensure table exists - compensates for parent class cleanup
    */
   private def ensureTableExists(): Unit = {
-    spark.sql(
-      s"""
-         |create table if not exists $tableName (
-         |  id string,
-         |  name string,
-         |  price double,
-         |  ts long
-         |) using hudi
-         | options (
-         |  primaryKey ='id',
-         |  type = 'cow',
-         |  preCombineField = 'ts',
-         |  hoodie.metadata.enable = 'true',
-         |  hoodie.metadata.record.index.enable = 'true',
-         |  hoodie.metadata.index.column.stats.enable = 'true',
-         |  hoodie.metadata.index.secondary.enable = 'true',
-         |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
-         |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
-         |  hoodie.write.table.version = '${getTableVersion}',
-         |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
-         | )
-         | location '$basePath'
-       """.stripMargin)
+    spark.sql(createTableStmtProvider.apply())
   }
 
   /**
@@ -149,29 +149,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     spark.sql("set hoodie.embed.timeline.server=false")
 
     // Create table with specified version
-    spark.sql(
-      s"""
-         |create table $tableName (
-         |  id string,
-         |  name string,
-         |  price double,
-         |  ts long
-         |) using hudi
-         | options (
-         |  primaryKey ='id',
-         |  type = 'cow',
-         |  preCombineField = 'ts',
-         |  hoodie.metadata.enable = 'true',
-         |  hoodie.metadata.record.index.enable = 'true',
-         |  hoodie.metadata.index.column.stats.enable = 'true',
-         |  hoodie.metadata.index.secondary.enable = 'true',
-         |  hoodie.metadata.record.index.min.filegroup.count = '${getNumFileIndexGroup}',
-         |  hoodie.metadata.record.index.max.filegroup.count = '${getNumFileIndexGroup}',
-         |  hoodie.write.table.version = '${getTableVersion}',
-         |  hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'
-         | )
-         | location '$basePath'
-       """.stripMargin)
+    spark.sql(createTableStmtProvider.apply())
 
     // Insert initial test data
     spark.sql(s"insert into $tableName values('1', 'b1', 10, 1000)")
