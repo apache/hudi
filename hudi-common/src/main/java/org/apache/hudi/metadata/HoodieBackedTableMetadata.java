@@ -541,7 +541,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         baseFileReaders = Collections.singletonMap(fileSlice.getBaseFile().get().getStoragePath(), readers.getLeft());
       }
 
-      ValidationUtils.checkArgument(isFullKey, "For Metadata Table Reuse, key filter should be based on full keys");
+      ValidationUtils.checkArgument(predicate instanceof Predicates.In, "For Metadata Table Reuse, key filter should be based on full keys");
       recordBufferLoader = readers.getRight();
     }
 
@@ -640,7 +640,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
     try {
       Predicate predicate = buildPredicate(partitionName, sortedKeys, isFullKey);
-      ClosableIterator<IndexedRecord> rawIterator = readSliceWithFilter(sortedKeys, fileSlice, isFullKey);
+      ClosableIterator<IndexedRecord> rawIterator = readSliceWithFilter(predicate, fileSlice);
 
       return new CloseableMappingIterator<>(rawIterator, record -> {
         GenericRecord metadataRecord = (GenericRecord) record;
