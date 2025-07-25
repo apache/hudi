@@ -66,8 +66,7 @@ public class PartialUpdateStrategy<T> {
                                  boolean keepOldMetadataColumns) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
-    if (partialUpdateMode == PartialUpdateMode.NONE
-        || null == oldRecord
+    if (null == oldRecord
         || newRecord.isDelete()
         || oldRecord.isDelete()) {
       return newRecord;
@@ -75,7 +74,6 @@ public class PartialUpdateStrategy<T> {
 
     switch (partialUpdateMode) {
       case KEEP_VALUES:
-      case FILL_DEFAULTS:
         return newRecord;
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(

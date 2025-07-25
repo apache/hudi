@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -125,11 +124,10 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
     when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
-    PartialUpdateMode partialUpdateMode = PartialUpdateMode.NONE;
     TypedProperties props = new TypedProperties();
     UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
     return new SortedKeyBasedFileGroupRecordBuffer<>(
-        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, Option.empty(), updateProcessor);
+        mockReaderContext, mockMetaClient, recordMergeMode, Option.empty(), props, Option.empty(), updateProcessor);
   }
 
   private static List<TestRecord> getActualRecords(SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer) throws IOException {

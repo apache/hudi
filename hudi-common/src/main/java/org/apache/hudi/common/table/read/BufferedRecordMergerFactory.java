@@ -60,7 +60,7 @@ public class BufferedRecordMergerFactory {
                                                    Option<String> payloadClass,
                                                    Schema readerSchema,
                                                    TypedProperties props,
-                                                   PartialUpdateMode partialUpdateMode) {
+                                                   Option<PartialUpdateMode> partialUpdateMode) {
     /**
      * This part implements KEEP_VALUES partial update mode, which merges two records that do not have all columns.
      * Other Partial update modes, like IGNORE_DEFAULTS assume all columns exists in the record,
@@ -74,15 +74,15 @@ public class BufferedRecordMergerFactory {
 
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
-        if (partialUpdateMode == PartialUpdateMode.NONE) {
+        if (!enablePartialMerging) {
           return new CommitTimeBufferedRecordMerger<>();
         }
-        return new CommitTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
+        return new CommitTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode.get(), props);
       case EVENT_TIME_ORDERING:
-        if (partialUpdateMode == PartialUpdateMode.NONE) {
+        if (!enablePartialMerging) {
           return new EventTimeBufferedRecordMerger<>();
         }
-        return new EventTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
+        return new EventTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode.get(), props);
       default:
         if (payloadClass.isPresent()) {
           return new CustomPayloadBufferedRecordMerger<>(

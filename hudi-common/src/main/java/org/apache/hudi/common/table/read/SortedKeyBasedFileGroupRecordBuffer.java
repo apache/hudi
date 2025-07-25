@@ -46,7 +46,7 @@ public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRec
   public SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                              HoodieTableMetaClient hoodieTableMetaClient,
                                              RecordMergeMode recordMergeMode,
-                                             PartialUpdateMode partialUpdateMode,
+                                             Option<PartialUpdateMode> partialUpdateMode,
                                              TypedProperties props,
                                              Option<String> orderingFieldName,
                                              UpdateProcessor<T> updateProcessor) {

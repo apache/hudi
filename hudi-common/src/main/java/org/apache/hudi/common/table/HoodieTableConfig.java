@@ -314,12 +314,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
 
-  public static final ConfigProperty<PartialUpdateMode> PARTIAL_UPDATE_MODE = ConfigProperty
+  public static final ConfigProperty<String> PARTIAL_UPDATE_MODE = ConfigProperty
       .key("hoodie.table.partial.update.mode")
-      .defaultValue(PartialUpdateMode.NONE)
+      .defaultValue(PartialUpdateMode.KEEP_VALUES.name())
       .sinceVersion("1.1.0")
-      .withDocumentation("This property when set, will define how two versions of the record will be "
-          + "merged together where the later contains only partial set of values and not entire record.");
+      .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
   public static final ConfigProperty<String> MERGE_PROPERTIES = ConfigProperty
       .key("hoodie.table.merge.properties")
@@ -1097,12 +1096,16 @@ public class HoodieTableConfig extends HoodieConfig {
             CONFIG_VALUES_DELIMITER));
   }
 
-  public PartialUpdateMode getPartialUpdateMode() {
+  public Option<PartialUpdateMode> getPartialUpdateMode() {
     if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
-      return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
+      if (contains(PARTIAL_UPDATE_MODE)) {
+        return Option.of(PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE)));
+      } else {
+        return Option.empty();
+      }
     } else {
       // For table version <= 8, partial update is not supported.
-      return PartialUpdateMode.NONE;
+      return Option.empty();
     }
   }
 

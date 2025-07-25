@@ -164,7 +164,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private FileGroupRecordBuffer<T> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                    HoodieTableMetaClient hoodieTableMetaClient,
                                                    RecordMergeMode recordMergeMode,
-                                                   PartialUpdateMode partialUpdateMode,
+                                                   Option<PartialUpdateMode> partialUpdateMode,
                                                    TypedProperties props,
                                                    boolean isSkipMerge,
                                                    boolean shouldUseRecordPosition,

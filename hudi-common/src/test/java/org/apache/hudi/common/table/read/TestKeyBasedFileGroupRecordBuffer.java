@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
@@ -272,7 +271,7 @@ class TestKeyBasedFileGroupRecordBuffer {
     TypedProperties props = new TypedProperties();
     UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
     return new KeyBasedFileGroupRecordBuffer<>(
-        readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, orderingFieldName, updateProcessor);
+        readerContext, mockMetaClient, recordMergeMode, Option.empty(), props, orderingFieldName, updateProcessor);
   }
 
   private static List<IndexedRecord> getActualRecords(FileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer) throws IOException {
