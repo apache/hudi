@@ -18,28 +18,10 @@
 
 package org.apache.hudi.adapter;
 
-import org.apache.flink.table.catalog.Column;
-import org.apache.flink.table.connector.RowLevelModificationScanContext;
-import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
-
-import javax.annotation.Nullable;
-
-import java.util.List;
+import org.apache.flink.streaming.api.connector.sink2.SupportsPreWriteTopology;
 
 /**
- * Adapter clazz for {@link SupportsRowLevelUpdate}.
+ * Adapter clazz for {@link SupportsPreWriteTopology}.
  */
-public interface SupportsRowLevelUpdateAdapter extends SupportsRowLevelUpdate {
-  @Override
-  default RowLevelUpdateInfo applyRowLevelUpdate(List<Column> updatedColumns, @Nullable RowLevelModificationScanContext context) {
-    return applyRowLevelUpdate(updatedColumns);
-  }
-
-  RowLevelUpdateInfoAdapter applyRowLevelUpdate(List<Column> updatedColumns);
-
-  /**
-   * Adapter clazz for {@link RowLevelUpdateInfo}.
-   */
-  interface RowLevelUpdateInfoAdapter extends RowLevelUpdateInfo {
-  }
+public interface SupportsPreWriteTopologyAdapter<InputT> extends SupportsPreWriteTopology<InputT> {
 }
