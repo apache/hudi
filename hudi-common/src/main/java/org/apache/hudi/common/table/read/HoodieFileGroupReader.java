@@ -75,7 +75,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieStorage storage;
   private final TypedProperties props;
   private final ReaderParameters readerParameters;
-  private final FileGroupRecordBufferLoader<T> recordBufferInitializer;
+  private final FileGroupRecordBufferLoader<T> recordBufferLoader;
   // Core structure to store and process records.
   private HoodieFileGroupRecordBuffer<T> recordBuffer;
   private ClosableIterator<T> baseFileIterator;
@@ -106,9 +106,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
                                 Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 ReaderParameters readerParameters, InputSplit inputSplit, Option<BaseFileUpdateCallback<T>> updateCallback,
-                                FileGroupRecordBufferLoader<T> recordBufferInitializer) {
+                                FileGroupRecordBufferLoader<T> recordBufferLoader) {
     this.readerContext = readerContext;
-    this.recordBufferInitializer = recordBufferInitializer;
+    this.recordBufferLoader = recordBufferLoader;
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
@@ -154,7 +154,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
     } else {
       this.baseFileIterator = iter;
-      Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferInitializer.getRecordBuffer(
+      Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(
           readerContext, storage, inputSplit, orderingFieldName, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback);
       recordBuffer = initializationResult.getLeft();
       validBlockInstants = initializationResult.getRight();

@@ -29,12 +29,12 @@ import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -186,8 +186,8 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
       dataSchemaFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
 
-    Schema dataSchema = getSchema(dataSchemaFields);
-    Schema requestedSchema = getSchema(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    Schema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
+    Schema requestedSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
 
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(mergeMode);
@@ -225,7 +225,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     if (addHoodieIsDeleted) {
       expectedFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
-    Schema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : getSchema(expectedFields);
+    Schema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
     when(recordMerger.getMandatoryFieldsForMerging(dataSchema, tableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
     FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
@@ -236,14 +236,5 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     assertEquals(addCustomDeleteMarker
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
         fileGroupReaderSchemaHandler.getCustomDeleteMarkerKeyValue());
-  }
-
-  private Schema getSchema(List<String> fields) {
-    SchemaBuilder.FieldAssembler<Schema> schemaFieldAssembler = SchemaBuilder.builder().record("test_schema")
-        .namespace("test_namespace").fields();
-    for (String field : fields) {
-      schemaFieldAssembler = schemaFieldAssembler.name(field).type().stringType().noDefault();
-    }
-    return schemaFieldAssembler.endRecord();
   }
 }

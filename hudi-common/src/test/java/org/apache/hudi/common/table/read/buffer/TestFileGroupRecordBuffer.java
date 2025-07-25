@@ -33,12 +33,12 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.UpdateProcessor;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -131,8 +131,8 @@ class TestFileGroupRecordBuffer {
         HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
         "colA", "colB", "colC", "colD"));
 
-    Schema dataSchema = getSchema(dataSchemaFields);
-    Schema requestedSchema = getSchema(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    Schema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
+    Schema requestedSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
 
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
 
@@ -148,15 +148,6 @@ class TestFileGroupRecordBuffer {
             dataSchema, requestedSchema, Option.empty(), tableConfig, props));
     assertEquals("Either custom delete key or marker is not specified",
         exception.getMessage());
-  }
-
-  private Schema getSchema(List<String> fields) {
-    SchemaBuilder.FieldAssembler<Schema> schemaFieldAssembler = SchemaBuilder.builder().record("test_schema")
-        .namespace("test_namespace").fields();
-    for (String field : fields) {
-      schemaFieldAssembler = schemaFieldAssembler.name(field).type().stringType().noDefault();
-    }
-    return schemaFieldAssembler.endRecord();
   }
 
   private void mockDeleteRecord(DeleteRecord deleteRecord,
