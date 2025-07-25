@@ -32,8 +32,15 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.action.TableChange;
+import org.apache.hudi.internal.schema.action.TableChanges;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -1300,14 +1307,21 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
-  public static class SchemaOnReadConfigs {
+  public static class SchemaEvolutionConfigBase {
     public Schema schema = AVRO_SCHEMA;
     public boolean nestedSupport = true;
     public boolean mapSupport = true;
     public boolean arraySupport = true;
-    public boolean addNewFieldSupport = true;
     // TODO: [HUDI-9603] Flink 1.18 array values incorrect in fg reader test
     public boolean anyArraySupport = true;
+  }
+
+
+  public static class SchemaOnReadConfigs extends SchemaEvolutionConfigBase {
+    public Schema schema = AVRO_SCHEMA;
+    public int numRoundsSupported = 5;
+    public boolean addNewFieldSupport = true;
+    public boolean addNewFieldNotAtEndSupport = true;
     public boolean reorderColumnSupport = true;
     public boolean renameColumnSupport = true;
     public boolean removeColumnSupport = true;
@@ -1352,60 +1366,303 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     public boolean dateToStringSupport = true;
   }
 
+  //TODO: decide if logical types should have more cases
+  // also if we need to test evolution where the main type is the same but the logical type changes
   private enum SchemaOnReadTypePromotionCase {
-    INT_TO_INT(Schema.Type.INT, Schema.Type.INT, null, config -> true),
-    INT_TO_LONG(Schema.Type.INT, Schema.Type.LONG, null, config -> config.intToLongSupport),
-    INT_TO_FLOAT(Schema.Type.INT, Schema.Type.FLOAT, null, config -> config.intToFloatSupport),
-    INT_TO_DOUBLE(Schema.Type.INT, Schema.Type.DOUBLE, null, config -> config.intToDoubleSupport),
-    INT_TO_STRING(Schema.Type.INT, Schema.Type.STRING, null, config -> config.intToStringSupport),
-    INT_TO_DECIMAL_FIXED(Schema.Type.INT, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.intToDecimalFixedSupport),
-    INT_TO_DECIMAL_BYTES(Schema.Type.INT, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.intToDecimalBytesSupport),
-    LONG_TO_LONG(Schema.Type.LONG, Schema.Type.LONG, null, config -> true),
-    LONG_TO_FLOAT(Schema.Type.LONG, Schema.Type.FLOAT, null, config -> config.longToFloatSupport),
-    LONG_TO_DOUBLE(Schema.Type.LONG, Schema.Type.DOUBLE, null, config -> config.longToDoubleSupport),
-    LONG_TO_STRING(Schema.Type.LONG, Schema.Type.STRING, null, config -> config.longToStringSupport),
-    LONG_TO_DECIMAL_FIXED(Schema.Type.LONG, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.longToDecimalFixedSupport),
-    LONG_TO_DECIMAL_BYTES(Schema.Type.LONG, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.longToDecimalBytesSupport),
-    FLOAT_TO_FLOAT(Schema.Type.FLOAT, Schema.Type.FLOAT, null, config -> true),
-    FLOAT_TO_DOUBLE(Schema.Type.FLOAT, Schema.Type.DOUBLE, null, config -> config.floatToDoubleSupport),
-    FLOAT_TO_STRING(Schema.Type.FLOAT, Schema.Type.STRING, null, config -> config.floatToStringSupport),
-    FLOAT_TO_DECIMAL_FIXED(Schema.Type.FLOAT, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.floatToDecimalFixedSupport),
-    FLOAT_TO_DECIMAL_BYTES(Schema.Type.FLOAT, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.floatToDecimalBytesSupport),
-    DOUBLE_TO_DOUBLE(Schema.Type.DOUBLE, Schema.Type.DOUBLE, null, config -> true),
-    DOUBLE_TO_STRING(Schema.Type.DOUBLE, Schema.Type.STRING, null, config -> config.doubleToStringSupport),
-    DOUBLE_TO_DECIMAL_FIXED(Schema.Type.DOUBLE, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.doubleToDecimalFixedSupport),
-    DOUBLE_TO_DECIMAL_BYTES(Schema.Type.DOUBLE, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.doubleToDecimalBytesSupport),
-    STRING_TO_STRING(Schema.Type.STRING, Schema.Type.STRING, null, config -> true),
-    STRING_TO_DECIMAL_FIXED(Schema.Type.STRING, Schema.Type.FIXED, LogicalTypes.decimal(3, 4), config -> config.stringToDecimalFixedSupport),
-    STRING_TO_DECIMAL_BYTES(Schema.Type.STRING, Schema.Type.BYTES, LogicalTypes.decimal(3, 4), config -> config.stringToDecimalBytesSupport),
-    STRING_TO_DATE(Schema.Type.STRING, Schema.Type.INT, LogicalTypes.date(), config -> config.stringToDateSupport),
-    DECIMAL_FIXED_TO_STRING(Schema.Type.FIXED, Schema.Type.STRING, LogicalTypes.decimal(3, 4), config -> config.decimalFixedToStringSupport),
-    DECIMAL_BYTES_TO_STRING(Schema.Type.BYTES, Schema.Type.STRING, LogicalTypes.decimal(3, 4), config -> config.decimalBytesToStringSupport),
-    DATE_TO_STRING(Schema.Type.INT, Schema.Type.STRING, LogicalTypes.date(), config -> config.dateToStringSupport);
+    INT_TO_INT(Schema.Type.INT, null, Schema.Type.INT, null, config -> true),
+    INT_TO_LONG(Schema.Type.INT, null, Schema.Type.LONG, null, config -> config.intToLongSupport),
+    INT_TO_FLOAT(Schema.Type.INT, null, Schema.Type.FLOAT, null, config -> config.intToFloatSupport),
+    INT_TO_DOUBLE(Schema.Type.INT, null, Schema.Type.DOUBLE, null, config -> config.intToDoubleSupport),
+    INT_TO_STRING(Schema.Type.INT, null, Schema.Type.STRING, null, config -> config.intToStringSupport),
+    INT_TO_DECIMAL_FIXED(Schema.Type.INT, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.intToDecimalFixedSupport),
+    INT_TO_DECIMAL_BYTES(Schema.Type.INT, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.intToDecimalBytesSupport),
+    LONG_TO_LONG(Schema.Type.LONG, null, Schema.Type.LONG, null, config -> true),
+    LONG_TO_FLOAT(Schema.Type.LONG, null, Schema.Type.FLOAT, null, config -> config.longToFloatSupport),
+    LONG_TO_DOUBLE(Schema.Type.LONG, null, Schema.Type.DOUBLE, null, config -> config.longToDoubleSupport),
+    LONG_TO_STRING(Schema.Type.LONG, null, Schema.Type.STRING, null, config -> config.longToStringSupport),
+    LONG_TO_DECIMAL_FIXED(Schema.Type.LONG, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.longToDecimalFixedSupport),
+    LONG_TO_DECIMAL_BYTES(Schema.Type.LONG, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.longToDecimalBytesSupport),
+    FLOAT_TO_FLOAT(Schema.Type.FLOAT, null, Schema.Type.FLOAT, null, config -> true),
+    FLOAT_TO_DOUBLE(Schema.Type.FLOAT, null, Schema.Type.DOUBLE, null, config -> config.floatToDoubleSupport),
+    FLOAT_TO_STRING(Schema.Type.FLOAT, null, Schema.Type.STRING, null, config -> config.floatToStringSupport),
+    FLOAT_TO_DECIMAL_FIXED(Schema.Type.FLOAT, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.floatToDecimalFixedSupport),
+    FLOAT_TO_DECIMAL_BYTES(Schema.Type.FLOAT, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.floatToDecimalBytesSupport),
+    DOUBLE_TO_DOUBLE(Schema.Type.DOUBLE, null, Schema.Type.DOUBLE, null, config -> true),
+    DOUBLE_TO_STRING(Schema.Type.DOUBLE, null, Schema.Type.STRING, null, config -> config.doubleToStringSupport),
+    DOUBLE_TO_DECIMAL_FIXED(Schema.Type.DOUBLE, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.doubleToDecimalFixedSupport),
+    DOUBLE_TO_DECIMAL_BYTES(Schema.Type.DOUBLE, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.doubleToDecimalBytesSupport),
+    STRING_TO_STRING(Schema.Type.STRING, null, Schema.Type.STRING, null, config -> true),
+    STRING_TO_DECIMAL_FIXED(Schema.Type.STRING, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.stringToDecimalFixedSupport),
+    STRING_TO_DECIMAL_BYTES(Schema.Type.STRING, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.stringToDecimalBytesSupport),
+    STRING_TO_DATE(Schema.Type.STRING, null, Schema.Type.INT, LogicalTypes.date(), config -> config.stringToDateSupport),
+    DECIMAL_FIXED_TO_STRING(Schema.Type.FIXED, LogicalTypes.decimal(4, 3), Schema.Type.STRING, null, config -> config.decimalFixedToStringSupport),
+    DECIMAL_BYTES_TO_STRING(Schema.Type.BYTES, LogicalTypes.decimal(4, 3), Schema.Type.STRING, null, config -> config.decimalBytesToStringSupport),
+    DATE_TO_STRING(Schema.Type.INT, LogicalTypes.date(), Schema.Type.STRING, null, config -> config.dateToStringSupport);
 
     public final Schema.Type before;
     public final Schema.Type after;
-    public final LogicalType logicalType;
+    public final LogicalType logicalTypeBefore;
+    public final LogicalType logicalTypeAfter;
+
     public final Predicate<SchemaOnReadConfigs> isEnabled;
 
-    SchemaOnReadTypePromotionCase(Schema.Type before, Schema.Type after, LogicalType logicalType, Predicate<SchemaOnReadConfigs> isEnabled) {
+    SchemaOnReadTypePromotionCase(Schema.Type before, LogicalType logicalTypeBefore, Schema.Type after,  LogicalType logicalTypeAfter, Predicate<SchemaOnReadConfigs> isEnabled) {
       this.before = before;
+      this.logicalTypeBefore = logicalTypeBefore;
       this.after = after;
-      this.logicalType = logicalType;
+      this.logicalTypeAfter = logicalTypeAfter;
       this.isEnabled = isEnabled;
     }
   }
 
+  public InternalSchema extendSchema(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
+    List<Pair<Schema.Type, LogicalType>> baseFields = new ArrayList<>();
+    if (configs.renameColumnAsPreviouslyRemovedSupport) {
+      if (!configs.renameColumnSupport && !configs.removeColumnSupport) {
+        throw new IllegalArgumentException("renameColumnAsPreviouslyRemovedSupport requires renameColumnSupport or removeColumnSupport to be enabled");
+      }
+    }
 
+    for (int i = 0; i <= configs.numRoundsSupported; i++) {
+      for (SchemaOnReadTypePromotionCase evolution : SchemaOnReadTypePromotionCase.values()) {
+        if (evolution.isEnabled.test(configs)) {
+          if (i >= iteration) {
+            baseFields.add(Pair.of(evolution.before, evolution.logicalTypeBefore));
+          } else {
+            baseFields.add(Pair.of(evolution.after, evolution.logicalTypeAfter));
+          }
+        }
+      }
+    }
 
-  public static class SchemaOnWriteConfigs {
-    public Schema schema = AVRO_SCHEMA;
-    public boolean nestedSupport = true;
-    public boolean mapSupport = true;
-    public boolean arraySupport = true;
+    Schema tmpExtendedSchema = generateExtendedSchema(configs, baseFields);
+    InternalSchema modificationSchema = AvroInternalSchemaConverter.convert(tmpExtendedSchema);
+    if (configs.reorderColumnSupport) {
+      TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(modificationSchema);
+      for (int i = 0; i < configs.numRoundsSupported;  i++) {
+        columnAddChange.addColumns("customFieldReorder" + i, Types.StringType.get(), "");
+        if (configs.nestedSupport) {
+          columnAddChange.addColumns("fare", "customFareReorder" + i, Types.StringType.get(), "");
+        }
+        if (configs.arraySupport) {
+          columnAddChange.addColumns("customFieldArray.element", "customFieldArrayReorder" + i, Types.StringType.get(), "");
+        }
+        if (configs.mapSupport) {
+          columnAddChange.addColumns("customFieldMap.value", "customFieldMapReorder" + i, Types.StringType.get(), "");
+        }
+      }
+      modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnAddChange);
+    }
+
+    if (configs.addNewFieldNotAtEndSupport) {
+      TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(modificationSchema);
+      columnAddChange.addColumns("customFieldAdd0", Types.StringType.get(), "");
+      if (configs.nestedSupport) {
+        columnAddChange.addColumns("fare", "customFareAdd0", Types.StringType.get(), "");
+      }
+      if (configs.arraySupport) {
+        columnAddChange.addColumns("customFieldArray.element", "customFieldArrayAdd0", Types.StringType.get(), "");
+      }
+      if (configs.mapSupport) {
+        columnAddChange.addColumns("customFieldMap.value", "customFieldMapAdd0", Types.StringType.get(), "");
+      }
+      modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnAddChange);
+    }
+
+    if (configs.renameColumnSupport) {
+      TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(modificationSchema);
+      for (int i = 0; i < configs.numRoundsSupported;  i++) {
+        columnAddChange.addColumns("customFieldRename" + i + "r0", Types.StringType.get(), "");
+        if (configs.nestedSupport) {
+          columnAddChange.addColumns("fare", "customFareRename" + i + "r0", Types.StringType.get(), "");
+        }
+        if (configs.arraySupport) {
+          columnAddChange.addColumns("customFieldArray.element", "customFieldArrayRename" + i + "r0", Types.StringType.get(), "");
+        }
+        if (configs.mapSupport) {
+          columnAddChange.addColumns("customFieldMap.value", "customFieldMapRename" + i + "r0", Types.StringType.get(), "");
+        }
+      }
+      modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnAddChange);
+    }
+
+    if (configs.removeColumnSupport) {
+      TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(modificationSchema);
+      for (int i = 0; i < configs.numRoundsSupported - 1;  i++) {
+        columnAddChange.addColumns("customFieldRemove" + i, Types.StringType.get(), "");
+        if (configs.nestedSupport) {
+          columnAddChange.addColumns("fare", "customFareRemove" + i, Types.StringType.get(), "");
+        }
+        if (configs.arraySupport) {
+          columnAddChange.addColumns("customFieldArray.element", "customFieldArrayRemove" + i, Types.StringType.get(), "");
+        }
+        if (configs.mapSupport) {
+          columnAddChange.addColumns("customFieldMap.value", "customFieldMapRemove" + i, Types.StringType.get(), "");
+        }
+      }
+      modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnAddChange);
+    }
+    if (configs.renameColumnAsPreviouslyRemovedSupport) {
+      TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(modificationSchema);
+      for (int i = 0; i < configs.numRoundsSupported - 1;  i++) {
+        columnAddChange.addColumns("customFieldRemovedForRename" + i, Types.StringType.get(), "");
+        columnAddChange.addColumns("customFieldRenameToRemoved" + i, Types.StringType.get(), "");
+        if (configs.nestedSupport) {
+          columnAddChange.addColumns("fare", "customFareRemovedForRename" + i, Types.StringType.get(), "");
+          columnAddChange.addColumns("fare", "customFareRenameToRemoved" + i, Types.StringType.get(), "");
+        }
+        if (configs.arraySupport) {
+          columnAddChange.addColumns("customFieldArray.element", "customFieldArrayRemovedForRename" + i, Types.StringType.get(), "");
+          columnAddChange.addColumns("customFieldArray.element", "customFieldArrayRenameToRemoved" + i, Types.StringType.get(), "");
+        }
+        if (configs.mapSupport) {
+          columnAddChange.addColumns("customFieldMap.value", "customFieldMapRemovedForRename" + i, Types.StringType.get(), "");
+          columnAddChange.addColumns("customFieldMap.value", "customFieldMapRenameToRemoved" + i, Types.StringType.get(), "");
+        }
+      }
+      modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnAddChange);
+    }
+
+    if (configs.addNewFieldSupport) {
+      TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(modificationSchema);
+      columnAddChange.addColumns("customFieldAddEnd0", Types.StringType.get(), "");
+      if (configs.nestedSupport) {
+        columnAddChange.addColumns("fare", "customFareAddEnd0", Types.StringType.get(), "");
+      }
+      if (configs.arraySupport) {
+        columnAddChange.addColumns("customFieldArray.element", "customFieldArrayAddEnd0", Types.StringType.get(), "");
+      }
+      if (configs.mapSupport) {
+        columnAddChange.addColumns("customFieldMap.value", "customFieldMapAddEnd0", Types.StringType.get(), "");
+      }
+      modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnAddChange);
+    }
+
+    for (int i = 1; i <= iteration; i++) {
+      if (configs.reorderColumnSupport) {
+        TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(modificationSchema);
+        columnUpdateChange.addPositionChange("customFieldReorder" + (configs.numRoundsSupported - i), "customFieldReorder" + ((configs.numRoundsSupported + 1 - i) % configs.numRoundsSupported), TableChange.ColumnPositionChange.ColumnPositionType.BEFORE);
+        if (configs.nestedSupport) {
+          columnUpdateChange.addPositionChange("fare.customFareReorder" + (configs.numRoundsSupported - i), "fare.customFareReorder" + ((configs.numRoundsSupported + 1 - i) % configs.numRoundsSupported), TableChange.ColumnPositionChange.ColumnPositionType.BEFORE);
+        }
+        if (configs.arraySupport) {
+          columnUpdateChange.addPositionChange("customFieldArray.element.customFieldArrayReorder" + (configs.numRoundsSupported - i), "customFieldArray.element.customFieldArrayReorder" + ((configs.numRoundsSupported + 1 - i) % configs.numRoundsSupported), TableChange.ColumnPositionChange.ColumnPositionType.BEFORE);
+        }
+        if (configs.mapSupport) {
+          columnUpdateChange.addPositionChange("customFieldMap.value.customFieldMapReorder" + (configs.numRoundsSupported - i), "customFieldMap.value.customFieldMapReorder" + ((configs.numRoundsSupported + 1 - i) % configs.numRoundsSupported), TableChange.ColumnPositionChange.ColumnPositionType.BEFORE);
+        }
+        modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnUpdateChange);
+      }
+
+      if (configs.addNewFieldNotAtEndSupport) {
+        TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(modificationSchema);
+        columnAddChange.addColumns("customFieldAdd" + i, Types.StringType.get(), "");
+        if (configs.nestedSupport) {
+          columnAddChange.addColumns("fare", "customFareAdd" + i, Types.StringType.get(), "");
+        }
+        if (configs.arraySupport) {
+          columnAddChange.addColumns("customFieldArray.element", "customFieldArrayAdd" + i, Types.StringType.get(), "");
+        }
+        if (configs.mapSupport) {
+          columnAddChange.addColumns("customFieldMap.value", "customFieldMapAdd" + i, Types.StringType.get(), "");
+        }
+        modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnAddChange);
+
+        TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(modificationSchema);
+        columnUpdateChange.addPositionChange("customFieldAdd" + i, "customFieldAdd" + (i - 1), TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
+        if (configs.nestedSupport) {
+          columnUpdateChange.addPositionChange("fare.customFareAdd" + i, "fare.customFareAdd" + (i - 1), TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
+        }
+        if (configs.arraySupport) {
+          columnUpdateChange.addPositionChange("customFieldArray.element.customFieldArrayAdd" + i, "customFieldArray.element.customFieldArrayAdd" + (i - 1), TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
+        }
+        if (configs.mapSupport) {
+          columnUpdateChange.addPositionChange("customFieldMap.value.customFieldMapAdd" + i, "customFieldMap.value.customFieldMapAdd" + (i - 1), TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
+        }
+        modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnUpdateChange);
+      }
+
+      if (configs.renameColumnSupport) {
+        for (int j = 0; j < i; j++) {
+          TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(modificationSchema);
+          columnUpdateChange.renameColumn("customFieldRename" + j + "r" + (i - 1 - j), "customFieldRename" + j + "r" + (i - j));
+          if (configs.nestedSupport) {
+            columnUpdateChange.renameColumn("fare.customFareRename" + j + "r" + (i - 1 - j), "customFareRename" + j + "r" + (i - j));
+          }
+          if (configs.arraySupport) {
+            columnUpdateChange.renameColumn("customFieldArray.element.customFieldArrayRename" + j + "r" + (i - 1 - j), "customFieldArrayRename" + j + "r" + (i - j));
+          }
+          if (configs.mapSupport) {
+            columnUpdateChange.renameColumn("customFieldMap.value.customFieldMapRename" + j + "r" + (i - 1 - j), "customFieldMapRename" + j + "r" + (i - j));
+          }
+          modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnUpdateChange);
+        }
+      }
+
+      if (configs.removeColumnSupport) {
+        TableChanges.ColumnDeleteChange columnDeleteChange = TableChanges.ColumnDeleteChange.get(modificationSchema);
+        columnDeleteChange.deleteColumn("customFieldRemove" + (i - 1));
+        if (configs.nestedSupport) {
+          columnDeleteChange.deleteColumn("fare.customFareRemove" + (i - 1));
+        }
+        if (configs.arraySupport) {
+          columnDeleteChange.deleteColumn("customFieldArray.element.customFieldArrayRemove" + (i - 1));
+        }
+        if (configs.mapSupport) {
+          columnDeleteChange.deleteColumn("customFieldMap.value.customFieldMapRemove" + (i - 1));
+        }
+        modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnDeleteChange);
+      }
+
+      if (configs.renameColumnAsPreviouslyRemovedSupport) {
+        TableChanges.ColumnDeleteChange columnDeleteChange = TableChanges.ColumnDeleteChange.get(modificationSchema);
+        columnDeleteChange.deleteColumn("customFieldRemovedForRename" + (i - 1));
+        if (configs.nestedSupport) {
+          columnDeleteChange.deleteColumn("fare.customFareRemovedForRename" + (i - 1));
+        }
+        if (configs.arraySupport) {
+          columnDeleteChange.deleteColumn("customFieldArray.element.customFieldArrayRemovedForRename" + (i - 1));
+        }
+        if (configs.mapSupport) {
+          columnDeleteChange.deleteColumn("customFieldMap.value.customFieldMapRemovedForRename" + (i - 1));
+        }
+        modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnDeleteChange);
+
+        TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(modificationSchema);
+        columnUpdateChange.renameColumn("customFieldRenameToRemoved" + (i - 1), "customFieldRemovedForRename" + (i - 1));
+        if (configs.nestedSupport) {
+          columnUpdateChange.renameColumn("fare.customFareRenameToRemoved" + (i - 1), "customFareRemovedForRename" + (i - 1));
+        }
+        if (configs.arraySupport) {
+          columnUpdateChange.renameColumn("customFieldArray.element.customFieldArrayRenameToRemoved" + (i - 1), "customFieldArrayRemovedForRename" + (i - 1));
+        }
+        if (configs.mapSupport) {
+          columnUpdateChange.renameColumn("customFieldMap.value.customFieldMapRenameToRemoved" + (i - 1), "customFieldMapRemovedForRename" + (i - 1));
+        }
+        modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnUpdateChange);
+      }
+
+      if (configs.addNewFieldSupport) {
+        TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(modificationSchema);
+        columnAddChange.addColumns("customFieldAddEnd" + i, Types.StringType.get(), "");
+        if (configs.nestedSupport) {
+          columnAddChange.addColumns("fare", "customFareAddEnd" + i, Types.StringType.get(), "");
+        }
+        if (configs.arraySupport) {
+          columnAddChange.addColumns("customFieldArray.element", "customFieldArrayAddEnd" + i, Types.StringType.get(), "");
+        }
+        if (configs.mapSupport) {
+          columnAddChange.addColumns("customFieldMap.value", "customFieldMapAddEnd" + i, Types.StringType.get(), "");
+        }
+        modificationSchema = SchemaChangeUtils.applyTableChanges2Schema(modificationSchema, columnAddChange);
+      }
+    }
+    this.extendedSchema = Option.of(AvroInternalSchemaConverter.convert(modificationSchema, tmpExtendedSchema.getName()));
+    return modificationSchema;
+  }
+
+  public static class SchemaOnWriteConfigs extends SchemaEvolutionConfigBase {
     public boolean addNewFieldSupport = true;
-    // TODO: [HUDI-9603] Flink 1.18 array values incorrect in fg reader test
-    public boolean anyArraySupport = true;
 
     // Int
     public boolean intToLongSupport = true;
@@ -1464,19 +1721,19 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   }
 
   public void extendSchema(SchemaOnWriteConfigs configs, boolean isBefore) {
-    List<Schema.Type> baseFields = new ArrayList<>();
+    List<Pair<Schema.Type, LogicalType>> baseFields = new ArrayList<>();
     for (SchemaOnWriteTypePromotionCase evolution : SchemaOnWriteTypePromotionCase.values()) {
       if (evolution.isEnabled.test(configs)) {
-        baseFields.add(isBefore ? evolution.before : evolution.after);
+        baseFields.add(Pair.of(isBefore ? evolution.before : evolution.after, null));
       }
     }
 
     // Add new field if we are testing adding new fields
     if (!isBefore && configs.addNewFieldSupport) {
-      baseFields.add(Schema.Type.BOOLEAN);
+      baseFields.add(Pair.of(Schema.Type.BOOLEAN, null));
     }
 
-    this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields)));
+    this.extendedSchema = Option.of(generateExtendedSchema(configs, baseFields));
   }
 
   public void extendSchemaBeforeEvolution(SchemaOnWriteConfigs configs) {
@@ -1491,11 +1748,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return extendedSchema.orElseThrow(IllegalArgumentException::new);
   }
 
-  private static Schema generateExtendedSchema(SchemaOnWriteConfigs configs, List<Schema.Type> baseFields) {
+  private static Schema generateExtendedSchema(SchemaEvolutionConfigBase configs, List<Pair<Schema.Type, LogicalType>> baseFields) {
     return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, SchemaOnWriteConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
+  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigBase configs, List<Pair<Schema.Type, LogicalType>> baseFields, String fieldPrefix, boolean toplevel) {
     List<Schema.Field> fields =  baseSchema.getFields();
     List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
     boolean addedFields = false;
@@ -1520,7 +1777,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return finalSchema;
   }
 
-  private static void addFields(SchemaOnWriteConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
+  private static void addFields(SchemaEvolutionConfigBase configs, List<Schema.Field> finalFields, List<Pair<Schema.Type, LogicalType>> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
     if (toplevel) {
       if (configs.mapSupport) {
         List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
@@ -1537,13 +1794,32 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     addFieldsHelper(finalFields, baseFields, fieldPrefix);
   }
 
-  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix) {
+  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Pair<Schema.Type, LogicalType>> baseFields, String fieldPrefix) {
     for (int i = 0; i < baseFields.size(); i++) {
-      if (baseFields.get(i) == Schema.Type.BOOLEAN) {
-        // boolean fields are added fields
-        finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
+      if (baseFields.get(i).getRight() == null) {
+        if (baseFields.get(i).getLeft() == Schema.Type.BOOLEAN) {
+          // boolean fields are added fields
+          finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
+        } else {
+          finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i).getLeft()), "", null));
+        }
       } else {
-        finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i)), "", null));
+        if (baseFields.get(i).getRight() instanceof LogicalTypes.Decimal) {
+          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) baseFields.get(i).getRight();
+          Schema fieldSchema;
+          if (baseFields.get(i).getLeft() == Schema.Type.FIXED) {
+            fieldSchema = Schema.createFixed(fieldPrefix + i, "", "", 30);
+          } else {
+            fieldSchema = Schema.create(baseFields.get(i).getLeft());
+          }
+
+          finalFields.add(new Schema.Field(fieldPrefix + i, LogicalTypes.decimal(decimal.getPrecision(), decimal.getScale()).addToSchema(fieldSchema), "", null));
+        } else if (baseFields.get(i).getRight() instanceof LogicalTypes.Date) {
+          Schema fieldSchema = LogicalTypes.date().addToSchema(Schema.create(baseFields.get(i).getLeft()));
+          finalFields.add(new Schema.Field(fieldPrefix + i, fieldSchema, "", null));
+        } else {
+          throw new IllegalStateException("Unsupported logical type: " + baseFields.get(i).getRight());
+        }
       }
     }
   }

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
@@ -227,6 +228,24 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         throw new RuntimeException(e);
       }
     }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), r.getData())).collect(Collectors.toList());
+  }
+
+  @Test
+  public void testMyDatagen() {
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
+      HoodieTestDataGenerator.SchemaOnReadConfigs schemaOnReadConfigs = new HoodieTestDataGenerator.SchemaOnReadConfigs();
+      InternalSchema round0 = dataGen.extendSchema(schemaOnReadConfigs, 0);
+      Schema avroSchema0 = dataGen.getExtendedSchema();
+      InternalSchema round1 = dataGen.extendSchema(schemaOnReadConfigs, 1);
+      Schema avroSchema1 = dataGen.getExtendedSchema();
+      InternalSchema round2 = dataGen.extendSchema(schemaOnReadConfigs, 2);
+      Schema avroSchema2 = dataGen.getExtendedSchema();
+      InternalSchema round3 = dataGen.extendSchema(schemaOnReadConfigs, 3);
+      Schema avroSchema3 = dataGen.getExtendedSchema();
+      InternalSchema round4 = dataGen.extendSchema(schemaOnReadConfigs, 4);
+      Schema avroSchema4 = dataGen.getExtendedSchema();
+      InternalSchema round5 = dataGen.extendSchema(schemaOnReadConfigs, 5);
+    }
   }
 
   /**
