@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Predicates;
 
@@ -107,29 +108,37 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
-    throw new UnsupportedOperationException("Reusable record buffer does not perform the processing of the data blocks");
+    throw new HoodieNotSupportedException("Reusable record buffer does not perform the processing of the data blocks");
   }
 
   @Override
   public void processNextDataRecord(BufferedRecord<T> record, Serializable index) {
-    throw new UnsupportedOperationException("Reusable record buffer does not process the data records from the logs");
+    throw new HoodieNotSupportedException("Reusable record buffer does not process the data records from the logs");
 
   }
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
-    throw new UnsupportedOperationException("Reusable record buffer does not perform the processing of the delete blocks");
+    throw new HoodieNotSupportedException("Reusable record buffer does not perform the processing of the delete blocks");
 
   }
 
   @Override
   public void processNextDeletedRecord(DeleteRecord record, Serializable index) {
-    throw new UnsupportedOperationException("Reusable record buffer does not process the delete records from the logs");
+    throw new HoodieNotSupportedException("Reusable record buffer does not process the delete records from the logs");
   }
 
   @Override
   public boolean containsLogRecord(String recordKey) {
     return validKeys.contains(recordKey) && existingRecords.containsKey(recordKey);
+  }
+
+  /**
+   * The close method is a no-op for this buffer implementation since the record map is managed by the {@link ReusableFileGroupRecordBufferLoader<T>}.
+   */
+  @Override
+  public void close() {
+    // no-op
   }
 
   private static class RemainingRecordIterator<T> implements Iterator<T> {
