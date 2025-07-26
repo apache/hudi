@@ -177,6 +177,13 @@ public class KafkaSourceConfig extends HoodieConfig {
           + "OffsetOutOfRange exception, as it is possible that the earliest Kafka offsets may "
           + "expire soon while the job is progressing.");
 
+  public static final ConfigProperty<String> IGNORE_PREFIX_CONFIG_LIST = ConfigProperty
+      .key(PREFIX + "ignore.prefix.config.list")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Comma-separated list of prefixes for config keys that should be dropped from the configs when passed to the Kafka consumer.");
+
   /**
    * Kafka reset offset strategies.
    */

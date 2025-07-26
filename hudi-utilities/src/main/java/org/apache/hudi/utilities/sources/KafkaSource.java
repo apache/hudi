@@ -20,7 +20,9 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
@@ -32,21 +34,28 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.streaming.kafka010.KafkaUtils;
+import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 
 public abstract class KafkaSource<T> extends Source<T> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
+  private static final String COMMA_DELIMITER = ",";
   // these are native kafka's config. do not change the config names.
   protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   protected static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
@@ -128,6 +137,29 @@ public abstract class KafkaSource<T> extends Source<T> {
     return new InputBatch<>(Option.of(newBatch), KafkaOffsetGen.CheckpointUtils.offsetsToStr(offsetRanges));
   }
 
+  /**
+   * Creates a Kafka RDD with the specified key-value deserialization types.
+   *
+   * @param props        Configuration properties for the Kafka source, including topic, bootstrap servers, etc.
+   * @param sparkContext Spark context used to create the RDD.
+   * @param offsetGen    Generator that provides Kafka parameters and helps map offset ranges.
+   * @param offsetRanges Kafka offset ranges to read data from.
+   *
+   * @param <K>          Type of the Kafka record key.
+   * @param <V>          Type of the Kafka record value.
+   * @return JavaRDD containing Kafka ConsumerRecord entries with deserialized key-value pairs.
+   */
+  public static <K, V> JavaRDD<ConsumerRecord<K, V>> createKafkaRDD(
+      TypedProperties props,
+      JavaSparkContext sparkContext,
+      KafkaOffsetGen offsetGen,
+      OffsetRange[] offsetRanges) {
+    Map<String, Object> kafkaParams =
+        filterKafkaParameters(offsetGen.getKafkaParams(), ConfigUtils.getStringWithAltKeys(props, KafkaSourceConfig.IGNORE_PREFIX_CONFIG_LIST, true));
+    LOG.debug("Original kafka params " + offsetGen.getKafkaParams() + "\n After filtering kafka params " + kafkaParams);
+    return KafkaUtils.createRDD(sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent());
+  }
+
   protected abstract T toBatch(OffsetRange[] offsetRanges);
 
   @Override
@@ -135,6 +167,42 @@ public abstract class KafkaSource<T> extends Source<T> {
     if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET)) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
+  }
+
+  /**
+  * Utility method that removes configs with keys that match (start with) any one of the prefixes.
+  *
+  * @param kafkaParams The incoming kafka params
+  * @param commaSeparatedPrefixes all configs with keys starting with any one of these comma-separated prefixes will be ignored.
+  * @return a new set of kafkaParams with the configs matching the prefixes removed.
+  **/
+  @VisibleForTesting
+  static Map<String, Object> filterKafkaParameters(Map<String, Object> kafkaParams, String commaSeparatedPrefixes) {
+    if (commaSeparatedPrefixes == null || commaSeparatedPrefixes.isEmpty()) {
+      return kafkaParams;
+    }
+
+    String[] prefixes = Arrays.stream(commaSeparatedPrefixes.split(COMMA_DELIMITER))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .toArray(String[]::new);
+
+    Map<String, Object> filteredInParams = new HashMap<>();
+    for (Map.Entry<String, Object> entry : kafkaParams.entrySet()) {
+      boolean beginsWithAtleastOnePrefix = false;
+      for (String prefix : prefixes) {
+        if (entry.getKey().startsWith(prefix)) {
+          beginsWithAtleastOnePrefix = true;
+          break;
+        }
+      }
+
+      if (!beginsWithAtleastOnePrefix) {
+        filteredInParams.put(entry.getKey(), entry.getValue());
+      }
+    }
+
+    return filteredInParams;
   }
 
   private boolean hasConfigException(Throwable e) {
