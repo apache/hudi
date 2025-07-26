@@ -38,7 +38,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.

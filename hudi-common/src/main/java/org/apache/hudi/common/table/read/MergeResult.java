@@ -30,11 +30,11 @@ public class MergeResult<T> {
     this.mergedRecord = mergedRecord;
   }
 
-  boolean isDelete() {
+  public boolean isDelete() {
     return isDelete;
   }
 
-  T getMergedRecord() {
+  public T getMergedRecord() {
     return mergedRecord;
   }
 }

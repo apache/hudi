@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -278,8 +279,8 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
       BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldNames, false);
-      MergeResult<T> isDeleteAndRecord = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
-      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, isDeleteAndRecord.getMergedRecord(), isDeleteAndRecord.isDelete());
+      MergeResult<T> mergeResult = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
+      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, mergeResult.getMergedRecord(), mergeResult.isDelete());
       return nextRecord != null;
     }
 
