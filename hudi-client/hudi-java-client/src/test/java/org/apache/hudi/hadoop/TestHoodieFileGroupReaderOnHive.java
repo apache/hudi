@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderOnJavaTestBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.SchemaOnReadEvolutionTestUtils;
 import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -113,7 +114,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
   }
 
   @Override
-  public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaEvolutionConfigs() {
+  public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaOnWriteConfigs() {
     SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs = new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
     configs.nestedSupport = false;
     configs.arraySupport = false;
@@ -132,6 +133,11 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     configs.stringToBytesSupport = false;
     configs.bytesToStringSupport = false;
     return configs;
+  }
+
+  @Override
+  public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
+    return null;
   }
 
   private void setupJobconf(JobConf jobConf, Schema schema) {

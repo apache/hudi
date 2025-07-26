@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFil
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.SchemaOnWriteConfigs
-import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.testutils.{HoodieTestUtils, SchemaOnReadEvolutionTestUtils}
 import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -433,7 +433,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     assertArrayMatchesSchema(schema.valueType, map.valueArray())
   }
 
-  override def getSchemaEvolutionConfigs: SchemaOnWriteConfigs = {
+  override def getSchemaOnWriteConfigs: SchemaOnWriteConfigs = {
     val configs = new SchemaOnWriteConfigs()
     configs.floatToDoubleSupport = false
     configs
@@ -478,6 +478,12 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)
     schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(schema, historySchemaStr))
     client.commit(instantTime, jsc.emptyRDD, HOption.of(extraMeta))
+  }
+
+  override def getSchemaOnReadConfigs: SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs = {
+    val configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs()
+    configs.floatToDoubleSupport = false
+    configs
   }
 }
 

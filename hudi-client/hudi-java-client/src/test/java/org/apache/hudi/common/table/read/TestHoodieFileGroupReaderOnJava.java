@@ -24,6 +24,7 @@ import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.SchemaOnReadEvolutionTestUtils;
 import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -60,9 +61,14 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
   }
 
   @Override
-  public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaEvolutionConfigs() {
+  public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaOnWriteConfigs() {
     SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs = new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
     configs.addNewFieldSupport = true;
     return configs;
+  }
+
+  @Override
+  public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
+    return null;
   }
 }

@@ -31,7 +31,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 
-public class SchemaEvolutionTestUtilsBase {
+class SchemaEvolutionTestUtilsBase {
   public static class SchemaEvolutionConfigBase {
     public Schema schema = AVRO_SCHEMA;
     public boolean nestedSupport = true;
@@ -41,7 +41,7 @@ public class SchemaEvolutionTestUtilsBase {
     public boolean anyArraySupport = true;
   }
 
-  public static Schema generateExtendedSchema(SchemaEvolutionConfigBase configs, List<Pair<Schema.Type, LogicalType>> baseFields) {
+  protected static Schema generateExtendedSchema(SchemaEvolutionConfigBase configs, List<Pair<Schema.Type, LogicalType>> baseFields) {
     return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
   }
 

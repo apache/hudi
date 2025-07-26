@@ -39,26 +39,25 @@ import java.util.function.Predicate;
 
 public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase {
 
-  public static InternalSchema extendSchema(SchemaOnReadConfigs configs, int iteration) {
+  public static InternalSchema generateExtendedSchema(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
     validateConfigs(configs);
 
-    List<Pair<Schema.Type, LogicalType>> baseFields = buildBaseFieldsList(configs, iteration);
+    List<Pair<Schema.Type, LogicalType>> baseFields = buildBaseFieldsList(configs, iteration, maxIterations);
     Schema tmpExtendedSchema = generateExtendedSchema(configs, baseFields);
     InternalSchema modificationSchema = AvroInternalSchemaConverter.convert(tmpExtendedSchema);
 
     SchemaModifier modifier = new SchemaModifier(configs);
 
     // Apply initial schema modifications
-    modificationSchema = addInitialFields(modificationSchema, configs, modifier);
+    modificationSchema = addInitialFields(modificationSchema, configs, maxIterations, modifier);
 
     // Apply iterative modifications
-    modificationSchema = applyIterativeModifications(modificationSchema, configs, modifier, iteration);
+    modificationSchema = applyUpdates(modificationSchema, configs, modifier, iteration, maxIterations);
 
     return modificationSchema;
   }
 
   public static class SchemaOnReadConfigs extends SchemaEvolutionTestUtilsBase.SchemaEvolutionConfigBase {
-    public int numRoundsSupported = 5;
     public boolean addNewFieldSupport = true;
     public boolean addNewFieldNotAtEndSupport = true;
     public boolean reorderColumnSupport = true;
@@ -199,13 +198,13 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     );
 
     private final Function<SchemaOnReadConfigs, Boolean> isEnabled;
-    private final TriFunction<InternalSchema, SchemaOnReadConfigs, SchemaModifier, InternalSchema> initializationFunction;
-    private final QuadFunction<InternalSchema, SchemaOnReadConfigs, SchemaModifier, Integer, InternalSchema> updateFunction;
+    private final TriFunction<InternalSchema, Integer, SchemaModifier, InternalSchema> initializationFunction;
+    private final QuadFunction<InternalSchema, SchemaModifier, Integer, Integer, InternalSchema> updateFunction;
 
     SchemaOnReadStructuralCase(
         Function<SchemaOnReadConfigs, Boolean> isEnabled,
-        TriFunction<InternalSchema, SchemaOnReadConfigs, SchemaModifier, InternalSchema> initializationFunction,
-        QuadFunction<InternalSchema, SchemaOnReadConfigs, SchemaModifier, Integer, InternalSchema> updateFunction) {
+        TriFunction<InternalSchema, Integer, SchemaModifier, InternalSchema> initializationFunction,
+        QuadFunction<InternalSchema, SchemaModifier, Integer, Integer, InternalSchema> updateFunction) {
       this.isEnabled = isEnabled;
       this.initializationFunction = initializationFunction;
       this.updateFunction = updateFunction;
@@ -215,12 +214,12 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       return Boolean.TRUE.equals(isEnabled.apply(configs)); // Avoid NPE
     }
 
-    public InternalSchema applyInitialization(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-      return initializationFunction.apply(schema, configs, modifier);
+    public InternalSchema applyInitialization(InternalSchema schema, int maxIterations, SchemaModifier modifier) {
+      return initializationFunction.apply(schema, maxIterations, modifier);
     }
 
-    public InternalSchema applyUpdate(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier, int iteration) {
-      return updateFunction.apply(schema, configs, modifier, iteration);
+    public InternalSchema applyUpdate(InternalSchema schema, SchemaModifier modifier, int iteration, int maxIterations) {
+      return updateFunction.apply(schema, modifier, iteration, maxIterations);
     }
 
 
@@ -234,6 +233,187 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       R apply(A a, B b, C c);
     }
   }
+
+  private static void validateConfigs(SchemaOnReadConfigs configs) {
+    if (configs.renameColumnAsPreviouslyRemovedSupport) {
+      if (!configs.renameColumnSupport && !configs.removeColumnSupport) {
+        throw new IllegalArgumentException(
+            "renameColumnAsPreviouslyRemovedSupport requires renameColumnSupport or removeColumnSupport to be enabled");
+      }
+    }
+
+    if (configs.arraySupport) {
+      if (!configs.anyArraySupport) {
+        throw new IllegalArgumentException("arraySupport requires anyArraySupport to be enabled");
+      }
+    }
+  }
+
+  private static List<Pair<Schema.Type, LogicalType>> buildBaseFieldsList(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
+    List<Pair<Schema.Type, LogicalType>> baseFields = new ArrayList<>();
+    for (int i = 0; i < maxIterations; i++) {
+      for (SchemaOnReadTypePromotionCase evolution : SchemaOnReadTypePromotionCase.values()) {
+        if (evolution.isEnabled.test(configs)) {
+          if (i >= iteration) {
+            baseFields.add(Pair.of(evolution.before, evolution.logicalTypeBefore));
+          } else {
+            baseFields.add(Pair.of(evolution.after, evolution.logicalTypeAfter));
+          }
+        }
+      }
+    }
+    return baseFields;
+  }
+
+  private static InternalSchema addInitialFields(InternalSchema schema, SchemaOnReadConfigs configs, Integer maxIterations, SchemaModifier modifier) {
+    InternalSchema result = schema;
+
+    for (SchemaOnReadStructuralCase strategy : SchemaOnReadStructuralCase.values()) {
+      if (strategy.enabled(configs)) {
+        result = strategy.applyInitialization(result, maxIterations, modifier);
+      }
+    }
+
+    return result;
+  }
+
+  private static InternalSchema addInitialReorderFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
+    // Collects all FieldNameHolders into a list
+    List<FieldNameHolder> fieldNamesList = new ArrayList<>();
+    for (int i = 0; i < maxIterations; i++) {
+      fieldNamesList.add(FieldNames.reorderField(i));
+    }
+    // Calls new modifier method that takes schema and List<FieldNameHolder>
+    return modifier.addFields(schema, fieldNamesList);
+  }
+
+  private static InternalSchema addInitialNonEndFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
+    return modifier.addFields(schema, Collections.singletonList(FieldNames.addField(0)));
+  }
+
+  private static InternalSchema addInitialRenameFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
+    List<FieldNameHolder> renameFields = new ArrayList<>(maxIterations);
+    for (int i = 0; i < maxIterations; i++) {
+      renameFields.add(FieldNames.renameField(i, 0));
+    }
+
+    return modifier.addFields(schema, renameFields);
+  }
+
+  private static InternalSchema addInitialRemoveFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
+    List<FieldNameHolder> removeFields = new ArrayList<>(maxIterations - 1);
+    for (int i = 0; i < maxIterations - 1; i++) {
+      removeFields.add(FieldNames.removeField(i));
+    }
+    return modifier.addFields(schema, removeFields);
+  }
+
+  private static InternalSchema addInitialRenameAsRemovedFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
+    List<FieldNameHolder> renameAsRemovedFields = new ArrayList<>(maxIterations - 1);
+    for (int i = 0; i < maxIterations - 1; i++) {
+      renameAsRemovedFields.add(FieldNames.removedForRenameField(i));
+      renameAsRemovedFields.add(FieldNames.renameToRemovedField(i));
+    }
+    return modifier.addFields(schema, renameAsRemovedFields);
+  }
+
+  private static InternalSchema addInitialEndFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
+    return modifier.addFields(schema, Collections.singletonList(FieldNames.addEndField(0)));
+  }
+
+  private static InternalSchema applyUpdates(InternalSchema schema, SchemaOnReadConfigs configs,
+                                             SchemaModifier modifier, int iteration, int maxIterations) {
+    InternalSchema result = schema;
+    for (int i = 1; i <= iteration; i++) {
+      result = applyUpdateIteration(result, configs, modifier, i, maxIterations);
+    }
+    return result;
+  }
+
+
+
+  private static InternalSchema applyUpdateIteration(InternalSchema schema, SchemaOnReadConfigs configs,
+                                                     SchemaModifier modifier, int iteration, int maxIterations) {
+    InternalSchema result = schema;
+
+    for (SchemaOnReadStructuralCase strategy : SchemaOnReadStructuralCase.values()) {
+      if (strategy.enabled(configs)) {
+        result = strategy.applyUpdate(result, modifier, iteration, maxIterations);
+      }
+    }
+
+    return result;
+  }
+
+  private static InternalSchema applyReorderModifications(InternalSchema schema, SchemaModifier modifier,
+                                                          int iteration, int maxIterations) {
+    int sourceIndex = maxIterations - iteration;
+    int targetIndex = (maxIterations + 1 - iteration) % maxIterations;
+
+    FieldNameHolder sourceFields = FieldNames.reorderField(sourceIndex);
+    FieldNameHolder targetFields = FieldNames.reorderField(targetIndex);
+
+    return modifier.repositionFields(schema, sourceFields, targetFields,
+        TableChange.ColumnPositionChange.ColumnPositionType.BEFORE);
+  }
+
+  private static InternalSchema applyNonEndFieldModifications(InternalSchema schema, SchemaModifier modifier,
+                                                              int iteration, int maxIterations) {
+    // Add new fields
+    InternalSchema tempSchema = modifier.addFields(schema, Collections.singletonList(FieldNames.addField(iteration)));
+
+    // Position the new fields
+    FieldNameHolder currentFields = FieldNames.addField(iteration);
+    FieldNameHolder previousFields = FieldNames.addField(iteration - 1);
+
+   return modifier.repositionFields(tempSchema,
+        currentFields, previousFields,
+        TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
+  }
+
+  private static InternalSchema applyRenameModifications(InternalSchema schema, SchemaModifier modifier,
+                                                         int iteration, int maxIterations) {
+    InternalSchema result = schema;
+
+    for (int j = 0; j < iteration; j++) {
+      int oldRevision = iteration - 1 - j;
+      int newRevision = iteration - j;
+      FieldNameHolder oldFields = FieldNames.renameField(j, oldRevision);
+      FieldNameHolder newFields = FieldNames.renameField(j, newRevision);
+      result = modifier.renameFields(result, oldFields, newFields);
+    }
+
+    return result;
+  }
+
+  private static InternalSchema applyRemoveModifications(InternalSchema schema, SchemaModifier modifier,
+                                                         int iteration, int maxIterations) {
+    int indexToRemove = iteration - 1;
+    FieldNameHolder fieldsToRemove = FieldNames.removeField(indexToRemove);
+    return modifier.deleteFields(schema, fieldsToRemove);
+  }
+
+  private static InternalSchema applyRenameAsRemovedModifications(InternalSchema schema, SchemaModifier modifier,
+                                                                  int iteration, int maxIterations) {
+    int index = iteration - 1;
+
+    // First delete the fields
+    FieldNameHolder fieldsToDelete = FieldNames.removedForRenameField(index);
+    InternalSchema tempSchema = modifier.deleteFields(schema, fieldsToDelete);
+
+    // Then rename the other fields
+    FieldNameHolder oldFields = FieldNames.renameToRemovedField(index);
+    FieldNameHolder newFields = FieldNames.removedForRenameField(index);
+
+    return modifier.renameFields(tempSchema, oldFields, newFields);
+  }
+
+  private static InternalSchema applyEndFieldModifications(InternalSchema schema, SchemaModifier modifier,
+                                                           int iteration, int maxIterations) {
+    FieldNameHolder endFields = FieldNames.addEndField(iteration);
+    return modifier.addFields(schema, Collections.singletonList(endFields));
+  }
+
 
   private static class FieldNameHolder {
     public final String baseFieldName;
@@ -249,7 +429,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     }
   }
 
-  // Field name generators for better maintainability
+  // Field name generators for test cases
   private static class FieldNames {
 
     // Helper method to create FieldNameHolder with consistent naming pattern
@@ -262,36 +442,43 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       );
     }
 
+    // for SchemaOnReadStructuralCase.REORDER_COLUMNS
     static FieldNameHolder reorderField(int i) {
       return createFieldNameHolder("Reorder", String.valueOf(i));
     }
 
+    // for SchemaOnReadStructuralCase.ADD_FIELD_NOT_AT_END
     static FieldNameHolder addField(int i) {
       return createFieldNameHolder("Add", String.valueOf(i));
     }
 
-    static FieldNameHolder addEndField(int i) {
-      return createFieldNameHolder("AddEnd", String.valueOf(i));
-    }
-
+    // for SchemaOnReadStructuralCase.RENAME_COLUMN
     static FieldNameHolder renameField(int i, int revision) {
       return createFieldNameHolder("Rename", i + "r" + revision);
     }
 
+    // for SchemaOnReadStructuralCase.REMOVE_COLUMN
     static FieldNameHolder removeField(int i) {
       return createFieldNameHolder("Remove", String.valueOf(i));
     }
 
+    // for SchemaOnReadStructuralCase.RENAME_AS_REMOVED
     static FieldNameHolder removedForRenameField(int i) {
       return createFieldNameHolder("RemovedForRename", String.valueOf(i));
     }
 
+    // also for SchemaOnReadStructuralCase.RENAME_AS_REMOVED
     static FieldNameHolder renameToRemovedField(int i) {
       return createFieldNameHolder("RenameToRemoved", String.valueOf(i));
     }
+
+    // for SchemaOnReadStructuralCase.ADD_FIELD_AT_END
+    static FieldNameHolder addEndField(int i) {
+      return createFieldNameHolder("AddEnd", String.valueOf(i));
+    }
   }
 
-  // Helper class to reduce repetitive code
+  // Apply base, nested, array and map modifications at once
   private static class SchemaModifier {
     private final SchemaOnReadConfigs configs;
 
@@ -330,7 +517,6 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
 
     private InternalSchema addFields(InternalSchema schema, List<FieldNameHolder> fieldNamesList) {
       TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
-
       for (FieldNameHolder fieldNames : fieldNamesList) {
         for (StructureType structure : StructureType.values()) {
           if (structure.isEnabled(configs)) {
@@ -343,7 +529,6 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
           }
         }
       }
-
       return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
     }
 
@@ -359,8 +544,8 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     }
 
     private InternalSchema renameFields(InternalSchema schema,
-                                       FieldNameHolder oldFieldNames,
-                                       FieldNameHolder newFieldNames) {
+                                        FieldNameHolder oldFieldNames,
+                                        FieldNameHolder newFieldNames) {
       TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(schema);
       for (StructureType structure : StructureType.values()) {
         if (structure.isEnabled(configs)) {
@@ -369,14 +554,13 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
           columnUpdateChange.renameColumn(structure.prefix + oldFieldName, newFieldName);
         }
       }
-
       return SchemaChangeUtils.applyTableChanges2Schema(schema, columnUpdateChange);
     }
 
     private InternalSchema repositionFields(InternalSchema schema,
-                                           FieldNameHolder fieldNames,
-                                           FieldNameHolder refFieldNames,
-                                           TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+                                            FieldNameHolder fieldNames,
+                                            FieldNameHolder refFieldNames,
+                                            TableChange.ColumnPositionChange.ColumnPositionType positionType) {
       TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(schema);
       for (StructureType structure : StructureType.values()) {
         if (structure.isEnabled(configs)) {
@@ -390,181 +574,5 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       }
       return SchemaChangeUtils.applyTableChanges2Schema(schema, columnUpdateChange);
     }
-  }
-
-
-
-  private static void validateConfigs(SchemaOnReadConfigs configs) {
-    if (configs.renameColumnAsPreviouslyRemovedSupport) {
-      if (!configs.renameColumnSupport && !configs.removeColumnSupport) {
-        throw new IllegalArgumentException(
-            "renameColumnAsPreviouslyRemovedSupport requires renameColumnSupport or removeColumnSupport to be enabled");
-      }
-    }
-  }
-
-  private static List<Pair<Schema.Type, LogicalType>> buildBaseFieldsList(SchemaOnReadConfigs configs, int iteration) {
-    List<Pair<Schema.Type, LogicalType>> baseFields = new ArrayList<>();
-    for (int i = 0; i < configs.numRoundsSupported; i++) {
-      for (SchemaOnReadTypePromotionCase evolution : SchemaOnReadTypePromotionCase.values()) {
-        if (evolution.isEnabled.test(configs)) {
-          if (i >= iteration) {
-            baseFields.add(Pair.of(evolution.before, evolution.logicalTypeBefore));
-          } else {
-            baseFields.add(Pair.of(evolution.after, evolution.logicalTypeAfter));
-          }
-        }
-      }
-    }
-    return baseFields;
-  }
-
-  private static InternalSchema addInitialFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    InternalSchema result = schema;
-
-    for (SchemaOnReadStructuralCase strategy : SchemaOnReadStructuralCase.values()) {
-      if (strategy.enabled(configs)) {
-        result = strategy.applyInitialization(result, configs, modifier);
-      }
-    }
-
-    return result;
-  }
-
-  private static InternalSchema addInitialReorderFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    // Collects all FieldNameHolders into a list
-    List<FieldNameHolder> fieldNamesList = new ArrayList<>();
-    for (int i = 0; i < configs.numRoundsSupported; i++) {
-      fieldNamesList.add(FieldNames.reorderField(i));
-    }
-    // Calls new modifier method that takes schema and List<FieldNameHolder>
-    return modifier.addFields(schema, fieldNamesList);
-  }
-
-  private static InternalSchema addInitialNonEndFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    return modifier.addFields(schema, Collections.singletonList(FieldNames.addField(0)));
-  }
-
-  private static InternalSchema addInitialRenameFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    List<FieldNameHolder> renameFields = new ArrayList<>(configs.numRoundsSupported );
-    for (int i = 0; i < configs.numRoundsSupported; i++) {
-      renameFields.add(FieldNames.renameField(i, 0));
-    }
-
-    return modifier.addFields(schema, renameFields);
-  }
-
-  private static InternalSchema addInitialRemoveFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    List<FieldNameHolder> removeFields = new ArrayList<>(configs.numRoundsSupported - 1);
-    for (int i = 0; i < configs.numRoundsSupported - 1; i++) {
-      removeFields.add(FieldNames.removeField(i));
-    }
-    return modifier.addFields(schema, removeFields);
-  }
-
-  private static InternalSchema addInitialRenameAsRemovedFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    List<FieldNameHolder> renameAsRemovedFields = new ArrayList<>(configs.numRoundsSupported - 1);
-    for (int i = 0; i < configs.numRoundsSupported - 1; i++) {
-      renameAsRemovedFields.add(FieldNames.removedForRenameField(i));
-      renameAsRemovedFields.add(FieldNames.renameToRemovedField(i));
-    }
-    return modifier.addFields(schema, renameAsRemovedFields);
-  }
-
-  private static InternalSchema addInitialEndFields(InternalSchema schema, SchemaOnReadConfigs configs, SchemaModifier modifier) {
-    return modifier.addFields(schema, Collections.singletonList(FieldNames.addEndField(0)));
-  }
-
-  private static InternalSchema applyIterativeModifications(InternalSchema schema, SchemaOnReadConfigs configs,
-                                                     SchemaModifier modifier, int iteration) {
-    InternalSchema result = schema;
-    for (int i = 1; i <= iteration; i++) {
-      result = applyIterationModifications(result, configs, modifier, i);
-    }
-    return result;
-  }
-
-
-
-  private static InternalSchema applyIterationModifications(InternalSchema schema, SchemaOnReadConfigs configs,
-                                                     SchemaModifier modifier, int iteration) {
-    InternalSchema result = schema;
-
-    for (SchemaOnReadStructuralCase strategy : SchemaOnReadStructuralCase.values()) {
-      if (strategy.enabled(configs)) {
-        result = strategy.applyUpdate(result, configs, modifier, iteration);
-      }
-    }
-
-    return result;
-  }
-
-  private static InternalSchema applyReorderModifications(InternalSchema schema, SchemaOnReadConfigs configs,
-                                                          SchemaModifier modifier, int iteration) {
-    int sourceIndex = configs.numRoundsSupported - iteration;
-    int targetIndex = (configs.numRoundsSupported + 1 - iteration) % configs.numRoundsSupported;
-
-    FieldNameHolder sourceFields = FieldNames.reorderField(sourceIndex);
-    FieldNameHolder targetFields = FieldNames.reorderField(targetIndex);
-
-    return modifier.repositionFields(schema, sourceFields, targetFields,
-        TableChange.ColumnPositionChange.ColumnPositionType.BEFORE);
-  }
-
-  private static InternalSchema applyNonEndFieldModifications(InternalSchema schema, SchemaOnReadConfigs configs,
-                                                              SchemaModifier modifier, int iteration) {
-    // Add new fields
-    InternalSchema tempSchema = modifier.addFields(schema, Collections.singletonList(FieldNames.addField(iteration)));
-
-    // Position the new fields
-    FieldNameHolder currentFields = FieldNames.addField(iteration);
-    FieldNameHolder previousFields = FieldNames.addField(iteration - 1);
-
-   return modifier.repositionFields(tempSchema,
-        currentFields, previousFields,
-        TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
-  }
-
-  private static InternalSchema applyRenameModifications(InternalSchema schema, SchemaOnReadConfigs configs,
-                                                         SchemaModifier modifier, int iteration) {
-    InternalSchema result = schema;
-
-    for (int j = 0; j < iteration; j++) {
-      int oldRevision = iteration - 1 - j;
-      int newRevision = iteration - j;
-      FieldNameHolder oldFields = FieldNames.renameField(j, oldRevision);
-      FieldNameHolder newFields = FieldNames.renameField(j, newRevision);
-      result = modifier.renameFields(result, oldFields, newFields);
-    }
-
-    return result;
-  }
-
-  private static InternalSchema applyRemoveModifications(InternalSchema schema, SchemaOnReadConfigs configs,
-                                                         SchemaModifier modifier, int iteration) {
-    int indexToRemove = iteration - 1;
-    FieldNameHolder fieldsToRemove = FieldNames.removeField(indexToRemove);
-    return modifier.deleteFields(schema, fieldsToRemove);
-  }
-
-  private static InternalSchema applyRenameAsRemovedModifications(InternalSchema schema, SchemaOnReadConfigs configs,
-                                                                  SchemaModifier modifier, int iteration) {
-    int index = iteration - 1;
-
-    // First delete the fields
-    FieldNameHolder fieldsToDelete = FieldNames.removedForRenameField(index);
-    InternalSchema tempSchema = modifier.deleteFields(schema, fieldsToDelete);
-
-    // Then rename the other fields
-    FieldNameHolder oldFields = FieldNames.renameToRemovedField(index);
-    FieldNameHolder newFields = FieldNames.removedForRenameField(index);
-
-    return modifier.renameFields(tempSchema, oldFields, newFields);
-  }
-
-  private static InternalSchema applyEndFieldModifications(InternalSchema schema, SchemaOnReadConfigs configs,
-                                                           SchemaModifier modifier, int iteration) {
-    FieldNameHolder endFields = FieldNames.addEndField(iteration);
-    return modifier.addFields(schema, Collections.singletonList(endFields));
   }
 }
