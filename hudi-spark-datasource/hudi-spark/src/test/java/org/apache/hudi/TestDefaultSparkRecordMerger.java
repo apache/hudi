@@ -42,7 +42,7 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.SPARK;
-import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELD;
+import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -100,7 +100,7 @@ class TestDefaultSparkRecordMerger {
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
-    props.setProperty(PRECOMBINE_FIELD.key(), INT_COLUMN_NAME);
+    props.setProperty(PRECOMBINE_FIELDS.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     Option<Pair<HoodieRecord, Schema>> merged =
@@ -127,7 +127,7 @@ class TestDefaultSparkRecordMerger {
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
-    props.setProperty(PRECOMBINE_FIELD.key(), INT_COLUMN_NAME);
+    props.setProperty(PRECOMBINE_FIELDS.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     Option<Pair<HoodieRecord, Schema>> r =
@@ -151,7 +151,7 @@ class TestDefaultSparkRecordMerger {
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
-    props.setProperty(PRECOMBINE_FIELD.key(), INT_COLUMN_NAME);
+    props.setProperty(PRECOMBINE_FIELDS.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     Option<Pair<HoodieRecord, Schema>> r =
@@ -172,7 +172,7 @@ class TestDefaultSparkRecordMerger {
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
-    props.setProperty(PRECOMBINE_FIELD.key(), INT_COLUMN_NAME);
+    props.setProperty(PRECOMBINE_FIELDS.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     Option<Pair<HoodieRecord, Schema>> r =

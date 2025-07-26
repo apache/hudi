@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
@@ -79,7 +79,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   private lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   // very much not recommended to use a partition column as the precombine
-  private lazy val partitionColumnsHasPrecombine = preCombineFieldOpt.isDefined && partitionColumns.contains(preCombineFieldOpt.get)
+  private lazy val partitionColumnsHasPrecombine = preCombineFields.nonEmpty && partitionColumns.exists(col => preCombineFields.contains(col))
 
   private lazy val keygenTypeHasVariablePartitionCols = isTimestampKeygen || isCustomKeygen
 
@@ -91,7 +91,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     (tableConfig.getKeyGeneratorClassName.equals(classOf[CustomKeyGenerator].getName) ||
     tableConfig.getKeyGeneratorClassName.equals(classOf[CustomAvroKeyGenerator].getName))
 
-  private lazy val variableTimestampKeygenPartitionCols = if (isTimestampKeygen) {
+  private lazy val variableTimestampKeygenPartitionCols: Seq[String] = if (isTimestampKeygen) {
     tableConfig.getPartitionFields.orElse(Array.empty).toSeq
   } else if (isCustomKeygen) {
     val timestampFieldsOpt = CustomAvroKeyGenerator.getTimestampFields(tableConfig)
@@ -110,19 +110,19 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     if (shouldExtractPartitionValuesFromPartitionPath) {
       Seq.empty
     } else if (partitionColumnsHasPrecombine) {
-      logWarning(s"Not recommended for field '${preCombineFieldOpt.get}' to be both precombine and partition")
+      logWarning(s"Not recommended for field '${preCombineFields}' to be both precombine and partition")
       if (keygenTypeHasVariablePartitionCols) {
         // still need to read any timestamp/custom keygen timestamp columns
-        if (variableTimestampKeygenPartitionCols.contains(preCombineFieldOpt.get)) {
+        if (variableTimestampKeygenPartitionCols.exists(col => preCombineFields.contains(col))) {
           // precombine is already included in the list
           variableTimestampKeygenPartitionCols
         } else {
           // precombine is not included in the list so we append it
-          variableTimestampKeygenPartitionCols :+ preCombineFieldOpt.get
+          variableTimestampKeygenPartitionCols ++ preCombineFields
         }
       } else {
         // not timestamp/custom keygen so just need to read precombine
-        Seq(preCombineFieldOpt.get)
+        preCombineFields
       }
     } else if (keygenTypeHasVariablePartitionCols) {
       variableTimestampKeygenPartitionCols
@@ -185,15 +185,16 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     })
   }
 
-  protected lazy val preCombineFieldOpt: Option[String] =
-    Option(tableConfig.getPreCombineField)
-      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
-      // NOTE: This is required to compensate for cases when empty string is used to stub
-      //       property value to avoid it being set with the default value
-      // TODO(HUDI-3456) cleanup
-      case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
-      case _ => None
+  protected lazy val preCombineFields: List[String] = {
+    val tablePrecombineFields = tableConfig.getPreCombineFields
+    if (tablePrecombineFields.isEmpty) {
+      DataSourceOptionsHelper.getPreCombineFields(optParams)
+        .orElse(java.util.Collections.emptyList[String])
+        .asScala.toList
+    } else {
+      tablePrecombineFields.asScala.toList
     }
+  }
 
   private lazy val recordKeyField: String =
     if (tableConfig.populateMetaFields()) {
@@ -259,7 +260,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
       tablePath = basePath.toString,
       latestCommitTimestamp = queryTimestamp,
       recordKeyField = recordKeyField,
-      preCombineFieldOpt = preCombineFieldOpt,
+      preCombineFields = preCombineFields,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = metadataConfig,
@@ -434,7 +435,7 @@ abstract class HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(override 
   extends HoodieBaseHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   override protected def getMandatoryFields(): Seq[String] = Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
-    preCombineFieldOpt.map(Seq(_)).getOrElse(Seq()) ++ partitionColumnsToRead
+    preCombineFields ++ partitionColumnsToRead
 
   override protected def isMOR: Boolean = false
 

@@ -1069,7 +1069,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String timelinePath;
     private String timelineHistoryPath;
     private String baseFileFormat;
-    private String preCombineField;
+    private String preCombineFields;
     private String partitionFields;
     private Boolean cdcEnabled;
     private String cdcSupplementalLoggingMode;
@@ -1190,8 +1190,12 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setPreCombineField(String preCombineField) {
-      this.preCombineField = preCombineField;
+    /**
+     * Sets preCombine fields as a comma separated string in the table
+     * @param preCombineFieldsAsString - Comma separated preCombine fields which need to be set for the table
+     */
+    public TableBuilder setPreCombineFields(String preCombineFieldsAsString) {
+      this.preCombineFields = preCombineFieldsAsString;
       return this;
     }
 
@@ -1394,8 +1398,8 @@ public class HoodieTableMetaClient implements Serializable {
         setBootstrapIndexEnable(hoodieConfig.getBoolean(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE));
       }
 
-      if (hoodieConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)) {
-        setPreCombineField(hoodieConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
+      if (hoodieConfig.contains(HoodieTableConfig.PRECOMBINE_FIELDS)) {
+        setPreCombineFields(hoodieConfig.getString(HoodieTableConfig.PRECOMBINE_FIELDS));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_FIELDS)) {
         setPartitionFields(
@@ -1478,7 +1482,7 @@ public class HoodieTableMetaClient implements Serializable {
 
       Triple<RecordMergeMode, String, String> mergeConfigs =
           HoodieTableConfig.inferCorrectMergingBehavior(
-              recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineField,
+              recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields,
               tableVersion);
       tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
       tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
@@ -1527,8 +1531,8 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_BASE_PATH, bootstrapBasePath);
       }
 
-      if (StringUtils.nonEmpty(preCombineField)) {
-        tableConfig.setValue(HoodieTableConfig.PRECOMBINE_FIELD, preCombineField);
+      if (StringUtils.nonEmpty(preCombineFields)) {
+        tableConfig.setValue(HoodieTableConfig.PRECOMBINE_FIELDS, preCombineFields);
       }
 
       if (null != partitionFields) {

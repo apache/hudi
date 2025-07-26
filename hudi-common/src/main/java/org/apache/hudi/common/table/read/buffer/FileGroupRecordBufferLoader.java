@@ -41,7 +41,7 @@ public interface FileGroupRecordBufferLoader<T> {
   Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                      HoodieStorage storage,
                                                                      InputSplit inputSplit,
-                                                                     Option<String> orderingFieldName,
+                                                                     List<String> orderingFieldNames,
                                                                      HoodieTableMetaClient hoodieTableMetaClient,
                                                                      TypedProperties props,
                                                                      ReaderParameters readerParameters,

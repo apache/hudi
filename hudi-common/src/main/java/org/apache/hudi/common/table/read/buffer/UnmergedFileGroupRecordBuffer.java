@@ -40,6 +40,7 @@ import org.apache.avro.Schema;
 
 import java.io.Serializable;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 
 class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
@@ -55,7 +56,7 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       PartialUpdateMode partialUpdateMode,
       TypedProperties props,
       HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, Option.empty(), null);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, Collections.emptyList(), null);
     this.readStats = readStats;
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }

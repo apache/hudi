@@ -175,7 +175,7 @@ public class StreamerUtil {
   public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
     return HoodiePayloadConfig.newBuilder()
         .withPayloadClass(conf.get(FlinkOptions.PAYLOAD_CLASS_NAME))
-        .withPayloadOrderingField(conf.get(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadOrderingFields(conf.get(FlinkOptions.PRECOMBINE_FIELD))
         .withPayloadEventTimeField(conf.get(FlinkOptions.PRECOMBINE_FIELD))
         .build();
   }
@@ -296,7 +296,7 @@ public class StreamerUtil {
           .setPayloadClassName(getPayloadClass(conf))
           .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
-          .setPreCombineField(OptionsResolver.getPreCombineField(conf))
+          .setPreCombineFields(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
           .setKeyGeneratorClassProp(

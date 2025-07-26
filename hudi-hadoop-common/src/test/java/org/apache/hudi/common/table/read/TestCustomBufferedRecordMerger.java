@@ -52,7 +52,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.AVRO;
-import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELD;
+import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
@@ -67,7 +67,7 @@ public class TestCustomBufferedRecordMerger extends HoodieFileGroupReaderTestHar
     Properties metaProps = super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), CustomAvroMerger.KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY);
-    metaProps.setProperty(PRECOMBINE_FIELD.key(), "timestamp");
+    metaProps.setProperty(PRECOMBINE_FIELDS.key(), "timestamp");
     return metaProps;
   }
 

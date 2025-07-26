@@ -152,7 +152,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(RawTripTestPayload.class.getName())
-            .withPayloadOrderingField("number").build())
+            .withPayloadOrderingFields("number").build())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(indexBuilder.build())
         .withMetadataConfig(metadataConfigBuilder.build())
@@ -180,7 +180,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
       properties.put("hoodie.datasource.write.partitionpath.field", "time");
       properties.put("hoodie.datasource.write.precombine.field", "number");
       properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "time");
-      properties.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "number");
+      properties.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "number");
     }
     return properties;
   }

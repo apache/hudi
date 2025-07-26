@@ -23,11 +23,12 @@ import org.apache.hudi.avro.{AvroSchemaCache, HoodieAvroUtils}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{OrderingValues, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
@@ -124,8 +125,7 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
-          val precombine = config.getString(PRECOMBINE_FIELD)
-          val precombineEmpty = StringUtils.isNullOrEmpty(precombine)
+          val precombineFields = config.getPreCombineFields()
 
           // handle dropping partition columns
           it.map { avroRec =>
@@ -143,9 +143,12 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine && !precombineEmpty) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
-                false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
+            val hoodieRecord = if (shouldCombine && !precombineFields.isEmpty) {
+              val orderingVal = OrderingValues.create(
+                precombineFields,
+                JFunction.toJavaFunction[String, Comparable[_]](
+                  field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
+                    consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, recordLocation)
             } else {

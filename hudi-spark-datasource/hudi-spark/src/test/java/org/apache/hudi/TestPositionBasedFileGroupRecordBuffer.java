@@ -158,7 +158,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         metaClient.getTableConfig().getPartialUpdateMode(),
         baseFileInstantTime,
         props,
-        Option.of("timestamp"),
+        Collections.singletonList("timestamp"),
         updateProcessor);
   }
 

@@ -192,7 +192,8 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(tableConfig.populateMetaFields()).thenReturn(true);
-    when(tableConfig.getPreCombineField()).thenReturn(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING);
+    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.of(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING));
+    when(tableConfig.getPreCombineFields()).thenReturn(setPrecombine ? Collections.singletonList(preCombineField) : Collections.emptyList());
     when(tableConfig.getTableVersion()).thenReturn(tableVersion);
     if (tableConfig.getTableVersion() == HoodieTableVersion.SIX) {
       if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {

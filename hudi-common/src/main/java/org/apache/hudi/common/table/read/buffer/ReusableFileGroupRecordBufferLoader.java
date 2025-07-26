@@ -52,7 +52,7 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
   public synchronized Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                                          HoodieStorage storage,
                                                                                          InputSplit inputSplit,
-                                                                                         Option<String> orderingFieldName,
+                                                                                         List<String> orderingFieldNames,
                                                                                          HoodieTableMetaClient hoodieTableMetaClient,
                                                                                          TypedProperties props,
                                                                                          ReaderParameters readerParameters,
@@ -63,13 +63,13 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
     if (cachedResults == null) {
       // Create an initial buffer to process the log files
       KeyBasedFileGroupRecordBuffer<T> initialBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldName, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
       List<String> validInstants = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, initialBuffer);
       cachedResults = Pair.of(initialBuffer, validInstants);
     }
     // Create a reusable buffer with the results from the initial scan
     ReusableKeyBasedRecordBuffer<T> reusableBuffer = new ReusableKeyBasedRecordBuffer<>(
-        readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldName, updateProcessor, cachedResults.getLeft().getLogRecords());
+        readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor, cachedResults.getLeft().getLogRecords());
     return Pair.of(reusableBuffer, cachedResults.getRight());
   }
 

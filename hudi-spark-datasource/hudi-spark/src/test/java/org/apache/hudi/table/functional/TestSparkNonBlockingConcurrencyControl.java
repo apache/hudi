@@ -617,7 +617,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     props.put(ENABLE_SCHEMA_CONFLICT_RESOLUTION.key(), "false");
     String basePath = basePath();
     return HoodieWriteConfig.newBuilder()
-        .withProps(Collections.singletonMap(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts"))
+        .withProps(Collections.singletonMap(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "ts"))
         .forTable("test")
         .withPath(basePath)
         .withSchema(jsonSchema)

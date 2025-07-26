@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -438,7 +439,7 @@ object HoodieSparkSqlTestBase {
       val logBlock = logReader.next()
       if (logBlock.isInstanceOf[HoodieDeleteBlock]) {
         val deleteLogBlock = logBlock.asInstanceOf[HoodieDeleteBlock]
-        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue() == 0 || i.getOrderingValue() == null))
+        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue().equals(OrderingValues.getDefault) || i.getOrderingValue() == null))
         deleteLogBlockFound = true
       }
     }

@@ -58,7 +58,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   /** @deprecated Use {@link HoodieWriteConfig#PRECOMBINE_FIELD_NAME} and its methods instead */
   @Deprecated
-  public static final ConfigProperty<String> ORDERING_FIELD = ConfigProperty
+  public static final ConfigProperty<String> ORDERING_FIELDS = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
       .noDefaultValue()
       .markAdvanced()
@@ -93,8 +93,8 @@ public class HoodiePayloadConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withPayloadOrderingField(String payloadOrderingField) {
-      payloadConfig.setValue(ORDERING_FIELD, String.valueOf(payloadOrderingField));
+    public Builder withPayloadOrderingFields(String payloadOrderingFields) {
+      payloadConfig.setValue(ORDERING_FIELDS, String.valueOf(payloadOrderingFields));
       return this;
     }
 

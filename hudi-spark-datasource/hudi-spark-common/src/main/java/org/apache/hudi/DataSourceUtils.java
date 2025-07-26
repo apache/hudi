@@ -205,8 +205,8 @@ public class DataSourceUtils {
             // to realize the SQL functionality, so the write config needs to be fetched first.
             .withPayloadClass(parameters.getOrDefault(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
                 parameters.getOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME)))
-            .withPayloadOrderingField(parameters.getOrDefault(DataSourceWriteOptions.PRECOMBINE_FIELD().key(),
-                parameters.get(HoodieTableConfig.PRECOMBINE_FIELD)))
+            .withPayloadOrderingFields(parameters.getOrDefault(DataSourceWriteOptions.PRECOMBINE_FIELD().key(),
+                parameters.get(HoodieTableConfig.PRECOMBINE_FIELDS)))
             .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -48,8 +49,6 @@ import java.io.ByteArrayOutputStream;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * Flink Engine-specific Implementations of `HoodieRecord`, which is expected to hold {@code RowData} as payload.
@@ -98,11 +97,16 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField) || recordSchema.getField(orderingField) == null) {
-      return DEFAULT_ORDERING_VALUE;
+    String[] orderingFields = ConfigUtils.getOrderingFields(props);
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
     } else {
-      return (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props, false);
+      return OrderingValues.create(orderingFields, field -> {
+        if (recordSchema.getField(field) == null) {
+          return OrderingValues.getDefault();
+        }
+        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props, false);
+      });
     }
   }
 

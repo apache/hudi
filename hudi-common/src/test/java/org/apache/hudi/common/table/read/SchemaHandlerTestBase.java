@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -248,9 +249,11 @@ public abstract class SchemaHandlerTestBase {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     if (hasPrecombine) {
-      when(hoodieTableConfig.getPreCombineField()).thenReturn("timestamp");
+      when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.of("timestamp"));
+      when(hoodieTableConfig.getPreCombineFields()).thenReturn(Collections.singletonList("timestamp"));
     } else {
-      when(hoodieTableConfig.getPreCombineField()).thenReturn(null);
+      when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
+      when(hoodieTableConfig.getPreCombineFields()).thenReturn(Collections.emptyList());
     }
     if (mergeMode == CUSTOM) {
       when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn("asdf");

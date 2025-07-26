@@ -19,6 +19,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -26,8 +27,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Properties;
-
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Provides support for seamlessly applying changes captured via Amazon Database Migration Service onto S3.
@@ -52,7 +51,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public AWSDmsAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
+    this(record.isPresent() ? record.get() : null, OrderingValues.getDefault()); // natural order
   }
 
   /**

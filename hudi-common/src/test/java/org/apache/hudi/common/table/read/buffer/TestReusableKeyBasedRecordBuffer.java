@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,7 +88,7 @@ class TestReusableKeyBasedRecordBuffer {
     when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     ReusableKeyBasedRecordBuffer<TestRecord> buffer = new ReusableKeyBasedRecordBuffer<>(mockReaderContext, metaClient,
-        RecordMergeMode.EVENT_TIME_ORDERING, PartialUpdateMode.NONE, new TypedProperties(), Option.of("value"), updateProcessor, preMergedLogRecords);
+        RecordMergeMode.EVENT_TIME_ORDERING, PartialUpdateMode.NONE, new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);
 
     List<TestRecord> baseFileRecords = Arrays.asList(new TestRecord("1", 10), new TestRecord("3", 30));
     buffer.setBaseFileIterator(ClosableIterator.wrap(baseFileRecords.iterator()));

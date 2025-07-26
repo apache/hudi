@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.util.{CollectionUtils, Option => HOption}
+import org.apache.hudi.common.util.{CollectionUtils, Option => HOption, OrderingValues}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -53,6 +53,7 @@ import org.mockito.Mockito
 import org.mockito.Mockito.when
 
 import java.util
+import java.util.Collections
 
 import scala.collection.JavaConverters._
 
@@ -187,7 +188,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "col3", UTF8String.fromString("blue"))
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "non_existent_col", HoodieRecord.DEFAULT_ORDERING_VALUE)
+      sparkReaderContext, row, avroSchema, "non_existent_col", OrderingValues.getDefault)
   }
 
   val expectedEventTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
@@ -300,8 +301,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                    avroSchema: Schema,
                                    orderingColumn: String,
                                    expectedOrderingValue: Comparable[_]): Unit = {
-    assertEquals(expectedOrderingValue, sparkReaderContext.getOrderingValue(
-      row, avroSchema, HOption.of(orderingColumn)))
+    assertEquals(expectedOrderingValue, sparkReaderContext.getOrderingValue(row, avroSchema, Collections.singletonList(orderingColumn)))
   }
 
   @Test

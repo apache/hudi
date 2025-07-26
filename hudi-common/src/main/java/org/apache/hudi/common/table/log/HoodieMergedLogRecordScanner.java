@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
@@ -279,8 +279,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
-      boolean choosePrev = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
+      boolean choosePrev = !OrderingValues.isDefault(deleteOrderingVal)
+          && OrderingValues.isSameClass(curOrderingVal, deleteOrderingVal)
           && curOrderingVal.compareTo(deleteOrderingVal) > 0;
       if (choosePrev) {
         // The DELETE message is obsolete if the old message has greater orderingVal.
