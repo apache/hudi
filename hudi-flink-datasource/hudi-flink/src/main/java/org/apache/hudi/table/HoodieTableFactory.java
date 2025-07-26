@@ -117,9 +117,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
             conf.set(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
           }
-          if (tableConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)
+          if (tableConfig.contains(HoodieTableConfig.PRECOMBINE_FIELDS)
               && !conf.contains(FlinkOptions.PRECOMBINE_FIELD)) {
-            conf.set(FlinkOptions.PRECOMBINE_FIELD, tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
+            conf.set(FlinkOptions.PRECOMBINE_FIELD, tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELDS));
           }
           if (tableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)
               && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {

@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -50,12 +51,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.table.read.buffer.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -104,13 +105,13 @@ class TestFileGroupRecordBuffer {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
     DeleteRecord deleteRecord = mock(DeleteRecord.class);
     mockDeleteRecord(deleteRecord, null);
-    assertEquals(DEFAULT_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
-    mockDeleteRecord(deleteRecord, DEFAULT_ORDERING_VALUE);
-    assertEquals(DEFAULT_ORDERING_VALUE, getOrderingValue(readerContext, deleteRecord));
-    String orderingValue = "xyz";
-    String convertedValue = "_xyz";
+    assertEquals(OrderingValues.getDefault(), getOrderingValue(readerContext, deleteRecord));
+    mockDeleteRecord(deleteRecord, OrderingValues.getDefault());
+    assertEquals(OrderingValues.getDefault(), getOrderingValue(readerContext, deleteRecord));
+    Comparable orderingValue = "xyz";
+    Comparable convertedValue = "_xyz";
     mockDeleteRecord(deleteRecord, orderingValue);
-    when(readerContext.convertValueToEngineType(orderingValue)).thenReturn(convertedValue);
+    when(readerContext.convertOrderingValueToEngineType(orderingValue)).thenReturn(convertedValue);
     assertEquals(convertedValue, getOrderingValue(readerContext, deleteRecord));
   }
 
@@ -173,7 +174,7 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            Option.empty(),
+            Collections.emptyList(),
             updateProcessor
         );
     when(readerContext.getValue(any(), any(), any())).thenReturn(null);
@@ -187,7 +188,7 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            Option.empty(),
+            Collections.emptyList(),
             updateProcessor
     );
     when(readerContext.getValue(any(), any(), any())).thenReturn("i");
@@ -210,7 +211,7 @@ class TestFileGroupRecordBuffer {
             RecordMergeMode.COMMIT_TIME_ORDERING,
             PartialUpdateMode.NONE,
             props,
-            Option.empty(),
+            Collections.emptyList(),
             updateProcessor
         );
 
@@ -221,8 +222,8 @@ class TestFileGroupRecordBuffer {
     record.put("op", "d");
     record.put("_hoodie_is_deleted", false);
     when(readerContext.getOrderingValue(any(), any(), any())).thenReturn(1);
-    when(readerContext.convertValueToEngineType(any())).thenReturn(1);
-    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Option.of("ts"), true);
+    when(readerContext.convertOrderingValueToEngineType(any())).thenReturn(1);
+    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Collections.singletonList("ts"), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "12345");
     Map<Serializable, BufferedRecord<GenericRecord>> records = keyBasedBuffer.getLogRecords();
@@ -237,7 +238,7 @@ class TestFileGroupRecordBuffer {
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");
     anotherRecord.put("_hoodie_is_deleted", true);
-    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Option.of("ts"), true);
+    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Collections.singletonList("ts"), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "54321");
     records = keyBasedBuffer.getLogRecords();

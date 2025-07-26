@@ -31,7 +31,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -40,9 +40,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
-
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.
@@ -56,7 +55,7 @@ public class BufferedRecordMergerFactory {
                                                    RecordMergeMode recordMergeMode,
                                                    boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
-                                                   Option<String> orderingFieldName,
+                                                   List<String> orderingFieldNames,
                                                    Option<String> payloadClass,
                                                    Schema readerSchema,
                                                    TypedProperties props,
@@ -68,7 +67,7 @@ public class BufferedRecordMergerFactory {
      */
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
-          readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
+          readerContext, recordMergeMode, false, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
       return new PartialUpdateBufferedRecordMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
     }
 
@@ -86,7 +85,7 @@ public class BufferedRecordMergerFactory {
       default:
         if (payloadClass.isPresent()) {
           return new CustomPayloadBufferedRecordMerger<>(
-              readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
+              readerContext, recordMerger, orderingFieldNames, payloadClass.get(), readerSchema, props);
         } else {
           return new CustomBufferedRecordMerger<>(readerContext, recordMerger, readerSchema, props);
         }
@@ -356,7 +355,7 @@ public class BufferedRecordMergerFactory {
 
       if (!combinedRecordAndSchemaOpt.isPresent()) {
         // An empty Option indicates that the output represents a delete.
-        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE, null, null, true));
+        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, true));
       }
 
       Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
@@ -391,18 +390,18 @@ public class BufferedRecordMergerFactory {
    * based on {@code CUSTOM} merge mode and a given record payload class.
    */
   private static class CustomPayloadBufferedRecordMerger<T> extends BaseCustomMerger<T> {
-    private final Option<String> orderingFieldName;
+    private final List<String> orderingFieldNames;
     private final String payloadClass;
 
     public CustomPayloadBufferedRecordMerger(
         HoodieReaderContext<T> readerContext,
         Option<HoodieRecordMerger> recordMerger,
-        Option<String> orderingFieldName,
+        List<String> orderingFieldNames,
         String payloadClass,
         Schema readerSchema,
         TypedProperties props) {
       super(readerContext, recordMerger, readerSchema, props);
-      this.orderingFieldName = orderingFieldName;
+      this.orderingFieldNames = orderingFieldNames;
       this.payloadClass = payloadClass;
     }
 
@@ -414,12 +413,12 @@ public class BufferedRecordMergerFactory {
         // If pre-combine does not return existing record, update it
         if (combinedRecordData != existingRecord.getRecord()) {
           Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
-          return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false));
+          return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldNames, false));
         }
         return Option.empty();
       }
       // An empty Option indicates that the output represents a delete.
-      return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE, null, null, true));
+      return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, true));
     }
 
     @Override
@@ -548,8 +547,8 @@ public class BufferedRecordMergerFactory {
     Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
     // Checks the ordering value does not equal to 0
     // because we use 0 as the default value which means natural order
-    boolean chooseExisting = !deleteOrderingVal.equals(0)
-        && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
+    boolean chooseExisting = !OrderingValues.isDefault(deleteOrderingVal)
+        && OrderingValues.isSameClass(existingOrderingVal, deleteOrderingVal)
         && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
     if (chooseExisting) {
       // The DELETE message is obsolete if the old message has greater orderingVal.

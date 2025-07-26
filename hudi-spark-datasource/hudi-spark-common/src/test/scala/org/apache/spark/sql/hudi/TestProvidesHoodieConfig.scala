@@ -94,7 +94,7 @@ class TestProvidesHoodieConfig {
     // catalogProperties won't be passed in correctly, because they were not synced properly
     when(mockCatalog.catalogProperties).thenReturn(Map.empty[String, String])
     when(mockCatalog.partitionFields).thenReturn(Array("partition"))
-    when(mockCatalog.preCombineKey).thenCallRealMethod()
+    when(mockCatalog.preCombineKeys).thenCallRealMethod()
     when(mockCatalog.partitionSchema).thenReturn(StructType(Nil))
     when(mockCatalog.primaryKeys).thenReturn(Array("key"))
     when(mockCatalog.table).thenReturn(CatalogTable.apply(
@@ -103,7 +103,7 @@ class TestProvidesHoodieConfig {
       CatalogStorageFormat.empty,
       StructType(Nil)))
     val props = new TypedProperties()
-    props.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key, "segment")
+    props.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key, "segment")
     val mockTableConfig = spy(classOf[HoodieTableConfig])
     when(mockTableConfig.getProps).thenReturn(props)
     when(mockCatalog.tableConfig).thenReturn(mockTableConfig)
@@ -140,7 +140,7 @@ class TestProvidesHoodieConfig {
 
     assertEquals(
       "segment",
-      combinedConfig.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key, "")
+      combinedConfig.getOrElse(HoodieTableConfig.PRECOMBINE_FIELDS.key, "")
     )
 
     // write config precombine field should be inferred from table config

@@ -35,7 +35,6 @@ import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -52,6 +51,7 @@ import org.apache.avro.Schema;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.UnaryOperator;
@@ -71,7 +71,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieTableMetaClient metaClient;
   private final InputSplit inputSplit;
   private final Option<String[]> partitionPathFields;
-  private final Option<String> orderingFieldName;
+  private final List<String> orderingFieldNames;
   private final HoodieStorage storage;
   private final TypedProperties props;
   private final ReaderParameters readerParameters;
@@ -116,16 +116,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.orderingFieldName = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
-        ? Option.empty()
-        : Option.ofNullable(ConfigUtils.getOrderingField(props))
-        .or(() -> {
-          String preCombineField = hoodieTableMetaClient.getTableConfig().getPreCombineField();
-          if (StringUtils.isNullOrEmpty(preCombineField)) {
-            return Option.empty();
-          }
-          return Option.of(preCombineField);
-        });
+    this.orderingFieldNames = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
+        ? Collections.emptyList()
+        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElse(hoodieTableMetaClient.getTableConfig().getPreCombineFields());
     this.readStats = new HoodieReadStats();
   }
 
@@ -139,7 +132,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     } else {
       this.baseFileIterator = iter;
       Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(
-          readerContext, storage, inputSplit, orderingFieldName, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback);
+          readerContext, storage, inputSplit, orderingFieldNames, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback);
       recordBuffer = initializationResult.getLeft();
       validBlockInstants = initializationResult.getRight();
       recordBuffer.setBaseFileIterator(baseFileIterator);
@@ -294,7 +287,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldName, false);
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldNames, false);
       return readerContext.constructHoodieRecord(bufferedRecord);
     });
   }

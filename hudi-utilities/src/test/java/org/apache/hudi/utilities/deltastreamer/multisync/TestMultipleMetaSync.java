@@ -91,7 +91,7 @@ public class TestMultipleMetaSync extends HoodieDeltaStreamerTestBase {
     cfg.syncClientToolClassNames = syncClassNames;
     cfg.operation = WriteOperationType.BULK_INSERT;
     cfg.enableHiveSync = true;
-    cfg.sourceOrderingField = "timestamp";
+    cfg.sourceOrderingFields = "timestamp";
     cfg.propsFilePath = UtilitiesTestBase.basePath + "/test-source.properties";
     cfg.configs.add("hoodie.datasource.hive_sync.partition_fields=year,month,day");
     cfg.sourceLimit =  1000;
