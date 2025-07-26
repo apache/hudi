@@ -323,6 +323,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           dropRecreateIdxAndValidate(tableName, basePath, 9, 2, dropRecreate = true, expected)
         }
       }
+      assertNoPersistentRDDs()
     }
   }
 
@@ -381,6 +382,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
         checkException(sql = s"create index idx_city on $tableName (city,state)")(
           "Only one column can be indexed for functional or secondary index."
         )
+        assertNoPersistentRDDs()
       }
     }
   }
@@ -472,6 +474,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
       validateSecondaryIndex(basePath, tableName, nonDeletedKeys)
       validateSecondaryIndex(basePath, tableName, finalUpdateKeys)
       dataGen.close()
+      assertNoPersistentRDDs()
     }
   }
 
@@ -510,6 +513,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .mode(SaveMode.Append)
           .save(basePath)
         dataGen.close()
+        assertNoPersistentRDDs()
       }
     }
   }

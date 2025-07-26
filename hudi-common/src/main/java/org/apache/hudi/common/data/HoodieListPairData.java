@@ -96,6 +96,11 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public void unpersistWithDependencies() {
+    // no-op - in-memory implementation doesn't have dependencies to unpersist
+  }
+
+  @Override
   public HoodieData<K> keys() {
     return new HoodieListData<>(asStream().map(Pair::getKey), lazy);
   }

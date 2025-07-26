@@ -34,6 +34,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
@@ -71,6 +72,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.data.HoodieSparkRDDUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -1123,7 +1125,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
-  private void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
+  void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
                                       HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
     String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
@@ -1134,18 +1136,26 @@ public class HoodieMetadataTableValidator implements Serializable {
     long numSecondaryKeys = secondaryKeys.count();
     int numPartitions = (int) Math.max(1, numSecondaryKeys / 100);
     secondaryKeys = secondaryKeys.sortBy(x -> x, true, numPartitions);
-    for (int i = 0; i < numPartitions; i++) {
-      List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
-      Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = HoodieDataUtils.collectPairDataAsMap(
-          ((HoodieBackedTableMetadata) metadataContext.tableMetadata).getSecondaryIndexRecords(
-              HoodieListData.lazy(secKeys), indexDefinition.getIndexName()));
-      Map<String, Set<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
-      if (!fsSecondaryKeyToRecordKeys.equals(mdtSecondaryKeyToRecordKeys)) {
-        throw new HoodieValidationException(String.format("Secondary Index does not match : \nMDT secondary index: %s \nFS secondary index: %s",
-            StringUtils.join(mdtSecondaryKeyToRecordKeys), StringUtils.join(fsSecondaryKeyToRecordKeys)));
+    try {
+      for (int i = 0; i < numPartitions; i++) {
+        List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
+        HoodiePairData<String, String> secondaryIndexData = ((HoodieBackedTableMetadata) metadataContext.tableMetadata).getSecondaryIndexRecords(
+            HoodieListData.lazy(secKeys), indexDefinition.getIndexName());
+        try {
+          Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = HoodieDataUtils.collectPairDataAsMap(secondaryIndexData);
+          Map<String, Set<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
+          if (!fsSecondaryKeyToRecordKeys.equals(mdtSecondaryKeyToRecordKeys)) {
+            throw new HoodieValidationException(String.format("Secondary Index does not match : \nMDT secondary index: %s \nFS secondary index: %s",
+                StringUtils.join(mdtSecondaryKeyToRecordKeys), StringUtils.join(fsSecondaryKeyToRecordKeys)));
+          }
+        } finally {
+          // Clean up the RDD to avoid memory leaks
+          secondaryIndexData.unpersistWithDependencies();
+        }
       }
+    } finally {
+      HoodieSparkRDDUtils.unpersistRDDWithDependencies(secondaryKeys.rdd());
     }
-    secondaryKeys.unpersist();
   }
 
   /**
@@ -1286,9 +1296,9 @@ public class HoodieMetadataTableValidator implements Serializable {
             return Pair.of(errorCount, list2);
           }
         });
-
+    HoodieSparkRDDUtils.unpersistRDDWithDependencies(keyToLocationFromRecordIndexRdd.rdd());
     long countKey = keyToLocationOnFsRdd.count();
-    keyToLocationOnFsRdd.unpersist();
+    HoodieSparkRDDUtils.unpersistRDDWithDependencies(keyToLocationOnFsRdd.rdd());
 
     long diffCount = result.getLeft();
     if (diffCount > 0) {

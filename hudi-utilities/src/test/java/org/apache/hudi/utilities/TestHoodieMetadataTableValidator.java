@@ -199,6 +199,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Overwrite)
         .save(basePath);
+    inserts.unpersist(true);
     Dataset<Row> updates = makeUpdateDf("001", 5).cache();
     updates.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
@@ -207,6 +208,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
         .save(basePath);
+    updates.unpersist(true);
 
     if (includeUncommittedLogFiles) {
       // add uncommitted log file to simulate task retry
@@ -234,6 +236,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());
     assertTrue(validator.getThrowables().isEmpty());
+    assertNoPersistentRDDs(sparkSession);
   }
 
   @Test
@@ -256,6 +259,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Overwrite)
         .save(basePath);
+    inserts.unpersist(true);
 
     // copy the metadata dir to a separate dir before update and then replace the proper table with this out of date version
     String metadataPath = basePath + "/.hoodie/metadata";
@@ -270,6 +274,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
         .save(basePath);
+    updates.unpersist(true);
 
     // clear MDT and replace with old copy
     fs.delete(new Path(metadataPath), true);
@@ -285,6 +290,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertFalse(validator.run());
     assertTrue(validator.hasValidationFailure());
     assertFalse(validator.getThrowables().isEmpty());
+    assertNoPersistentRDDs(sparkSession);
   }
 
   @Test
@@ -470,6 +476,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());
+    assertNoPersistentRDDs(sparkSession);
     assertTrue(validator.getThrowables().isEmpty());
   }
 
@@ -513,6 +520,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
         .mode(SaveMode.Overwrite)
         .save(basePath);
+    inserts.unpersist(true);
 
     String partition1 = "PARTITION1";
     String partition2 = "PARTITION2";
@@ -574,6 +582,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       // validate that all 3 partitions are returned
       assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
     }
+    assertNoPersistentRDDs(sparkSession);
   }
 
   @ParameterizedTest
@@ -596,6 +605,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
           .mode(SaveMode.Append)
           .save(basePath);
     }
+    inserts.unpersist(true);
 
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
     config.basePath = "file:" + basePath;
@@ -606,6 +616,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     validator.run();
+    assertNoPersistentRDDs(sparkSession);
     // assertFalse(validator.hasValidationFailure());
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(engineContext.getStorageConf()).build();
 
@@ -693,6 +704,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         assertThrows(HoodieValidationException.class, validator::run);
       }
     }
+    assertNoPersistentRDDs(sparkSession);
   }
 
   @ParameterizedTest
@@ -717,6 +729,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
           .mode(SaveMode.Append)
           .save(basePath);
     }
+    inserts.unpersist(true);
 
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
     config.basePath = "file:" + basePath;
@@ -746,6 +759,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     } else {
       assertThrows(HoodieValidationException.class, localValidator::run);
     }
+    assertNoPersistentRDDs(sparkSession);
   }
 
   @Test
@@ -825,6 +839,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         Collections.singletonList(INSTANT_GENERATOR.createNewInstant(
             HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, baseInstantTime)),
         logFile, committedFilesMap, Pair.of(false, ""));
+    assertNoPersistentRDDs(sparkSession);
   }
 
   private void prepareTimelineAndValidate(HoodieTableMetaClient metaClient,
@@ -1027,6 +1042,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
                 + "File slice from MDT-based listing: %s.",
             label, partition, basePath, listFs.get(i), listMdt.get(i)),
         exception.getMessage());
+    assertNoPersistentRDDs(sparkSession);
   }
 
   Pair<List<HoodieBaseFile>, List<HoodieBaseFile>> generateTwoEqualBaseFileList(int size) {
@@ -1170,7 +1186,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
           .mode(SaveMode.Append)
           .save(basePath);
     }
-
+    inserts.unpersist(true);
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
     config.basePath = "file:" + basePath;
     config.validateLatestFileSlices = true;
@@ -1263,6 +1279,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Overwrite)
         .save(basePath);
+    inserts.unpersist(true);
     Dataset<Row> updates = makeUpdateDf("001", 5).cache();
     updates.write().format("hudi").options(writeOptions)
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
@@ -1271,6 +1288,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
         .save(basePath);
+    updates.unpersist(true);
 
     Dataset<Row> inserts2 = makeInsertDf("002", 5).cache();
     inserts2.write().format("hudi").options(writeOptions)
@@ -1280,6 +1298,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
         .save(basePath);
+    inserts2.unpersist(true);
 
     // validate MDT
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
@@ -1302,6 +1321,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());
     assertTrue(validator.getThrowables().isEmpty());
+    assertNoPersistentRDDs(sparkSession);
   }
 
   /**
@@ -1383,6 +1403,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
         .mode(SaveMode.Overwrite)
         .save(basePath);
+    inserts.unpersist(true);
 
     // Test with default max length
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
