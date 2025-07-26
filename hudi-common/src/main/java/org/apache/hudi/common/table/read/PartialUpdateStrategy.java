@@ -21,9 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
 
@@ -32,14 +30,15 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
-import static org.apache.hudi.common.util.ConfigUtils.toMap;
+import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
 
 /**
  * This class implements the detailed partial update logic for different partial update modes,
  * which is wrapped into partial update mergers
- * {@link BufferedRecordMergerFactory.CommitTimeBufferedRecordPartialUpdateMerger} and
- * {@link BufferedRecordMergerFactory.EventTimeBufferedRecordPartialUpdateMerger}.
+ * {@link BufferedRecordMergerFactory.CommitTimePartialRecordMerger} and
+ * {@link BufferedRecordMergerFactory.EventTimePartialRecordMerger}.
  */
 public class PartialUpdateStrategy<T> {
   private final HoodieReaderContext<T> readerContext;
@@ -175,11 +174,6 @@ public class PartialUpdateStrategy<T> {
   }
 
   static Map<String, String> parseMergeProperties(TypedProperties props) {
-    Map<String, String> properties = new HashMap<>();
-    String raw = props.getProperty(HoodieTableConfig.MERGE_PROPERTIES.key());
-    if (StringUtils.isNullOrEmpty(raw)) {
-      return properties;
-    }
-    return toMap(raw, ",");
+    return extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
   }
 }
