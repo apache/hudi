@@ -313,9 +313,6 @@ public class HoodieLogFileCommand {
     props.setProperty(
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()));
-    props.setProperty(
-        ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-        ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue());
 
     return props;
   }

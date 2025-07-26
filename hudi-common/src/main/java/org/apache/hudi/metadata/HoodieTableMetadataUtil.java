@@ -415,6 +415,7 @@ public class HoodieTableMetadataUtil {
    * @param enabledPartitionTypes - Set of enabled MDT partitions to update
    * @param bloomFilterType       - Type of generated bloom filter records
    * @param bloomIndexParallelism - Parallelism for bloom filter record generation
+   * @param enableOptimizeLogBlocksScan - flag used to enable scanInternalV2 for log blocks in data table
    * @return Map of partition to metadata records for the commit action
    */
   public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context, HoodieConfig hoodieConfig, HoodieCommitMetadata commitMetadata,
@@ -791,6 +792,7 @@ public class HoodieTableMetadataUtil {
    * @param engineContext                    - Engine context
    * @param dataMetaClient                   - HoodieTableMetaClient for data
    * @param metadataConfig                   - HoodieMetadataConfig
+   * @param enableOptimizeLogBlocksScan - flag used to enable scanInternalV2 for log blocks in data table
    * @return List of column stats index records for the clean metadata
    */
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCleanMetadata cleanMetadata,
@@ -954,6 +956,7 @@ public class HoodieTableMetadataUtil {
    * @param logFilePaths         list of log file paths including current and previous file slices
    * @param finalWriterSchemaOpt records schema
    * @param currentLogFilePaths  list of log file paths for the current instant
+   * @param enableOptimizedLogBlocksScan - flag used to enable scanInternalV2 for log blocks in data table
    * @return pair of revived and deleted keys
    */
   @VisibleForTesting
