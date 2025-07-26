@@ -367,7 +367,7 @@ public abstract class FileFormatUtils {
       if (keyGenerator.isPresent()) {
         this.func = retVal -> {
           String recordKey = keyGenerator.get().getRecordKey(retVal);
-          String partitionPath = keyGenerator.get().getPartitionPath(retVal);
+          String partitionPath = partitionPathOption.orElseGet(() -> keyGenerator.get().getPartitionPath(retVal));
           return new HoodieKey(recordKey, partitionPath);
         };
       } else {

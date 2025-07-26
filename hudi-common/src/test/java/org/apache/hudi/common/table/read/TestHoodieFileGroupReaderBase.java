@@ -145,20 +145,21 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", false),
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet", true),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro", true),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet", true),
-        arguments(RecordMergeMode.CUSTOM, "avro", false),
-        arguments(RecordMergeMode.CUSTOM, "parquet", true)
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "orc", "avro", false),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet", "parquet", true),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "orc", "avro", true),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet", "parquet", true),
+        arguments(RecordMergeMode.CUSTOM, "parquet", "avro", false),
+        arguments(RecordMergeMode.CUSTOM, "parquet", "parquet", true)
     );
   }
 
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
+  public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode, String baseFileFormat, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, populateMetaFields));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
+    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat);
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
