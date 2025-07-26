@@ -25,13 +25,11 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 
 import java.util.Collections;
 import java.util.Hashtable;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -41,7 +39,7 @@ public class TwoToThreeUpgradeHandler implements UpgradeHandler {
   public static final String SPARK_SIMPLE_KEY_GENERATOR = "org.apache.hudi.keygen.SimpleKeyGenerator";
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
                                                                          HoodieEngineContext context,
                                                                          String instantTime,
                                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
@@ -64,6 +62,6 @@ public class TwoToThreeUpgradeHandler implements UpgradeHandler {
     ValidationUtils.checkState(keyGenClassName != null, String.format("Missing config: %s or %s",
         HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, HoodieWriteConfig.KEYGENERATOR_CLASS_NAME));
     tablePropsToAdd.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGenClassName);
-    return Pair.of(tablePropsToAdd, Collections.EMPTY_LIST);
+    return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.EMPTY_LIST);
   }
 }

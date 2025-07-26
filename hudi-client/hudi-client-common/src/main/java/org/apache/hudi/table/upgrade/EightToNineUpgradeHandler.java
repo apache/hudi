@@ -36,7 +36,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.table.HoodieTable;
@@ -94,10 +93,10 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       OverwriteNonDefaultsWithLatestAvroPayload.class.getName()));
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
-                                                                         HoodieEngineContext context,
-                                                                         String instantTime,
-                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
+                                                       HoodieEngineContext context,
+                                                       String instantTime,
+                                                       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     // If auto upgrade is disabled, set writer version to 8 and return.
@@ -105,7 +104,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       config.setValue(
           HoodieWriteConfig.WRITE_TABLE_VERSION,
           String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-      return Pair.of(tablePropsToAdd, Collections.emptyList());
+      return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptyList());
     }
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
@@ -129,32 +128,19 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.EIGHT);
     // Handle merge mode config.
-    upgradeMergeModeConfig(tablePropsToAdd, tableConfig);
+    reconcileMergeModeConfig(tablePropsToAdd, tableConfig);
     // Handle partial update mode config.
-    upgradePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
+    reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
     // Handle merge properties config.
-    upgradeMergePropertiesConfig(tablePropsToAdd, tableConfig);
+    reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig);
     // Handle payload class configs.
     List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
-    upgradePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
-    return Pair.of(tablePropsToAdd, tablePropsToRemove);
+    reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
+    return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 
-  private void upgradePayloadClassConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                         List<ConfigProperty> tablePropsToRemove,
-                                         HoodieTableConfig tableConfig) {
-    String payloadClass = tableConfig.getPayloadClass();
-    if (StringUtils.isNullOrEmpty(payloadClass)) {
-      return;
-    }
-    if (PAYLOAD_CLASSES_TO_HANDLE.contains(payloadClass)) {
-      tablePropsToAdd.put(LEGACY_PAYLOAD_CLASS_NAME, payloadClass);
-      tablePropsToRemove.add(PAYLOAD_CLASS_NAME);
-    }
-  }
-
-  private void upgradeMergeModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                      HoodieTableConfig tableConfig) {
+  private void reconcileMergeModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
+                                        HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
     if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
@@ -169,8 +155,21 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     // else: No op, which means merge strategy id and merge mode are not changed.
   }
 
-  private void upgradePartialUpdateModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                              HoodieTableConfig tableConfig) {
+  private void reconcilePayloadClassConfig(Map<ConfigProperty, String> tablePropsToAdd,
+                                           List<ConfigProperty> tablePropsToRemove,
+                                           HoodieTableConfig tableConfig) {
+    String payloadClass = tableConfig.getPayloadClass();
+    if (StringUtils.isNullOrEmpty(payloadClass)) {
+      return;
+    }
+    if (PAYLOAD_CLASSES_TO_HANDLE.contains(payloadClass)) {
+      tablePropsToAdd.put(LEGACY_PAYLOAD_CLASS_NAME, payloadClass);
+      tablePropsToRemove.add(PAYLOAD_CLASS_NAME);
+    }
+  }
+
+  private void reconcilePartialUpdateModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
+                                                HoodieTableConfig tableConfig) {
     // Set partial update mode for all tables.
     tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name());
 
@@ -188,8 +187,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  private void upgradeMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                            HoodieTableConfig tableConfig) {
+  private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd,
+                                              HoodieTableConfig tableConfig) {
     // Set merge properties for all tables.
     String mergeProperties = StringUtils.EMPTY_STRING;
     tablePropsToAdd.put(MERGE_PROPERTIES, mergeProperties);

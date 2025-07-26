@@ -46,7 +46,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -84,7 +83,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
   private static final Logger LOG = LoggerFactory.getLogger(SevenToEightUpgradeHandler.class);
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
                                                                          HoodieEngineContext context,
                                                                          String instantTime,
                                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
@@ -95,11 +94,11 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     // If auto upgrade is disabled, set writer version to 6 and return
     if (!config.autoUpgrade()) {
       config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
-      return Pair.of(tablePropsToAdd, Collections.emptyList());
+      return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptyList());
     }
 
     // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
-    checkAndHandleMetadataTable(context, table, config, metaClient);
+    checkAndHandleMetadataTable(context, table, config, metaClient, true);
 
     // Rollback and run compaction in one step
     rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()), HoodieTableVersion.SIX);
@@ -144,7 +143,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
 
     upgradeToLSMTimeline(table, context, config);
 
-    return Pair.of(tablePropsToAdd, Collections.emptyList());
+    return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptyList());
   }
 
   static void upgradePartitionFields(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {

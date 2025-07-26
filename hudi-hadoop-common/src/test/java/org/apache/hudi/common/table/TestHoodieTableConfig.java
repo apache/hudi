@@ -45,6 +45,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -136,6 +138,46 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals(6, config.getProps().size());
     assertNull(config.getProps().getProperty("hoodie.invalid.config"));
     assertFalse(config.getProps().contains(HoodieTableConfig.TIMELINE_HISTORY_PATH.key()));
+  }
+
+  @Test
+  void testUpdateAndDelete() throws IOException {
+    Properties updatedProps = new Properties();
+    updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table2");
+    updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field");
+    updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
+    HoodieTableConfig.update(storage, metaPath, updatedProps);
+
+    assertTrue(storage.exists(cfgPath));
+    assertFalse(storage.exists(backupCfgPath));
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    assertEquals(9, config.getProps().size());
+    assertEquals("test-table2", config.getTableName());
+    assertEquals("new_field", config.getPreCombineField());
+    assertEquals("partition_path", config.getPartitionFields().get()[0]);
+
+    // update 1 property and delete 1 property
+    updatedProps = new Properties();
+    updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field2");
+    Set<String> propsToDelete = new HashSet<>();
+    propsToDelete.add(HoodieTableConfig.PARTITION_FIELDS.key());
+    // delete a non existant property as well
+    propsToDelete.add(HoodieTableConfig.RECORDKEY_FIELDS.key());
+    HoodieTableConfig.updateDeleteProps(storage, metaPath, updatedProps, propsToDelete);
+    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    assertEquals(8, config.getProps().size());
+    assertEquals("test-table2", config.getTableName());
+    assertEquals("new_field2", config.getPreCombineField());
+    assertFalse(config.getPartitionFields().isPresent());
+
+    // just delete 1 property w/o updating anything.
+    updatedProps = new Properties();
+    HoodieTableConfig.updateDeleteProps(storage, metaPath, updatedProps, Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELD.key()));
+    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    assertEquals(7, config.getProps().size());
+    assertEquals("test-table2", config.getTableName());
+    assertNull(config.getPreCombineField());
+    assertFalse(config.getPartitionFields().isPresent());
   }
 
   @Test

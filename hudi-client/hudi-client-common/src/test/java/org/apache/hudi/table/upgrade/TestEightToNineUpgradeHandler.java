@@ -37,7 +37,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.storage.HoodieStorage;
@@ -104,8 +103,8 @@ class TestEightToNineUpgradeHandler {
       new AbstractMap.SimpleEntry<>(MERGE_PROPERTIES, StringUtils.EMPTY_STRING)
   ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   private static final List<ConfigProperty> DEFAULT_CONFIG_REMOVED = Collections.emptyList();
-  private static final Pair<Map<ConfigProperty, String>, List<ConfigProperty>> DEFAULT_UPGRADE_RESULT =
-      Pair.of(DEFAULT_CONFIG_UPDATED, DEFAULT_CONFIG_REMOVED);
+  private static final UpgradeDowngrade.TableConfigChangeSet DEFAULT_UPGRADE_RESULT =
+      new UpgradeDowngrade.TableConfigChangeSet(DEFAULT_CONFIG_UPDATED, DEFAULT_CONFIG_REMOVED);
   private static final String INSTANT_TIME = "20231201120000";
   private StoragePath indexDefPath;
   @TempDir
@@ -214,10 +213,10 @@ class TestEightToNineUpgradeHandler {
           .thenAnswer(invocation -> null);
       when(tableConfig.getPayloadClass()).thenReturn(payloadClassName);
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
+      UpgradeDowngrade.TableConfigChangeSet propertiesToHandle =
           handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
-      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
+      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getPropertiesToUpdate();
+      List<ConfigProperty> propertiesToRemove = propertiesToHandle.getPropertiesToDelete();
       // Assert merge properties
       assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
       if (StringUtils.isNullOrEmpty(expectedMergeProperties)) {
@@ -255,10 +254,11 @@ class TestEightToNineUpgradeHandler {
       // Setup: No index metadata present
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
       // Execute
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> result =
+      UpgradeDowngrade.TableConfigChangeSet result =
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(DEFAULT_UPGRADE_RESULT, result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToUpdate(), result.getPropertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToDelete(), result.getPropertiesToDelete());
     }
   }
 
@@ -268,10 +268,10 @@ class TestEightToNineUpgradeHandler {
     // Payload class can be any, e.g., AWSDmsAvroPayload
     when(config.getProps()).thenReturn(new TypedProperties());
     when(tableConfig.getPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
-    Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToHandle =
+    UpgradeDowngrade.TableConfigChangeSet  propertiesToHandle =
         handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-    Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getLeft();
-    List<ConfigProperty> propertiesToRemove = propertiesToHandle.getRight();
+    Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getPropertiesToUpdate();
+    List<ConfigProperty> propertiesToRemove = propertiesToHandle.getPropertiesToDelete();
     assertTrue(
         propertiesToAdd.isEmpty(),
         "Expected no properties to be added when autoUpgrade is false");
@@ -325,11 +325,12 @@ class TestEightToNineUpgradeHandler {
       when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
 
       // Execute
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> result =
+      UpgradeDowngrade.TableConfigChangeSet result =
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
       // Verify
-      assertEquals(DEFAULT_UPGRADE_RESULT, result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToUpdate(), result.getPropertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToDelete(), result.getPropertiesToDelete());
       
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present
@@ -409,10 +410,11 @@ class TestEightToNineUpgradeHandler {
       // we'll skip this test for now and focus on testing the storage functionality
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
       // Execute
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> result =
+      UpgradeDowngrade.TableConfigChangeSet result =
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(DEFAULT_UPGRADE_RESULT, result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToUpdate(), result.getPropertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToDelete(), result.getPropertiesToDelete());
     }
   }
 
@@ -433,10 +435,11 @@ class TestEightToNineUpgradeHandler {
       HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata();
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
       // Execute
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> result =
+      UpgradeDowngrade.TableConfigChangeSet result =
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(DEFAULT_UPGRADE_RESULT, result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToUpdate(), result.getPropertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToDelete(), result.getPropertiesToDelete());
     }
   }
 
@@ -472,11 +475,12 @@ class TestEightToNineUpgradeHandler {
       when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
 
       // Execute
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> result =
+      UpgradeDowngrade.TableConfigChangeSet result =
           handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
       // Verify
-      assertEquals(DEFAULT_UPGRADE_RESULT, result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToUpdate(), result.getPropertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.getPropertiesToDelete(), result.getPropertiesToDelete());
       
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present

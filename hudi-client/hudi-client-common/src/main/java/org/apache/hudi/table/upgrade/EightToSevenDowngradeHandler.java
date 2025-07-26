@@ -44,7 +44,6 @@ import org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineLoade
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -99,7 +98,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     // Rollback and run compaction in one step
@@ -145,7 +144,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
       UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SEVEN, metaClient);
     }
-    return Pair.of(tablePropsToAdd, tablePropsToRemove);
+    return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 
   static void downgradePartitionFields(HoodieWriteConfig config,

@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -65,14 +64,13 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailed
  */
 public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config,
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config,
                                                                            HoodieEngineContext context,
                                                                            String instantTime,
                                                                            SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    // If metadata is enabled for the data table, and
-    // existing metadata table is behind the data table, then delete it
+    // handle metadata table
     checkAndHandleMetadataTable(context, table, config, metaClient);
     // Rollback and run compaction in one step
     rollbackFailedWritesAndCompact(
@@ -99,6 +97,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         propertiesToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
       }
     }
-    return Pair.of(propertiesToAdd, propertiesToRemove);
+    return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
   }
 }

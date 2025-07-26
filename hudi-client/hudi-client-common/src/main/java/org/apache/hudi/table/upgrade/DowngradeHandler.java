@@ -18,13 +18,8 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * Interface to assist in downgrading Hoodie table.
@@ -41,7 +36,7 @@ public interface DowngradeHandler {
    * @return Map of config properties and its values to be added to table properties along with the list
    * of config properties to be removed from the table config.
    */
-  Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(
+  UpgradeDowngrade.TableConfigChangeSet downgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper);
 }

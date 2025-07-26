@@ -20,7 +20,6 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
@@ -28,7 +27,6 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
@@ -39,9 +37,7 @@ import org.apache.hudi.table.action.rollback.ListingBasedRollbackStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
@@ -52,7 +48,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
 public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     // fetch pending commit info
@@ -68,7 +64,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
       // for every pending commit, delete old markers and re-create markers in new format
       recreateMarkers(commit, table, context, config.getMarkersDeleteParallelism());
     }
-    return Pair.of(Collections.EMPTY_MAP, Collections.EMPTY_LIST);
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 
   /**

@@ -70,6 +70,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -536,7 +537,8 @@ public class HoodieTableConfig extends HoodieConfig {
     recoverIfNeeded(storage, cfgPath, backupCfgPath);
   }
 
-  private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
+  private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn,
+                             Set<String> propsToDelete) {
     StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     try {
@@ -558,6 +560,7 @@ public class HoodieTableConfig extends HoodieConfig {
       String checksum;
       try (OutputStream out = storage.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
+        propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
         checksum = storeProperties(props, out, cfgPath);
       }
 
@@ -591,13 +594,18 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public static void update(HoodieStorage storage, StoragePath metadataFolder,
                             Properties updatedProps) {
-    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, Collections.EMPTY_SET);
+  }
+
+  public static void updateDeleteProps(HoodieStorage storage, StoragePath metadataFolder,
+                            Properties updatedProps, Set<String> propstoDelete) {
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, propstoDelete);
   }
 
   public static void delete(HoodieStorage storage, StoragePath metadataFolder, Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties);
+    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties, Collections.EMPTY_SET);
   }
 
   /**

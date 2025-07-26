@@ -18,14 +18,12 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.storage.StoragePath;
@@ -35,9 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Upgrade handle to assist in upgrading hoodie table from version 5 to 6.
@@ -49,7 +44,7 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
   private static final Logger LOG = LoggerFactory.getLogger(FiveToSixUpgradeHandler.class);
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
                                                                          HoodieEngineContext context,
                                                                          String instantTime,
                                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
@@ -57,7 +52,7 @@ public class FiveToSixUpgradeHandler implements UpgradeHandler {
 
     deleteCompactionRequestedFileFromAuxiliaryFolder(table);
 
-    return Pair.of(Collections.emptyMap(), Collections.emptyList());
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 
   /**

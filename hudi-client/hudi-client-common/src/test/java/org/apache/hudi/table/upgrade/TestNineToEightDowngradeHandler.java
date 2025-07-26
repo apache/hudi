@@ -19,7 +19,6 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
@@ -31,7 +30,6 @@ import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -171,26 +169,26 @@ class TestNineToEightDowngradeHandler {
           any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
       when(tableConfig.getLegacyPayloadClass()).thenReturn(payloadClassName);
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+      UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
       // Assert properties to remove
-      assertEquals(expectedPropertiesToRemoveSize, propertiesToChange.getRight().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getRight().get(2));
+      assertEquals(expectedPropertiesToRemoveSize, propertiesToChange.getPropertiesToDelete().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getPropertiesToDelete().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getPropertiesToDelete().get(1));
+      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getPropertiesToDelete().get(2));
       // Assert properties to add
-      assertEquals(expectedPropertiesToAddSize, propertiesToChange.getLeft().size());
+      assertEquals(expectedPropertiesToAddSize, propertiesToChange.getPropertiesToUpdate().size());
       // Assert payload class is always set
-      assertEquals(payloadClassName, propertiesToChange.getLeft().get(PAYLOAD_CLASS_NAME));
+      assertEquals(payloadClassName, propertiesToChange.getPropertiesToUpdate().get(PAYLOAD_CLASS_NAME));
       // Assert record merge mode if required
       if (hasRecordMergeMode) {
         assertEquals(RecordMergeMode.CUSTOM.name(),
-            propertiesToChange.getLeft().get(RECORD_MERGE_MODE));
+            propertiesToChange.getPropertiesToUpdate().get(RECORD_MERGE_MODE));
       }
       // Assert record merge strategy ID if required
       if (hasRecordMergeStrategyId) {
         assertEquals(PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-            propertiesToChange.getLeft().get(RECORD_MERGE_STRATEGY_ID));
+            propertiesToChange.getPropertiesToUpdate().get(RECORD_MERGE_STRATEGY_ID));
       }
     }
   }
@@ -203,12 +201,12 @@ class TestNineToEightDowngradeHandler {
           any(), any(), any(), any(), anyBoolean(), any()))
           .thenAnswer(invocation -> null);
       when(tableConfig.getLegacyPayloadClass()).thenReturn("NonExistentPayloadClass");
-      Pair<Map<ConfigProperty, String>, List<ConfigProperty>> propertiesToChange =
+      UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(2, propertiesToChange.getRight().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getRight().get(0));
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getRight().get(1));
-      assertEquals(0, propertiesToChange.getLeft().size());
+      assertEquals(2, propertiesToChange.getPropertiesToDelete().size());
+      assertEquals(MERGE_PROPERTIES, propertiesToChange.getPropertiesToDelete().get(0));
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getPropertiesToDelete().get(1));
+      assertEquals(0, propertiesToChange.getPropertiesToUpdate().size());
     }
   }
 
