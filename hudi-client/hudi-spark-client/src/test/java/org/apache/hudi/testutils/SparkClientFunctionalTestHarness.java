@@ -232,6 +232,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
           context, basePath(), incrementTimelineServicePortToUse());
       timelineServicePort = timelineService.getServerPort();
     }
+    spark.sparkContext().persistentRdds().foreach(rdd -> rdd._2.unpersist(false));
   }
 
   /**
@@ -463,5 +464,9 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     // Check for differences
     return df1Normalized.except(df2Normalized).isEmpty()
         && df2Normalized.except(df1Normalized).isEmpty();
+  }
+
+  public void assertNoPersistentRDDs() {
+    HoodieSparkClientTestHarness.assertNoPersistentRDDs(spark, 2);
   }
 }
