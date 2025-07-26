@@ -205,19 +205,6 @@ object HoodieWriterUtils {
           && value.equals(classOf[OverwriteWithLatestAvroPayload].getName)
           && tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()).equals(classOf[DefaultHoodieRecordPayload].getName)) {
           true
-        } else if (tableVersion == HoodieTableVersion.NINE) {
-          // When payload class from writer is empty, skip comparison.
-          if (value.equals(StringUtils.EMPTY_STRING)) {
-            true
-          } else {
-            // If legacy payload class exist, then their values must be equal.
-            if (tableConfig.contains(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME)) {
-              value.equals(tableConfig.getStringOrDefault(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING))
-            } else {
-              // Otherwise, it does not match.
-              false
-            }
-          }
         } else {
           ignoreConfig
         }
@@ -254,15 +241,17 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
+          // In Table Version 9, builtin payload should compare with legacy payload class.
+          val keyInTableConfig = if (key.equals(PAYLOAD_CLASS_NAME.key())
+            && HoodieTableVersion.current() == HoodieTableVersion.NINE
+            && HoodieTableConfig.PAYLOADS_UNDER_DEPRECATION.contains(value)) {
+              HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key()
+          } else {
+            key
+          }
+          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
-            // For table version 9, `LEGACY_PAYLOAD_CLASS_NAME` property stores the payload class name.
-            if (HoodieTableVersion.current() == HoodieTableVersion.NINE && key.equals(PAYLOAD_CLASS_NAME)) {
-              val legacyPayloadClassName = tableConfig.getStringOrDefault(
-                HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING)
-              diffConfigs.append(s"$key:\t$value\t$legacyPayloadClassName\n")
-            }
-            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")
           }
         }
       }
