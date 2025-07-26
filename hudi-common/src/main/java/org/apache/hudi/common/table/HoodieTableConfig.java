@@ -121,10 +121,10 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
   // This prefix is used to set merging related properties.
-  // A reader might need to read some writer properties to function as expected,
+  // A reader might need to read some merger properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties,
   // and produces a map of key value pairs (Key1->Value1, Key2->Value2, ...) to use.
-  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.prefix.";
+  public static final String MERGE_PROPERTIES_PREFIX = "hoodie.table.merge.properties.";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -1201,6 +1201,10 @@ public class HoodieTableConfig extends HoodieConfig {
       return Option.of(getBaseFileFormat());
     }
     return Option.empty();
+  }
+
+  public Map<String, String> getTableMergeProperties() {
+    return ConfigUtils.extractWithPrefix(this.props, MERGE_PROPERTIES_PREFIX);
   }
 
   public Map<String, String> propsMap() {
