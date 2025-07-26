@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
@@ -106,6 +107,15 @@ public final class SchemaTestUtil {
     } catch (IOException e) {
       throw new HoodieIOException("Could not read data from " + RESOURCE_SAMPLE_DATA, e);
     }
+  }
+
+  public static Schema getSchemaFromFields(List<String> fields) {
+    SchemaBuilder.FieldAssembler<Schema> schemaFieldAssembler = SchemaBuilder.builder().record("test_schema")
+        .namespace("test_namespace").fields();
+    for (String field : fields) {
+      schemaFieldAssembler = schemaFieldAssembler.name(field).type().stringType().noDefault();
+    }
+    return schemaFieldAssembler.endRecord();
   }
 
   private static <T extends IndexedRecord> List<T> toRecords(Schema writerSchema, Schema readerSchema, int from, int limit)

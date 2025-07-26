@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig, Hood
 import org.apache.hudi.common.config.HoodieMetadataConfig.{DEFAULT_METADATA_ENABLE_FOR_READERS, ENABLE}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
@@ -329,7 +330,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
   override def buildDataSchema(): StructType = fileIndex.dataSchema
 }
 
-abstract class BaseHoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
+abstract class HoodieBaseMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                                        override val metaClient: HoodieTableMetaClient,
                                                                        override val options: Map[String, String],
                                                                        override val schemaSpec: Option[StructType],
@@ -343,15 +344,16 @@ abstract class BaseHoodieMergeOnReadIncrementalHadoopFsRelationFactory(override 
   override protected def isIncremental: Boolean = true
 }
 
-class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
-                                                          override val metaClient: HoodieTableMetaClient,
-                                                          override val options: Map[String, String],
-                                                          override val schemaSpec: Option[StructType],
-                                                          isBootstrap: Boolean)
-  extends BaseHoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
+abstract class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
+                                                                   override val metaClient: HoodieTableMetaClient,
+                                                                   override val options: Map[String, String],
+                                                                   override val schemaSpec: Option[StructType],
+                                                                   isBootstrap: Boolean,
+                                                                   mergeOnReadIncrementalRelation: MergeOnReadIncrementalRelation)
+  extends HoodieBaseMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   private val incrementalFileIndex = new HoodieIncrementalFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, true, true)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, true, mergeOnReadIncrementalRelation)
 
   override def buildFileIndex(): HoodieFileIndex = incrementalFileIndex
 
@@ -362,14 +364,30 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
   override def buildDataSchema(): StructType = incrementalFileIndex.dataSchema
 }
 
+class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(override val sqlContext: SQLContext,
+                                                            override val metaClient: HoodieTableMetaClient,
+                                                            override val options: Map[String, String],
+                                                            override val schemaSpec: Option[StructType],
+                                                            isBootstrap: Boolean)
+  extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
+    MergeOnReadIncrementalRelationV1(sqlContext, options, metaClient, schemaSpec))
+
+class HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(override val sqlContext: SQLContext,
+                                                            override val metaClient: HoodieTableMetaClient,
+                                                            override val options: Map[String, String],
+                                                            override val schemaSpec: Option[StructType],
+                                                            isBootstrap: Boolean)
+  extends HoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec))
+
 class HoodieMergeOnReadCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,
                                                   override val options: Map[String, String],
                                                   override val schemaSpec: Option[StructType],
                                                   isBootstrap: Boolean)
-  extends BaseHoodieMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
+  extends HoodieBaseMergeOnReadIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   private val hoodieCDCFileIndex = new HoodieCDCFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, true, true)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, true)
 
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
@@ -408,7 +426,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
   override def buildDataSchema(): StructType = fileIndex.dataSchema
 }
 
-abstract class BaseHoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
+abstract class HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                                        override val metaClient: HoodieTableMetaClient,
                                                                        override val options: Map[String, String],
                                                                        override val schemaSpec: Option[StructType],
@@ -424,15 +442,16 @@ abstract class BaseHoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override 
 
 }
 
-class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
-                                                          override val metaClient: HoodieTableMetaClient,
-                                                          override val options: Map[String, String],
-                                                          override val schemaSpec: Option[StructType],
-                                                          isBootstrap: Boolean)
-  extends BaseHoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
+abstract class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContext: SQLContext,
+                                                                       override val metaClient: HoodieTableMetaClient,
+                                                                       override val options: Map[String, String],
+                                                                       override val schemaSpec: Option[StructType],
+                                                                       isBootstrap: Boolean,
+                                                                       mergeOnReadIncrementalRelation: MergeOnReadIncrementalRelation)
+  extends HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   private val incrementalFileIndex = new HoodieIncrementalFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, true)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, mergeOnReadIncrementalRelation)
 
   override def buildFileIndex(): HoodieFileIndex = incrementalFileIndex
 
@@ -443,15 +462,32 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
   override def buildDataSchema(): StructType = incrementalFileIndex.dataSchema
 }
 
+class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(override val sqlContext: SQLContext,
+                                                            override val metaClient: HoodieTableMetaClient,
+                                                            override val options: Map[String, String],
+                                                            override val schemaSpec: Option[StructType],
+                                                            isBootstrap: Boolean)
+extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
+  MergeOnReadIncrementalRelationV1(sqlContext, options, metaClient, schemaSpec))
+
+class HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(override val sqlContext: SQLContext,
+                                                            override val metaClient: HoodieTableMetaClient,
+                                                            override val options: Map[String, String],
+                                                            override val schemaSpec: Option[StructType],
+                                                            isBootstrap: Boolean,
+                                                            rangeType: RangeType)
+  extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap,
+    MergeOnReadIncrementalRelationV2(sqlContext, options, metaClient, schemaSpec, None, rangeType))
+
 class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLContext,
                                                   override val metaClient: HoodieTableMetaClient,
                                                   override val options: Map[String, String],
                                                   override val schemaSpec: Option[StructType],
                                                   isBootstrap: Boolean)
-  extends BaseHoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
+  extends HoodieBaseCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   private val hoodieCDCFileIndex = new HoodieCDCFileIndex(
-    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false, true)
+    sparkSession, metaClient, schemaSpec, options, fileStatusCache, false)
   override def buildFileIndex(): HoodieFileIndex = hoodieCDCFileIndex
 
   override def buildDataSchema(): StructType = hoodieCDCFileIndex.cdcRelation.schema

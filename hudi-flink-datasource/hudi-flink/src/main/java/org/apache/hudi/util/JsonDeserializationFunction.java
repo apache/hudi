@@ -18,7 +18,8 @@
 
 package org.apache.hudi.util;
 
-import org.apache.flink.api.common.functions.AbstractRichFunction;
+import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
+
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.formats.common.TimestampFormat;
@@ -33,7 +34,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * Wrapper function that manages the lifecycle of the JSON deserialization schema.
  */
 public final class JsonDeserializationFunction
-    extends AbstractRichFunction
+    extends AbstractRichFunctionAdapter
     implements MapFunction<String, RowData> {
   private final JsonRowDataDeserializationSchema deserializationSchema;
 

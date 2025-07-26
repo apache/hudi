@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import java.io.IOException;
 
 /**
- * A {@link BufferedRecord} merger that covers three core merging scenarios within {@link FileGroupRecordBuffer}:
+ * A {@link BufferedRecord} merger that covers three core merging scenarios within {@link org.apache.hudi.common.table.read.buffer.FileGroupRecordBuffer}:
  *
  * <ol>
  *   <li>log & log merging;</li>
