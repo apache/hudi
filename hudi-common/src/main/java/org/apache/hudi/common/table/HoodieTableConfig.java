@@ -120,6 +120,11 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
+  // This prefix is used to set merging related properties.
+  // A reader might need to read some merger properties to function as expected,
+  // and Hudi stores properties with this prefix so the reader parses these properties,
+  // and produces a map of key value pairs (Key1->Value1, Key2->Value2, ...) to use.
+  public static final String MERGE_PROPERTIES_PREFIX = "hoodie.table.merge.properties.";
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -322,15 +327,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be "
           + "merged together where the later contains only partial set of values and not entire record.");
-
-  public static final ConfigProperty<String> MERGE_PROPERTIES = ConfigProperty
-      .key("hoodie.table.merge.properties")
-      .noDefaultValue()
-      .sinceVersion("1.1.0")
-      .withDocumentation("The value of this property is in the format of 'K1=V1,K2=V2,...,Ki=Vi,...'. "
-          + "Each (Ki, Vi) pair represents a property used during merge scenarios. "
-          + "Some merge mode might need some writer properties that are required for readers to function as expected. "
-          + "Hudi stores those properties here so readers can set them while reading.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -1205,6 +1201,10 @@ public class HoodieTableConfig extends HoodieConfig {
       return Option.of(getBaseFileFormat());
     }
     return Option.empty();
+  }
+
+  public Map<String, String> getTableMergeProperties() {
+    return ConfigUtils.extractWithPrefix(this.props, MERGE_PROPERTIES_PREFIX);
   }
 
   public Map<String, String> propsMap() {
