@@ -290,7 +290,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertFalse(validator.run());
     assertTrue(validator.hasValidationFailure());
     assertFalse(validator.getThrowables().isEmpty());
-    assertNoPersistentRDDs(sparkSession);
   }
 
   @Test

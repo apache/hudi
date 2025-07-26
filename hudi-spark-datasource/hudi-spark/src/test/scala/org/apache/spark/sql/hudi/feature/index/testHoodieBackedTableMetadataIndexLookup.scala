@@ -160,7 +160,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     spark.sql("set hoodie.embed.timeline.server=false")
 
-    // Create table with specified version
+    // Create table with a specified version
     spark.sql(createTableStatementProvider.apply())
 
     // Insert initial test data including records with $ characters
@@ -170,6 +170,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     spark.sql(s"insert into $tableName" + " values('$a', 'sec$key', 40, 1001)")
     spark.sql(s"insert into $tableName" + " values('a$a', '$sec$', 50, 1002)")
     spark.sql(s"insert into $tableName" + " values('$$', '$$', 60, 1003)")
+    spark.sql(s"insert into $tableName" + " values('$$2', '$$', 60, 1003)")
 
     val props = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
@@ -197,7 +198,8 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
       Seq("a$", "b$", 30.0, 1000),
       Seq("$a", "sec$key", 40.0, 1001),
       Seq("a$a", "$sec$", 50.0, 1002),
-      Seq("$$", "$$", 60.0, 1003)
+      Seq("$$", "$$", 60.0, 1003),
+      Seq("$$2", "$$", 60.0, 1003)
     )
 
     // Create secondary indexes on name and price columns
@@ -267,13 +269,13 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     assertNoPersistentRDDs()
 
     // Case 2: All existing keys including those with $ characters
-    val allKeys = HoodieListData.eager(List("a1", "a2", "a$", "$a", "a$a", "$$").asJava)
+    val allKeys = HoodieListData.eager(List("a1", "a2", "a$", "$a", "a$a", "$$", "$$2").asJava)
     val allResultRDD = hoodieBackedTableMetadata.readRecordIndex(allKeys)
     val allResult = allResultRDD.collectAsList().asScala
     allResultRDD.unpersistWithDependencies()
     // Validate keys including special characters
     val resultKeys = allResult.map(_.getKey()).toSet
-    assert(resultKeys == Set("a1", "a2", "a$", "$a", "a$a", "$$"), "Keys should match input keys including $ characters")
+    assert(resultKeys == Set("a1", "a2", "a$", "$a", "a$a", "$$", "$$2"), "Keys should match input keys including $ characters")
 
     // Validate HoodieRecordGlobalLocation structure
     allResult.foreach { pair =>
@@ -309,11 +311,11 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     mixedResultRDD.unpersistWithDependencies()
 
     // Case 5: Duplicate keys including those with $ characters
-    val dupKeys = HoodieListData.eager(List("a1", "a1", "a2", "a2", "a$", "a$", "$a", "a$a", "a$a", "$a", "$$", "$$").asJava)
+    val dupKeys = HoodieListData.eager(List("a1", "a1", "a2", "a2", "a$", "a$", "$a", "a$a", "a$a", "$a", "$$", "$$", "$$2", "$$2").asJava)
     val dupResultRDD = hoodieBackedTableMetadata.readRecordIndex(dupKeys)
     val dupResult = dupResultRDD.collectAsList().asScala
     val dupResultKeys = dupResult.map(_.getKey()).toSet
-    assert(dupResultKeys == Set("a1", "a2", "a$", "$a", "a$a", "$$"), "Should deduplicate keys including those with $")
+    assert(dupResultKeys == Set("a1", "a2", "a$", "$a", "a$a", "$$", "$$2"), "Should deduplicate keys including those with $")
     dupResultRDD.unpersistWithDependencies()
 
     // Case 6: Use parallelized RDD
@@ -348,7 +350,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val allSecondaryKeys = HoodieListData.eager(List("b1", "b2", "b$", "sec$key", "$sec$", "$$").asJava)
     val allResultRDD = hoodieBackedTableMetadata.readSecondaryIndexLocations(allSecondaryKeys, secondaryIndexName)
     val allResult = allResultRDD.collectAsList().asScala
-    assert(allResult.size == 6, s"Should return 6 results for 6 existing secondary keys in table version ${getTableVersion}")
+    assert(allResult.size == 7, s"Should return 7 results for 6 existing secondary keys in table version ${getTableVersion}")
 
     // Validate HoodieRecordGlobalLocation structure
     allResult.foreach { location =>
@@ -368,7 +370,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     assertNoPersistentRDDs()
 
     // Case 3: Non-existing secondary keys, some matches the prefix of existing records
-    val nonExistKeys = HoodieListData.eager(List("", "b", "non_exist_1", "non_exist_2").asJava)
+    val nonExistKeys = HoodieListData.eager(List("", "b", "b$$", "non_exist_1", "non_exist_2").asJava)
     val nonExistResultRDD = hoodieBackedTableMetadata.readSecondaryIndexLocations(nonExistKeys, secondaryIndexName)
     val nonExistResult = nonExistResultRDD.collectAsList().asScala
     assert(nonExistResult.isEmpty, s"Non-existing secondary keys should return empty result for table version ${getTableVersion}")
@@ -376,7 +378,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
 
     // Case 4: Mix of existing and non-existing secondary keys
     assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
-    val mixedKeys = HoodieListData.eager(List("b1", "non_exist_1", "b2", "non_exist_2").asJava)
+    val mixedKeys = HoodieListData.eager(List("", "b$$", "b1", "non_exist_1", "b2", "non_exist_2").asJava)
     val mixedResultRDD = hoodieBackedTableMetadata.readSecondaryIndexLocations(mixedKeys, secondaryIndexName)
     val mixedResult = mixedResultRDD.collectAsList().asScala
     assert(mixedResult.size == 2, s"Should return 2 results for 2 existing secondary keys in table version ${getTableVersion}")
@@ -445,7 +447,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     assert(resultMap.asScala("b$").asScala == Set("a$"))
     assert(resultMap.asScala("b1").asScala == Set("a1"))
     assert(resultMap.asScala("b2").asScala == Set("a2"))
-    assert(resultMap.asScala("$$").asScala == Set("$$"))
+    assert(resultMap.asScala("$$").asScala == Set("$$", "$$2"))
     assert(resultMap.asScala("sec$key").asScala == Set("$a"))
     assert(resultMap.asScala("$sec$").asScala == Set("a$a"))
     result.unpersistWithDependencies()
@@ -580,7 +582,9 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
       "40.0$\\$a",
       "50.0$a\\$a",
       "60.0$\\$\\$",
+      "60.0$\\$\\$2",
       "\\$\\$$\\$\\$",
+      "\\$\\$$\\$\\$2",
       "\\$sec\\$$a\\$a",
       "b1$a1",
       "b2$a2",
