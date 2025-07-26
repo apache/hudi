@@ -43,7 +43,7 @@ import org.apache.spark.sql.{SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -196,24 +196,9 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     }
   }
 
-  private lazy val recordKeyField: String =
-    if (tableConfig.populateMetaFields()) {
-      HoodieRecord.RECORD_KEY_METADATA_FIELD
-    } else {
-      val keyFields = tableConfig.getRecordKeyFields.get()
-      checkState(keyFields.length == 1)
-      keyFields.head
-    }
-
   private lazy val specifiedQueryTimestamp: Option[String] =
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
       .map(HoodieSqlCommonUtils.formatQueryInstant)
-
-  private val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
-    DataSourceReadOptions.REALTIME_MERGE.defaultValue)
-
-  private val recordMergerImplClasses = ConfigUtils.split2List(
-    getConfigValue(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES, Some(""))).asScala.toList
 
   private val shouldExtractPartitionValuesFromPartitionPath: Boolean = {
     // Controls whether partition columns (which are the source for the partition path values) should
@@ -235,12 +220,6 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   // NOTE: We're including compaction here since it's not considering a "commit" operation
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
-  private def getConfigValue(config: ConfigProperty[String],
-                             defaultValueOption: Option[String] = Option.empty): String = {
-    optParams.getOrElse(config.key(),
-      sqlContext.getConf(config.key(), defaultValueOption.getOrElse(config.defaultValue())))
-  }
-
   private def checkIfAConfigurationEnabled(config: ConfigProperty[java.lang.Boolean],
                                            defaultValueOption: Option[String] = Option.empty): Boolean = {
     optParams.getOrElse(config.key(),
@@ -248,25 +227,6 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   }
 
   protected lazy val fileStatusCache: FileStatusCache = FileStatusCache.getOrCreate(sparkSession)
-
-  private val configProperties: TypedProperties = getConfigProperties(sparkSession, options, metaClient.getTableConfig)
-  private val metadataConfig: HoodieMetadataConfig = HoodieMetadataConfig.newBuilder
-    .fromProperties(configProperties)
-    .enable(configProperties.getBoolean(ENABLE.key, DEFAULT_METADATA_ENABLE_FOR_READERS)
-      && HoodieTableMetadataUtil.isFilesPartitionAvailable(metaClient)).build
-
-  private lazy val tableState: HoodieTableState = // Subset of the state of table's configuration as of at the time of the query
-    HoodieTableState(
-      tablePath = basePath.toString,
-      latestCommitTimestamp = queryTimestamp,
-      recordKeyField = recordKeyField,
-      preCombineFields = preCombineFields,
-      usesVirtualKeys = !tableConfig.populateMetaFields(),
-      recordPayloadClassName = tableConfig.getPayloadClass,
-      metadataConfig = metadataConfig,
-      recordMergeImplClasses = recordMergerImplClasses,
-      recordMergeStrategyId = tableConfig.getRecordMergeStrategyId
-    )
 
   protected def getMandatoryFields: Seq[String] = partitionColumnsToRead
 
@@ -277,16 +237,12 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected def getRequiredFilters: Seq[Filter]
 
   override def buildFileFormat(): FileFormat = {
-    if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
-      new HoodieMultipleBaseFileFormat(sparkSession.sparkContext.broadcast(tableState),
-        sparkSession.sparkContext.broadcast(HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt)),
-        metaClient.getTableConfig.getTableName, mergeType, getMandatoryFields, isMOR, isIncremental, getRequiredFilters)
-    } else {
-      new HoodieFileGroupReaderBasedParquetFileFormat(basePath.toString,
-        HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
-        isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters)
-    }
+    val tableConfig = metaClient.getTableConfig
+    new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
+      HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+      tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
+      isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
+      tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat)
   }
 
   override def buildBucketSpec(): Option[BucketSpec] = None

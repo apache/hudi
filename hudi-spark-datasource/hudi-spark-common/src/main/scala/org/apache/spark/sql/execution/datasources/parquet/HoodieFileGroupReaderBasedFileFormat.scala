@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, HoodieTableState, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGroupSplit}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.collection.ClosableIterator
@@ -42,6 +43,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
+import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -61,20 +63,21 @@ trait HoodieFormatTrait {
 
 /**
  * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
- * from Parquet formatted base files and their log files.
+ * from Parquet or ORC formatted base files and their log files.
  */
-class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
-                                                  tableSchema: HoodieTableSchema,
-                                                  tableName: String,
-                                                  queryTimestamp: String,
-                                                  mandatoryFields: Seq[String],
-                                                  isMOR: Boolean,
-                                                  isBootstrap: Boolean,
-                                                  isIncremental: Boolean,
-                                                  validCommits: String,
-                                                  shouldUseRecordPosition: Boolean,
-                                                  requiredFilters: Seq[Filter]
-                                                 ) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
+                                           tableSchema: HoodieTableSchema,
+                                           tableName: String,
+                                           queryTimestamp: String,
+                                           mandatoryFields: Seq[String],
+                                           isMOR: Boolean,
+                                           isBootstrap: Boolean,
+                                           isIncremental: Boolean,
+                                           validCommits: String,
+                                           shouldUseRecordPosition: Boolean,
+                                           requiredFilters: Seq[Filter],
+                                           isMultipleBaseFileFormatsEnabled: Boolean,
+                                           hoodieFileFormat: HoodieFileFormat) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
@@ -169,26 +172,21 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-    val parquetFileReader = sparkAdapter.createParquetFileReader(supportVectorizedRead,
-      spark.sessionState.conf, options, augmentedStorageConf.unwrap())
-    val fileGroupParquetFileReader = if (isMOR && supportVectorizedRead) {
-      // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.
-      // TODO: please consider to support vectorized reader in file group reader
-      spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(vectorized = false,
-        spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
+    // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.
+    // TODO: please consider to support vectorized reader in file group reader
+    val vectorizedReadOverride = supportVectorizedRead && !isMOR
+    val baseFileReader: SparkColumnarFileReader = if (isMultipleBaseFileFormatsEnabled) {
+      new MultipleColumnarFileFormatReader(
+        sparkAdapter.createParquetFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap()),
+        sparkAdapter.createOrcFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema))
+    } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
+      sparkAdapter.createParquetFileReader(supportVectorizedRead, spark.sessionState.conf, options, augmentedStorageConf.unwrap())
+    } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
+      sparkAdapter.createOrcFileReader(supportVectorizedRead, spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema)
     } else {
-      spark.sparkContext.broadcast(parquetFileReader)
+      null
     }
-    val orcFileReader = sparkAdapter.createOrcFileReader(supportVectorizedRead,
-      spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema)
-    val fileGroupOrcFileReader = if (isMOR && supportVectorizedRead) {
-      // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.
-      // TODO: please consider to support vectorized reader in file group reader
-      spark.sparkContext.broadcast(sparkAdapter.createOrcFileReader(vectorized = false,
-        spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema))
-    } else {
-      spark.sparkContext.broadcast(orcFileReader)
-    }
+    val broadcastedBaseFileReader = spark.sparkContext.broadcast(baseFileReader)
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
@@ -206,7 +204,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
-              val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupParquetFileReader.value, fileGroupOrcFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              val readerContext = new SparkFileFormatInternalRowReaderContext(broadcastedBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
@@ -238,15 +236,15 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
                 fixedPartitionIndexes)
 
             case _ =>
-              readBaseFile(file, fileGroupParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+              readBaseFile(file, broadcastedBaseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
                 requiredSchema, partitionSchema, outputSchema, filters, storageConf)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
-          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, fileGroupParquetFileReader.value, fileGroupOrcFileReader.value, storageConf, fileIndexProps, requiredSchema)
+          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, broadcastedBaseFileReader.value, storageConf, fileIndexProps, requiredSchema)
 
         case _ =>
-          readBaseFile(file, fileGroupParquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+          readBaseFile(file, broadcastedBaseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
             requiredSchema, partitionSchema, outputSchema, filters, storageConf)
       }
       CloseableIteratorListener.addListener(iter)
@@ -261,8 +259,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
   }
 
   private def buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping,
-                                     parquetFileReader: SparkColumnarFileReader,
-                                     orcFileReader: SparkColumnarFileReader,
+                                     baseFileReader: SparkColumnarFileReader,
                                      storageConf: StorageConfiguration[Configuration],
                                      props: TypedProperties,
                                      requiredSchema: StructType): Iterator[InternalRow] = {
@@ -276,8 +273,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tablePath: String,
       cdcFileGroupSplit,
       metaClient,
       storageConf,
-      parquetFileReader,
-      orcFileReader,
+      baseFileReader,
       tableSchema,
       cdcSchema,
       requiredSchema,

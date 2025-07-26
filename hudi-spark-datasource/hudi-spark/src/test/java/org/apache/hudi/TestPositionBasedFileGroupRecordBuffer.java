@@ -125,7 +125,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
 
     SparkColumnarFileReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(false, spark().sessionState().conf(),
         Map$.MODULE$.empty(), storageConf().unwrapAs(Configuration.class));
-    HoodieReaderContext<InternalRow> ctx = new SparkFileFormatInternalRowReaderContext(reader, null, JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(),
+    HoodieReaderContext<InternalRow> ctx = new SparkFileFormatInternalRowReaderContext(reader, JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(),
         JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(), storageConf(), metaClient.getTableConfig());
     ctx.setTablePath(basePath());
     ctx.setLatestCommitTime(WriteClientTestUtils.createNewInstantTime());

@@ -42,6 +42,7 @@ import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, Spa
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
+import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf.LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION
 import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, DataType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -104,7 +105,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val parquetReader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
     val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema);
     val orcReader = sparkAdapter.createOrcFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]), dataSchema)
-    new SparkFileFormatInternalRowReaderContext(parquetReader, orcReader, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
+    val multiFormatReader = new MultipleColumnarFileFormatReader(parquetReader, orcReader)
+    new SparkFileFormatInternalRowReaderContext(multiFormatReader, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
   }
 
   override def commitToTable(recordList: util.List[HoodieRecord[_]],
@@ -178,7 +180,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     Mockito.when(tableConfig.populateMetaFields()).thenReturn(true)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, null, Seq.empty, Seq.empty, getStorageConf, tableConfig)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, getStorageConf, tableConfig)
     val orderingFieldName = "col2"
     val avroSchema = new Schema.Parser().parse(
       "{\"type\": \"record\",\"name\": \"test\",\"namespace\": \"org.apache.hudi\",\"fields\": ["
@@ -312,7 +314,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
     when(tableConfig.populateMetaFields()).thenReturn(true)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, null, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
     val schema = SchemaBuilder.builder()
       .record("test")
       .fields()
@@ -334,7 +336,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val props = new TypedProperties
     props.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "field1,field2")
     when(tableConfig.getProps).thenReturn(props)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, null, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
     val schema = SchemaBuilder.builder()
       .record("test")
       .fields()
@@ -353,7 +355,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     when(tableConfig.populateMetaFields()).thenReturn(false)
     when(tableConfig.getRecordKeyFields).thenReturn(HOption.of(Array("outer1.field1", "outer1.field2", "outer1.field3")))
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, null, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
     val schema: _root_.org.apache.avro.Schema = buildMultiLevelSchema
     val key = "outer1.field1:compound,outer1.field2:__empty__,outer1.field3:__null__"
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString(""), null))
@@ -367,7 +369,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(true)
     val storageConf = Mockito.mock(classOf[StorageConfiguration[_]])
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, null, Seq.empty, Seq.empty, storageConf, tableConfig)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf, tableConfig)
     val schema: Schema = buildMultiLevelSchema
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("nested_value"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))

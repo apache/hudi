@@ -84,7 +84,7 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
     val stringValue = "string_value"
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(true)
-    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
+    val sparkReaderContext = new SparkFileFormatInternalRowReaderContext(reader, Seq.empty, Seq.empty, storageConf(), tableConfig)
     assertEquals(1, sparkReaderContext.getRecordContext().convertValueToEngineType(1))
     assertEquals(1L, sparkReaderContext.getRecordContext().convertValueToEngineType(1L))
     assertEquals(1.1f, sparkReaderContext.getRecordContext().convertValueToEngineType(1.1f))

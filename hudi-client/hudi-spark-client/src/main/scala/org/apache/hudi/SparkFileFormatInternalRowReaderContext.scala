@@ -52,12 +52,10 @@ import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
  * @param parquetFileReader A reader that transforms a [[PartitionedFile]] to an iterator of
  *                          [[InternalRow]]. This is required for reading the base file and
  *                          not required for reading a file group with only log files.
- * @param orcFileReader     TODO
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
-class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkColumnarFileReader,
-                                              orcFileReader: SparkColumnarFileReader,
+class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileReader,
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
@@ -87,14 +85,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkColumnarFi
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      val reader = if (filePath.getName.endsWith(".parquet")) {
-        parquetFileReader
-      } else if (filePath.getName.endsWith(".orc")) {
-        orcFileReader
-      } else {
-        throw new IllegalArgumentException(s"Unsupported file format for file: $filePath")
-      }
-      new CloseableInternalRowIterator(reader.read(fileInfo,
+      new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
