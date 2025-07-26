@@ -212,22 +212,33 @@ object HoodieWriterUtils {
     }
   }
 
-  /**
-   * Check if payload class from writer matches that from table config for Table version 9.
-   */
-  def checkIfPayloadClassConsistent(payloadClass: String, tableConfig: HoodieTableConfig): Boolean = {
-    // If legacy payload class exist, then their values must be equal.
-    if (tableConfig.contains(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME)) {
-      payloadClass.equals(tableConfig.getStringOrDefault(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING))
-    } else {
-      // Otherwise, payload class should be empty.
-      payloadClass.equals(StringUtils.EMPTY_STRING)
-    }
-  }
-
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
                           tableConfig: HoodieConfig): Unit = {
     validateTableConfig(spark, params, tableConfig, false)
+  }
+
+  /**
+   * This function adds specific rules to choose config key in table config for a given writer key.
+   *
+   * RULE 1: When
+   *   1. table version is 9,
+   *   2. writer key is a payload class key, and
+   *   3. table config has legacy payload class configured,
+   * then
+   *   return legacy payload class key.
+   *
+   * Basic rule:
+   *   return writer key.
+   */
+  def getKeyInTableConfig(key: String, tableConfig: HoodieConfig): String = {
+    if (HoodieTableVersion.current() == HoodieTableVersion.NINE
+        && key.equals(PAYLOAD_CLASS_NAME.key)
+        && !StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING).trim)) {
+      HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key
+    } else {
+      key
+    }
   }
 
   /**
@@ -241,14 +252,7 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          // In Table Version 9, builtin payload should compare with legacy payload class.
-          val keyInTableConfig = if (key.equals(PAYLOAD_CLASS_NAME.key())
-            && HoodieTableVersion.current() == HoodieTableVersion.NINE
-            && HoodieTableConfig.PAYLOADS_UNDER_DEPRECATION.contains(value)) {
-              HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key()
-          } else {
-            key
-          }
+          val keyInTableConfig = getKeyInTableConfig(key, tableConfig)
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")
