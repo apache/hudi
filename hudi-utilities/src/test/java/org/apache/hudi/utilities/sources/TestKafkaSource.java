@@ -38,11 +38,11 @@ public class TestKafkaSource {
     // Case 1: No prefixes are configured.
     assertEquals(kafkaParams, KafkaSource.filterKafkaParameters(kafkaParams, ""));
     // Case 2: Only prefix matching is done, sub strings within the config key are ignored and config is passed down to kafka consumer.
-    assertEquals(kafkaParams, KafkaSource.filterKafkaParameters(kafkaParams, "config.;port"));
+    assertEquals(kafkaParams, KafkaSource.filterKafkaParameters(kafkaParams, "config.,port"));
     // Case 3: There are no configs with the given prefixes.
-    assertEquals(kafkaParams, KafkaSource.filterKafkaParameters(kafkaParams, "custom3;custom4"));
+    assertEquals(kafkaParams, KafkaSource.filterKafkaParameters(kafkaParams, "custom3,custom4"));
     // Case 4: Ensure only the appropriate configs are filtered out.
-    Map<String, Object> filteredParams = KafkaSource.filterKafkaParameters(kafkaParams, "custom1;custom2");
+    Map<String, Object> filteredParams = KafkaSource.filterKafkaParameters(kafkaParams, "custom1,custom2");
     Map<String, Object> expectedParams = new HashMap<>();
     expectedParams.put("boostrap.servers", "dns:port");
     assertEquals(expectedParams, filteredParams);

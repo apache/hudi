@@ -55,6 +55,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 
 public abstract class KafkaSource<T> extends Source<T> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaSource.class);
+  private static final String COMMA_DELIMITER = ",";
   // these are native kafka's config. do not change the config names.
   protected static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   protected static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
@@ -181,7 +182,7 @@ public abstract class KafkaSource<T> extends Source<T> {
       return kafkaParams;
     }
 
-    String[] prefixes = Arrays.stream(semiColonSeparatedPrefixes.split(";"))
+    String[] prefixes = Arrays.stream(semiColonSeparatedPrefixes.split(COMMA_DELIMITER))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .toArray(String[]::new);
