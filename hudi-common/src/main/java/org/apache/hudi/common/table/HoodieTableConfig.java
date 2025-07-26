@@ -908,14 +908,30 @@ public class HoodieTableConfig extends HoodieConfig {
     return finalConfigs;
   }
 
-  static Pair<RecordMergeMode, String> inferMergeModeOrStrategyId(RecordMergeMode mode,
-                                                                  String strategyId,
-                                                                  String payloadClass) {
+  public static Pair<RecordMergeMode, String> inferMergeModeOrStrategyId(RecordMergeMode mode,
+                                                                         String strategyId,
+                                                                         String payloadClass) {
     if (mode == null && strategyId == null) {
-      throw new HoodieException("Merge mode and strategy id cannot be NULL at the same time");
-    }
-
-    if (mode != null && strategyId != null) {
+      // If both are null, try to infer from payload class
+      if (!StringUtils.isNullOrEmpty(payloadClass)) {
+        if (PAYLOADS_UNDER_DEPRECATION.contains(payloadClass)) {
+          if (EVENT_TIME_BASED_PAYLOADS.contains(payloadClass)) {
+            mode = EVENT_TIME_ORDERING;
+            strategyId = EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+          } else {
+            mode = COMMIT_TIME_ORDERING;
+            strategyId = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+          }
+        } else {
+          mode = CUSTOM;
+          strategyId = PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+        }
+      } else {
+        throw new HoodieException(String.format(
+            "Merge mode and strategy id cannot both be NULL in table version: %s",
+            HoodieTableVersion.current().name()));
+      }
+    } else if (mode != null && strategyId != null) {
       checkIfConsistent(mode, strategyId);
     } else if (mode == null) {
       if (strategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
@@ -939,15 +955,15 @@ public class HoodieTableConfig extends HoodieConfig {
     return Pair.of(mode, strategyId);
   }
 
-  static void checkIfConsistent(RecordMergeMode mode, String strategyId) {
+  public static void checkIfConsistent(RecordMergeMode mode, String strategyId) {
     boolean isConsistent;
     if (mode == COMMIT_TIME_ORDERING) {
-      isConsistent = strategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+      isConsistent = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID.equals(strategyId);
     } else if (mode == EVENT_TIME_ORDERING) {
-      isConsistent = strategyId.equals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+      isConsistent = EVENT_TIME_BASED_MERGE_STRATEGY_UUID.equals(strategyId);
     } else {
-      isConsistent =  strategyId.equals(CUSTOM_MERGE_STRATEGY_UUID)
-          || strategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+      isConsistent = CUSTOM_MERGE_STRATEGY_UUID.equals(strategyId)
+          || PAYLOAD_BASED_MERGE_STRATEGY_UUID.equals(strategyId);
     }
     if (!isConsistent) {
       throw new HoodieException(String.format(
