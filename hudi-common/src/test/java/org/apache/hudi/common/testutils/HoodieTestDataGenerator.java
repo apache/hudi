@@ -1302,10 +1302,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     this.extendedSchema = Option.of(extendedSchema);
   }
 
-  public Schema getExtendedSchema() {
-    return extendedSchema.orElseThrow(IllegalArgumentException::new);
-  }
-
   private void generateCustomValues(GenericRecord rec, String customPrefix) {
     for (Schema.Field field : rec.getSchema().getFields()) {
       if (field.name().startsWith(customPrefix)) {

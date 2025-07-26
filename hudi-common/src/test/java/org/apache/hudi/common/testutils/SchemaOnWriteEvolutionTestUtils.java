@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.LogicalType;
@@ -29,7 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
-public class SchemaOnWriteEvolutionTestUtils {
+public class SchemaOnWriteEvolutionTestUtils extends SchemaEvolutionTestUtilsBase {
 
   public static class SchemaOnWriteConfigs extends SchemaEvolutionTestUtilsBase.SchemaEvolutionConfigBase {
     public boolean addNewFieldSupport = true;
@@ -92,21 +91,25 @@ public class SchemaOnWriteEvolutionTestUtils {
 
   public static Schema generateExtendedSchema(SchemaOnWriteConfigs configs, int iteration, int maxIterations) {
     List<Pair<Schema.Type, LogicalType>> baseFields = new ArrayList<>();
-    for (SchemaOnWriteTypePromotionCase evolution : SchemaOnWriteTypePromotionCase.values()) {
-      if (evolution.isEnabled.test(configs)) {
-        baseFields.add(Pair.of(isBefore ? evolution.before : evolution.after, null));
+    for (int i = 0; i < maxIterations; i++) {
+      for (SchemaOnWriteTypePromotionCase evolution : SchemaOnWriteTypePromotionCase.values()) {
+        if (evolution.isEnabled.test(configs)) {
+          if (i >= iteration) {
+            baseFields.add(Pair.of(evolution.before, null));
+          } else {
+            baseFields.add(Pair.of(evolution.after, null));
+          }
+        }
       }
     }
 
-    // Add new field if we are testing adding new fields
-    if (!isBefore && configs.addNewFieldSupport) {
-      baseFields.add(Pair.of(Schema.Type.BOOLEAN, null));
+    for (int i = 0; i < maxIterations; i++) {
+      // Add new field if we are testing adding new fields
+      if (configs.addNewFieldSupport && i < iteration) {
+        baseFields.add(Pair.of(Schema.Type.BOOLEAN, null));
+      }
     }
 
-    this.extendedSchema = Option.of(generateExtendedSchema(configs, baseFields));
-  }
-
-  public void extendSchema(SchemaOnWriteConfigs configs, boolean isBefore) {
-
+   return generateExtendedSchema(configs, baseFields);
   }
 }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderOnJavaTestBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
@@ -112,8 +113,8 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
   }
 
   @Override
-  public HoodieTestDataGenerator.SchemaOnWriteConfigs getSchemaEvolutionConfigs() {
-    HoodieTestDataGenerator.SchemaOnWriteConfigs configs = new HoodieTestDataGenerator.SchemaOnWriteConfigs();
+  public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaEvolutionConfigs() {
+    SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs = new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
     configs.nestedSupport = false;
     configs.arraySupport = false;
     configs.mapSupport = false;

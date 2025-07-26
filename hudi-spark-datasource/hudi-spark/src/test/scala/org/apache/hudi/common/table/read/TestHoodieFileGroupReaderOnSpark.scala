@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.SchemaOnWriteConfigs
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.internal.schema.InternalSchema
