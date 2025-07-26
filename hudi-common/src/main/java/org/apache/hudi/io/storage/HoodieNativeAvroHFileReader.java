@@ -341,7 +341,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
                                                                          Schema readerSchema) throws IOException {
     HFileReader reader = newHFileReader();
-    return new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema.get());
+    return new RecordByKeyIterator(reader, sortedKeys, getSchema(), readerSchema);
   }
 
   @Override

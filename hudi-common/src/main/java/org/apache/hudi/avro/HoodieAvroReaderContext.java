@@ -54,6 +54,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -69,15 +70,43 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final String payloadClass;
+  private final Map<StoragePath, HoodieAvroFileReader> reusableFileReaders;
 
+  /**
+   * Constructs an instance of the reader context that will read data into Avro records.
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig the configuration of the Hudi table being read
+   * @param instantRangeOpt the set of valid instants for this read
+   * @param filterOpt an optional filter to apply on the record keys
+   */
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap());
+  }
+
+  /**
+   * Constructs an instance of the reader context with an optional cache of reusable file readers.
+   * This provides an opportunity for increased performance when repeatedly reading from the same files.
+   * The caller of this constructor is responsible for managing the lifecycle of the reusable file readers.
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig the configuration of the Hudi table being read
+   * @param instantRangeOpt the set of valid instants for this read
+   * @param filterOpt an optional filter to apply on the record keys
+   * @param reusableFileReaders a map of reusable file readers, keyed by their storage paths.
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
     this.payloadClass = tableConfig.getPayloadClass();
     this.typeConverter = new AvroReaderContextTypeConverter();
+    this.reusableFileReaders = reusableFileReaders;
   }
 
   @Override
@@ -88,9 +117,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema dataSchema,
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
-    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, baseFileFormat, Option.empty());
+    HoodieAvroFileReader reader;
+    if (reusableFileReaders.containsKey(filePath)) {
+      reader = reusableFileReaders.get(filePath);
+    } else {
+      reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+              filePath, baseFileFormat, Option.empty());
+    }
     if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
     }

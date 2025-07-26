@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -27,6 +27,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -39,7 +41,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -119,7 +120,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
       String recordKey = invocation.getArgument(1);
       return new TestRecord(recordKey, 0);
     });
-    when(mockReaderContext.getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).recordKey);
+    when(mockReaderContext.getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
     when(mockReaderContext.getOrderingValue(any(), any(), any())).thenReturn(0);
     when(mockReaderContext.toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
     when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -140,27 +141,4 @@ class TestSortedKeyBasedFileGroupRecordBuffer {
     return actualRecords;
   }
 
-  private static class TestRecord {
-    private final String recordKey;
-    private final int value;
-
-    @Override
-    public boolean equals(Object o) {
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      TestRecord that = (TestRecord) o;
-      return value == that.value && Objects.equals(recordKey, that.recordKey);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(recordKey, value);
-    }
-
-    public TestRecord(String recordKey, int value) {
-      this.recordKey = recordKey;
-      this.value = value;
-    }
-  }
 }

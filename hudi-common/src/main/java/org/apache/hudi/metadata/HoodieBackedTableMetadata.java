@@ -35,12 +35,16 @@ import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.buffer.ReusableFileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieDataUtils;
@@ -61,6 +65,8 @@ import org.apache.hudi.expression.Literal;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -109,6 +115,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileSystemView
 public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadata.class);
+  private static final Schema SCHEMA = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
 
   private final String metadataBasePath;
 
@@ -117,6 +124,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieTableFileSystemView metadataFileSystemView;
   // should we reuse the open file handles, across calls
   private final boolean reuse;
+  private final transient Map<HoodieFileGroupId, Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferLoader<IndexedRecord>>> reusableFileReaders = new ConcurrentHashMap<>();
 
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();
@@ -171,7 +179,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<HoodieRecord<HoodieMetadataPayload>> records = getRecordsByKeys(
         HoodieListData.eager(Collections.singletonList(key)), partitionName, IDENTITY_ENCODING)
         .values().collectAsList();
-    ValidationUtils.checkArgument(records.size() <= 1, "Found more than 1 record for record key " + key);
+    ValidationUtils.checkArgument(records.size() <= 1, () -> "Found more than 1 record for record key " + key);
     return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
   }
 
@@ -227,7 +235,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     //       records matching the key-prefix
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
-    checkState(!partitionFileSlices.isEmpty(), "Number of file slices for partition " + partitionName + " should be > 0");
+    checkState(!partitionFileSlices.isEmpty(), () -> "Number of file slices for partition " + partitionName + " should be > 0");
 
     return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
         getEngineContext().parallelize(partitionFileSlices))
@@ -350,7 +358,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
         getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true);
-    
+
     return result.filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
 
@@ -439,7 +447,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       HoodieData<String> keys, String partitionName, SerializableFunctionUnchecked<String, String> keyEncodingFn) {
     List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
-    checkState(!fileSlices.isEmpty(), "No file slices found for partition: " + partitionName);
+    checkState(!fileSlices.isEmpty(), () -> "No file slices found for partition: " + partitionName);
 
     return doLookup(keys, partitionName, fileSlices, keyEncodingFn);
   }
@@ -460,7 +468,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         "Record index is not initialized in MDT");
     ValidationUtils.checkState(
         dataMetaClient.getTableConfig().getMetadataPartitions().contains(partitionName),
-        "Secondary index is not initialized in MDT for: " + partitionName);
+        () -> "Secondary index is not initialized in MDT for: " + partitionName);
     // Fetch secondary-index records
     Map<String, Set<String>> secondaryKeyRecords = HoodieDataUtils.dedupeAndCollectAsMap(
         getSecondaryIndexRecords(HoodieListData.eager(secondaryKeys.collectAsList()), partitionName));
@@ -500,37 +508,79 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return keys;
   }
 
-  private HoodieFileGroupReader<IndexedRecord> buildFileGroupReader(Predicate predicate,
-                                                                    FileSlice fileSlice) {
+  private ClosableIterator<IndexedRecord> readSliceWithFilter(Predicate predicate, FileSlice fileSlice) throws IOException {
     Option<HoodieInstant> latestMetadataInstant =
         metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime =
         latestMetadataInstant.map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
-    Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     // Only those log files which have a corresponding completed instant on the dataset should be read
     // This is because the metadata table is updated before the dataset instants are committed.
     Set<String> validInstantTimestamps = getValidInstantTimestamps();
-    InstantRange instantRange = InstantRange.builder()
+    Option<InstantRange> instantRange = Option.of(InstantRange.builder()
         .rangeType(InstantRange.RangeType.EXACT_MATCH)
-        .explicitInstants(validInstantTimestamps).build();
-    
+        .explicitInstants(validInstantTimestamps).build());
+
+    // If reuse is enabled and full scan is allowed for the partition, we can reuse the file readers for base files and the reader context for the log files.
+    Map<StoragePath, HoodieAvroFileReader> baseFileReaders = Collections.emptyMap();
+    ReusableFileGroupRecordBufferLoader<IndexedRecord> recordBufferLoader = null;
+    if (reuse && isFullScanAllowedForPartition(fileSlice.getPartitionPath())) {
+      Pair<HoodieAvroFileReader, ReusableFileGroupRecordBufferLoader<IndexedRecord>> readers =
+          reusableFileReaders.computeIfAbsent(fileSlice.getFileGroupId(), fgId -> {
+            try {
+              HoodieAvroFileReader baseFileReader = null;
+              if (fileSlice.getBaseFile().isPresent()) {
+                baseFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+                    .getFileReader(metadataConfig, fileSlice.getBaseFile().get().getStoragePath(), metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
+              }
+              return Pair.of(baseFileReader, buildReusableRecordBufferLoader(fileSlice, latestMetadataInstantTime, instantRange));
+            } catch (IOException ex) {
+              throw new HoodieIOException("Error opening readers for metadata table partition " + fileSlice.getPartitionPath(), ex);
+            }
+          });
+      if (fileSlice.getBaseFile().isPresent()) {
+        baseFileReaders = Collections.singletonMap(fileSlice.getBaseFile().get().getStoragePath(), readers.getLeft());
+      }
+
+      ValidationUtils.checkArgument(predicate instanceof Predicates.In, "For Metadata Table Reuse, key filter should be based on full keys");
+      recordBufferLoader = readers.getRight();
+    }
+
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         storageConf,
         metadataMetaClient.getTableConfig(),
-        Option.of(instantRange),
-        Option.of(predicate));
-    return HoodieFileGroupReader.<IndexedRecord>newBuilder()
+        instantRange,
+        Option.of(predicate),
+        baseFileReaders);
+
+    HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metadataMetaClient)
         .withLatestCommitTime(latestMetadataInstantTime)
         .withFileSlice(fileSlice)
-        .withDataSchema(schema)
-        .withRequestedSchema(schema)
+        .withDataSchema(SCHEMA)
+        .withRequestedSchema(SCHEMA)
         .withProps(buildFileGroupReaderProperties(metadataConfig))
-        .withStart(0)
-        .withLength(Long.MAX_VALUE)
-        .withShouldUseRecordPosition(false)
+        .withRecordBufferLoader(recordBufferLoader)
         .build();
+
+    return fileGroupReader.getClosableIterator();
+  }
+
+  private ReusableFileGroupRecordBufferLoader<IndexedRecord> buildReusableRecordBufferLoader(FileSlice fileSlice, String latestMetadataInstantTime,
+                                                                                             Option<InstantRange> instantRangeOption) {
+    // initialize without any filters
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
+        storageConf,
+        metadataMetaClient.getTableConfig(),
+        instantRangeOption,
+        Option.empty());
+    readerContext.initRecordMerger(metadataConfig.getProps());
+    readerContext.setHasBootstrapBaseFile(false);
+    readerContext.setHasLogFiles(fileSlice.hasLogFiles());
+    readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, SCHEMA, SCHEMA, Option.empty(), metadataMetaClient.getTableConfig(), metadataConfig.getProps()));
+    readerContext.setShouldMergeUseRecordPosition(false);
+    readerContext.setLatestCommitTime(latestMetadataInstantTime);
+    return FileGroupRecordBufferLoader.createReusable(readerContext);
   }
 
   private HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> lookupKeyRecordPairs(String partitionName,
@@ -590,8 +640,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
     try {
       Predicate predicate = buildPredicate(partitionName, sortedKeys, isFullKey);
-      HoodieFileGroupReader<IndexedRecord> fileGroupReader = buildFileGroupReader(predicate, fileSlice);
-      ClosableIterator<IndexedRecord> rawIterator = fileGroupReader.getClosableIterator();
+      ClosableIterator<IndexedRecord> rawIterator = readSliceWithFilter(predicate, fileSlice);
 
       return new CloseableMappingIterator<>(rawIterator, record -> {
         GenericRecord metadataRecord = (GenericRecord) record;
@@ -604,12 +653,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   /**
    * Builds a predicate for querying metadata partitions based on the partition type and lookup strategy.
-   * 
+   *
    * Secondary index partitions are treated as a special case where the isFullKey parameter is ignored.
-   * This is because secondary index lookups are neither pure prefix lookups nor full key lookups, 
+   * This is because secondary index lookups are neither pure prefix lookups nor full key lookups,
    * but rather use a customized key format: {secondary_key}+${record_key}. The lookup always uses
    * prefix matching to find all record keys associated with a given secondary key value.
-   * 
+   *
    * @param partitionName The name of the metadata partition
    * @param sortedKeys The list of keys to search for
    * @param isFullKey Whether to perform exact key matching (ignored for secondary index partitions)
@@ -665,6 +714,26 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (this.metadataFileSystemView != null) {
       this.metadataFileSystemView.close();
       this.metadataFileSystemView = null;
+    }
+    closeReusableReaders();
+  }
+
+  /**
+   * Close and clear all the partitions readers.
+   */
+  private void closeReusableReaders() {
+    if (reuse) {
+      reusableFileReaders.values().forEach(pair -> {
+        if (pair.getLeft() != null) {
+          // Close the base file reader
+          pair.getLeft().close();
+        }
+        if (pair.getRight() != null) {
+          // Close the file group record buffer
+          pair.getRight().close();
+        }
+      });
+      reusableFileReaders.clear();
     }
   }
 
@@ -723,6 +792,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
     validInstantTimestamps = null;
     partitionFileSliceMap.clear();
+    closeReusableReaders();
   }
 
   @Override

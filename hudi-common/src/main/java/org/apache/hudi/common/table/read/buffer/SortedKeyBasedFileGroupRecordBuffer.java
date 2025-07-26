@@ -17,13 +17,15 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
@@ -37,13 +39,13 @@ import java.util.stream.Collectors;
  * An extension of {@link KeyBasedFileGroupRecordBuffer} that sorts the log records based on the record key when joining with the base file records.
  * This assumes that the base file records are already sorted by the record key.
  */
-public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
+class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
 
   // when sorting is enabled, this will hold the base file record if it was not used in the previous iteration
   private Option<T> queuedBaseFileRecord = Option.empty();
   private Queue<String> logRecordKeysSorted = null;
 
-  public SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+  SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                              HoodieTableMetaClient hoodieTableMetaClient,
                                              RecordMergeMode recordMergeMode,
                                              PartialUpdateMode partialUpdateMode,
