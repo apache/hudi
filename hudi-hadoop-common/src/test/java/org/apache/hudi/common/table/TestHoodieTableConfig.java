@@ -579,46 +579,47 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @ParameterizedTest
   @MethodSource("argumentsForInferMergingConfigsForVersion9")
   void testInferMergingConfigsForVersion9(String testName, RecordMergeMode recordMergeMode, String payloadClassName,
-                                         String recordMergeStrategyId, HoodieTableVersion tableVersion,
-                                         int expectedConfigSize, String expectedMergeMode, String expectedPayloadClass,
-                                         String expectedMergeStrategyId, String expectedLegacyPayloadClass,
-                                         String expectedPartialUpdateMode, String expectedDebeziumMarker,
-                                         String expectedDeleteKey, String expectedDeleteMarker, String expectedCustomProperty) {
+                                          String recordMergeStrategyId, HoodieTableVersion tableVersion,
+                                          int expectedConfigSize, String expectedMergeMode, String expectedPayloadClass,
+                                          String expectedMergeStrategyId, String expectedLegacyPayloadClass,
+                                          String expectedPartialUpdateMode, String expectedDebeziumMarker,
+                                          String expectedDeleteKey, String expectedDeleteMarker, String expectedCustomProperty) {
     Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForVersion9(
         recordMergeMode, payloadClassName, recordMergeStrategyId, tableVersion);
 
     assertEquals(expectedConfigSize, configs.size(), "Config size mismatch for: " + testName);
-
     if (expectedMergeMode != null) {
-      assertEquals(expectedMergeMode, configs.get(RECORD_MERGE_MODE.key()), "Merge mode mismatch for: " + testName);
+      assertEquals(expectedMergeMode, configs.get(RECORD_MERGE_MODE.key()),
+          "Merge mode mismatch for: " + testName);
     }
-
     if (expectedPayloadClass != null) {
-      assertEquals(expectedPayloadClass, configs.get(PAYLOAD_CLASS_NAME.key()), "Payload class mismatch for: " + testName);
+      assertEquals(expectedPayloadClass, configs.get(PAYLOAD_CLASS_NAME.key()),
+          "Payload class mismatch for: " + testName);
     }
-
     if (expectedMergeStrategyId != null) {
-      assertEquals(expectedMergeStrategyId, configs.get(RECORD_MERGE_STRATEGY_ID.key()), "Merge strategy ID mismatch for: " + testName);
+      assertEquals(expectedMergeStrategyId, configs.get(RECORD_MERGE_STRATEGY_ID.key()),
+          "Merge strategy ID mismatch for: " + testName);
     }
-
     if (expectedLegacyPayloadClass != null) {
-      assertEquals(expectedLegacyPayloadClass, configs.get(LEGACY_PAYLOAD_CLASS_NAME.key()), "Legacy payload class mismatch for: " + testName);
+      assertEquals(expectedLegacyPayloadClass, configs.get(LEGACY_PAYLOAD_CLASS_NAME.key()),
+          "Legacy payload class mismatch for: " + testName);
     }
-
     if (expectedPartialUpdateMode != null) {
-      assertEquals(expectedPartialUpdateMode, configs.get(HoodieTableConfig.PARTIAL_UPDATE_MODE.key()), "Partial update mode mismatch for: " + testName);
+      assertEquals(expectedPartialUpdateMode, configs.get(HoodieTableConfig.PARTIAL_UPDATE_MODE.key()),
+          "Partial update mode mismatch for: " + testName);
     }
-
     if (expectedDebeziumMarker != null) {
-      assertEquals(expectedDebeziumMarker, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER), "Debezium marker mismatch for: " + testName);
+      assertEquals(expectedDebeziumMarker, configs.get(
+          HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
+          "Debezium marker mismatch for: " + testName);
     }
-
     if (expectedDeleteKey != null) {
-      assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY), "Delete key mismatch for: " + testName);
+      assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY),
+          "Delete key mismatch for: " + testName);
     }
-
     if (expectedDeleteMarker != null) {
-      assertEquals(expectedDeleteMarker, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER), "Delete marker mismatch for: " + testName);
+      assertEquals(expectedDeleteMarker, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER),
+          "Delete marker mismatch for: " + testName);
     }
   }
 
