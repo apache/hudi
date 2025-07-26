@@ -1481,17 +1481,18 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setTableVersion(tableVersion);
       tableConfig.setInitialVersion(tableVersion);
 
+      // For table version <= 8
       if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
         Triple<RecordMergeMode, String, String> mergeConfigs =
-            HoodieTableConfig.inferCorrectMergingBehavior(
+            HoodieTableConfig.inferBasicMergingBehavior(
                 recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields,
                 tableVersion);
         tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
         tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
         tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
-      } else {
+      } else { // For table version >= 9
         Map<String, String> mergeConfigs = inferMergingConfigsForVersion9(
-            recordMergeMode, payloadClassName, recordMergerStrategyId, tableVersion);
+            recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields, tableVersion);
         for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
           tableConfig.setValue(config.getKey(), config.getValue());
         }

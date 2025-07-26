@@ -188,8 +188,8 @@ public class FileGroupReaderSchemaHandler<T> {
                                                        Option<Pair<String, String>> customDeleteMarkerKeyAndValue,
                                                        boolean hasInstantRange) {
     RecordMergeMode mergeMode = cfg.getRecordMergeMode();
-    if (HoodieTableVersion.current().lesserThan(HoodieTableVersion.NINE)) {
-      Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+    if (cfg.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
+      Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferBasicMergingBehavior(
           cfg.getRecordMergeMode(),
           cfg.getPayloadClass(),
           cfg.getRecordMergeStrategyId(),
