@@ -36,6 +36,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -153,7 +154,7 @@ public class TestHoodieListDataPairData {
 
   @Test
   void testReduceByKeyWithCloseableInput() {
-    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    ConcurrentLinkedQueue<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ConcurrentLinkedQueue<>();
     HoodiePairData<Integer, Integer> data = HoodieListData.lazy(Arrays.asList(1, 1, 1))
         .flatMapToPair(key -> {
           CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
@@ -167,7 +168,7 @@ public class TestHoodieListDataPairData {
 
   @Test
   void testLeftOuterJoinWithCloseableInput() {
-    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    ConcurrentLinkedQueue<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ConcurrentLinkedQueue<>();
     HoodiePairData<Integer, Integer> dataToJoin = HoodieListData.lazy(Arrays.asList(1, 2, 3))
         .flatMapToPair(key -> {
           CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
@@ -182,7 +183,7 @@ public class TestHoodieListDataPairData {
 
   @Test
   void testJoinWithCloseableInput() {
-    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    ConcurrentLinkedQueue<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ConcurrentLinkedQueue<>();
     HoodiePairData<Integer, Integer> dataToJoin = HoodieListData.lazy(Arrays.asList(1, 2, 3))
         .flatMapToPair(key -> {
           CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
