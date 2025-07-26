@@ -225,6 +225,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val fileIndex = HoodieFileIndex(spark, metaClient, None, queryOpts)
     assertEquals("partition_path", fileIndex.partitionSchema.fields.map(_.name).mkString(","))
     writeClient.close()
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -271,6 +272,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .sorted
 
     assertEquals(List("2021/03/08", "2021/03/09"), prunedPartitions)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -332,6 +334,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
     assertEquals(1, distinctListOfCommitTimesAfterSecondWrite.size, "All basefiles affected so all have same commit time")
     assertEquals(lastCommitTime, distinctListOfCommitTimesAfterSecondWrite.head, "All files should be of second commit after index refresh")
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -393,6 +396,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
       assertEquals(10, readDF.count())
       assertEquals(5, readDF.filter("dt = '2021-03-01' and hh = '10'").count())
+      assertNoPersistentRDDs(sparkSession)
     }
 
     {
@@ -438,6 +442,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         assertEquals(10, readDF.count())
         // There are 5 rows in the  dt = 2021/03/01 and hh = 10
         assertEquals(5, readDF.filter("dt = '2021/03/01' and hh ='10'").count())
+        assertNoPersistentRDDs(sparkSession)
       }
     }
 
@@ -472,6 +477,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
       assertEquals(10, readDF.count())
       assertEquals(5, readDF.filter("dt = '2021/03/01' and hh = '10'").count())
+      assertNoPersistentRDDs(sparkSession)
     }
   }
 

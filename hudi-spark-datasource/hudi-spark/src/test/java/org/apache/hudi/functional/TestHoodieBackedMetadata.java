@@ -37,6 +37,7 @@ import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -82,6 +83,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -122,7 +124,6 @@ import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
-import org.apache.hudi.common.util.HoodieDataUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -1190,12 +1191,25 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
         context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-    Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(metadataReader
-        .readRecordIndex(HoodieListData.eager(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
-    assertEquals(0, result.size(), "RI should not return entries that are rolled back.");
-    result = HoodieDataUtils.dedupeAndCollectAsMap(metadataReader
-        .readRecordIndex(HoodieListData.eager(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
-    assertEquals(records2.size(), result.size(), "RI should return entries in the commit.");
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData1 = metadataReader
+        .readRecordIndex(HoodieListData.eager(records1.stream().map(HoodieRecord::getRecordKey)
+        .collect(Collectors.toList())));
+    Map<String, HoodieRecordGlobalLocation> result;
+    try {
+      result = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData1);
+      assertEquals(0, result.size(), "RI should not return entries that are rolled back.");
+    } finally {
+      recordIndexData1.unpersistWithDependencies();
+    }
+    
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData2 = metadataReader
+        .readRecordIndex(HoodieListData.eager(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
+    try {
+      result = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData2);
+      assertEquals(records2.size(), result.size(), "RI should return entries in the commit.");
+    } finally {
+      recordIndexData2.unpersistWithDependencies();
+    }
   }
 
   private void revertTableToInflightState(HoodieWriteConfig writeConfig) throws IOException {

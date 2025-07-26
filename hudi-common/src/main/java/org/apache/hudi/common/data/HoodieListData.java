@@ -112,6 +112,11 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   @Override
+  public void unpersistWithDependencies() {
+    // No OP - in-memory implementation doesn't have dependencies to unpersist
+  }
+
+  @Override
   public <O> HoodieData<O> map(SerializableFunction<T, O> func) {
     return new HoodieListData<>(asStream().map(throwingMapWrapper(func)), lazy);
   }

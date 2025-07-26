@@ -184,6 +184,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
     validateNonExistantColumnsToIndexDefn(metaClient)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   /**
@@ -247,6 +248,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         "c2_minValue", "c3_maxValue", "c3_minValue", "c5_maxValue", "c5_minValue", "`c9.c9_1_car_brand_maxValue`", "`c9.c9_1_car_brand_minValue`",
         "`c10.c10_1.c10_2_1_nested_lvl2_field2_maxValue`","`c10.c10_1.c10_2_1_nested_lvl2_field2_minValue`")),
       addNestedFiled = true)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -364,6 +366,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       smallFileLimit = 0))
 
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   @ParameterizedTest
@@ -444,6 +447,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
 
     validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   def simulateFailureForLatestCommit(tableType: HoodieTableType, partitionCol: String) : Unit = {

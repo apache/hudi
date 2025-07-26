@@ -67,7 +67,13 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
 
   override protected def beforeAll(): Unit = {
     spark.sql("set hoodie.metadata.index.column.stats.enable=false")
+    spark.sparkContext.persistentRdds.foreach(rdd => rdd._2.unpersist())
     initQueryIndexConf()
+  }
+
+  override protected def afterAll(): Unit = {
+    assertNoPersistentRDDs()
+    super.afterAll()
   }
 
   test("Test Expression Index With Hive Sync Non Partitioned External Table") {
@@ -147,6 +153,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           HiveTestUtil.shutdown()
 
           spark.sql(s"""DROP TABLE if exists $tableName""")
+          assertNoPersistentRDDs()
         }
       }
     }
@@ -590,6 +597,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         Seq("name", "A3", "A3", false), // for update of id=1
         Seq("name", "A2", "A2", false) // for file in name=a2
       )
+      assertNoPersistentRDDs()
     }
   }
 
@@ -875,6 +883,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         checkNestedExceptionContains(s"create index idx_datestr on $tableName using column_stats(ts) options(expr='from_unixtime', invalidOp='random')")(
           "Input options [invalidOp] are not valid for spark function"
         )
+        assertNoPersistentRDDs()
       }
     }
   }
@@ -976,6 +985,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         exprIndexSupport = new ExpressionIndexSupport(spark, tableSchema, metadataConfig, metaClient)
         assertTrue(exprIndexSupport.prunePartitions(fileIndex, Seq(dataFilter), filterReferencedColumns).isEmpty)
         spark.sql(s"drop index idx_ts on $tableName")
+        assertNoPersistentRDDs()
       }
     }
   }
@@ -1567,6 +1577,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
         dataFilter = EqualTo(dateSub, lit(18586).expr)
         verifyFilePruning(opts, dataFilter, metaClient, isDataSkippingExpected = true)
         spark.sql(s"drop index idx_date_sub on $tableName")
+        assertNoPersistentRDDs()
       }
     }
   }
@@ -1807,6 +1818,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           Seq("trip5", "rider-A"),
           Seq("trip6", "rider-C")
         )
+        assertNoPersistentRDDs()
       }
     }
   }
@@ -1882,6 +1894,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
           Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "price=100", "ts"), "2021-09-26", "2021-09-26"),
           Seq(getPartitionStatsIndexKey(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX, "price=1000", "ts"), "2022-09-26", "2022-09-26")
         )
+        assertNoPersistentRDDs()
       }
     }
   }
@@ -2047,6 +2060,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       // check more records returned if no partition filter provided
       indexDf = expressionIndexSupport.loadExpressionIndexDataFrame("expr_index_idx_datestr", Set(), shouldReadInMemory = true)
       assertTrue(indexDf.count() > 1)
+      assertNoPersistentRDDs()
     }
   }
 
@@ -2123,6 +2137,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
       assertTrue(prunedPartitionAndFileNamesMap.keySet.size == 1) // partition
       assertTrue(prunedPartitionAndFileNamesMap.values.head.size == 1) // log file
       assertTrue(FSUtils.isLogFile(prunedPartitionAndFileNamesMap.values.head.head))
+      assertNoPersistentRDDs()
     }
   }
 
@@ -2179,6 +2194,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
     assertFalse(bloomFilterRecords.isEmpty)
     val bloomFilter: HoodieMetadataBloomFilter = bloomFilterRecords.collectAsList().get(0).getData.asInstanceOf[HoodieMetadataPayload].getBloomFilterMetadata.get()
     assertTrue(bloomFilter.getType.equals("DYNAMIC_V0"))
+    assertNoPersistentRDDs()
   }
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient,

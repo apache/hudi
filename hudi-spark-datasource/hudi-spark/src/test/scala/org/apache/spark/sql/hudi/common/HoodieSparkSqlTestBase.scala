@@ -34,6 +34,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -109,6 +110,8 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
     super.test(testName, testTags: _*)(
       try {
+        spark.sparkContext.persistentRdds.foreach(rdd => rdd._2.unpersist(false))
+        assertNoPersistentRDDs()
         testFun
       } finally {
         val catalog = spark.sessionState.catalog
@@ -368,6 +371,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         HoodieInMemoryHashIndex.clear()
       }
     }
+  }
+
+  def assertNoPersistentRDDs(): Unit = {
+    HoodieSparkClientTestHarness.assertNoPersistentRDDs(spark, 5)
   }
 }
 

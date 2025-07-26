@@ -110,6 +110,7 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
 
     assertTrue(getLatestClusteringInstant().get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
     validateDataAndRecordIndices(hudiOpts)
+    assertNoPersistentRDDs(sparkSession)
   }
 
   private def getLatestClusteringInstant(): Option[HoodieInstant] = {
@@ -178,8 +179,10 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val readDf = spark.read.format("hudi").load(basePath)
     val rowArr = readDf.collect()
-    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndex(
-      HoodieListData.eager(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava)))
+    val res = metadata.readRecordIndex(
+      HoodieListData.eager(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava));
+    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(res);
+    res.unpersistWithDependencies()
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {

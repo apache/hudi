@@ -220,6 +220,8 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // NOTE: It's important to set Spark's `Tests.IS_TESTING` so that our tests are recognized
     //       as such by Spark
     System.setProperty("spark.testing", "true");
+    sparkSession.sparkContext().persistentRdds().foreach(rdd -> rdd._2.persist());
+    assertNoPersistentRDDs(sparkSession);
   }
 
   /**
@@ -703,5 +705,41 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   protected HoodieTableMetaClient createMetaClient(JavaSparkContext context, String basePath) {
     return HoodieClientTestUtils.createMetaClient(context, basePath);
+  }
+
+  /**
+   * Asserts that there are no persistent RDDs in the given SparkSession.
+   * This method polls the SparkSession's persistent RDD list until it is empty or times out.
+   *
+   * @param spark The SparkSession to check for persistent RDDs
+   * @param timeoutSeconds Maximum time in seconds to wait for RDDs to be unpersisted
+   * @throws AssertionError if persistent RDDs remain after timeout period
+   */
+  public static void assertNoPersistentRDDs(SparkSession spark, int timeoutSeconds) {
+    long startTime = System.currentTimeMillis();
+    long timeout = timeoutSeconds * 1000L;
+    Object syncObj = new Object(); // One-time sync object
+
+    while (!spark.sparkContext().getPersistentRDDs().isEmpty()) {
+      if (System.currentTimeMillis() - startTime > timeout) {
+        int remainingCount = spark.sparkContext().getPersistentRDDs().size();
+        fail("Timeout: " + remainingCount + " RDDs still persistent after " + timeoutSeconds + " seconds");
+      }
+      try {
+        // Force a read sequence with no-op synchronization
+        synchronized (syncObj) {
+          // No-op, just for synchronization
+        }
+        Thread.sleep(50); // Check every 50ms
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        fail("Interrupted while waiting for RDD unpersist");
+      }
+    }
+  }
+
+  // Overloaded method with default 3-second timeout
+  public void assertNoPersistentRDDs(SparkSession spark) {
+    assertNoPersistentRDDs(spark, 3);
   }
 }
