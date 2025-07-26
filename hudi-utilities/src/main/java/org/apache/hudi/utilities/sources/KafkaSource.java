@@ -173,16 +173,16 @@ public abstract class KafkaSource<T> extends Source<T> {
   * Utility method that removes configs with keys that match (start with) any one of the prefixes.
   *
   * @param kafkaParams The incoming kafka params
-  * @param semiColonSeparatedPrefixes all configs with keys starting with any one of these semi-colon separated prefixes will be ignored.
+  * @param commaSeparatedPrefixes all configs with keys starting with any one of these comma-separated prefixes will be ignored.
   * @return a new set of kafkaParams with the configs matching the prefixes removed.
   **/
   @VisibleForTesting
-  static Map<String, Object> filterKafkaParameters(Map<String, Object> kafkaParams, String semiColonSeparatedPrefixes) {
-    if (semiColonSeparatedPrefixes == null || semiColonSeparatedPrefixes.isEmpty()) {
+  static Map<String, Object> filterKafkaParameters(Map<String, Object> kafkaParams, String commaSeparatedPrefixes) {
+    if (commaSeparatedPrefixes == null || commaSeparatedPrefixes.isEmpty()) {
       return kafkaParams;
     }
 
-    String[] prefixes = Arrays.stream(semiColonSeparatedPrefixes.split(COMMA_DELIMITER))
+    String[] prefixes = Arrays.stream(commaSeparatedPrefixes.split(COMMA_DELIMITER))
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .toArray(String[]::new);
