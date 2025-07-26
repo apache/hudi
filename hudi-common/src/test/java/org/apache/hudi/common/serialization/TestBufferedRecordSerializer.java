@@ -20,6 +20,7 @@ package org.apache.hudi.common.serialization;
 
 import org.apache.hudi.avro.AvroRecordSerializer;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -86,5 +87,26 @@ public class TestBufferedRecordSerializer {
     for (int i = 0; i < metadataRecord.getSchema().getFields().size(); i++) {
       Assertions.assertEquals(metadataRecord.get(i), result.getRecord().get(i));
     }
+    // assert the records are equivalent
+    Assertions.assertEquals(bufferedRecord.getRecord().toString(), result.getRecord().toString());
+  }
+
+  @Test
+  void testDeleteRecordSerAndDe() throws IOException {
+    Schema schema = SchemaTestUtil.getSimpleSchema();
+    DeleteRecord record = DeleteRecord.create("id", "partition", 100);
+    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecord.forDeleteRecord(record, 100);
+
+    AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
+    BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
+
+    byte[] bytes = bufferedRecordSerializer.serialize(bufferedRecord);
+    BufferedRecord<IndexedRecord> result = bufferedRecordSerializer.deserialize(bytes);
+
+    Assertions.assertEquals(bufferedRecord.getRecordKey(), result.getRecordKey());
+    Assertions.assertEquals(bufferedRecord.getOrderingValue(), result.getOrderingValue());
+    Assertions.assertEquals(bufferedRecord.getSchemaId(), result.getSchemaId());
+    Assertions.assertEquals(bufferedRecord.isDelete(), result.isDelete());
+    Assertions.assertNull(result.getRecord());
   }
 }

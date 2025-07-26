@@ -220,16 +220,6 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   }
 
   @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
-    BufferedRecord<T> existingRecord = records.get(recordPosition);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
-    if (recordOpt.isPresent()) {
-      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordPosition, BufferedRecord.forDeleteRecord(recordOpt.get(), orderingValue));
-    }
-  }
-
-  @Override
   public boolean containsLogRecord(String recordKey) {
     return records.values().stream()
         .filter(r -> !r.isDelete())
