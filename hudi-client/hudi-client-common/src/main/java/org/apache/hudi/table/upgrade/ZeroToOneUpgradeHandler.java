@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
@@ -51,7 +52,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
 public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> upgrade(
+  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     // fetch pending commit info
@@ -67,7 +68,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
       // for every pending commit, delete old markers and re-create markers in new format
       recreateMarkers(commit, table, context, config.getMarkersDeleteParallelism());
     }
-    return Collections.EMPTY_MAP;
+    return Pair.of(Collections.EMPTY_MAP, Collections.EMPTY_LIST);
   }
 
   /**

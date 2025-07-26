@@ -21,26 +21,38 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{AWSDmsAvroPayload, EventTimeAvroPayload, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.SaveMode
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import scala.jdk.CollectionConverters._
+
 class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
+  /**
+   * Test if the payload based read have the same behavior for different table versions.
+   */
   @ParameterizedTest
-  @MethodSource(Array("provideParams"))
+  @MethodSource(Array("provideParamsForPayloadBehavior"))
   def testMergerBuiltinPayload(tableType: String,
-                               payloadClazz: String): Unit = {
+                               payloadClazz: String,
+                               tableVersion: String): Unit = {
     val opts: Map[String, String] = Map(
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
       HoodieTableConfig.MERGE_PROPERTIES.key() ->
-        "hoodie.payload.delete.field=xp,hoodie.payload.delete.marker=d")
+        "hoodie.payload.delete.field=Op,hoodie.payload.delete.marker=d")
     val columns = Seq("ts", "key", "rider", "driver", "fare", "Op")
+
+    var metaClient: HoodieTableMetaClient = getHoodieMetaClient(storageConf(), basePath())
+    new UpgradeDowngrade(metaClient, getWriteConfig(opts), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.SIX, null)
 
     // 1. Add an insert.
     val data = Seq(
@@ -56,9 +68,17 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion).
+      option(HoodieTableConfig.INITIAL_VERSION.key(), tableVersion).
       options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
+    // Validate table version.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertEquals(
+      Integer.valueOf(tableVersion),
+      metaClient.getTableConfig.getTableVersion.versionCode())
+
     // 2. Add an update.
     val firstUpdateData = Seq(
       (11, "1", "rider-X", "driver-X", 19.10, "d"),
@@ -67,9 +87,16 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     firstUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion).
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
+    // Validate table version.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(
+      Integer.valueOf(tableVersion),
+      metaClient.getTableConfig.getTableVersion.versionCode())
+
     // 3. Add an update.
     val secondUpdateData = Seq(
       (12, "3", "rider-CC", "driver-CC", 33.90, "i"),
@@ -80,9 +107,16 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(OPERATION.key(), "upsert").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true").
       option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion).
       options(opts).
       mode(SaveMode.Append).
       save(basePath)
+    // Validate table version.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(
+      Integer.valueOf(tableVersion),
+      metaClient.getTableConfig.getTableVersion.versionCode())
+
     // 4. Validate.
     val df = spark.read.format("hudi").options(opts).load(basePath)
     val finalDf = df.select("ts", "key", "rider", "driver", "fare", "Op").sort("key")
@@ -116,11 +150,39 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertTrue(
       expectedDf.except(finalDf).isEmpty && finalDf.except(expectedDf).isEmpty)
   }
+
+  def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
+    val props = TypedProperties.fromMap(hudiOpts.asJava)
+    HoodieWriteConfig.newBuilder()
+      .withProps(props)
+      .withPath(basePath())
+      .build()
+  }
 }
 
-// TODO: Add COPY_ON_WRITE table type tests when write path is updated accordingly.
+// TODO: Add COPY_ON_WRITE table type tests when write path is updated accordingly.s
 object TestPayloadDeprecationFlow {
-  def provideParams(): java.util.List[Arguments] = {
+  def provideParamsForPayloadBehavior(): java.util.List[Arguments] = {
+    java.util.Arrays.asList(
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteWithLatestAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName, "6"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteWithLatestAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName, "8"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteWithLatestAvroPayload].getName, "9"),
+      Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName, "9"),
+      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName, "9"),
+      Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName, "9"),
+      Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName, "9")
+    )
+  }
+
+  def provideParamsForUpgradeBehavior(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
       Arguments.of("MERGE_ON_READ", classOf[OverwriteWithLatestAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName),

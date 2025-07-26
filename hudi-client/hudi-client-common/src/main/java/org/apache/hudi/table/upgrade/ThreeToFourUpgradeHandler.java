@@ -23,10 +23,13 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
+import java.util.Collections;
 import java.util.Hashtable;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
@@ -40,7 +43,10 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
 public class ThreeToFourUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> upgrade(HoodieWriteConfig config,
+                                                                         HoodieEngineContext context,
+                                                                         String instantTime,
+                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     String database = config.getString(DATABASE_NAME);
     if (StringUtils.nonEmpty(database)) {
@@ -52,6 +58,6 @@ public class ThreeToFourUpgradeHandler implements UpgradeHandler {
     if (config.isMetadataTableEnabled() && metadataPartitionExists(config.getBasePath(), context, MetadataPartitionType.FILES.getPartitionPath())) {
       tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, MetadataPartitionType.FILES.getPartitionPath());
     }
-    return tablePropsToAdd;
+    return Pair.of(tablePropsToAdd, Collections.EMPTY_LIST);
   }
 }
