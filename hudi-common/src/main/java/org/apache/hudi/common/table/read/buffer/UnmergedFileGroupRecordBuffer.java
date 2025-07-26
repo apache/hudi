@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -29,6 +29,8 @@ import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -40,13 +42,13 @@ import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-public class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
+class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   private final Deque<HoodieLogBlock> currentInstantLogBlocks;
   private final HoodieReadStats readStats;
   private ClosableIterator<T> recordIterator;
 
-  public UnmergedFileGroupRecordBuffer(
+  UnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
       HoodieTableMetaClient hoodieTableMetaClient,
       RecordMergeMode recordMergeMode,
