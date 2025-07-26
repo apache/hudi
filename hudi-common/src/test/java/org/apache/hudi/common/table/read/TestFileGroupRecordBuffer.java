@@ -32,7 +32,6 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -295,7 +294,7 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            PartialUpdateMode.NONE,
+            Option.empty(),
             props,
             Option.empty(),
             updateProcessor
@@ -309,7 +308,7 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            PartialUpdateMode.NONE,
+            Option.empty(),
             props,
             Option.empty(),
             updateProcessor
@@ -332,7 +331,7 @@ class TestFileGroupRecordBuffer {
             readerContext,
             hoodieTableMetaClient,
             RecordMergeMode.COMMIT_TIME_ORDERING,
-            PartialUpdateMode.NONE,
+            Option.empty(),
             props,
             Option.empty(),
             updateProcessor

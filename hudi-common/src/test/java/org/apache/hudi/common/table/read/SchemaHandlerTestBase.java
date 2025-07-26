@@ -352,7 +352,12 @@ public abstract class SchemaHandlerTestBase {
     }
 
     @Override
-    public String constructEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
+    public String mergeEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
+      return "";
+    }
+
+    @Override
+    public String createEngineRecord(Schema schema, List<Object> values) {
       return "";
     }
 

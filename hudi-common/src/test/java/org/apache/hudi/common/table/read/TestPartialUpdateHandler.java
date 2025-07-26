@@ -31,12 +31,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestPartialUpdateStrategy {
+class TestPartialUpdateHandler {
   @Test
   void testParseValidProperties() {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "a=1,b=2,c=3");
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
 
     assertEquals(3, result.size());
     assertEquals("1", result.get("a"));
@@ -48,7 +48,7 @@ class TestPartialUpdateStrategy {
   void testHandlesWhitespace() {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), " a = 1 , b=  2 ,c=3 ");
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
 
     assertEquals(3, result.size());
     assertEquals("1", result.get("a"));
@@ -60,7 +60,7 @@ class TestPartialUpdateStrategy {
   void testIgnoresEmptyEntriesAndMissingEquals() {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), ",a=1,,b,c=3");
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
 
     assertEquals(3, result.size());
     assertEquals("1", result.get("a"));
@@ -72,21 +72,21 @@ class TestPartialUpdateStrategy {
   void testEmptyInputReturnsEmptyMap() {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), "");
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
     assertTrue(result.isEmpty());
   }
 
   @Test
   void testMissingKeyReturnsEmptyMap() {
     TypedProperties props = new TypedProperties(); // no property set
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
     assertTrue(result.isEmpty());
   }
 
   @Test
   void testDirectMatch() {
     Schema stringSchema = Schema.create(Schema.Type.STRING);
-    assertTrue(PartialUpdateStrategy.hasTargetType(stringSchema, Schema.Type.STRING));
+    assertTrue(PartialUpdateHandler.hasTargetType(stringSchema, Schema.Type.STRING));
   }
 
   @Test
@@ -96,7 +96,7 @@ class TestPartialUpdateStrategy {
         Schema.create(Schema.Type.BOOLEAN),
         Schema.create(Schema.Type.STRING)
     );
-    assertTrue(PartialUpdateStrategy.hasTargetType(unionSchema, Schema.Type.STRING));
+    assertTrue(PartialUpdateHandler.hasTargetType(unionSchema, Schema.Type.STRING));
   }
 
   @Test
@@ -106,12 +106,12 @@ class TestPartialUpdateStrategy {
         Schema.create(Schema.Type.BOOLEAN),
         Schema.create(Schema.Type.INT)
     );
-    assertFalse(PartialUpdateStrategy.hasTargetType(unionSchema, Schema.Type.STRING));
+    assertFalse(PartialUpdateHandler.hasTargetType(unionSchema, Schema.Type.STRING));
   }
 
   @Test
   void testNonUnionNonTargetType() {
     Schema intSchema = Schema.create(Schema.Type.INT);
-    assertFalse(PartialUpdateStrategy.hasTargetType(intSchema, Schema.Type.STRING));
+    assertFalse(PartialUpdateHandler.hasTargetType(intSchema, Schema.Type.STRING));
   }
 }

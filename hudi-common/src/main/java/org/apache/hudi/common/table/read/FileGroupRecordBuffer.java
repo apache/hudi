@@ -68,7 +68,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected final Schema readerSchema;
   protected final Option<String> orderingFieldName;
   protected final RecordMergeMode recordMergeMode;
-  protected final PartialUpdateMode partialUpdateMode;
+  protected Option<PartialUpdateMode> partialUpdateMode;
   protected final Option<HoodieRecordMerger> recordMerger;
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
@@ -88,7 +88,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
                                   RecordMergeMode recordMergeMode,
-                                  PartialUpdateMode partialUpdateMode,
+                                  Option<PartialUpdateMode> partialUpdateMode,
                                   TypedProperties props,
                                   Option<String> orderingFieldName,
                                   UpdateProcessor<T> updateProcessor) {
@@ -97,6 +97,7 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateMode = partialUpdateMode;
+    this.enablePartialMerging = partialUpdateMode.isPresent();
     this.recordMerger = readerContext.getRecordMerger();
     if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
       this.payloadClass = Option.of(hoodieTableMetaClient.getTableConfig().getPayloadClass());

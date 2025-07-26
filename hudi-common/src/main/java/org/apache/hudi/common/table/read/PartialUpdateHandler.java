@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 
@@ -41,17 +42,19 @@ import static org.apache.hudi.common.util.ConfigUtils.toMap;
  * {@link BufferedRecordMergerFactory.CommitTimeBufferedRecordPartialUpdateMerger} and
  * {@link BufferedRecordMergerFactory.EventTimeBufferedRecordPartialUpdateMerger}.
  */
-public class PartialUpdateStrategy<T> {
+public class PartialUpdateHandler<T> {
   private final HoodieReaderContext<T> readerContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
+  private final KeepValuesPartialMergingUtils keepValuesPartialMergingUtils;
 
-  public PartialUpdateStrategy(HoodieReaderContext<T> readerContext,
-                               PartialUpdateMode partialUpdateMode,
-                               TypedProperties props) {
+  public PartialUpdateHandler(HoodieReaderContext<T> readerContext,
+                              PartialUpdateMode partialUpdateMode,
+                              TypedProperties props) {
     this.readerContext = readerContext;
     this.partialUpdateMode = partialUpdateMode;
     this.mergeProperties = parseMergeProperties(props);
+    this.keepValuesPartialMergingUtils = KeepValuesPartialMergingUtils.INSTANCE;
   }
 
   /**
@@ -63,11 +66,11 @@ public class PartialUpdateStrategy<T> {
                                  BufferedRecord<T> oldRecord,
                                  Schema newSchema,
                                  Schema oldSchema,
+                                 Schema readerSchema,
                                  boolean keepOldMetadataColumns) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
-    if (partialUpdateMode == PartialUpdateMode.NONE
-        || null == oldRecord
+    if (null == oldRecord
         || newRecord.isDelete()
         || oldRecord.isDelete()) {
       return newRecord;
@@ -75,17 +78,34 @@ public class PartialUpdateStrategy<T> {
 
     switch (partialUpdateMode) {
       case KEEP_VALUES:
-      case FILL_DEFAULTS:
-        return newRecord;
+        return reconcileBasedOnKeepValues(newRecord, oldRecord, newSchema, oldSchema, readerSchema);
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(
             newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns);
-      case IGNORE_MARKERS:
+      case FILL_UNAVAILABLE:
         return reconcileMarkerValues(
             newRecord, oldRecord, newSchema, oldSchema);
       default:
-        return newRecord;
+        throw new HoodieIOException("Unsupported PartialUpdateMode " + partialUpdateMode + " detected");
     }
+  }
+
+  /**
+   * Reconcile two versions of the record based on KEEP_VALUES.
+   * i.e for values missing from new record, we pick from older record, if not, value from new record is picked for each column.
+   * @param newRecord       The newer record determined by the merge mode.
+   * @param oldRecord       The older record determined by the merge mode.
+   * @param newSchema       The schema of the newer record.
+   * @param oldSchema       The schema of the older record.
+   * @param readerSchema    Reader schema to be used to finally read the merged record.
+   * @return the merged record of type {@link BufferedRecord}
+   */
+  BufferedRecord<T> reconcileBasedOnKeepValues(BufferedRecord<T> newRecord,
+                                               BufferedRecord<T> oldRecord,
+                                               Schema newSchema,
+                                               Schema oldSchema,
+                                               Schema readerSchema) {
+    return (BufferedRecord<T>) keepValuesPartialMergingUtils.mergePartialRecords(oldRecord, oldSchema, newRecord, newSchema, readerSchema, readerContext).getLeft();
   }
 
   /**
@@ -111,15 +131,14 @@ public class PartialUpdateStrategy<T> {
       Object defaultValue = field.defaultVal();
       Object newValue = readerContext.getValue(
           newRecord.getRecord(), newSchema, fieldName);
-      if (defaultValue == newValue
-          || (keepOldMetadataColumns && HOODIE_META_COLUMNS_NAME_TO_POS.containsKey(fieldName))) {
+      if (defaultValue == newValue || (keepOldMetadataColumns && HOODIE_META_COLUMNS_NAME_TO_POS.containsKey(fieldName))) {
         updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = readerContext.mergeEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
@@ -147,7 +166,7 @@ public class PartialUpdateStrategy<T> {
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = readerContext.mergeEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),

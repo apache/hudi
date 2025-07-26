@@ -69,7 +69,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                             HoodieTableMetaClient hoodieTableMetaClient,
                                             RecordMergeMode recordMergeMode,
-                                            PartialUpdateMode partialUpdateMode,
+                                            Option<PartialUpdateMode> partialUpdateMode,
                                             String baseFileInstantTime,
                                             TypedProperties props,
                                             Option<String> orderingFieldName,
@@ -111,6 +111,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       // When a data block contains partial updates, subsequent record merging must always use
       // partial merging.
       enablePartialMerging = true;
+      if (partialUpdateMode.isEmpty()) {
+        this.partialUpdateMode = Option.of(PartialUpdateMode.KEEP_VALUES);
+      }
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
           readerContext,
           recordMergeMode,
