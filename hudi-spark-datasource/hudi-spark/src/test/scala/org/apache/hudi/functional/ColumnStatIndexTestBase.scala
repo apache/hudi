@@ -133,9 +133,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       val shouldValidateColumnStatsManually = (params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
         params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)) && params.shouldValidateManually
 
-      val enableOptimizedLogBlocksScan = writeOptions.getOrDefault(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()).toBoolean
       validateColumnStatsIndex(params.testCase, params.metadataOpts, params.expectedColStatsSourcePath,
-        shouldValidateColumnStatsManually, params.validationSortColumns, enableOptimizedLogBlocksScan)
+        shouldValidateColumnStatsManually, params.validationSortColumns)
     } else if (params.shouldValidatePartitionStats) {
       validatePartitionStatsIndex(params.testCase, params.metadataOpts, params.expectedColStatsSourcePath)
     }
@@ -187,8 +186,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                               includedCols: Seq[String],
                                             indexedCols: Seq[String],
                                             indexSchema: StructType,
-                                            sourceTableSchema: StructType,
-                                            enableOptimizedLogBlocksScan: Boolean): DataFrame = {
+                                            sourceTableSchema: StructType): DataFrame = {
     val metaClient = HoodieTableMetaClient.builder().setConf(new HadoopStorageConfiguration(jsc.hadoopConfiguration())).setBasePath(tablePath).build()
     val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().enable(false).build())
     fsv.loadAllPartitions()
@@ -244,7 +242,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
           metaClient,
           writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
           HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue(),
-          indexSchema, enableOptimizedLogBlocksScan))
+          indexSchema))
       }
     }
   }
@@ -253,10 +251,10 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                         datasetMetaClient: HoodieTableMetaClient,
                                         writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
                                         maxBufferSize: Integer,
-                                        indexSchema: StructType, enableOptimizedLogBlocksScan: Boolean): DataFrame = {
+                                        indexSchema: StructType): DataFrame = {
     val colStatsEntries = logFiles.stream().map[org.apache.hudi.common.util.Option[Row]](logFile => {
       try {
-        getColStatsFromLogFile(logFile.getPath.toString, latestCommit, columnsToIndex, datasetMetaClient, writerSchemaOpt, maxBufferSize, enableOptimizedLogBlocksScan)
+        getColStatsFromLogFile(logFile.getPath.toString, latestCommit, columnsToIndex, datasetMetaClient, writerSchemaOpt, maxBufferSize)
       } catch {
         case e: Exception =>
           throw e
@@ -270,11 +268,10 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                        columnsToIndex: util.List[String],
                                        datasetMetaClient: HoodieTableMetaClient,
                                        writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
-                                       maxBufferSize: Integer,
-                                       enableOptimizedLogBlocksScan: Boolean
+                                       maxBufferSize: Integer
                                       ): org.apache.hudi.common.util.Option[Row] = {
     LogFileColStatsTestUtil.getLogFileColumnRangeMetadata(logFilePath, datasetMetaClient, latestCommit,
-      columnsToIndex, writerSchemaOpt, maxBufferSize, enableOptimizedLogBlocksScan)
+      columnsToIndex, writerSchemaOpt, maxBufferSize)
   }
 
   protected def validateColumnsToIndex(metaClient: HoodieTableMetaClient, expectedColsToIndex: Seq[String]): Unit = {
@@ -290,8 +287,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                          metadataOpts: Map[String, String],
                                          expectedColStatsSourcePath: String,
                                          validateColumnStatsManually: Boolean,
-                                         validationSortColumns: Seq[String],
-                                         enableOptimizedLogBlocksScan: Boolean): Unit = {
+                                         validationSortColumns: Seq[String]): Unit = {
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
       .build()
@@ -324,7 +320,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         // TODO(HUDI-4557): support validation of column stats of avro log files
         // Collect Column Stats manually (reading individual Parquet files)
         val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, indexedColumns.toSeq, indexedColumns.toSeq, expectedColStatsSchema, localSourceTableSchema, enableOptimizedLogBlocksScan)
+        buildColumnStatsTableManually(basePath, indexedColumns.toSeq, indexedColumns.toSeq, expectedColStatsSchema, localSourceTableSchema)
 
         assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
           asJson(sort(transposedColStatsDF, validationSortColumns)))

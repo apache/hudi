@@ -585,7 +585,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Lazy<Option<Schema>> tableSchemaOpt) {
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext, lazyLatestMergedPartitionFileSliceList.get(), dataWriteConfig.getMetadataConfig(),
-        dataMetaClient, tableSchemaOpt, Option.of(dataWriteConfig.getRecordMerger().getRecordType()), dataWriteConfig.enableOptimizedLogBlocksScan());
+        dataMetaClient, tableSchemaOpt, Option.of(dataWriteConfig.getRecordMerger().getRecordType()));
     final int fileGroupCount = dataWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
     return Pair.of(fileGroupCount, records);
   }
@@ -613,8 +613,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         engineContext, Collections.emptyMap(), partitionIdToAllFilesMap, dataMetaClient, dataWriteConfig.getMetadataConfig(),
         dataWriteConfig.getColumnStatsIndexParallelism(),
         dataWriteConfig.getMetadataConfig().getMaxReaderBufferSize(),
-        columnsToIndex,
-        dataWriteConfig.enableOptimizedLogBlocksScan());
+        columnsToIndex);
 
     return Pair.of(columnsToIndex, Pair.of(fileGroupCount, records));
   }

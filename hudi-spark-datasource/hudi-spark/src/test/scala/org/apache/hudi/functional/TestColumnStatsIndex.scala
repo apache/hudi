@@ -24,7 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_F
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
@@ -935,9 +935,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
           .json(getClass.getClassLoader.getResource("index/colstats/updated-partial-column-stats-index-table.json").toString)
 
       // Collect Column Stats manually (reading individual Parquet files)
-      val enableOptimizeLogBlockScan = HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue().toBoolean
       val manualUpdatedColStatsTableDF =
-        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema, sourceTableSchema, enableOptimizeLogBlockScan)
+        buildColumnStatsTableManually(basePath, requestedColumns, targetColumnsToIndex, expectedColStatsSchema, sourceTableSchema)
 
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
 

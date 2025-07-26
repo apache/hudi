@@ -42,12 +42,12 @@ public class LogFileColStatsTestUtil {
 
   public static Option<Row> getLogFileColumnRangeMetadata(String filePath, HoodieTableMetaClient datasetMetaClient, String latestCommitTime,
                                                           List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
-                                                          int maxBufferSize, boolean enableOptimizeLogBlocksScan) throws IOException {
+                                                          int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
       String partitionPath = FSUtils.getRelativePartitionPath(datasetMetaClient.getBasePath(), new StoragePath(filePath).getParent());
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
           HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt,
-                  maxBufferSize, enableOptimizeLogBlocksScan);
+                  maxBufferSize);
       return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {
       throw new HoodieException("Writer schema needs to be set");

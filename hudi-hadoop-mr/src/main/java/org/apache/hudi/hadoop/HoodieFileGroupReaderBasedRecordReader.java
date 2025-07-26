@@ -20,7 +20,6 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
@@ -154,8 +153,6 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         .withStart(fileSplit.getStart())
         .withLength(fileSplit.getLength())
         .withShouldUseRecordPosition(false)
-        .withEnableOptimizedLogBlockScan(jobConf.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-                Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue())))
         .build()
         .getClosableIterator();
     // it expects the partition columns to be at the end
