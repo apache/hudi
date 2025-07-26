@@ -52,7 +52,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -101,10 +100,11 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.D_VALUE;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.OP_FIELD;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
@@ -134,6 +134,7 @@ public class HoodieTableConfig extends HoodieConfig {
   // A reader might need to read some writer properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties,
   // and produces a map of key value pairs (Key1->Value1, Key2->Value2, ...) to use.
+  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.prefix.";
   public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           AWSDmsAvroPayload.class.getName(),
@@ -144,7 +145,6 @@ public class HoodieTableConfig extends HoodieConfig {
           OverwriteWithLatestAvroPayload.class.getName(),
           PartialUpdateAvroPayload.class.getName(),
           PostgresDebeziumAvroPayload.class.getName())));
-  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.prefix.";
 
   public static final Set<String> EVENT_TIME_BASED_PAYLOADS = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
@@ -847,140 +847,81 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * Handle table config creation logic when creating a table for Table Version 9,
-   * since it has some different logic from previous versions.
+   * which is based on the logic of table version < 9, and then tuned for version 9 logic.
+   * This approach fits the same behavior of upgrade from 8 to 9.
    */
   public static Map<String, String> inferMergingConfigsForVersion9(RecordMergeMode recordMergeMode,
                                                                    String payloadClassName,
                                                                    String recordMergeStrategyId,
+                                                                   String orderingFieldName,
                                                                    HoodieTableVersion tableVersion) {
-    Map<String, String> finalConfigs = new HashMap<>();
+    Map<String, String> reconciledConfigs = new HashMap<>();
     if (tableVersion.versionCode() != HoodieTableVersion.NINE.versionCode()) {
-      return finalConfigs;
+      return reconciledConfigs;
     }
 
-    // Infer merge mode and strategy id if needed.
-    Pair<RecordMergeMode, String> mergeModeAndStrategyId =
-        inferMergeModeOrStrategyId(recordMergeMode, recordMergeStrategyId, payloadClassName);
-    recordMergeMode = mergeModeAndStrategyId.getLeft();
-    recordMergeStrategyId = mergeModeAndStrategyId.getRight();
+    // Step 1: Infer merging configs based on input information.
+    // This step is important since it provides the same configs before we do table upgrade.
+    // Then additional logic for table version 9 could be verified.
+    Triple<RecordMergeMode, String, String> inferredConfigs = inferBasicMergingBehavior(
+        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+    recordMergeMode = inferredConfigs.getLeft();
+    recordMergeStrategyId = inferredConfigs.getRight();
 
-    // Properties for all tables.
-    // Since PARTIAL_UPDATE_MODE does not have default value, do not set it.
-    // For tables using MERGE MODEs (event time/commit time), or CUSTOM mergers.
+    // Step 2: Handle Version 9 specific logic.
+    // CASE 1: For tables using MERGE MODE, or CUSTOM mergers.
+    //   NOTE: Payload class should NOT be set for this case.
     if (StringUtils.isNullOrEmpty(payloadClassName)) {
-      finalConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
-      finalConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
-      // NOTE: No payload class should be set.
-    } else { // For tables using custom payload classes.
-      // For tables using CUSTOM payload classes.
+      reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+      reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
+    } else {
+      // For tables using payload classes.
+      //   CASE 2: Custom payload class. We set these properties explicitly.
       if (!PAYLOADS_UNDER_DEPRECATION.contains(payloadClassName)) {
-        finalConfigs.put(RECORD_MERGE_MODE.key(), CUSTOM.toString());
-        finalConfigs.put(PAYLOAD_CLASS_NAME.key(), payloadClassName);
-        finalConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
-      } else { // For tables using builtin payload classes.
-        // Merge mode.
+        reconciledConfigs.put(RECORD_MERGE_MODE.key(), CUSTOM.toString());
+        reconciledConfigs.put(PAYLOAD_CLASS_NAME.key(), payloadClassName);
+        reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+      } else { // CASE 3: Payload classes are under deprecation.
+        // Standard merging configs.
         // NOTE: We use LEGACY_PAYLOAD_CLASS_NAME instead of PAYLOAD_CLASS_NAME here.
         if (EVENT_TIME_BASED_PAYLOADS.contains(payloadClassName)) {
-          finalConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
-          finalConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
-          finalConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+          reconciledConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
+          reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
+          reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
         } else {
-          finalConfigs.put(RECORD_MERGE_MODE.key(), COMMIT_TIME_ORDERING.name());
-          finalConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
-          finalConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+          reconciledConfigs.put(RECORD_MERGE_MODE.key(), COMMIT_TIME_ORDERING.name());
+          reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
+          reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
         }
-        // Partial update mode.
+        // Partial update mode config.
         if (payloadClassName.equals(PartialUpdateAvroPayload.class.getName())
             || payloadClassName.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
-          finalConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
+          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
         } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
-          finalConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_MARKERS.name());
+          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_MARKERS.name());
         }
-        // Merge properties.
+        // Additional custom properties.
         if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
-          finalConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER, DEBEZIUM_UNAVAILABLE_VALUE);
+          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER, DEBEZIUM_UNAVAILABLE_VALUE);
         } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
-          finalConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY, "Op");
-          finalConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER, "D");
+          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
+          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER, D_VALUE);
         }
       }
     }
-    return finalConfigs;
-  }
-
-  public static Pair<RecordMergeMode, String> inferMergeModeOrStrategyId(RecordMergeMode mode,
-                                                                         String strategyId,
-                                                                         String payloadClass) {
-    if (mode == null && strategyId == null) {
-      // If both are null, try to infer from payload class
-      if (!StringUtils.isNullOrEmpty(payloadClass)) {
-        if (PAYLOADS_UNDER_DEPRECATION.contains(payloadClass)) {
-          if (EVENT_TIME_BASED_PAYLOADS.contains(payloadClass)) {
-            mode = EVENT_TIME_ORDERING;
-            strategyId = EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
-          } else {
-            mode = COMMIT_TIME_ORDERING;
-            strategyId = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
-          }
-        } else {
-          mode = CUSTOM;
-          strategyId = PAYLOAD_BASED_MERGE_STRATEGY_UUID;
-        }
-      } else {
-        throw new HoodieException(String.format(
-            "Merge mode and strategy id cannot both be NULL in table version: %s",
-            HoodieTableVersion.current().name()));
-      }
-    } else if (mode != null && strategyId != null) {
-      checkIfConsistent(mode, strategyId);
-    } else if (mode == null) {
-      if (strategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
-        mode = COMMIT_TIME_ORDERING;
-      } else if (strategyId.equals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID)) {
-        mode = EVENT_TIME_ORDERING;
-      } else {
-        mode = CUSTOM;
-      }
-    } else {
-      if (mode == COMMIT_TIME_ORDERING) {
-        strategyId = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
-      } else if (mode == EVENT_TIME_ORDERING) {
-        strategyId = EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
-      } else if (!StringUtils.isNullOrEmpty(payloadClass)) {
-        strategyId = PAYLOAD_BASED_MERGE_STRATEGY_UUID;
-      } else {
-        strategyId = CUSTOM_MERGE_STRATEGY_UUID;
-      }
-    }
-    return Pair.of(mode, strategyId);
-  }
-
-  public static void checkIfConsistent(RecordMergeMode mode, String strategyId) {
-    boolean isConsistent;
-    if (mode == COMMIT_TIME_ORDERING) {
-      isConsistent = COMMIT_TIME_BASED_MERGE_STRATEGY_UUID.equals(strategyId);
-    } else if (mode == EVENT_TIME_ORDERING) {
-      isConsistent = EVENT_TIME_BASED_MERGE_STRATEGY_UUID.equals(strategyId);
-    } else {
-      isConsistent = CUSTOM_MERGE_STRATEGY_UUID.equals(strategyId)
-          || PAYLOAD_BASED_MERGE_STRATEGY_UUID.equals(strategyId);
-    }
-    if (!isConsistent) {
-      throw new HoodieException(String.format(
-          "The provided record merge mode config (%s) and merge strategy id (%s) are not consistent.",
-          mode.name(), strategyId));
-    }
+    return reconciledConfigs;
   }
 
   /**
    * Infers the merging behavior based on what the user sets (or doesn't set).
-   * Validates that the user has not set an illegal combination of configs
+   * Validates that the user has not set an illegal combination of configs.
+   * This function infers basic merging properties used by table version <= 8.
    */
-  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
-                                                                                    String payloadClassName,
-                                                                                    String recordMergeStrategyId,
-                                                                                    String orderingFieldNamesAsString,
-                                                                                    HoodieTableVersion tableVersion) {
+  public static Triple<RecordMergeMode, String, String> inferBasicMergingBehavior(RecordMergeMode recordMergeMode,
+                                                                                  String payloadClassName,
+                                                                                  String recordMergeStrategyId,
+                                                                                  String orderingFieldNamesAsString,
+                                                                                  HoodieTableVersion tableVersion) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;
@@ -1371,7 +1312,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Map<String, String> getTableMergeProperties() {
-    return ConfigUtils.extractWithPrefix(this.props, MERGE_PROPERTIES_PREFIX);
+    return ConfigUtils.extractWithPrefix(this.props, MERGE_CUSTOM_PROPERTY_PREFIX);
   }
 
   public Map<String, String> propsMap() {
