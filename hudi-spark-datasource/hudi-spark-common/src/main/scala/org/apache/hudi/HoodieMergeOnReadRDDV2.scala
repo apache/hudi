@@ -46,8 +46,7 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
-import org.apache.spark.sql.execution.datasources.FileFormat
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
+import org.apache.spark.sql.execution.datasources.{FileFormat, SparkColumnarFileReader}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 
@@ -109,10 +108,18 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
   private val hadoopConfBroadcast = sc.broadcast(new SerializableWritable(config))
-  private val fileGroupParquetFileReader: Broadcast[SparkParquetReader] = {
+  private val fileGroupParquetFileReader: Broadcast[SparkColumnarFileReader] = {
     if (!metaClient.isMetadataTable) {
       val updatedOptions: Map[String, String] = options + (FileFormat.OPTION_RETURNING_BATCH -> "false") // disable vectorized reading for MOR
       sc.broadcast(sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config))
+    } else {
+      null
+    }
+  }
+  private val fileGroupOrcFileReader: Broadcast[SparkColumnarFileReader] = {
+    if (!metaClient.isMetadataTable) {
+      val updatedOptions: Map[String, String] = options + (FileFormat.OPTION_RETURNING_BATCH -> "false") // disable vectorized reading for MOR
+      sc.broadcast(sparkAdapter.createOrcFileReader(vectorized = false, sqlConf, updatedOptions, config, tableSchema.structTypeSchema))
     } else {
       null
     }
@@ -170,8 +177,8 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .build()
           convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
-          val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupParquetFileReader.value, optionalFilters,
-            Seq.empty, storageConf, metaClient.getTableConfig)
+          val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupParquetFileReader.value,
+            fileGroupOrcFileReader.value, optionalFilters, Seq.empty, storageConf, metaClient.getTableConfig)
           val fileGroupReader = HoodieFileGroupReader.newBuilder()
             .withReaderContext(readerContext)
             .withHoodieTableMetaClient(metaClient)

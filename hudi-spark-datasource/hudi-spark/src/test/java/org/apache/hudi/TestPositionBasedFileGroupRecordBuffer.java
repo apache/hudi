@@ -59,7 +59,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader;
 import org.apache.spark.sql.sources.Filter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -123,9 +123,9 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         .build();
     avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
 
-    SparkParquetReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(false, spark().sessionState().conf(),
+    SparkColumnarFileReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(false, spark().sessionState().conf(),
         Map$.MODULE$.empty(), storageConf().unwrapAs(Configuration.class));
-    HoodieReaderContext<InternalRow> ctx = new SparkFileFormatInternalRowReaderContext(reader, JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(),
+    HoodieReaderContext<InternalRow> ctx = new SparkFileFormatInternalRowReaderContext(reader, null, JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(),
         JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(), storageConf(), metaClient.getTableConfig());
     ctx.setTablePath(basePath());
     ctx.setLatestCommitTime(WriteClientTestUtils.createNewInstantTime());
