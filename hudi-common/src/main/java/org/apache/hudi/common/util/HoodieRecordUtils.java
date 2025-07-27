@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieAvroBinaryRecordMerger;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -77,7 +78,7 @@ public class HoodieRecordUtils {
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
-      return HoodieAvroRecordMerger.INSTANCE;
+      return HoodieAvroBinaryRecordMerger.INSTANCE;
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
           .orElse(HoodieAvroRecordMerger.INSTANCE);

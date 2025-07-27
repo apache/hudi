@@ -284,7 +284,7 @@ public class HoodieTableMetadataUtil {
         Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
         Object fieldValue;
-        if (record.getRecordType() == HoodieRecordType.AVRO) {
+        if (record.getRecordType() == HoodieRecordType.AVRO || record.getRecordType() == HoodieRecordType.AVRO_BINARY) {
           fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
           if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
             fieldValue = java.sql.Date.valueOf(fieldValue.toString());
