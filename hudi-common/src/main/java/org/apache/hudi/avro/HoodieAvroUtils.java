@@ -47,7 +47,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.util.Lazy;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;

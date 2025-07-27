@@ -22,7 +22,6 @@ package org.apache.hudi.functional;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
-import org.apache.hudi.avro.AvroReaderContextTypeConverter;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -52,17 +51,12 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -70,27 +64,26 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
-import java.util.stream.Stream;
-
-import scala.collection.immutable.Seq;
 
 import static org.apache.hudi.BaseSparkInternalRowReaderContext.getFieldValueFromInternalRow;
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.util.OrderingValues.DEFAULT_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
-  private static final String RECORD_KEY = "test_key";
+  private static final String RECORD_KEY = "initial_id";
   private static final String PARTITION_PATH = "test_partition";
   private static final long ORDERING_VALUE = 100L;
   private static final String IGNORE_MARKERS_VALUE = "__HUDI_DEFAULT_MARKER__";
-  private static final Schema fullSchema = getFullSchema();
-  private static final Schema partialSchema = getPartialSchema();
+  private static final List<Schema> SCHEMAS = Arrays.asList(
+      getSchema1(), getSchema2(), getSchema3(), getSchema4(), getSchema5());
+  private static final Schema READER_SCHEMA = getSchema1();
   private HoodieTableConfig tableConfig;
   private StorageConfiguration<?> storageConfig;
   private TypedProperties props;
@@ -117,7 +110,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   // ============================================================================
   @ParameterizedTest
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
-  void testNoPartialMerging(RecordMergeMode mergeMode) throws IOException {
+  void testRegularMerging(RecordMergeMode mergeMode) throws IOException {
     // Test 1: NONE partial update mode (regular path)
     BufferedRecordMerger<InternalRow> noneMerger = createMerger(readerContext, mergeMode, PartialUpdateMode.NONE);
     // Create records with all columns
@@ -129,10 +122,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, false);
 
     Option<BufferedRecord<InternalRow>> deltaResult = noneMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
-    if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+    if (mergeMode == COMMIT_TIME_ORDERING) {
       assertTrue(deltaResult.isPresent());
       assertEquals(newRecord, deltaResult.get().getRecord());
       BufferedRecord<InternalRow> mergedRecord = deltaResult.get();
+      // No construction happens. So the key is original key.
       assertEquals(RECORD_KEY, mergedRecord.getRecordKey());
       assertFalse(mergedRecord.isDelete());
       assertNotNull(mergedRecord.getRecord());
@@ -148,15 +142,23 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     BufferedRecord<InternalRow> olderBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecord, 1, false);
     BufferedRecord<InternalRow> newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newerRecord, 1, false);
     Pair<Boolean, InternalRow> finalResult = noneMerger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.getLeft());
-    assertNotNull(finalResult.getRight());
+    if (mergeMode == COMMIT_TIME_ORDERING) {
+      assertEquals(newerRecord, finalResult.getRight());
+    } else {
+      assertEquals(olderRecord, finalResult.getRight());
+    }
+  }
 
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
+  void testRegularMergingWithIgnoreDefaults(RecordMergeMode mergeMode) throws IOException {
     // Test 2: IGNORE_DEFAULTS partial update mode
     BufferedRecordMerger<InternalRow> ignoreDefaultsMerger =
         createMerger(readerContext, mergeMode, PartialUpdateMode.IGNORE_DEFAULTS);
-    
+
     // Old record has all columns, new record has some columns with default/null values
     InternalRow oldRecordWithDefaults = createFullRecord(
         "old_id", "Old Name", 25, "Old City", 1000L);
@@ -189,7 +191,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         ignoreDefaultsMerger.finalMerge(olderBufferedRecordWithDefaults, newerBufferedRecordWithDefaults);
     assertFalse(finalResultDefaults.getLeft());
     assertNotNull(finalResultDefaults.getRight());
+  }
 
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
+  void testRegularMergingWithIgnoreMarkers(RecordMergeMode mergeMode) throws IOException {
     // Test 3: IGNORE_MARKERS partial update mode
     props.put(HoodieTableConfig.MERGE_PROPERTIES.key(), PARTIAL_UPDATE_CUSTOM_MARKER + "=" + IGNORE_MARKERS_VALUE);
     BufferedRecordMerger<InternalRow> ignoreMarkersMerger =
@@ -239,11 +245,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
   void testPartialMerging(RecordMergeMode mergeMode) throws IOException {
     BufferedRecordMerger<InternalRow> merger = createPartialMerger(mergeMode, readerContext);
-    
+
     // Test 1: Old record has all columns, new record has partial columns
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
     InternalRow newRecord = createPartialRecord("new_id", "New Name");
-    
+
     BufferedRecord<InternalRow> oldBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
     BufferedRecord<InternalRow> newBufferedRecord =
@@ -274,6 +280,12 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     Pair<Boolean, InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.getLeft());
     assertNotNull(finalResult.getRight());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
+  void testPartialMergingNotCompleteSchema(RecordMergeMode mergeMode) throws IOException {
+    BufferedRecordMerger<InternalRow> merger = createPartialMerger(mergeMode, readerContext);
 
     // Test 2: Different column sets - Old record has id, name, age, city; New record has id, name, timestamp
     InternalRow oldRecordDifferent = createRecordWithIdNameAgeCity(
@@ -282,9 +294,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         "new_id", "New Name", 2000L);
     
     BufferedRecord<InternalRow> oldBufferedRecordDifferent =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecordDifferent, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecordDifferent, 4, false);
     BufferedRecord<InternalRow> newBufferedRecordDifferent =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecordDifferent, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecordDifferent, 3, false);
 
     Option<BufferedRecord<InternalRow>> deltaResultDifferent =
         merger.deltaMerge(newBufferedRecordDifferent, oldBufferedRecordDifferent);
@@ -301,9 +313,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         createRecordWithIdNameTimestamp("newer_id", "Newer Name", 3000L);
     
     BufferedRecord<InternalRow> olderBufferedRecordDifferent =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecordDifferent, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecordDifferent, 4, false);
     BufferedRecord<InternalRow> newerBufferedRecordDifferent =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecordDifferent, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecordDifferent, 3, false);
 
     Pair<Boolean, InternalRow> finalResultDifferent =
         merger.finalMerge(olderBufferedRecordDifferent, newerBufferedRecordDifferent);
@@ -315,11 +327,44 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   // Edge Cases and Additional Tests
   // ============================================================================
 
-  @Test
-  void testDeltaMergeWithNullExistingRecord() throws IOException {
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
+  void testRegularMergingWithIgnoreDefaultsNested(RecordMergeMode mergeMode) throws IOException {
+    BufferedRecordMerger<InternalRow> ignoreDefaultsMerger =
+        createMerger(readerContext, mergeMode, PartialUpdateMode.IGNORE_DEFAULTS);
+
+    // Old record has all columns, new record has some columns with default/null values
+    InternalRow oldRecordWithDefaults = createFullRecordWithCompany(
+        "old_id", "Old Name", 25, "Old City", 1000L, "def", "ACity");
+    InternalRow newRecordWithDefaults = createFullRecordWithCompany(
+        "new_id", "New Name", 0, null, 0L, "abc", "treecity");
+    BufferedRecord<InternalRow> oldBufferedRecordWithDefaults =
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecordWithDefaults, 5, false);
+    BufferedRecord<InternalRow> newBufferedRecordWithDefaults =
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecordWithDefaults, 5, false);
+
+    Option<BufferedRecord<InternalRow>> deltaResultDefaults =
+        ignoreDefaultsMerger.deltaMerge(newBufferedRecordWithDefaults, oldBufferedRecordWithDefaults);
+
+    assertTrue(deltaResultDefaults.isPresent());
+    BufferedRecord<InternalRow> mergedRecordDefaults = deltaResultDefaults.get();
+    InternalRow row = mergedRecordDefaults.getRecord();
+    assertEquals("Old City", row.getString(3));
+    // NOTE: Ignore default does not work for nested value due to design tradeoff.
+    assertEquals("abc", row.getStruct(5, 2).getString(0));
+    assertEquals("treecity", row.getStruct(5, 2).getString(1));
+    assertEquals(RECORD_KEY, mergedRecordDefaults.getRecordKey());
+    assertFalse(mergedRecordDefaults.isDelete());
+    assertNotNull(mergedRecordDefaults.getRecord());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
+  void testDeltaMergeWithNullExistingRecord(RecordMergeMode mergeMode) throws IOException {
     BufferedRecordMerger<InternalRow> merger = createMerger(
-        readerContext, RecordMergeMode.COMMIT_TIME_ORDERING, PartialUpdateMode.NONE);
-    
+        readerContext, mergeMode, PartialUpdateMode.NONE);
+
+    // New record is not delete.
     InternalRow newRecord = createFullRecord(
         "new_id", "New Name", 30, "New City", 2000L);
     BufferedRecord<InternalRow> newBufferedRecord =
@@ -330,58 +375,74 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     assertTrue(result.isPresent());
     BufferedRecord<InternalRow> mergedRecord = result.get();
     assertEquals(newRecord, mergedRecord.getRecord());
+
+    // New record is delete.
+    newBufferedRecord =
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, false);
+    result = merger.deltaMerge(newBufferedRecord, null);
+    assertTrue(result.isPresent());
+    assertEquals(newRecord, result.get().getRecord());
   }
 
-  @Test
-  void testDeltaMergeWithDeleteRecord() {
-    BufferedRecordMerger<InternalRow> merger = createMerger(
-        readerContext, RecordMergeMode.COMMIT_TIME_ORDERING, PartialUpdateMode.NONE);
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
+  void testDeltaMergeWithDeleteRecord(RecordMergeMode mergeMode) {
+    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, PartialUpdateMode.NONE);
     
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
     BufferedRecord<InternalRow> oldBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
     DeleteRecord deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH);
     Option<DeleteRecord> result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
-    
     assertTrue(result.isPresent());
     DeleteRecord mergedDeleteRecord = result.get();
     assertEquals(RECORD_KEY, mergedDeleteRecord.getRecordKey());
-  }
 
-  @Test
-  void testDeltaMergeWithDeleteRecords() throws IOException {
-    BufferedRecordMerger<InternalRow> merger = createMerger(
-        readerContext, RecordMergeMode.COMMIT_TIME_ORDERING, PartialUpdateMode.NONE);
-    
-    BufferedRecord<InternalRow> oldBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, null, 1, true);
-    BufferedRecord<InternalRow> newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, null, 1, true);
-
-    Option<BufferedRecord<InternalRow>> result = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
-    
+    // Delete record has ordering value > default value.
+    DeleteRecord.create(RECORD_KEY, PARTITION_PATH, 1);
+    result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
-    BufferedRecord<InternalRow> mergedRecord = result.get();
-    assertEquals(RECORD_KEY, mergedRecord.getRecordKey());
-    assertTrue(mergedRecord.isDelete());
+
+    // Existing record is delete.
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
+    assertTrue(result.isPresent());
+
+    // Existing record is delete.
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, DEFAULT_VALUE, oldRecord, 1, true);
+    result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
+    if (mergeMode == COMMIT_TIME_ORDERING) {
+      assertTrue(result.isPresent());
+    } else {
+      assertTrue(result.isEmpty());
+    }
   }
 
-  @Test
-  void testFinalMergeWithDeleteRecords() throws IOException {
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
+  void testFinalMergeWithDeleteRecords(RecordMergeMode mergeMode) throws IOException {
     BufferedRecordMerger<InternalRow> merger = createMerger(
-        readerContext, RecordMergeMode.COMMIT_TIME_ORDERING, PartialUpdateMode.NONE);
-    
+        readerContext, mergeMode, PartialUpdateMode.NONE);
+
+    InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
+    InternalRow newRecord = createFullRecord("new_id", "New Name", 29, "New City", 2000L);
     BufferedRecord<InternalRow> olderBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, null, 1, true);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
     BufferedRecord<InternalRow> newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, null, 1, true);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, true);
 
     Pair<Boolean, InternalRow> result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertTrue(result.getLeft());
-    assertTrue(result.getRight() == null);
+    if (mergeMode == COMMIT_TIME_ORDERING) {
+      assertEquals(newRecord, result.getRight());
+    } else {
+      assertEquals(oldRecord, result.getRight());
+    }
   }
-  
-  // Helper method to create records for the parameterized test
+
+  // ============================================================================
+  // Helper methods or class to create records for the parameterized test
+  // ============================================================================
   private static InternalRow createFullRecord(String id, String name, int age, String city, long timestamp) {
     return new GenericInternalRow(new Object[]{
         UTF8String.fromString(id),
@@ -439,9 +500,21 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     });
   }
 
-  // ============================================================================
-  // Helper Methods
-  // ============================================================================
+  private static InternalRow createFullRecordWithCompany(
+      String id, String name, int age, String city, long timestamp, String companyName, String companyCity) {
+    InternalRow companyRow = new GenericInternalRow(new Object[]{
+        UTF8String.fromString(companyName),
+        UTF8String.fromString(companyCity)
+    });
+    return new GenericInternalRow(new Object[]{
+        UTF8String.fromString(id),
+        UTF8String.fromString(name),
+        age,
+        UTF8String.fromString(city),
+        timestamp,
+        companyRow
+    });
+  }
 
   private BufferedRecordMerger<InternalRow> createMerger(HoodieReaderContext<InternalRow> readerContext,
                                                          RecordMergeMode mergeMode,
@@ -455,7 +528,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
         Collections.emptyList(), // orderingFieldNames
         Option.empty(), // payloadClass
-        fullSchema, // readerSchema
+        READER_SCHEMA, // readerSchema
         props, // props
         partialUpdateMode
     );
@@ -472,15 +545,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
         Collections.emptyList(), // orderingFieldNames
         Option.empty(), // payloadClass
-        fullSchema, // readerSchema
+        READER_SCHEMA, // readerSchema
         props, // props
         PartialUpdateMode.KEEP_VALUES // partialUpdateMode
     );
   }
 
-  private static Schema getFullSchema() {
+  private static Schema getSchema1() {
     Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
-
     List<Schema.Field> fields = Arrays.asList(
         new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
         new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
@@ -488,12 +560,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new Schema.Field("city", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
         new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
     );
-
     fullSchema.setFields(fields);
     return fullSchema;
   }
 
-  private static Schema getPartialSchema() {
+  private static Schema getSchema2() {
     // Create a partial schema with only some fields
     Schema partialSchema = Schema.createRecord("PartialRecord", null, null, false);
     partialSchema.setFields(Arrays.asList(
@@ -501,6 +572,57 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE)
     ));
     return partialSchema;
+  }
+
+  private static Schema getSchema3() {
+    Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
+    List<Schema.Field> fields = Arrays.asList(
+        new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
+        new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
+        new Schema.Field("age", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL))), null, 0),
+        new Schema.Field("city", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE)
+    );
+    fullSchema.setFields(fields);
+    return fullSchema;
+  }
+
+  private static Schema getSchema4() {
+    Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
+    List<Schema.Field> fields = Arrays.asList(
+        new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
+        new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
+        new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
+    );
+    fullSchema.setFields(fields);
+    return fullSchema;
+  }
+
+  private static Schema getSchema5() {
+    String schemaJson =
+        "{\n"
+          + "  \"type\": \"record\",\n"
+          + "  \"name\": \"TestRecord\",\n"
+          + "  \"fields\": [\n"
+          + "    {\"name\": \"id\", \"type\": [\"null\", \"string\"], \"default\": null},\n"
+          + "    {\"name\": \"name\", \"type\": [\"null\", \"string\"], \"default\": null},\n"
+          + "    {\"name\": \"age\", \"type\": [\"int\", \"null\"], \"default\": 0},\n"
+          + "    {\"name\": \"city\", \"type\": [\"null\", \"string\"], \"default\": null},\n"
+          + "    {\"name\": \"timestamp\", \"type\": [\"long\", \"null\"], \"default\": 0},\n"
+          + "    {\n"
+          + "      \"name\": \"company\",\n"
+          + "      \"type\": {\n"
+          + "        \"type\": \"record\",\n"
+          + "        \"name\": \"Company\",\n"
+          + "        \"fields\": [\n"
+          + "          {\"name\": \"name\", \"type\": \"string\", \"default\": \"abc\"},\n"
+          + "          {\"name\": \"city\", \"type\": \"string\", \"default\": \"treecity\"}\n"
+          + "        ]\n"
+          + "      },\n"
+          + "      \"default\": {\"name\": \"abc\", \"city\": \"treecity\"}\n"
+          + "    }\n"
+          + "  ]\n"
+          + "}";
+    return new Schema.Parser().parse(schemaJson);
   }
 
   static class DummyInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
@@ -612,12 +734,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     @Override
     public Schema getSchemaFromBufferRecord(BufferedRecord<InternalRow> record) {
       int id = record.getSchemaId();
-      if (id == 1) {
-        return fullSchema;
-      } else if (id == 2) {
-        return partialSchema;
+      if (id >= 1 && id <= SCHEMAS.size()) {
+        return SCHEMAS.get(id - 1);
+      } else {
+        throw new RuntimeException("Schema id is illegal: " + id);
       }
-      return fullSchema;
     }
   }
 }
