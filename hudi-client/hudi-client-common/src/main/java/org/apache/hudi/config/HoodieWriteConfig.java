@@ -150,6 +150,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(HoodieTableVersion.current().versionCode())
       .withValidValues(
           String.valueOf(HoodieTableVersion.SIX.versionCode()),
+          String.valueOf(HoodieTableVersion.SEVEN.versionCode()),
           String.valueOf(HoodieTableVersion.EIGHT.versionCode()),
           String.valueOf(HoodieTableVersion.NINE.versionCode())
       )
