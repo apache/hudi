@@ -97,14 +97,12 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
       SparkColumnarFileReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
       baseFileReaderBroadcast = jsc.broadcast(new MultipleColumnarFileFormatReader(parquetFileReader, orcFileReader));
-    } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.PARQUET) {
-      baseFileReaderBroadcast = jsc.broadcast(
-          sparkAdapter.createParquetFileReader(false, sqlConf, options, configs));
     } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.ORC) {
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
       baseFileReaderBroadcast = jsc.broadcast(orcFileReader);
     } else {
-      throw new HoodieException("Unsupported base file format: " + metaClient.getTableConfig().getBaseFileFormat());
+      baseFileReaderBroadcast = jsc.broadcast(
+          sparkAdapter.createParquetFileReader(false, sqlConf, options, configs));
     }
     // Broadcast: TableConfig.
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
