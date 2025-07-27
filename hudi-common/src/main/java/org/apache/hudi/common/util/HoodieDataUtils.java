@@ -45,7 +45,7 @@ public class HoodieDataUtils {
    * @return a Map containing the de-duplicated key-value pairs
    */
   public static <K, V> Map<K, V> dedupeAndCollectAsMap(HoodiePairData<K, V> pairData) {
-    // Map each pair to Option<Pair> to handle null keys uniformly
+    // Map each pair to (Option<Pair.key>, V) to handle null keys uniformly
     // If there are multiple entries sharing the same key, use the incoming one
     return pairData.mapToPair(pair -> 
         Pair.of(
@@ -73,7 +73,7 @@ public class HoodieDataUtils {
    * @return a Map containing keys mapped to sets of values
    */
   public static <K, V> Map<K, Set<V>> collectPairDataAsMap(HoodiePairData<K, V> pairData) {
-    // Map each pair to Option<Pair> to handle null keys uniformly
+    // Map each pair to (Option<Pair.key>, V) to handle null keys uniformly
     // If there are multiple entries sharing the same key, combine them into a set
     return pairData.mapToPair(pair -> 
         Pair.of(

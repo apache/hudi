@@ -834,6 +834,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
 
     return getRecordsByKeyPrefixes(keys, partitionName, false, SecondaryIndexKeyUtils::escapeSpecialChars)
+        .filter(hoodieRecord -> !hoodieRecord.getData().isDeleted())
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
   }
 
