@@ -48,6 +48,8 @@ object HoodieProcedures {
       ,(ShowCommitFilesProcedure.NAME, ShowCommitFilesProcedure.builder)
       ,(ShowCommitPartitionsProcedure.NAME, ShowCommitPartitionsProcedure.builder)
       ,(ShowCommitWriteStatsProcedure.NAME, ShowCommitWriteStatsProcedure.builder)
+      ,(ShowCleansProcedure.NAME, ShowCleansProcedure.builder)
+      ,(ShowCleanPlansProcedure.NAME, ShowCleanPlansProcedure.builder)
       ,(CommitsCompareProcedure.NAME, CommitsCompareProcedure.builder)
       ,(ShowSavepointsProcedure.NAME, ShowSavepointsProcedure.builder)
       ,(DeleteMarkerProcedure.NAME, DeleteMarkerProcedure.builder)
