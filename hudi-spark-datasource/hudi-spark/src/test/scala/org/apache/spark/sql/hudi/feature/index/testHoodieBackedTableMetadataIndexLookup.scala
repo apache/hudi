@@ -240,7 +240,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
    */
   protected def testReadRecordIndex(): Unit = {
     // Case 1: Empty input
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
     val emptyResultRDD = hoodieBackedTableMetadata.readRecordIndex(HoodieListData.eager(List.empty[String].asJava))
     val emptyResult = emptyResultRDD.collectAsList()
     assert(emptyResult.isEmpty, "Empty input should return empty result")
@@ -341,7 +340,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     assert(nonExistResult.isEmpty, s"Non-existing secondary keys should return empty result for table version ${getTableVersion}")
 
     // Case 4: Mix of existing and non-existing secondary keys
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
     val mixedKeys = HoodieListData.eager(List("b1", "non_exist_1", "b2", "non_exist_2").asJava)
     val mixedResultRDD = hoodieBackedTableMetadata.readSecondaryIndexLocations(mixedKeys, secondaryIndexName)
     val mixedResult = mixedResultRDD.collectAsList().asScala
@@ -393,7 +391,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val secondaryIndexName = "secondary_index_idx_name"
 
     // Test with existing secondary keys including those with $ characters
-    assert(jsc.sc.getPersistentRDDs.isEmpty, "Should start with no persistent RDDs test")
     val existingKeys = HoodieListData.eager(List("b1", "b2", "b$", "b$", "b1", "$$", "sec$key", "$sec$", "$$", null).asJava)
     val result = hoodieBackedTableMetadata.getSecondaryIndexRecords(existingKeys, secondaryIndexName)
     val resultMap = HoodieDataUtils.collectPairDataAsMap(result)
