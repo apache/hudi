@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -393,6 +394,115 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
   @Test
   public void testUpgradeFourtoFiveWithHiveStyleDefaultPartitionWithSkipValidation() throws Exception {
     testUpgradeFourToFiveInternal(true, true, true);
+  }
+
+  @Test
+  public void testUpgradeFourToFiveWithMetadataTableFailure() throws Exception {
+    // Follow same setup of testUpgradeFourToFiveInternal
+    String tableName = metaClient.getTableConfig().getTableName();
+    cleanUp();
+    initSparkContexts();
+    initPath();
+    initTestDataGenerator();
+
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params, tableName);
+    Properties properties = new Properties();
+    params.forEach((k, v) -> properties.setProperty(k, v));
+
+    initMetaClient(getTableType(), properties);
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withRollbackUsingMarkers(false)
+        .withWriteTableVersion(6)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withProps(params)
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    // Write inserts
+    doInsert(client);
+
+    downgradeTableConfigsFromFiveToFour(cfg);
+    // end of setup of testUpgradeFourToFiveInternal
+
+    // Now test specific case of Metadata table failure during upgrade process
+    HoodieTableVersion originalVersion = metaClient.getTableConfig().getTableVersion();
+    
+    // Get metadata table path and corrupt its properties files, to trigger exception
+    String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
+        metaClient.getBasePath().toString());
+    StoragePath metadataHoodiePath = new StoragePath(metadataTablePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    StoragePath propsPath = new StoragePath(metadataHoodiePath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    StoragePath backupPropsPath = new StoragePath(metadataHoodiePath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+    
+    // Corrupt both properties files with invalid content
+    String corruptedContent = "CORRUPTED_INVALID_CONTENT\n\nTHIS_IS_NOT_VALID_PROPERTIES_FORMAT";
+    try (OutputStream propsOut = metaClient.getStorage().create(propsPath, true);
+         OutputStream backupOut = metaClient.getStorage().create(backupPropsPath, true)) {
+      propsOut.write(corruptedContent.getBytes());
+      backupOut.write(corruptedContent.getBytes());
+    }
+
+    // Attempt upgrade from version 4 to 5 - should fail with metadata table exception
+    HoodieUpgradeDowngradeException exception = assertThrows(
+        HoodieUpgradeDowngradeException.class,
+        () -> new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+            .run(HoodieTableVersion.FIVE, null)
+    );
+
+    // Verify the exception message contains the expected error message
+    assertTrue(exception.getMessage().contains("Upgrade/downgrade for the Hudi metadata table failed. "
+        + "Please try again. If the failure repeats for metadata table, it is recommended to disable "
+        + "the metadata table so that the upgrade and downgrade can continue for the data table."),
+        "Exception message should match the exact error message from UpgradeDowngrade.java");
+    
+    // Verify main table version unchanged (upgrade process was stopped)
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(originalVersion, metaClient.getTableConfig().getTableVersion(),
+        "Main table version should remain unchanged when metadata table upgrade fails");
+  }
+
+  @Test
+  public void testAutoUpgradeDisabledDuringUpgrade() throws Exception {
+    // Follow same setup of testUpgradeFourToFiveInternal
+    String tableName = metaClient.getTableConfig().getTableName();
+    cleanUp();
+    initSparkContexts();
+    initPath();
+    initTestDataGenerator();
+
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params, tableName);
+    Properties properties = new Properties();
+    params.forEach((k, v) -> properties.setProperty(k, v));
+
+    initMetaClient(getTableType(), properties);
+    // Create config with auto-upgrade disabled
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withRollbackUsingMarkers(false)
+        .withWriteTableVersion(6)
+        .withAutoUpgradeVersion(false)  // Disable auto-upgrade
+        .withProps(params)
+        .build();
+    
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    // Write inserts to establish table
+    doInsert(client);
+    
+    // Downgrade to version 4 first
+    downgradeTableConfigsFromFiveToFour(cfg);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTableVersion originalVersion = metaClient.getTableConfig().getTableVersion();
+    assertEquals(HoodieTableVersion.FOUR, originalVersion, "Table should be at version 4 before test");
+    
+    // Attempt upgrade from version 4 to 5 with auto-upgrade disabled
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.FIVE, null);
+    
+    // Verify that upgrade was skipped and table version remains unchanged
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(HoodieTableVersion.FOUR, metaClient.getTableConfig().getTableVersion(),
+        "Table version should remain at 4 when auto-upgrade is disabled");
   }
 
   private void testUpgradeFourToFiveInternal(boolean assertDefaultPartition, boolean skipDefaultPartitionValidation, boolean isHiveStyle) throws Exception {
