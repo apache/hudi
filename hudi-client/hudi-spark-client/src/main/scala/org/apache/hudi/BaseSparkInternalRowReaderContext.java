@@ -113,7 +113,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public InternalRow constructEngineRecord(Schema schema,
+  public InternalRow mergeWithEngineRecord(Schema schema,
                                            Map<Integer, Object> updateValues,
                                            BufferedRecord<InternalRow> baseRecord) {
     List<Schema.Field> fields = schema.getFields();

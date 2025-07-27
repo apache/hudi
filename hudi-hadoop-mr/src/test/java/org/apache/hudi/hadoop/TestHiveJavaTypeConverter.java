@@ -19,6 +19,8 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
+
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.Text;
 import org.junit.jupiter.api.Test;
@@ -28,8 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestHiveReaderContextTypeConverter {
-  private final HiveReaderContextTypeConverter handler = new HiveReaderContextTypeConverter();
+class TestHiveJavaTypeConverter {
+  private final HiveJavaTypeConverter handler = new HiveJavaTypeConverter();
 
   @Test
   void testCastToBooleanWithValidBooleanWritableTrue() {
@@ -45,10 +47,7 @@ class TestHiveReaderContextTypeConverter {
 
   @Test
   void testCastToBooleanWithInvalidType() {
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      handler.castToBoolean("not a BooleanWritable");
-    });
-    assertTrue(exception.getMessage().contains("Expected BooleanWritable but got"));
+    assertThrows(IllegalArgumentException.class, () -> handler.castToBoolean("not a BooleanWritable"), "Expected BooleanWritable but got");
   }
 
   @Test
@@ -59,9 +58,6 @@ class TestHiveReaderContextTypeConverter {
 
   @Test
   void testCastToStringWithInvalidType() {
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      handler.castToString(new BooleanWritable(true));
-    });
-    assertTrue(exception.getMessage().contains("Expected BooleanWritable but got"));
+    assertThrows(IllegalArgumentException.class, () -> handler.castToString(new BooleanWritable(true)), "Expected Text but got");
   }
 }

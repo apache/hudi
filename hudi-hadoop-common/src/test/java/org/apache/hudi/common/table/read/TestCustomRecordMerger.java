@@ -60,7 +60,7 @@ import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.Operati
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestCustomBufferedRecordMerger extends HoodieFileGroupReaderTestHarness {
+public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
 
   @Override
   protected Properties getMetaProps() {
@@ -122,7 +122,7 @@ public class TestCustomBufferedRecordMerger extends HoodieFileGroupReaderTestHar
 
   @BeforeEach
   public void initialize() throws Exception {
-    setTableName(TestCustomBufferedRecordMerger.class.getName());
+    setTableName(TestCustomRecordMerger.class.getName());
     initPath(tableName);
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});

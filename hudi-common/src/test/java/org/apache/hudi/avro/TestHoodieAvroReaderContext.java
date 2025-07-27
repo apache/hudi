@@ -213,7 +213,7 @@ class TestHoodieAvroReaderContext {
     BufferedRecord<IndexedRecord> baseRecord =
         new BufferedRecord<>("key1", 1, engineRecord, 0, false);
     Map<Integer, Object> updates = new HashMap<>();
-    IndexedRecord output = readerContext.constructEngineRecord(schema, updates, baseRecord);
+    IndexedRecord output = readerContext.mergeWithEngineRecord(schema, updates, baseRecord);
     assertEquals("String1", output.get(0));
     assertEquals("String2", output.get(1));
     assertEquals(1, output.get(2));
@@ -229,7 +229,7 @@ class TestHoodieAvroReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(0, "String1_0");
     updates.put(2, 2);
-    IndexedRecord output = readerContext.constructEngineRecord(schema, updates, baseRecord);
+    IndexedRecord output = readerContext.mergeWithEngineRecord(schema, updates, baseRecord);
     assertEquals("String1_0", output.get(0));
     assertEquals("String2", output.get(1));
     assertEquals(2, output.get(2));

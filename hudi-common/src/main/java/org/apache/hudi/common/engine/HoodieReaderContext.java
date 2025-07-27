@@ -31,7 +31,9 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.JavaTypeConverter;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -97,7 +99,7 @@ public abstract class HoodieReaderContext<T> {
   protected String partitionPath;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
-  protected ReaderContextTypeConverter typeConverter;
+  protected JavaTypeConverter typeConverter;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -113,7 +115,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
-    this.typeConverter = new ReaderContextTypeConverter();
+    this.typeConverter = new DefaultJavaTypeConverter();
   }
 
   // Getter and Setter for schemaHandler
@@ -208,7 +210,7 @@ public abstract class HoodieReaderContext<T> {
     return new DefaultSerializer<>();
   }
 
-  public ReaderContextTypeConverter getTypeConverter() {
+  public JavaTypeConverter getTypeConverter() {
     return typeConverter;
   }
 
@@ -416,7 +418,7 @@ public abstract class HoodieReaderContext<T> {
    * @param baseRecord       The record based on which the engine record is built.
    * @return A new instance of engine record type {@link T}.
    */
-  public abstract T constructEngineRecord(Schema schema,
+  public abstract T mergeWithEngineRecord(Schema schema,
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
 

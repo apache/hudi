@@ -17,23 +17,22 @@
  * under the License.
  */
 
-package org.apache.hudi.avro;
+package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.engine.ReaderContextTypeConverter;
-import org.apache.hudi.common.util.StringUtils;
+public class DefaultJavaTypeConverter implements JavaTypeConverter {
 
-import java.nio.ByteBuffer;
+  public boolean castToBoolean(Object value) {
+    if (value instanceof Boolean) {
+      return (boolean) value;
+    } else {
+      throw new IllegalArgumentException("Input value type " + value.getClass() + ", cannot be cast to boolean");
+    }
+  }
 
-public class AvroReaderContextTypeConverter extends ReaderContextTypeConverter {
-  @Override
   public String castToString(Object value) {
-    if (value == null) {
-      return null;
+    if (null != value) {
+      return value.toString();
     }
-    if (value instanceof ByteBuffer) {
-      ByteBuffer buffer = (ByteBuffer) value;
-      return StringUtils.fromUTF8Bytes(buffer.array());
-    }
-    return value.toString();
+    return null;
   }
 }

@@ -17,32 +17,29 @@
  * under the License.
  */
 
-package org.apache.hudi.common.engine;
+package org.apache.hudi.hadoop.utils;
 
-/**
- * Helper class that handle cell level operation.
- */
-public class ReaderContextTypeConverter {
-  /**
-   * Cast to Java boolean value.
-   * If the object is not compatible with boolean type, throws.
-   */
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
+
+import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.Text;
+
+public class HiveJavaTypeConverter extends DefaultJavaTypeConverter {
+  @Override
   public boolean castToBoolean(Object value) {
-    if (value instanceof Boolean) {
-      return (boolean) value;
+    if (value instanceof BooleanWritable) {
+      return ((BooleanWritable) value).get();
     } else {
-      throw new IllegalArgumentException(
-          "Input value type " + value.getClass() + ", cannot be cast to boolean");
+      throw new IllegalArgumentException("Expected BooleanWritable but got " + value.getClass());
     }
   }
 
-  /**
-   * Cast to Java string value.
-   */
+  @Override
   public String castToString(Object value) {
-    if (null != value) {
+    if (value instanceof Text) {
       return value.toString();
+    } else {
+      throw new IllegalArgumentException("Expected Text but got " + value.getClass());
     }
-    return null;
   }
 }

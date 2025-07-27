@@ -17,31 +17,20 @@
  * under the License.
  */
 
-package org.apache.hudi.hadoop;
+package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.engine.ReaderContextTypeConverter;
+import java.nio.ByteBuffer;
 
-import org.apache.hadoop.io.BooleanWritable;
-import org.apache.hadoop.io.Text;
-
-public class HiveReaderContextTypeConverter extends ReaderContextTypeConverter {
-  @Override
-  public boolean castToBoolean(Object value) {
-    if (value instanceof BooleanWritable) {
-      return ((BooleanWritable) value).get();
-    } else {
-      throw new IllegalArgumentException(
-          "Expected BooleanWritable but got " + value.getClass());
-    }
-  }
-
+public class AvroJavaTypeConverter extends DefaultJavaTypeConverter {
   @Override
   public String castToString(Object value) {
-    if (value instanceof Text) {
-      return value.toString();
-    } else {
-      throw new IllegalArgumentException(
-          "Expected BooleanWritable but got " + value.getClass());
+    if (value == null) {
+      return null;
     }
+    if (value instanceof ByteBuffer) {
+      ByteBuffer buffer = (ByteBuffer) value;
+      return StringUtils.fromUTF8Bytes(buffer.array());
+    }
+    return value.toString();
   }
 }

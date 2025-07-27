@@ -117,7 +117,7 @@ class TestHiveHoodieReaderContext {
     BufferedRecord<ArrayWritable> buffered = new BufferedRecord<>("anyKey", 1, base, 1, false);
 
     Map<Integer, Object> updates = new HashMap<>();
-    ArrayWritable result = avroReaderContext.constructEngineRecord(SCHEMA, updates, buffered);
+    ArrayWritable result = avroReaderContext.mergeWithEngineRecord(SCHEMA, updates, buffered);
     Writable[] values = result.get();
 
     assertEquals(1, ((IntWritable) values[0]).get());
@@ -143,7 +143,7 @@ class TestHiveHoodieReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(0, new IntWritable(2));
     updates.put(1, new Text("Bob"));
-    ArrayWritable result = avroReaderContext.constructEngineRecord(SCHEMA, updates, buffered);
+    ArrayWritable result = avroReaderContext.mergeWithEngineRecord(SCHEMA, updates, buffered);
     Writable[] values = result.get();
 
     assertEquals(2, ((IntWritable) values[0]).get());
