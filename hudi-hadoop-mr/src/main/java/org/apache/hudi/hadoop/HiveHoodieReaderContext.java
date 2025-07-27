@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -104,7 +105,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.partitionColSet = new HashSet<>(this.partitionCols);
     this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
-    this.typeConverter = new HiveReaderContextTypeConverter();
+    this.typeConverter = new HiveJavaTypeConverter();
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
@@ -230,7 +231,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public ArrayWritable constructEngineRecord(Schema schema,
+  public ArrayWritable mergeWithEngineRecord(Schema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<ArrayWritable> baseRecord) {
     Writable[] engineRecord = baseRecord.getRecord().get();
