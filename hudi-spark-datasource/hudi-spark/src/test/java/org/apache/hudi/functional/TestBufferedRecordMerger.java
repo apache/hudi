@@ -56,7 +56,9 @@ import org.apache.spark.unsafe.types.UTF8String;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -64,10 +66,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.BaseSparkInternalRowReaderContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
 import static org.apache.hudi.common.util.OrderingValues.DEFAULT_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -82,8 +87,13 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   private static final long ORDERING_VALUE = 100L;
   private static final String IGNORE_MARKERS_VALUE = "__HUDI_DEFAULT_MARKER__";
   private static final List<Schema> SCHEMAS = Arrays.asList(
-      getSchema1(), getSchema2(), getSchema3(), getSchema4(), getSchema5());
-  private static final Schema READER_SCHEMA = getSchema1();
+      getSchema1(),
+      getSchema2(),
+      getSchema3(),
+      getSchema4(),
+      getSchema5(),
+      getSchema6());
+  private static final Schema READER_SCHEMA = getSchema6();
   private HoodieTableConfig tableConfig;
   private StorageConfiguration<?> storageConfig;
   private TypedProperties props;
@@ -98,9 +108,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"id"}));
-
     // Create reader context.
     props = new TypedProperties();
+    props.put(PRECOMBINE_FIELDS.key(), "precombine");
     readerContext = new DummyInternalRowReaderContext(
         storageConfig, tableConfig, Option.empty(), Option.empty());
   }
@@ -109,133 +119,167 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   // Test Set 1: enablePartialMerging = false
   // ============================================================================
   @ParameterizedTest
-  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
-  void testRegularMerging(RecordMergeMode mergeMode) throws IOException {
-    // Test 1: NONE partial update mode (regular path)
-    BufferedRecordMerger<InternalRow> noneMerger = createMerger(readerContext, mergeMode, PartialUpdateMode.NONE);
-    // Create records with all columns
+  @MethodSource("mergeModeAndStageProvider")
+  void testRegularMerging(RecordMergeMode mergeMode, PartialUpdateMode updateMode, MergeStage stage) throws IOException {
+    if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+      props.put(HoodieTableConfig.MERGE_PROPERTIES.key(),
+          PARTIAL_UPDATE_CUSTOM_MARKER + "=" + IGNORE_MARKERS_VALUE);
+    }
+
+    if (stage == MergeStage.DELTA_MERGE) {
+      runDeltaMerge(mergeMode, updateMode);
+    } else if (stage == MergeStage.FINAL_MERGE) {
+      runFinalMerge(mergeMode, updateMode);
+    } else {
+      runDeltaDeleteMerge(mergeMode, updateMode);
+    }
+  }
+
+  private void runDeltaMerge(RecordMergeMode mergeMode, PartialUpdateMode updateMode) throws IOException {
+    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, updateMode);
+    // Create records with all columns.
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
-    InternalRow newRecord = createFullRecord("new_id", "New Name", 30, "New City", 2000L);
+    InternalRow newRecord = createFullRecord("new_id", "New Name", 0, IGNORE_MARKERS_VALUE, 0L);
+
+    // CASE 1: New record has lower ordering value.
     BufferedRecord<InternalRow> oldBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
     BufferedRecord<InternalRow> newBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, false);
-
-    Option<BufferedRecord<InternalRow>> deltaResult = noneMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
+    Option<BufferedRecord<InternalRow>> deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
       assertTrue(deltaResult.isPresent());
+      if (updateMode == PartialUpdateMode.NONE) {
+        assertEquals(newRecord, deltaResult.get().getRecord());
+      } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
+        assertEquals(25, deltaResult.get().getRecord().getInt(2));
+        assertEquals(1000L, deltaResult.get().getRecord().getLong(4));
+      } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+        assertEquals("Old City", deltaResult.get().getRecord().getString(3));
+      }
+    } else {
+      if (updateMode == PartialUpdateMode.NONE) {
+        assertTrue(deltaResult.isEmpty());
+      } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
+        assertTrue(deltaResult.isPresent());
+        assertEquals(oldRecord, deltaResult.get().getRecord());
+      }
+    }
+
+    // CASE 2: New record has higher ordering value.
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, false);
+    deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
+    assertTrue(deltaResult.isPresent());
+    if (updateMode == PartialUpdateMode.NONE) {
       assertEquals(newRecord, deltaResult.get().getRecord());
-      BufferedRecord<InternalRow> mergedRecord = deltaResult.get();
-      // No construction happens. So the key is original key.
-      assertEquals(RECORD_KEY, mergedRecord.getRecordKey());
-      assertFalse(mergedRecord.isDelete());
-      assertNotNull(mergedRecord.getRecord());
+    } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
+      assertEquals(25, deltaResult.get().getRecord().getInt(2));
+      assertEquals(1000L, deltaResult.get().getRecord().getLong(4));
+    } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+      assertEquals("Old City", deltaResult.get().getRecord().getString(3));
+    }
+
+    // CASE 3: New record and old record have the same ordering value.
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, false);
+    deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
+    assertTrue(deltaResult.isPresent());
+    if (updateMode == PartialUpdateMode.NONE) {
+      assertEquals(newRecord, deltaResult.get().getRecord());
+    } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
+      assertEquals(25, deltaResult.get().getRecord().getInt(2));
+      assertEquals(1000L, deltaResult.get().getRecord().getLong(4));
+    } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+      assertEquals("Old City", deltaResult.get().getRecord().getString(3));
+    }
+  }
+
+  private void runDeltaDeleteMerge(RecordMergeMode mergeMode, PartialUpdateMode updateMode) throws IOException {
+    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, updateMode);
+    // Create records with all columns.
+    InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
+    InternalRow newRecord = createFullRecord("new_id", "New Name", 0, IGNORE_MARKERS_VALUE, 0L);
+
+    // CASE 1: New record has lower ordering value.
+    BufferedRecord<InternalRow> oldBufferedRecord =
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+    DeleteRecord deleteRecord = DeleteRecord.create(RECORD_KEY, "anyPath", ORDERING_VALUE - 1);
+    Option<DeleteRecord> deltaResult = merger.deltaMerge(deleteRecord, oldBufferedRecord);
+    if (mergeMode == COMMIT_TIME_ORDERING) {
+      assertTrue(deltaResult.isPresent());
+      assertEquals(deleteRecord, deltaResult.get());
     } else {
       assertTrue(deltaResult.isEmpty());
     }
 
-    // Test final merge
-    InternalRow olderRecord = createFullRecord(
+    // CASE 2: New record has higher ordering value.
+    deleteRecord = DeleteRecord.create(RECORD_KEY, "anyPath", ORDERING_VALUE + 1);
+    deltaResult = merger.deltaMerge(deleteRecord, oldBufferedRecord);
+    assertTrue(deltaResult.isPresent());
+    assertEquals(deleteRecord, deltaResult.get());
+
+    // CASE 3: New record and old record have the same ordering value.
+    deleteRecord = DeleteRecord.create(RECORD_KEY, "anyPath", ORDERING_VALUE);
+    deltaResult = merger.deltaMerge(deleteRecord, oldBufferedRecord);
+    assertTrue(deltaResult.isPresent());
+    assertEquals(deleteRecord, deltaResult.get());
+  }
+
+  private void runFinalMerge(RecordMergeMode mergeMode, PartialUpdateMode updateMode) throws IOException {
+    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, updateMode);
+    InternalRow oldRecord = createFullRecord(
         "older_id", "Older Name", 20, "Older City", 500L);
-    InternalRow newerRecord = createFullRecord(
-        "newer_id", "Newer Name", 35, "Newer City", 3000L);
+    InternalRow newRecord = createFullRecord(
+        "new_id", "New Name", 0, IGNORE_MARKERS_VALUE, 0L);
+
+    // New record has lower ordering value.
     BufferedRecord<InternalRow> olderBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
     BufferedRecord<InternalRow> newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newerRecord, 1, false);
-    Pair<Boolean, InternalRow> finalResult = noneMerger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, false);
+    Pair<Boolean, InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.getLeft());
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertEquals(newerRecord, finalResult.getRight());
+      if (updateMode == PartialUpdateMode.NONE) {
+        assertEquals(newRecord, finalResult.getRight());
+      } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
+        assertEquals(20, finalResult.getRight().getInt(2));
+        assertEquals(500L, finalResult.getRight().getLong(4));
+      } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+        assertEquals("Older City", finalResult.getRight().getString(3));
+      }
     } else {
-      assertEquals(olderRecord, finalResult.getRight());
+      assertEquals(oldRecord, finalResult.getRight());
     }
-  }
 
-  @ParameterizedTest
-  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
-  void testRegularMergingWithIgnoreDefaults(RecordMergeMode mergeMode) throws IOException {
-    // Test 2: IGNORE_DEFAULTS partial update mode
-    BufferedRecordMerger<InternalRow> ignoreDefaultsMerger =
-        createMerger(readerContext, mergeMode, PartialUpdateMode.IGNORE_DEFAULTS);
+    // New record has higher ordering value.
+    olderBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, false);
+    finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    assertFalse(finalResult.getLeft());
+    if (updateMode == PartialUpdateMode.NONE) {
+      assertEquals(newRecord, finalResult.getRight());
+    } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
+      assertEquals(20, finalResult.getRight().getInt(2));
+      assertEquals(500, finalResult.getRight().getLong(4));
+    } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+      assertEquals("Older City", finalResult.getRight().getString(3));
+    }
 
-    // Old record has all columns, new record has some columns with default/null values
-    InternalRow oldRecordWithDefaults = createFullRecord(
-        "old_id", "Old Name", 25, "Old City", 1000L);
-    InternalRow newRecordWithDefaults = createRecordWithDefaults(
-        "new_id", "New Name", 0, null, 0L);
-    BufferedRecord<InternalRow> oldBufferedRecordWithDefaults =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecordWithDefaults, 1, false);
-    BufferedRecord<InternalRow> newBufferedRecordWithDefaults =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecordWithDefaults, 1, false);
-    Option<BufferedRecord<InternalRow>> deltaResultDefaults =
-        ignoreDefaultsMerger.deltaMerge(newBufferedRecordWithDefaults, oldBufferedRecordWithDefaults);
-    assertTrue(deltaResultDefaults.isPresent());
-    BufferedRecord<InternalRow> mergedRecordDefaults = deltaResultDefaults.get();
-    assertEquals("Old City", mergedRecordDefaults.getRecord().getString(3));
-    assertEquals(RECORD_KEY, mergedRecordDefaults.getRecordKey());
-    assertFalse(mergedRecordDefaults.isDelete());
-    assertNotNull(mergedRecordDefaults.getRecord());
-
-    // Test final merge with defaults
-    InternalRow olderRecordWithDefaults =
-        createFullRecord("older_id", "Older Name", 20, "Older City", 500L);
-    InternalRow newerRecordWithDefaults =
-        createRecordWithDefaults("newer_id", "Newer Name", 0, null, 0L);
-    BufferedRecord<InternalRow> olderBufferedRecordWithDefaults =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecordWithDefaults, 1, false);
-    BufferedRecord<InternalRow> newerBufferedRecordWithDefaults =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecordWithDefaults, 1, false);
-
-    Pair<Boolean, InternalRow> finalResultDefaults =
-        ignoreDefaultsMerger.finalMerge(olderBufferedRecordWithDefaults, newerBufferedRecordWithDefaults);
-    assertFalse(finalResultDefaults.getLeft());
-    assertNotNull(finalResultDefaults.getRight());
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
-  void testRegularMergingWithIgnoreMarkers(RecordMergeMode mergeMode) throws IOException {
-    // Test 3: IGNORE_MARKERS partial update mode
-    props.put(HoodieTableConfig.MERGE_PROPERTIES.key(), PARTIAL_UPDATE_CUSTOM_MARKER + "=" + IGNORE_MARKERS_VALUE);
-    BufferedRecordMerger<InternalRow> ignoreMarkersMerger =
-        createMerger(readerContext, mergeMode, PartialUpdateMode.IGNORE_MARKERS);
-
-    // Old record has all columns, new record has some columns with marker values
-    InternalRow oldRecordWithMarkers =
-        createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
-    InternalRow newRecordWithMarkers =
-        createRecordWithMarkers("new_id", "New Name", 0, IGNORE_MARKERS_VALUE, 0L);
-    
-    BufferedRecord<InternalRow> oldBufferedRecordWithMarkers =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecordWithMarkers, 1, false);
-    BufferedRecord<InternalRow> newBufferedRecordWithMarkers =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecordWithMarkers, 1, false);
-
-    Option<BufferedRecord<InternalRow>> deltaResultMarkers =
-        ignoreMarkersMerger.deltaMerge(newBufferedRecordWithMarkers, oldBufferedRecordWithMarkers);
-    assertTrue(deltaResultMarkers.isPresent());
-    BufferedRecord<InternalRow> mergedRecordMarkers = deltaResultMarkers.get();
-    assertEquals(RECORD_KEY, mergedRecordMarkers.getRecordKey());
-    assertFalse(mergedRecordMarkers.isDelete());
-    assertNotNull(mergedRecordMarkers.getRecord());
-
-    // Test final merge with markers
-    InternalRow olderRecordWithMarkers =
-        createFullRecord("older_id", "Older Name", 20, "Older City", 500L);
-    InternalRow newerRecordWithMarkers =
-        createRecordWithMarkers("newer_id", "Newer Name", 0, IGNORE_MARKERS_VALUE, 0L);
-    
-    BufferedRecord<InternalRow> olderBufferedRecordWithMarkers =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecordWithMarkers, 1, false);
-    BufferedRecord<InternalRow> newerBufferedRecordWithMarkers =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecordWithMarkers, 1, false);
-
-    Pair<Boolean, InternalRow> finalResultMarkers =
-        ignoreMarkersMerger.finalMerge(olderBufferedRecordWithMarkers, newerBufferedRecordWithMarkers);
-    assertEquals("Older City", finalResultMarkers.getRight().getString(3));
-    assertFalse(finalResultMarkers.getLeft());
-    assertNotNull(finalResultMarkers.getRight());
+    // New record has equal ordering value.
+    olderBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, false);
+    finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    assertFalse(finalResult.getLeft());
+    if (updateMode == PartialUpdateMode.NONE) {
+      assertEquals(newRecord, finalResult.getRight());
+    } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
+      assertEquals(20, finalResult.getRight().getInt(2));
+      assertEquals(500, finalResult.getRight().getLong(4));
+    } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+      assertEquals("Older City", finalResult.getRight().getString(3));
+    }
   }
 
   // ============================================================================
@@ -244,83 +288,85 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
   void testPartialMerging(RecordMergeMode mergeMode) throws IOException {
+    runPartialDeltaMerge(mergeMode);
+    runPartialFinalMerge(mergeMode);
+  }
+
+  private void runPartialFinalMerge(RecordMergeMode mergeMode) throws IOException {
     BufferedRecordMerger<InternalRow> merger = createPartialMerger(mergeMode, readerContext);
 
-    // Test 1: Old record has all columns, new record has partial columns
-    InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
-    InternalRow newRecord = createPartialRecord("new_id", "New Name");
+    // Case 1: new record has lower ordering value.
+    InternalRow olderRecord = createFullRecordForPartial(
+        (int) ORDERING_VALUE, "older_id", "Older Name", 20, "Older City", 500L);
+    InternalRow newerRecord = createPartialRecord(
+        (int) ORDERING_VALUE - 1, "newer_id", "Newer Name");
+    BufferedRecord<InternalRow> olderBufferedRecord =
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecord, 6, false);
+    BufferedRecord<InternalRow> newerBufferedRecord =
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newerRecord, 2, false);
 
+    Pair<Boolean, InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    InternalRow expected = createFullRecordForPartial(
+        (int) ORDERING_VALUE - 1, "newer_id", "Newer Name", 20, "Older City", 500L);
+    assertNotNull(finalResult.getRight());
+    if (mergeMode == COMMIT_TIME_ORDERING) {
+      assertRowEqual(expected, finalResult.getRight(), READER_SCHEMA);
+    } else {
+      assertRowEqual(olderRecord, finalResult.getRight(), READER_SCHEMA);
+    }
+    // Case 2: new record has higher ordering value.
+    newerRecord = createPartialRecord((int) ORDERING_VALUE + 1, "newer_id", "Newer Name");
+    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecord, 2, false);
+    finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    expected = createFullRecordForPartial(
+        (int) ORDERING_VALUE + 1, "newer_id", "Newer Name", 20, "Older City", 500L);
+    assertRowEqual(expected, finalResult.getRight(), READER_SCHEMA);
+    // Case 3: new record has equal ordering value.
+    newerRecord = createPartialRecord((int) ORDERING_VALUE, "newer_id", "Newer Name");
+    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newerRecord, 2, false);
+    finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    expected = createFullRecordForPartial(
+        (int) ORDERING_VALUE, "newer_id", "Newer Name", 20, "Older City", 500L);
+    assertRowEqual(expected, finalResult.getRight(), READER_SCHEMA);
+  }
+
+  private void runPartialDeltaMerge(RecordMergeMode mergeMode) throws IOException {
+    BufferedRecordMerger<InternalRow> merger = createPartialMerger(mergeMode, readerContext);
+
+    // Test 1: Old record more columns than new record.
+    // Case 1: New record has lower ordering value.
+    InternalRow oldRecord = createFullRecordForPartial((int) ORDERING_VALUE, "old_id", "Old Name", 25, "Old City", 1000L);
+    InternalRow newRecord = createPartialRecord((int) ORDERING_VALUE - 1, "new_id", "New Name");
     BufferedRecord<InternalRow> oldBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 6, false);
     BufferedRecord<InternalRow> newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 2, false);
-
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 2, false);
     Option<BufferedRecord<InternalRow>> deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     assertTrue(deltaResult.isPresent());
     BufferedRecord<InternalRow> mergedRecord = deltaResult.get();
-    assertEquals("new_id", mergedRecord.getRecordKey());
-    assertFalse(mergedRecord.isDelete());
-    assertNotNull(mergedRecord.getRecord());
-
-    // Test 2: Old record has fewer columns than new columns.
-    deltaResult = merger.deltaMerge(oldBufferedRecord, newBufferedRecord);
+    InternalRow expected = createFullRecordForPartial(
+        (int) ORDERING_VALUE - 1, "new_id", "New Name", 25, "Old City", 1000L);
+    if (mergeMode == COMMIT_TIME_ORDERING) {
+      assertRowEqual(expected, mergedRecord.getRecord(), READER_SCHEMA);
+    } else {
+      assertRowEqual(oldRecord, mergedRecord.getRecord(), READER_SCHEMA);
+    }
+    // Test 2: New record has higher columns ordering value.
+    newRecord = createPartialRecord((int) ORDERING_VALUE + 1, "new_id", "New Name");
+    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 2, false);
+    deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
+    expected = createFullRecordForPartial(
+        (int) ORDERING_VALUE + 1, "new_id", "New Name", 25, "Old City", 1000L);
     assertTrue(deltaResult.isPresent());
-    assertEquals("old_id", deltaResult.get().getRecordKey());
-    assertFalse(deltaResult.get().isDelete());
-    assertNotNull(deltaResult.get().getRecord());
-
-    // Test 3: Test final merge with partial records
-    InternalRow olderRecord = createFullRecord("older_id", "Older Name", 20, "Older City", 500L);
-    InternalRow newerRecord = createPartialRecord("newer_id", "Newer Name");
-    BufferedRecord<InternalRow> olderBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecord, 1, false);
-    BufferedRecord<InternalRow> newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecord, 2, false);
-
-    Pair<Boolean, InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
-    assertFalse(finalResult.getLeft());
-    assertNotNull(finalResult.getRight());
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
-  void testPartialMergingNotCompleteSchema(RecordMergeMode mergeMode) throws IOException {
-    BufferedRecordMerger<InternalRow> merger = createPartialMerger(mergeMode, readerContext);
-
-    // Test 2: Different column sets - Old record has id, name, age, city; New record has id, name, timestamp
-    InternalRow oldRecordDifferent = createRecordWithIdNameAgeCity(
-        "old_id", "Old Name", 25, "Old City");
-    InternalRow newRecordDifferent = createRecordWithIdNameTimestamp(
-        "new_id", "New Name", 2000L);
-    
-    BufferedRecord<InternalRow> oldBufferedRecordDifferent =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecordDifferent, 4, false);
-    BufferedRecord<InternalRow> newBufferedRecordDifferent =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecordDifferent, 3, false);
-
-    Option<BufferedRecord<InternalRow>> deltaResultDifferent =
-        merger.deltaMerge(newBufferedRecordDifferent, oldBufferedRecordDifferent);
-    assertTrue(deltaResultDifferent.isPresent());
-    BufferedRecord<InternalRow> mergedRecordDifferent = deltaResultDifferent.get();
-    assertEquals("new_id", mergedRecordDifferent.getRecordKey());
-    assertFalse(mergedRecordDifferent.isDelete());
-    assertNotNull(mergedRecordDifferent.getRecord());
-
-    // Test final merge with different column sets
-    InternalRow olderRecordDifferent =
-        createRecordWithIdNameAgeCity("older_id", "Older Name", 20, "Older City");
-    InternalRow newerRecordDifferent =
-        createRecordWithIdNameTimestamp("newer_id", "Newer Name", 3000L);
-    
-    BufferedRecord<InternalRow> olderBufferedRecordDifferent =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecordDifferent, 4, false);
-    BufferedRecord<InternalRow> newerBufferedRecordDifferent =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecordDifferent, 3, false);
-
-    Pair<Boolean, InternalRow> finalResultDifferent =
-        merger.finalMerge(olderBufferedRecordDifferent, newerBufferedRecordDifferent);
-    assertFalse(finalResultDifferent.getLeft()); // Should not be a delete
-    assertNotNull(finalResultDifferent.getRight()); // Should have a record
+    assertEquals(expected, deltaResult.get().getRecord());
+    // Test 3: New record has equal ordering value.
+    newRecord = createPartialRecord((int) ORDERING_VALUE, "new_id", "New Name");
+    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 2, false);
+    deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
+    assertTrue(deltaResult.isPresent());
+    expected = createFullRecordForPartial(
+        (int) ORDERING_VALUE, "new_id", "New Name", 25, "Old City", 1000L);
+    assertEquals(expected, deltaResult.get().getRecord());
   }
 
   // ============================================================================
@@ -371,53 +417,88 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, false);
     Option<BufferedRecord<InternalRow>> result =
         merger.deltaMerge(newBufferedRecord, null);
-    
     assertTrue(result.isPresent());
     BufferedRecord<InternalRow> mergedRecord = result.get();
     assertEquals(newRecord, mergedRecord.getRecord());
 
-    // New record is delete.
+    // New record is delete with 100 ordering value.
     newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, true);
     result = merger.deltaMerge(newBufferedRecord, null);
     assertTrue(result.isPresent());
     assertEquals(newRecord, result.get().getRecord());
+
+    // New record is delete with default ordering value.
+    newBufferedRecord =
+        new BufferedRecord<>(RECORD_KEY, DEFAULT_VALUE, newRecord, 1, true);
+    result = merger.deltaMerge(newBufferedRecord, null);
+    assertTrue(result.isPresent());
+    assertEquals(newRecord, result.get().getRecord());
+
+    // NOTE: no need to test null case at final stage since
+    //       record buffer ensures both new and old records are not null.
   }
 
+  /**
+   * Test delete related logic in delta stage.
+   */
   @ParameterizedTest
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
   void testDeltaMergeWithDeleteRecord(RecordMergeMode mergeMode) {
     BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, PartialUpdateMode.NONE);
-    
+
+    // Delete record has null ordering value.
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
     BufferedRecord<InternalRow> oldBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
     DeleteRecord deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH);
     Option<DeleteRecord> result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
-    DeleteRecord mergedDeleteRecord = result.get();
-    assertEquals(RECORD_KEY, mergedDeleteRecord.getRecordKey());
+    assertEquals(deleteRecord, result.get());
+
+    // Delete record has lower ordering value.
+    deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH, ORDERING_VALUE - 1);
+    result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
+    if (mergeMode == COMMIT_TIME_ORDERING) {
+      assertTrue(result.isPresent());
+      assertEquals(deleteRecord, result.get());
+    } else {
+      assertTrue(result.isEmpty());
+    }
 
     // Delete record has ordering value > default value.
-    DeleteRecord.create(RECORD_KEY, PARTITION_PATH, 1);
+    deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH, ORDERING_VALUE + 1);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
+    assertEquals(deleteRecord, result.get());
 
     // Existing record is delete.
+    // Delete record has null ordering value.
     oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
 
-    // Existing record is delete.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, DEFAULT_VALUE, oldRecord, 1, true);
+    // Delete record has lower ordering value.
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH, ORDERING_VALUE - 1);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
       assertTrue(result.isPresent());
     } else {
       assertTrue(result.isEmpty());
     }
+
+    // Delete record has higher ordering value.
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH, ORDERING_VALUE + 1);
+    result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
+    assertTrue(result.isPresent());
   }
 
+  /**
+   * Test delete related logic in final stage.
+   */
   @ParameterizedTest
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
   void testFinalMergeWithDeleteRecords(RecordMergeMode mergeMode) throws IOException {
@@ -426,24 +507,63 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
     InternalRow newRecord = createFullRecord("new_id", "New Name", 29, "New City", 2000L);
+
+    // new record has lower ordering value.
     BufferedRecord<InternalRow> olderBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
     BufferedRecord<InternalRow> newerBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, true);
 
     Pair<Boolean, InternalRow> result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
-    assertTrue(result.getLeft());
     if (mergeMode == COMMIT_TIME_ORDERING) {
       assertEquals(newRecord, result.getRight());
     } else {
       assertEquals(oldRecord, result.getRight());
     }
+
+    // new record has higher ordering value.
+    newerBufferedRecord =
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, true);
+    result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    assertTrue(result.getLeft());
+    assertEquals(newRecord, result.getRight());
+
+    // new record has default ordering value.
+    newerBufferedRecord =
+        new BufferedRecord<>(RECORD_KEY, DEFAULT_VALUE, newRecord, 1, true);
+    result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    assertTrue(result.getLeft());
+    assertEquals(newRecord, result.getRight());
   }
 
   // ============================================================================
   // Helper methods or class to create records for the parameterized test
   // ============================================================================
-  private static InternalRow createFullRecord(String id, String name, int age, String city, long timestamp) {
+  static enum MergeStage {
+    DELTA_MERGE,
+    DELTA_DELETE_MERGE,
+    FINAL_MERGE;
+  }
+
+  private static Stream<Arguments> mergeModeAndStageProvider() {
+    List<MergeStage> stages = Arrays.asList(MergeStage.values());
+    return Arrays.stream(RecordMergeMode.values())
+        .filter(mode -> mode == RecordMergeMode.COMMIT_TIME_ORDERING || mode == RecordMergeMode.EVENT_TIME_ORDERING)
+        .flatMap(mode ->
+            Arrays.stream(PartialUpdateMode.values())
+                .flatMap(updateMode ->
+                    stages.stream()
+                        .map(stage -> Arguments.of(mode, updateMode, stage))
+                )
+        )
+        .filter(args -> {
+          PartialUpdateMode updateMode = (PartialUpdateMode) args.get()[1];
+          return updateMode != PartialUpdateMode.FILL_DEFAULTS && updateMode != PartialUpdateMode.KEEP_VALUES;
+        });
+  }
+
+  private static InternalRow createFullRecord(
+      String id, String name, int age, String city, long timestamp) {
     return new GenericInternalRow(new Object[]{
         UTF8String.fromString(id),
         UTF8String.fromString(name),
@@ -452,51 +572,24 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         timestamp
     });
   }
-  
-  private static InternalRow createPartialRecord(String id, String name) {
+
+  private static InternalRow createFullRecordForPartial(
+      int precombine, String id, String name, int age, String city, long timestamp) {
     return new GenericInternalRow(new Object[]{
+        precombine,
+        UTF8String.fromString(id),
+        UTF8String.fromString(name),
+        age,
+        UTF8String.fromString(city),
+        timestamp
+    });
+  }
+  
+  private static InternalRow createPartialRecord(int precombine, String id, String name) {
+    return new GenericInternalRow(new Object[]{
+        precombine,
         UTF8String.fromString(id),
         UTF8String.fromString(name)
-    });
-  }
-  
-  private static InternalRow createRecordWithDefaults(String id, String name, int age, String city, long timestamp) {
-    return new GenericInternalRow(new Object[]{
-        UTF8String.fromString(id),
-        UTF8String.fromString(name),
-        age,
-        city != null ? UTF8String.fromString(city) : null,
-        timestamp
-    });
-  }
-  
-  private static InternalRow createRecordWithMarkers(String id, String name, int age, String city, long timestamp) {
-    return new GenericInternalRow(new Object[]{
-        UTF8String.fromString(id),
-        UTF8String.fromString(name),
-        age,
-        UTF8String.fromString(city),
-        timestamp
-    });
-  }
-  
-  private static InternalRow createRecordWithIdNameAgeCity(String id, String name, int age, String city) {
-    return new GenericInternalRow(new Object[]{
-        UTF8String.fromString(id),
-        UTF8String.fromString(name),
-        age,
-        UTF8String.fromString(city),
-        null // timestamp is null
-    });
-  }
-  
-  private static InternalRow createRecordWithIdNameTimestamp(String id, String name, long timestamp) {
-    return new GenericInternalRow(new Object[]{
-        UTF8String.fromString(id),
-        UTF8String.fromString(name),
-        null, // age is null
-        null, // city is null
-        timestamp
     });
   }
 
@@ -523,7 +616,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         readerContext,
         mergeMode,
         false,
-        mergeMode == RecordMergeMode.EVENT_TIME_ORDERING
+        mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
         Collections.emptyList(), // orderingFieldNames
@@ -540,7 +633,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         readerContext,
         mergeMode,
         true,
-        mergeMode == RecordMergeMode.EVENT_TIME_ORDERING
+        mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
         Collections.emptyList(), // orderingFieldNames
@@ -568,6 +661,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     // Create a partial schema with only some fields
     Schema partialSchema = Schema.createRecord("PartialRecord", null, null, false);
     partialSchema.setFields(Arrays.asList(
+        new Schema.Field("precombine", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0),
         new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
         new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE)
     ));
@@ -625,8 +719,21 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     return new Schema.Parser().parse(schemaJson);
   }
 
-  static class DummyInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
+  private static Schema getSchema6() {
+    Schema fullSchema = Schema.createRecord("TestRecord", null, null, false);
+    List<Schema.Field> fields = Arrays.asList(
+        new Schema.Field("precombine", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL))), null, 0),
+        new Schema.Field("id", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
+        new Schema.Field("name", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
+        new Schema.Field("age", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.NULL))), null, 0),
+        new Schema.Field("city", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))), null, Schema.NULL_VALUE),
+        new Schema.Field("timestamp", Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.LONG), Schema.create(Schema.Type.NULL))), null, 0L)
+    );
+    fullSchema.setFields(fields);
+    return fullSchema;
+  }
 
+  static class DummyInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
     protected DummyInternalRowReaderContext(StorageConfiguration<?> storageConfiguration,
                                             HoodieTableConfig tableConfig,
                                             Option<InstantRange> instantRangeOpt,
@@ -693,7 +800,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public InternalRow constructEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<InternalRow> baseRecord) {
+    public InternalRow constructEngineRecord(Schema schema,
+                                             Map<Integer, Object> updateValues,
+                                             BufferedRecord<InternalRow> baseRecord) {
       List<Schema.Field> fields = schema.getFields();
       Object[] values = new Object[fields.size()];
       for (Schema.Field field : fields) {
@@ -718,16 +827,18 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public ClosableIterator<InternalRow> mergeBootstrapReaders(ClosableIterator<InternalRow> skeletonFileIterator,
-                                                               Schema skeletonRequiredSchema,
-                                                               ClosableIterator<InternalRow> dataFileIterator,
-                                                               Schema dataRequiredSchema,
-                                                               List<Pair<String, Object>> requiredPartitionFieldAndValues) {
+    public ClosableIterator<InternalRow> mergeBootstrapReaders(
+        ClosableIterator<InternalRow> skeletonFileIterator,
+        Schema skeletonRequiredSchema,
+        ClosableIterator<InternalRow> dataFileIterator,
+        Schema dataRequiredSchema,
+        List<Pair<String, Object>> requiredPartitionFieldAndValues) {
       return null;
     }
 
     @Override
-    public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    public UnaryOperator<InternalRow> projectRecord(
+        Schema from, Schema to, Map<String, String> renamedColumns) {
       return null;
     }
 
@@ -740,5 +851,64 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         throw new RuntimeException("Schema id is illegal: " + id);
       }
     }
+  }
+
+  public static void assertRowEqual(InternalRow expected, InternalRow actual, Schema schema) {
+    assertRowEqualsRecursive(expected, actual, schema.getFields(), "");
+  }
+
+  private static void assertRowEqualsRecursive(InternalRow expected, InternalRow actual,
+                                               List<Schema.Field> fields, String pathPrefix) {
+    for (int i = 0; i < fields.size(); i++) {
+      Schema.Field field = fields.get(i);
+      Schema fieldSchema = getNonNullSchema(field.schema());
+      String path = pathPrefix + field.name();
+
+      if (expected.isNullAt(i) || actual.isNullAt(i)) {
+        assertEquals(expected.isNullAt(i), actual.isNullAt(i), "Null mismatch at: " + path);
+        continue;
+      }
+
+      switch (fieldSchema.getType()) {
+        case STRING:
+          assertEquals(expected.getUTF8String(i).toString(),
+              actual.getUTF8String(i).toString(),
+              "Mismatch at: " + path);
+          break;
+        case INT:
+          assertEquals(expected.getInt(i), actual.getInt(i), "Mismatch at: " + path);
+          break;
+        case LONG:
+          assertEquals(expected.getLong(i), actual.getLong(i), "Mismatch at: " + path);
+          break;
+        case FLOAT:
+          assertEquals(expected.getFloat(i), actual.getFloat(i), "Mismatch at: " + path);
+          break;
+        case DOUBLE:
+          assertEquals(expected.getDouble(i), actual.getDouble(i), "Mismatch at: " + path);
+          break;
+        case BOOLEAN:
+          assertEquals(expected.getBoolean(i), actual.getBoolean(i), "Mismatch at: " + path);
+          break;
+        case RECORD:
+          InternalRow expectedStruct = expected.getStruct(i, fieldSchema.getFields().size());
+          InternalRow actualStruct = actual.getStruct(i, fieldSchema.getFields().size());
+          assertRowEqualsRecursive(expectedStruct, actualStruct, fieldSchema.getFields(), path + ".");
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported type: " + fieldSchema.getType() + " at " + path);
+      }
+    }
+  }
+
+  private static Schema getNonNullSchema(Schema schema) {
+    if (schema.getType() == Schema.Type.UNION) {
+      for (Schema s : schema.getTypes()) {
+        if (s.getType() != Schema.Type.NULL) {
+          return s;
+        }
+      }
+    }
+    return schema;
   }
 }
