@@ -297,7 +297,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   public void testSchemaEvolutionWhenBaseFilesWithDifferentSchema(HoodieFileFormat fileFormat) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
-    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
     HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
     if (fileFormat == HoodieFileFormat.ORC) {
       // ORC can support reading float as string, but it converts float to double to string causing differences in precision
