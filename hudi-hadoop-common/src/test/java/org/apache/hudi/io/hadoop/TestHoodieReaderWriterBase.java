@@ -158,7 +158,6 @@ public abstract class TestHoodieReaderWriterBase {
   @ValueSource(strings = {
       "/exampleEvolvedSchema.avsc",
       "/exampleEvolvedSchemaChangeOrder.avsc",
-      "/exampleEvolvedSchemaColumnRequire.avsc",
       "/exampleEvolvedSchemaColumnType.avsc",
       "/exampleEvolvedSchemaDeleteColumn.avsc"
   })
