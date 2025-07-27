@@ -74,6 +74,7 @@ import java.util.stream.Stream;
 
 import scala.collection.immutable.Seq;
 
+import static org.apache.hudi.BaseSparkInternalRowReaderContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -546,7 +547,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     @Override
     public Object getValue(InternalRow record, Schema schema, String fieldName) {
-      return null;
+      return getFieldValueFromInternalRow(record, schema, fieldName);
     }
 
     @Override
