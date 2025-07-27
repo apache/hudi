@@ -111,8 +111,6 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
     super.test(testName, testTags: _*)(
       try {
-        spark.sparkContext.persistentRdds.foreach(rdd => rdd._2.unpersist(false))
-        assertNoPersistentRDDs()
         testFun
       } finally {
         val catalog = spark.sessionState.catalog
@@ -374,8 +372,16 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  def assertNoPersistentRDDs(): Unit = {
-    HoodieSparkClientTestHarness.assertNoPersistentRDDs(spark, 5)
+  /**
+   * Wraps test execution with RDD persistence validation.
+   * This ensures that no new RDDs remain persisted after test execution.
+   *
+   * @param f The test code to execute
+   */
+  protected def withRDDPersistenceValidation(f: => Unit): Unit = {
+    org.apache.hudi.testutils.SparkRDDValidationUtils.withRDDPersistenceValidation(spark, new org.apache.hudi.testutils.SparkRDDValidationUtils.ThrowingRunnable {
+      override def run(): Unit = f
+    })
   }
 }
 

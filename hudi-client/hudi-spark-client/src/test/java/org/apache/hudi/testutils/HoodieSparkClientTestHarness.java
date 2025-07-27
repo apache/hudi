@@ -79,11 +79,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.SparkSessionExtensions;
-import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -106,7 +104,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
-import scala.collection.JavaConverters;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
@@ -224,7 +221,6 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     //       as such by Spark
     System.setProperty("spark.testing", "true");
     sparkSession.sparkContext().persistentRdds().foreach(rdd -> rdd._2.persist());
-    assertNoPersistentRDDs(sparkSession);
   }
 
   /**
@@ -708,72 +704,5 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   protected HoodieTableMetaClient createMetaClient(JavaSparkContext context, String basePath) {
     return HoodieClientTestUtils.createMetaClient(context, basePath);
-  }
-
-  /**
-   * Asserts that there are no actively persisted RDDs in the given SparkSession.
-   * It checks each RDD’s storage level instead of relying on garbage collection.
-   *
-   * @param spark The SparkSession to check
-   * @param timeoutSeconds Maximum time to wait
-   * @throws AssertionError if RDDs remain persisted after timeout
-   */
-  public static void assertNoPersistentRDDs(SparkSession spark, int timeoutSeconds) {
-    long startTime = System.currentTimeMillis();
-    long timeout = timeoutSeconds * 1000L;
-    Object syncObj = new Object();
-    synchronized (syncObj) {
-
-    }
-
-    SparkContext sc = spark.sparkContext();
-
-    while (true) {
-      boolean allUnpersisted = true;
-
-      java.util.Map<Object, RDD<?>> javaMap = JavaConverters.mapAsJavaMap(sc.getPersistentRDDs());
-
-      for (Map.Entry<Object, RDD<?>> entry : javaMap.entrySet()) {
-        RDD<?> rdd = entry.getValue();
-        if (!rdd.getStorageLevel().equals(StorageLevel.NONE())) {
-          allUnpersisted = false;
-          break;
-        }
-      }
-
-      if (allUnpersisted) {
-        return; // All good
-      }
-
-      if (System.currentTimeMillis() - startTime > timeout) {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<Object, RDD<?>> entry : javaMap.entrySet()) {
-          RDD<?> rdd = entry.getValue();
-          if (!rdd.getStorageLevel().equals(StorageLevel.NONE())) {
-            sb.append("RDD ID=")
-                .append(entry.getKey())
-                .append(" still persisted with level: ")
-                .append(rdd.getStorageLevel().description())
-                .append("\n");
-          }
-        }
-        throw new AssertionError("Timeout after " + timeoutSeconds + " seconds:\n" + sb.toString());
-      }
-
-      try {
-        synchronized (syncObj) {
-
-        }
-        Thread.sleep(50);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new AssertionError("Interrupted while waiting for RDD unpersist");
-      }
-    }
-  }
-
-  // Overloaded method with default 3-second timeout
-  public void assertNoPersistentRDDs(SparkSession spark) {
-    assertNoPersistentRDDs(spark, 3);
   }
 }

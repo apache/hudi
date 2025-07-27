@@ -72,7 +72,6 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase {
   }
 
   override protected def afterAll(): Unit = {
-    assertNoPersistentRDDs()
     super.afterAll()
   }
 

@@ -263,7 +263,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val emptyResult = emptyResultRDD.collectAsList()
     assert(emptyResult.isEmpty, "Empty input should return empty result")
     emptyResultRDD.unpersistWithDependencies()
-    assertNoPersistentRDDs()
 
     // Case 2: All existing keys including those with $ characters
     val allKeys = HoodieListData.eager(List("a1", "a2", "a$", "$a", "a$a", "$$").asJava)
@@ -323,9 +322,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     val rddResultKeys = rddResult.map(_.getKey()).collectAsList().asScala.toSet
     assert(rddResultKeys == Set("a1", "a2", "a$"), "Should deduplicate keys including those with $")
     rddResult.unpersistWithDependencies()
-
-    // Validate no persistent RDDs as long as caller unpersist once done with the data.
-    assertNoPersistentRDDs()
   }
 
   /**
@@ -364,7 +360,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
         s"Position should be >= INVALID_POSITION for table version ${getTableVersion}")
     }
     allResultRDD.unpersistWithDependencies()
-    assertNoPersistentRDDs()
 
     // Case 3: Non-existing secondary keys, some matches the prefix of existing records
     val nonExistKeys = HoodieListData.eager(List("", "b", "non_exist_1", "non_exist_2").asJava)
@@ -412,9 +407,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     // Should not throw exception, even if no results found
     assert(largeResultRDD.collectAsList().size() == 2, "Large key list should return empty result for non-existing keys")
     largeResultRDD.unpersistWithDependencies()
-
-    // Validate no persistent RDDs
-    assertNoPersistentRDDs()
   }
 
   /**
@@ -467,7 +459,6 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     // Unpersist with dependencies
     rddResult.unpersistWithDependencies()
     // Verify all RDDs are cleaned up
-    assertNoPersistentRDDs()
   }
 }
 
@@ -491,7 +482,6 @@ class HoodieBackedTableMetadataIndexLookupV8TestBase extends HoodieBackedTableMe
     checkExceptionContain(() => {
       hoodieBackedTableMetadata.readSecondaryIndexLocations(rddKeys, secondaryIndexName)
     })("only support HoodieListData")
-    assertNoPersistentRDDs()
   }
 }
 
@@ -501,15 +491,21 @@ class HoodieBackedTableMetadataIndexLookupV8Test1Fg extends HoodieBackedTableMet
   }
 
   test("Unit test Index join API - Version 8") {
-    testGetSecondaryIndexRecords()
+    withRDDPersistenceValidation {
+      testGetSecondaryIndexRecords()
+    }
   }
 
   test("Exhaustive test for readRecordIndex - Version 8") {
-    testReadRecordIndex()
+    withRDDPersistenceValidation {
+      testReadRecordIndex()
+    }
   }
 
   test("Exhaustive test for readSecondaryIndexResult - Version 8") {
-    testReadSecondaryIndexLocations()
+    withRDDPersistenceValidation {
+      testReadSecondaryIndexLocations()
+    }
   }
 }
 
@@ -519,15 +515,21 @@ class HoodieBackedTableMetadataIndexLookupV8Test10Fg extends HoodieBackedTableMe
   }
 
   test("Unit test Index join API - Version 8") {
-    testGetSecondaryIndexRecords()
+    withRDDPersistenceValidation {
+      testGetSecondaryIndexRecords()
+    }
   }
 
   test("Exhaustive test for readRecordIndex - Version 8") {
-    testReadRecordIndex()
+    withRDDPersistenceValidation {
+      testReadRecordIndex()
+    }
   }
 
   test("Exhaustive test for readSecondaryIndexResult - Version 8") {
-    testReadSecondaryIndexLocations()
+    withRDDPersistenceValidation {
+      testReadSecondaryIndexLocations()
+    }
   }
 }
 
@@ -548,7 +550,6 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
     // Collect and validate results
     assert(rddResult.count() == 3, "Version 2 should support RDD input")
     rddResult.unpersistWithDependencies()
-    assertNoPersistentRDDs()
 
     // Test case for null values in secondary index
     testNullValueInSecondaryIndex()
@@ -624,7 +625,6 @@ class HoodieBackedTableMetadataIndexLookupV9TestBase extends HoodieBackedTableMe
     // Verify that null lookup returns exactly 1 result (for the null_record we inserted)
     assert(nullResult2.isEmpty, s"Secondary index lookup should return empty, but found ${nullLocations.size}")
     nullResult2.unpersistWithDependencies()
-    assertNoPersistentRDDs()
   }
 }
 
@@ -634,15 +634,21 @@ class HoodieBackedTableMetadataIndexLookupV9Test1Fg extends HoodieBackedTableMet
   }
 
   test("Unit test Index join API - Version 9") {
-    testGetSecondaryIndexRecords()
+    withRDDPersistenceValidation {
+      testGetSecondaryIndexRecords()
+    }
   }
 
   test("Exhaustive test for readRecordIndex - Version 9") {
-    testReadRecordIndex()
+    withRDDPersistenceValidation {
+      testReadRecordIndex()
+    }
   }
 
   test("Exhaustive test for readSecondaryIndexResult - Version 9") {
-    testReadSecondaryIndexLocations()
+    withRDDPersistenceValidation {
+      testReadSecondaryIndexLocations()
+    }
   }
 }
 
@@ -652,14 +658,20 @@ class HoodieBackedTableMetadataIndexLookupV9Test10Fg extends HoodieBackedTableMe
   }
 
   test("Unit test Index join API - Version 9") {
-    testGetSecondaryIndexRecords()
+    withRDDPersistenceValidation {
+      testGetSecondaryIndexRecords()
+    }
   }
 
   test("Exhaustive test for readRecordIndex - Version 9") {
-    testReadRecordIndex()
+    withRDDPersistenceValidation {
+      testReadRecordIndex()
+    }
   }
 
   test("Exhaustive test for readSecondaryIndexResult - Version 9") {
-    testReadSecondaryIndexLocations()
+    withRDDPersistenceValidation {
+      testReadSecondaryIndexLocations()
+    }
   }
 }
