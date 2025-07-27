@@ -22,13 +22,16 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDefaultValue;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
@@ -77,8 +80,12 @@ public class PartialUpdateStrategy<T> {
       case FILL_DEFAULTS:
         return newRecord;
       case IGNORE_DEFAULTS:
-        return reconcileDefaultValues(
-            newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns);
+        try {
+          return reconcileDefaultValues(
+              newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns);
+        } catch (IOException e) {
+          throw new HoodieException("Failed to merge two records", e);
+        }
       case IGNORE_MARKERS:
         return reconcileMarkerValues(
             newRecord, oldRecord, newSchema, oldSchema);
@@ -99,7 +106,7 @@ public class PartialUpdateStrategy<T> {
                                            BufferedRecord<T> oldRecord,
                                            Schema newSchema,
                                            Schema oldSchema,
-                                           boolean keepOldMetadataColumns) {
+                                           boolean keepOldMetadataColumns) throws IOException {
     List<Schema.Field> fields = newSchema.getFields();
     Map<Integer, Object> updateValues = new HashMap<>();
     T engineRecord;
@@ -107,7 +114,7 @@ public class PartialUpdateStrategy<T> {
     // for nested columns, we do not check the leaf level data type defaults.
     for (Schema.Field field : fields) {
       String fieldName = field.name();
-      Object defaultValue = field.defaultVal();
+      Object defaultValue = toJavaDefaultValue(field);
       Object newValue = readerContext.getValue(
           newRecord.getRecord(), newSchema, fieldName);
       if (defaultValue == newValue
@@ -139,8 +146,11 @@ public class PartialUpdateStrategy<T> {
       String fieldName = field.name();
       Object newValue = readerContext.getValue(newRecord.getRecord(), newSchema, fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
+          && null != partialUpdateCustomMarker
           && (partialUpdateCustomMarker.equals(readerContext.getTypeConverter().castToString(newValue)))) {
-        updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+        updateValues.put(
+            field.pos(),
+            readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
     if (updateValues.isEmpty()) {
