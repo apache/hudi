@@ -584,6 +584,8 @@ public class HoodieIndexUtils {
       case AVRO:
         HoodieKey recordKey = new HoodieKey(oldRecord.getRecordKey(), location.getPartitionPath());
         return tagRecord(new HoodieAvroRecord(recordKey, (HoodieRecordPayload) oldRecord.getData()), location);
+      case AVRO_BINARY:
+        return tagRecord(oldRecord.newInstance(), location);
       case SPARK:
         return tagRecord(oldRecord.newInstance(), location);
       default:

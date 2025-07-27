@@ -18,6 +18,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDReadClient;
@@ -26,6 +27,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroBinaryRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -249,7 +251,8 @@ public class DataSourceUtils {
       JavaRDD<HoodieRecord> records = hoodieKeysAndLocations.map(tuple -> {
         HoodieRecord record = recordType == HoodieRecord.HoodieRecordType.AVRO
             ? new HoodieAvroRecord(tuple._1, new EmptyHoodieRecordPayload())
-            : new HoodieEmptyRecord(tuple._1, HoodieRecord.HoodieRecordType.SPARK);
+            : (recordType == HoodieRecord.HoodieRecordType.AVRO_BINARY ?  new HoodieAvroBinaryRecord(tuple._1, null)
+            : new HoodieEmptyRecord(tuple._1, HoodieRecord.HoodieRecordType.SPARK));
         record.setCurrentLocation(tuple._2.get());
         return record;
       });
@@ -274,10 +277,28 @@ public class DataSourceUtils {
     return record;
   }
 
+  public static HoodieRecord createHoodieAvroBinaryRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
+                                                          scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
+    HoodieAvroBinaryRecord record = new HoodieAvroBinaryRecord(hKey, HoodieAvroUtils.avroToBytes(gr), orderingVal);
+    if (recordLocation.isDefined()) {
+      record.setCurrentLocation(recordLocation.get());
+    }
+    return record;
+  }
+
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
                                                 String payloadClass, scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
     HoodieAvroRecord record = new HoodieAvroRecord<>(hKey, payload);
+    if (recordLocation.isDefined()) {
+      record.setCurrentLocation(recordLocation.get());
+    }
+    return record;
+  }
+
+  public static HoodieRecord createHoodieAvroBinaryRecord(GenericRecord gr, HoodieKey hKey,
+                                                scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
+    HoodieAvroBinaryRecord record = new HoodieAvroBinaryRecord(hKey, HoodieAvroUtils.avroToBytes(gr));
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
     }

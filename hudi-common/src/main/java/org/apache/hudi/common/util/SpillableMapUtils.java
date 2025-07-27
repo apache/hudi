@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
+import org.apache.hudi.common.model.HoodieAvroBinaryRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -183,5 +184,13 @@ public class SpillableMapUtils {
    */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
     return (R) new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath), HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal));
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   * todo: move to some other right class.
+   */
+  public static <R> R generateAvroBinaryForDelete(String recKey, String partitionPath, Comparable orderingVal) {
+    return (R) new HoodieAvroBinaryRecord(new HoodieKey(recKey, partitionPath), null, orderingVal);
   }
 }
