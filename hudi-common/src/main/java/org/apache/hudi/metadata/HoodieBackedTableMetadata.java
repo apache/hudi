@@ -625,12 +625,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                                       List<String> sortedKeys,
                                                                                                       FileSlice fileSlice) {
     boolean isSecondaryIndex = MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX);
-    return lookupRecords(partitionName, sortedKeys, fileSlice, metadataRecord -> {
-      HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
-      String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
-      HoodieKey hoodieKey = new HoodieKey(rowKey, partitionName);
-      return Pair.of(rowKey, new HoodieAvroRecord<>(hoodieKey, payload));
-    }, !isSecondaryIndex);
+    return new CloseableFilterIterator<>(
+        lookupRecords(partitionName, sortedKeys, fileSlice, metadataRecord -> {
+          HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
+          String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
+          HoodieKey hoodieKey = new HoodieKey(rowKey, partitionName);
+          return Pair.of(rowKey, new HoodieAvroRecord<>(hoodieKey, payload));
+        }, !isSecondaryIndex),
+        p -> !p.getValue().getData().isDeleted());
   }
 
   private ClosableIterator<HoodieRecord<HoodieMetadataPayload>> lookupRecordsItr(String partitionName,
