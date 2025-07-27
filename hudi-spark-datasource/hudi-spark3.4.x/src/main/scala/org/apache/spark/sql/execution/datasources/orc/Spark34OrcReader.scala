@@ -23,12 +23,11 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.memory.MemoryMode
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-class Spark35OrcReader(enableVectorizedReader: Boolean,
+class Spark34OrcReader(enableVectorizedReader: Boolean,
                        memoryMode: MemoryMode,
                        dataSchema: StructType,
                        orcFilterPushDown: Boolean,
@@ -44,11 +43,11 @@ class Spark35OrcReader(enableVectorizedReader: Boolean,
   }
 
   override def structTypeToAttributes(schema: StructType): Seq[Attribute] = {
-    toAttributes(schema)
+    schema.toAttributes
   }
 }
 
-object Spark35OrcReader {
+object Spark34OrcReader {
   /**
    * Get ORC file reader
    *
@@ -62,7 +61,7 @@ object Spark35OrcReader {
             sqlConf: SQLConf,
             options: Map[String, String],
             hadoopConf: Configuration,
-            dataSchema: StructType): Spark35OrcReader = {
+            dataSchema: StructType): Spark34OrcReader = {
     //set hadoopconf
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
     hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
@@ -74,7 +73,7 @@ object Spark35OrcReader {
       MemoryMode.ON_HEAP
     }
 
-    new Spark35OrcReader(
+    new Spark34OrcReader(
       enableVectorizedReader = vectorized,
       memoryMode = memoryMode,
       isCaseSensitive = sqlConf.caseSensitiveAnalysis,

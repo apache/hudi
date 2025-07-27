@@ -21,34 +21,33 @@ package org.apache.spark.sql.execution.datasources.orc
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.memory.MemoryMode
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-class Spark35OrcReader(enableVectorizedReader: Boolean,
-                       memoryMode: MemoryMode,
+import java.net.URI
+
+class Spark33OrcReader(enableVectorizedReader: Boolean,
                        dataSchema: StructType,
                        orcFilterPushDown: Boolean,
                        isCaseSensitive: Boolean,
                        capacity: Int) extends SparkOrcReaderBase(enableVectorizedReader, dataSchema, orcFilterPushDown, isCaseSensitive) {
 
   override def partitionedFileToPath(file: PartitionedFile): Path = {
-    file.toPath
+    new Path(new URI(file.filePath))
   }
 
   override def buildReader(): OrcColumnarBatchReader = {
-    new OrcColumnarBatchReader(capacity, memoryMode)
+    new OrcColumnarBatchReader(capacity)
   }
 
   override def structTypeToAttributes(schema: StructType): Seq[Attribute] = {
-    toAttributes(schema)
+    schema.toAttributes
   }
 }
 
-object Spark35OrcReader {
+object Spark33OrcReader {
   /**
    * Get ORC file reader
    *
@@ -62,24 +61,18 @@ object Spark35OrcReader {
             sqlConf: SQLConf,
             options: Map[String, String],
             hadoopConf: Configuration,
-            dataSchema: StructType): Spark35OrcReader = {
+            dataSchema: StructType): Spark33OrcReader = {
     //set hadoopconf
     hadoopConf.set(SQLConf.SESSION_LOCAL_TIMEZONE.key, sqlConf.sessionLocalTimeZone)
     hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
     hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
 
-    val memoryMode = if (sqlConf.offHeapColumnVectorEnabled) {
-      MemoryMode.OFF_HEAP
-    } else {
-      MemoryMode.ON_HEAP
-    }
-
-    new Spark35OrcReader(
+    new Spark33OrcReader(
       enableVectorizedReader = vectorized,
-      memoryMode = memoryMode,
       isCaseSensitive = sqlConf.caseSensitiveAnalysis,
       capacity = sqlConf.orcVectorizedReaderBatchSize,
       orcFilterPushDown = sqlConf.orcFilterPushDown,
       dataSchema = dataSchema)
   }
 }
+
