@@ -19,6 +19,8 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.AvroJavaTypeConverter;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -29,8 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestAvroReaderContextTypeConverter {
-  private final AvroReaderContextTypeConverter converter = new AvroReaderContextTypeConverter();
+class TestAvroJavaTypeConverter {
+  private final AvroJavaTypeConverter converter = new AvroJavaTypeConverter();
 
   @Test
   void testCastToStringWithNullValue() {

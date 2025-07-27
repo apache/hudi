@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
+import org.apache.hudi.common.util.AvroJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
@@ -105,7 +106,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
     this.payloadClass = tableConfig.getPayloadClass();
-    this.typeConverter = new AvroReaderContextTypeConverter();
+    this.typeConverter = new AvroJavaTypeConverter();
     this.reusableFileReaders = reusableFileReaders;
   }
 

@@ -17,22 +17,22 @@
  * under the License.
  */
 
-package org.apache.hudi.common.engine;
+package org.apache.hudi.common.util;
 
-/**
- * An interface that implements type conversion related functions,
- * which is expected to extended by different engines to
- * handle their type conversion accordingly.
- */
-public interface ReaderContextTypeConverter {
-  /**
-   * Cast to Java boolean value.
-   * If the object is not compatible with boolean type, throws.
-   */
-  boolean castToBoolean(Object value);
+public class DefaultJavaTypeConverter implements JavaTypeConverter {
 
-  /**
-   * Cast to Java string value.
-   */
-  String castToString(Object value);
+  public boolean castToBoolean(Object value) {
+    if (value instanceof Boolean) {
+      return (boolean) value;
+    } else {
+      throw new IllegalArgumentException("Input value type " + value.getClass() + ", cannot be cast to boolean");
+    }
+  }
+
+  public String castToString(Object value) {
+    if (null != value) {
+      return value.toString();
+    }
+    return null;
+  }
 }

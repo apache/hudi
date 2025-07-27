@@ -17,14 +17,11 @@
  * under the License.
  */
 
-package org.apache.hudi.avro;
-
-import org.apache.hudi.common.engine.ReaderContextBaseTypeConverter;
-import org.apache.hudi.common.util.StringUtils;
+package org.apache.hudi.common.util;
 
 import java.nio.ByteBuffer;
 
-public class AvroReaderContextTypeConverter extends ReaderContextBaseTypeConverter {
+public class AvroJavaTypeConverter extends DefaultJavaTypeConverter {
   @Override
   public String castToString(Object value) {
     if (value == null) {

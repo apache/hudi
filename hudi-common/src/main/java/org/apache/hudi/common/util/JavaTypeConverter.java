@@ -17,31 +17,22 @@
  * under the License.
  */
 
-package org.apache.hudi.hadoop;
+package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.engine.ReaderContextBaseTypeConverter;
+/**
+ * An interface that implements Java type conversion related functions,
+ * which is expected to extended by different engines to
+ * handle their type conversion accordingly.
+ */
+public interface JavaTypeConverter {
+  /**
+   * Cast to Java boolean value.
+   * If the object is not compatible with boolean type, throws.
+   */
+  boolean castToBoolean(Object value);
 
-import org.apache.hadoop.io.BooleanWritable;
-import org.apache.hadoop.io.Text;
-
-public class HiveReaderContextTypeConverter extends ReaderContextBaseTypeConverter {
-  @Override
-  public boolean castToBoolean(Object value) {
-    if (value instanceof BooleanWritable) {
-      return ((BooleanWritable) value).get();
-    } else {
-      throw new IllegalArgumentException(
-          "Expected BooleanWritable but got " + value.getClass());
-    }
-  }
-
-  @Override
-  public String castToString(Object value) {
-    if (value instanceof Text) {
-      return value.toString();
-    } else {
-      throw new IllegalArgumentException(
-          "Expected BooleanWritable but got " + value.getClass());
-    }
-  }
+  /**
+   * Cast to Java string value.
+   */
+  String castToString(Object value);
 }
