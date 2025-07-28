@@ -27,9 +27,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
@@ -58,8 +55,6 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * @see HoodieTimeline
  */
 public abstract class BaseHoodieTimeline implements HoodieTimeline {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieTimeline.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -439,6 +434,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     return empty() ? Option.empty() : nthInstant(countInstants() - 1);
   }
 
+  @Override
   public Option<HoodieInstant> lastInstantByCompletionTime() {
     return Option.fromJavaOptional(getInstantsAsStream()
         .max(instantComparator.completionTimeOrderedComparator()));
@@ -507,14 +503,12 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
 
   @Override
   public Stream<HoodieInstant> getInstantsOrderedByCompletionTime() {
-    return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
-        .sorted(instantComparator.completionTimeOrderedComparator());
+    return getInstantsAsStream().sorted(instantComparator.completionTimeOrderedComparator());
   }
 
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstantsByCompletionTime() {
-    return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
-        .sorted(instantComparator.completionTimeOrderedComparator().reversed());
+    return getInstantsAsStream().sorted(instantComparator.completionTimeOrderedComparator().reversed());
   }
 
   @Override

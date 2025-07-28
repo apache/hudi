@@ -60,7 +60,7 @@ public interface CompletionTimeQueryView extends AutoCloseable {
    *
    * @return The completion time if the instant finished or empty if it is still pending.
    */
-  Option<String> getCompletionTime(String beginTime);
+  Option<String> getCompletionTime(String instantTime);
 
   /**
    * Queries the instant times with given completion time range.
