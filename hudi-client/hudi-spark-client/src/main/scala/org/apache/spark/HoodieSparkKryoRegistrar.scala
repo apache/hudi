@@ -18,6 +18,7 @@
 
 package org.apache.spark
 
+import org.apache.hudi.IncrementalRelationV1
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.{HoodieKey, HoodieSparkRecord}
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
@@ -32,6 +33,7 @@ import com.esotericsoftware.kryo.serializers.JavaSerializer
 import com.google.protobuf.Message
 import com.twitter.chill.protobuf.ProtobufSerializer
 import org.apache.spark.serializer.KryoRegistrator
+import org.slf4j.LoggerFactory
 
 /**
  * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
@@ -50,6 +52,8 @@ import org.apache.spark.serializer.KryoRegistrator
  * </ol>
  */
 class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegistrator {
+  private val log = LoggerFactory.getLogger(classOf[HoodieSparkKryoRegistrar])
+
 
   override def registerClasses(kryo: Kryo): Unit = {
     ///////////////////////////////////////////////////////////////////////////
@@ -74,7 +78,14 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
     //       So we replace it with [[HadoopStorageConfiguration]] for Spark.
     kryo.register(classOf[HadoopStorageConfiguration], new JavaSerializer())
     // NOTE: Protobuf objects are not serializable by default using kryo, need to register them explicitly.
-    kryo.addDefaultSerializer(classOf[Message], new ProtobufSerializer())
+    //       Only initialize this serializer if Protobuf is on the classpath.
+    try {
+      if (Class.forName(classOf[Message].getName, false, getClass.getClassLoader) != null) {
+        kryo.addDefaultSerializer(classOf[Message], new ProtobufSerializer())
+      }
+    } catch {
+      case ClassNotFoundException => log.warn("Protobuf classes not found on the classpath, skipping Protobuf serializer registration.")
+    }
   }
 
   /**
