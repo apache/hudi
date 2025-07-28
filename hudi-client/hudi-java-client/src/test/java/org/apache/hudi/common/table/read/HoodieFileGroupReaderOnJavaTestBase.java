@@ -157,40 +157,40 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
         .withProps(finalWriteConfigs)
         .build();
 
-   try (HoodieJavaWriteClient<?> client = new HoodieJavaWriteClient<>(context, config)) {
+    try (HoodieJavaWriteClient<?> client = new HoodieJavaWriteClient<>(context, config)) {
 
-     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-         .setConf(storageConf)
-         .setBasePath(basePath)
-         .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
-         .build();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf(storageConf)
+          .setBasePath(basePath)
+          .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
+          .build();
 
-     WriteOperationType operationType = WriteOperationType.ALTER_SCHEMA;
-     String commitActionType = CommitUtils.getCommitActionType(operationType, metaClient.getTableType());
+      WriteOperationType operationType = WriteOperationType.ALTER_SCHEMA;
+      String commitActionType = CommitUtils.getCommitActionType(operationType, metaClient.getTableType());
 
-     String instantTime = client.startCommit(commitActionType);
-     client.setOperationType(operationType);
+      String instantTime = client.startCommit(commitActionType);
+      client.setOperationType(operationType);
 
-     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
-     TimelineLayout layout = metaClient.getTimelineLayout();
-     HoodieInstant requested = layout.getInstantGenerator()
-         .createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, instantTime);
+      HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+      TimelineLayout layout = metaClient.getTimelineLayout();
+      HoodieInstant requested = layout.getInstantGenerator()
+          .createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, instantTime);
 
-     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-     metadata.setOperationType(operationType);
+      HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+      metadata.setOperationType(operationType);
 
-     timeline.transitionRequestedToInflight(requested, Option.of(metadata));
+      timeline.transitionRequestedToInflight(requested, Option.of(metadata));
 
-     Map<String, String> extraMeta = new HashMap<>();
-     long schemaId = Long.parseLong(instantTime);
-     InternalSchema withId = schema.setSchemaId(schemaId);
-     extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(withId));
+      Map<String, String> extraMeta = new HashMap<>();
+      long schemaId = Long.parseLong(instantTime);
+      InternalSchema withId = schema.setSchemaId(schemaId);
+      extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(withId));
 
-     FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
-     schemaManager.persistHistorySchemaStr(instantTime,
-         SerDeHelper.inheritSchemas(schema, historySchemaStr));
+      FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
+      schemaManager.persistHistorySchemaStr(instantTime,
+          SerDeHelper.inheritSchemas(schema, historySchemaStr));
 
-     assertTrue(client.commit(instantTime, new ArrayList<>(), Option.of(extraMeta)));
-   }
+      assertTrue(client.commit(instantTime, new ArrayList<>(), Option.of(extraMeta)));
+    }
   }
 }

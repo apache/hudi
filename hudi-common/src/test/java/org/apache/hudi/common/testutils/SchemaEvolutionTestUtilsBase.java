@@ -20,7 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.model.WriteOperationType;
 
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
@@ -29,9 +29,195 @@ import org.apache.avro.Schema;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.model.WriteOperationType.INSERT;
+import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 
 class SchemaEvolutionTestUtilsBase {
+
+  // Test data configuration
+  protected static class WriteDataConfig {
+    final int recordCount;
+    final String commitId;
+    final String partition;
+    final WriteOperationType operation;
+    final boolean isBaseFile;
+
+    WriteDataConfig(int recordCount, String commitId, String partition,
+                   WriteOperationType operation, boolean isBaseFile) {
+      this.recordCount = recordCount;
+      this.commitId = commitId;
+      this.partition = partition;
+      this.operation = operation;
+      this.isBaseFile = isBaseFile;
+    }
+
+    static WriteDataConfig baseFile(int recordCount, String commitId) {
+      return baseFile(recordCount, commitId, null);
+    }
+
+    static WriteDataConfig baseFile(int recordCount, String commitId, String partition) {
+      return new WriteDataConfig(recordCount, commitId, partition, INSERT, true);
+    }
+
+    static WriteDataConfig logFile(int recordCount, String commitId) {
+      return new WriteDataConfig(recordCount, commitId, null, UPSERT, false);
+    }
+  }
+
+
+  public enum SchemaEvolutionScenarioType {
+    BASE_FILES_WITH_DIFFERENT_SCHEMA(new SchemaEvolutionScenario(1)
+        .writeData(WriteDataConfig.baseFile(5, "001", "any_partition"))
+        .validate(0)
+        .evolveSchema()
+        .writeData(WriteDataConfig.baseFile(5, "002", "new_partition"))
+        .validate(0)),
+    BASE_FILE_HAS_DIFFERENT_SCHEMA_THAN_LOG_FILES(new SchemaEvolutionScenario(1)
+        .writeData(WriteDataConfig.baseFile(10, "001", "any_partition"))
+        .validate(0)
+        .writeData(WriteDataConfig.logFile(5, "002"))
+        .validate(1)
+        .evolveSchema()
+        .writeData(WriteDataConfig.baseFile(5, "003", "new_partition"))
+        .validate(-1)),
+    LOG_FILES_WITH_DIFFERENT_SCHEMA(new SchemaEvolutionScenario(1)
+        .writeData(WriteDataConfig.baseFile(100, "001"))
+        .validate(0)
+        .writeData(WriteDataConfig.logFile(50, "002"))
+        .validate(1)
+        .evolveSchema()
+        .writeData(WriteDataConfig.logFile(50, "003"))
+        .validate(2)),
+
+    LOG_FILES_WITH_DIFFERENT_SCHEMA_AND_TABLE_SCHEMA_DIFFERS(new SchemaEvolutionScenario(2)
+        .writeData(WriteDataConfig.baseFile(100, "001"))
+        .validate(0)
+        .writeData(WriteDataConfig.logFile(50, "002"))
+        .validate(1)
+        .evolveSchema()
+        .writeData(WriteDataConfig.logFile(50, "003"))
+        .validate(2)
+        .evolveSchema()
+        .writeData(WriteDataConfig.baseFile(5, "004", "new_partition"))
+        .validate(-1)),
+    BASE_FILES_WITH_DIFFERENT_SCHEMA_FROM_LOG_FILES(new SchemaEvolutionScenario(1)
+        .writeData(WriteDataConfig.baseFile(100, "001"))
+        .validate(0)
+        .evolveSchema()
+        .writeData(WriteDataConfig.logFile(50, "002"))
+        .validate(1));
+
+    private final SchemaEvolutionScenario scenario;
+    SchemaEvolutionScenarioType(SchemaEvolutionScenario scenario) {
+      this.scenario = scenario;
+    }
+  }
+
+  public static final class SchemaEvolutionScenario {
+    private int currentIteration = 0;
+    private final int maxIterations;
+    private final List<TestStep> steps = new ArrayList<>();
+
+    private List<TestStep> getSteps() {
+      return steps;
+    }
+
+    public SchemaEvolutionScenario(int maxIterations) {
+      this.maxIterations = maxIterations;
+    }
+
+    SchemaEvolutionScenario writeData(WriteDataConfig dataConfig) {
+      steps.add(new WriteDataStep(dataConfig));
+      return this;
+    }
+
+    SchemaEvolutionScenario evolveSchema() {
+      steps.add(new EvolveSchemaStep(currentIteration++, maxIterations));
+      return this;
+    }
+
+    SchemaEvolutionScenario validate(int expectedLogFiles) {
+      steps.add(new ValidateStep(expectedLogFiles));
+      return this;
+    }
+
+  }
+
+  // Abstract test step
+  private interface TestStep {
+    void execute(SchemaEvolutionTestExecutor executor) throws Exception;
+  }
+
+  // Concrete test steps
+  private static class WriteDataStep implements TestStep {
+    private final WriteDataConfig config;
+
+    WriteDataStep(WriteDataConfig config) {
+      this.config = config;
+    }
+
+    @Override
+    public void execute(SchemaEvolutionTestExecutor executor) throws Exception {
+      executor.writeData(config);
+    }
+  }
+
+  private static class EvolveSchemaStep implements TestStep {
+    private final int iteration;
+    private final int maxIterations;
+
+    EvolveSchemaStep(int iteration, int maxIterations) {
+      this.iteration = iteration;
+      this.maxIterations = maxIterations;
+    }
+
+    @Override
+    public void execute(SchemaEvolutionTestExecutor executor) throws Exception {
+      executor.evolveSchema(iteration, maxIterations);
+    }
+  }
+
+  private static class ValidateStep implements TestStep {
+    private final int expectedLogFiles;
+
+    ValidateStep(int expectedLogFiles) {
+      this.expectedLogFiles = expectedLogFiles;
+    }
+
+    @Override
+    public void execute(SchemaEvolutionTestExecutor executor) throws Exception {
+      executor.validate(expectedLogFiles);
+    }
+  }
+
+  public interface SchemaEvolutionTestExecutor extends AutoCloseable {
+
+    void writeData(WriteDataConfig dataConfig) throws Exception;
+
+    void evolveSchema(int iteration, int maxIterations) throws Exception;
+
+    void validate(int expectedLogFiles) throws Exception;
+
+    default void execute(SchemaEvolutionScenario scenario) throws Exception {
+      for (TestStep step : scenario.getSteps()) {
+        step.execute(this);
+      }
+    }
+  }
+
+  public static class SchemaEvolutionField {
+    public SchemaEvolutionField(String name, Schema.Type type, LogicalType logicalType) {
+      this.name = name;
+      this.type = type;
+      this.logicalType = logicalType;
+    }
+
+    public String name;
+    public Schema.Type type;
+    public LogicalType logicalType;
+  }
+
   public static class SchemaEvolutionConfigBase {
     public Schema schema = AVRO_SCHEMA;
     public boolean nestedSupport = true;
@@ -41,11 +227,11 @@ class SchemaEvolutionTestUtilsBase {
     public boolean anyArraySupport = true;
   }
 
-  protected static Schema generateExtendedSchema(SchemaEvolutionConfigBase configs, List<Pair<Schema.Type, LogicalType>> baseFields) {
+  protected static Schema generateExtendedSchema(SchemaEvolutionConfigBase configs, List<SchemaEvolutionField> baseFields) {
     return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
   }
 
-  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigBase configs, List<Pair<Schema.Type, LogicalType>> baseFields, String fieldPrefix, boolean toplevel) {
+  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigBase configs, List<SchemaEvolutionField> baseFields, String fieldPrefix, boolean toplevel) {
     List<Schema.Field> fields =  baseSchema.getFields();
     List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
     boolean addedFields = false;
@@ -70,7 +256,9 @@ class SchemaEvolutionTestUtilsBase {
     return finalSchema;
   }
 
-  private static void addFields(SchemaEvolutionConfigBase configs, List<Schema.Field> finalFields, List<Pair<Schema.Type, LogicalType>> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
+  private static void addFields(SchemaEvolutionConfigBase configs, List<Schema.Field> finalFields,
+                                List<SchemaEvolutionField> baseFields, String fieldPrefix,
+                                String namespace, boolean toplevel) {
     if (toplevel) {
       if (configs.mapSupport) {
         List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
@@ -87,31 +275,31 @@ class SchemaEvolutionTestUtilsBase {
     addFieldsHelper(finalFields, baseFields, fieldPrefix);
   }
 
-  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Pair<Schema.Type, LogicalType>> baseFields, String fieldPrefix) {
+  private static void addFieldsHelper(List<Schema.Field> finalFields, List<SchemaEvolutionField> baseFields, String fieldPrefix) {
     for (int i = 0; i < baseFields.size(); i++) {
-      if (baseFields.get(i).getRight() == null) {
-        if (baseFields.get(i).getLeft() == Schema.Type.BOOLEAN) {
+      if (baseFields.get(i).logicalType == null) {
+        if (baseFields.get(i).type == Schema.Type.BOOLEAN) {
           // boolean fields are added fields
-          finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
+          finalFields.add(new Schema.Field(fieldPrefix + baseFields.get(i).name, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
         } else {
-          finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i).getLeft()), "", null));
+          finalFields.add(new Schema.Field(fieldPrefix + baseFields.get(i).name, Schema.create(baseFields.get(i).type), "", null));
         }
       } else {
-        if (baseFields.get(i).getRight() instanceof LogicalTypes.Decimal) {
-          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) baseFields.get(i).getRight();
+        if (baseFields.get(i).logicalType instanceof LogicalTypes.Decimal) {
+          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) baseFields.get(i).logicalType;
           Schema fieldSchema;
-          if (baseFields.get(i).getLeft() == Schema.Type.FIXED) {
-            fieldSchema = Schema.createFixed(fieldPrefix + i, "", "", 30);
+          if (baseFields.get(i).type == Schema.Type.FIXED) {
+            fieldSchema = Schema.createFixed(fieldPrefix + baseFields.get(i).name, "", "", 30);
           } else {
-            fieldSchema = Schema.create(baseFields.get(i).getLeft());
+            fieldSchema = Schema.create(baseFields.get(i).type);
           }
 
-          finalFields.add(new Schema.Field(fieldPrefix + i, LogicalTypes.decimal(decimal.getPrecision(), decimal.getScale()).addToSchema(fieldSchema), "", null));
-        } else if (baseFields.get(i).getRight() instanceof LogicalTypes.Date) {
-          Schema fieldSchema = LogicalTypes.date().addToSchema(Schema.create(baseFields.get(i).getLeft()));
-          finalFields.add(new Schema.Field(fieldPrefix + i, fieldSchema, "", null));
+          finalFields.add(new Schema.Field(fieldPrefix + baseFields.get(i).name, LogicalTypes.decimal(decimal.getPrecision(), decimal.getScale()).addToSchema(fieldSchema), "", null));
+        } else if (baseFields.get(i).logicalType instanceof LogicalTypes.Date) {
+          Schema fieldSchema = LogicalTypes.date().addToSchema(Schema.create(baseFields.get(i).type));
+          finalFields.add(new Schema.Field(fieldPrefix + baseFields.get(i).name, fieldSchema, "", null));
         } else {
-          throw new IllegalStateException("Unsupported logical type: " + baseFields.get(i).getRight());
+          throw new IllegalStateException("Unsupported logical type: " + baseFields.get(i).logicalType);
         }
       }
     }

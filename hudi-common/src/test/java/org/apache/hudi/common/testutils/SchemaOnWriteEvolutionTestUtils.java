@@ -19,14 +19,13 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.avro.LogicalType;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public class SchemaOnWriteEvolutionTestUtils extends SchemaEvolutionTestUtilsBase {
 
@@ -82,6 +81,12 @@ public class SchemaOnWriteEvolutionTestUtils extends SchemaEvolutionTestUtilsBas
     public final Schema.Type after;
     public final Predicate<SchemaOnWriteConfigs> isEnabled;
 
+    public String getFormattedName() {
+      return Arrays.stream(this.name().split("_"))
+          .map(word -> word.charAt(0) + word.substring(1).toLowerCase())
+          .collect(Collectors.joining(""));
+    }
+
     SchemaOnWriteTypePromotionCase(Schema.Type before, Schema.Type after, Predicate<SchemaOnWriteConfigs> isEnabled) {
       this.before = before;
       this.after = after;
@@ -90,14 +95,14 @@ public class SchemaOnWriteEvolutionTestUtils extends SchemaEvolutionTestUtilsBas
   }
 
   public static Schema generateExtendedSchema(SchemaOnWriteConfigs configs, int iteration, int maxIterations) {
-    List<Pair<Schema.Type, LogicalType>> baseFields = new ArrayList<>();
+    List<SchemaEvolutionField> baseFields = new ArrayList<>();
     for (int i = 0; i < maxIterations; i++) {
       for (SchemaOnWriteTypePromotionCase evolution : SchemaOnWriteTypePromotionCase.values()) {
         if (evolution.isEnabled.test(configs)) {
           if (i >= iteration) {
-            baseFields.add(Pair.of(evolution.before, null));
+            baseFields.add(new SchemaEvolutionField(evolution.getFormattedName(), evolution.before, null));
           } else {
-            baseFields.add(Pair.of(evolution.after, null));
+            baseFields.add(new SchemaEvolutionField(evolution.getFormattedName(), evolution.after, null));
           }
         }
       }
@@ -106,10 +111,10 @@ public class SchemaOnWriteEvolutionTestUtils extends SchemaEvolutionTestUtilsBas
     for (int i = 0; i < maxIterations; i++) {
       // Add new field if we are testing adding new fields
       if (configs.addNewFieldSupport && i < iteration) {
-        baseFields.add(Pair.of(Schema.Type.BOOLEAN, null));
+        baseFields.add(new SchemaEvolutionField("BoolAddField" + i, Schema.Type.BOOLEAN, null));
       }
     }
 
-   return generateExtendedSchema(configs, baseFields);
+    return generateExtendedSchema(configs, baseFields);
   }
 }

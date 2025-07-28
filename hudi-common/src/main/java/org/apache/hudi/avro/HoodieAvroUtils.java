@@ -1375,6 +1375,63 @@ public class HoodieAvroUtils {
     }
   }
 
+  public static void validateRecordsHaveSameData(Object expected, Object actual) {
+    validateRecordsHaveSameData(expected, actual, new LinkedList<>());
+  }
+
+  private static void validateRecordsHaveSameData(Object expected, Object actual, Deque<String> fieldNames) {
+    if (expected instanceof GenericRecord) {
+      if (!(actual instanceof GenericRecord)) {
+        throw new HoodieAvroSchemaException("Expected record but got " + actual.getClass().getName() + " for " + createFullName(fieldNames));
+      }
+      GenericRecord expectedRecord = (GenericRecord) expected;
+      GenericRecord actualRecord = (GenericRecord) actual;
+      // TODO: add this check when schema evolution has the more flexible schema comparison
+      // if (!Objects.equals(expectedRecord.getSchema(), actualRecord.getSchema())) {
+      //   throw new HoodieAvroSchemaException("Expected record schema " + expectedRecord.getSchema() + " but got " + actualRecord.getSchema() + " for " + createFullName(fieldNames));
+      // }
+      for (Schema.Field field : expectedRecord.getSchema().getFields()) {
+        fieldNames.push(field.name());
+        validateRecordsHaveSameData(expectedRecord.get(field.name()), actualRecord.get(field.name()), fieldNames);
+        fieldNames.pop();
+      }
+    } else if (expected instanceof Collection) {
+      if (!(actual instanceof Collection)) {
+        throw new HoodieAvroSchemaException("Expected collection but got " + actual.getClass().getName());
+      }
+      Collection expectedCollection = (Collection) expected;
+      Collection actualCollection = (Collection) actual;
+      if (expectedCollection.size() != actualCollection.size()) {
+        throw new HoodieAvroSchemaException("Expected collection size " + expectedCollection.size() + " but got " + actualCollection.size() + " for " + createFullName(fieldNames));
+      }
+      Iterator<?> expectedIterator = expectedCollection.iterator();
+      Iterator<?> actualIterator = actualCollection.iterator();
+      fieldNames.push("element");
+      while (expectedIterator.hasNext() && actualIterator.hasNext()) {
+        validateRecordsHaveSameData(expectedIterator.next(), actualIterator.next(), fieldNames);
+      }
+      fieldNames.pop();
+    } else if (expected instanceof Map) {
+      if (!(actual instanceof Map)) {
+        throw new HoodieAvroSchemaException("Expected map but got " + actual.getClass().getName() + " for " + createFullName(fieldNames));
+      }
+      Map expectedMap = (Map) expected;
+      Map actualMap = (Map) actual;
+      if (!expectedMap.keySet().equals(actualMap.keySet())) {
+        throw new HoodieAvroSchemaException("Expected map keys " + expectedMap.keySet() + " but got " + actualMap.keySet() + " for " + createFullName(fieldNames));
+      }
+      fieldNames.push("value");
+      for (Object key : expectedMap.keySet()) {
+        validateRecordsHaveSameData(expectedMap.get(key), actualMap.get(key), fieldNames);
+      }
+      fieldNames.pop();
+    } else {
+      if (!Objects.equals(expected, actual)) {
+        throw new HoodieAvroSchemaException("For " + createFullName(fieldNames) + " Expected " + expected + " but got " + actual);
+      }
+    }
+  }
+
   /**
    * Avro does not support type promotion from numbers to string. This function returns true if
    * it will be necessary to rewrite the record to support this promotion.

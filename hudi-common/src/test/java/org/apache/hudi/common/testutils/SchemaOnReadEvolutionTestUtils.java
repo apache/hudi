@@ -19,7 +19,8 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.TableChange;
@@ -32,19 +33,23 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase {
 
   public static InternalSchema generateExtendedSchema(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
     validateConfigs(configs);
 
-    List<Pair<Schema.Type, LogicalType>> baseFields = buildBaseFieldsList(configs, iteration, maxIterations);
+    List<SchemaEvolutionField> baseFields = buildBaseFieldsList(configs, iteration, maxIterations);
     Schema tmpExtendedSchema = generateExtendedSchema(configs, baseFields);
-    InternalSchema modificationSchema = AvroInternalSchemaConverter.convert(tmpExtendedSchema);
+    InternalSchema modificationSchema = AvroInternalSchemaConverter.convert(HoodieAvroUtils.addMetadataFields(tmpExtendedSchema));
 
     SchemaModifier modifier = new SchemaModifier(configs);
 
@@ -55,6 +60,16 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     modificationSchema = applyUpdates(modificationSchema, configs, modifier, iteration, maxIterations);
 
     return modificationSchema;
+  }
+
+  public static Map<String, String> generateColumnNameChanges(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
+    if (!configs.renameColumnSupport || iteration == 0) {
+      return Collections.emptyMap();
+    }
+
+    RenameCapture modifier = new RenameCapture(configs);
+    applyUpdateIteration(InternalSchema.getEmptyInternalSchema(), configs, modifier, iteration, maxIterations);
+    return modifier.getRenameMap();
   }
 
   public static class SchemaOnReadConfigs extends SchemaEvolutionTestUtilsBase.SchemaEvolutionConfigBase {
@@ -112,30 +127,30 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     INT_TO_FLOAT(Schema.Type.INT, null, Schema.Type.FLOAT, null, config -> config.intToFloatSupport),
     INT_TO_DOUBLE(Schema.Type.INT, null, Schema.Type.DOUBLE, null, config -> config.intToDoubleSupport),
     INT_TO_STRING(Schema.Type.INT, null, Schema.Type.STRING, null, config -> config.intToStringSupport),
-    INT_TO_DECIMAL_FIXED(Schema.Type.INT, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.intToDecimalFixedSupport),
-    INT_TO_DECIMAL_BYTES(Schema.Type.INT, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.intToDecimalBytesSupport),
+    INT_TO_DECIMAL_FIXED(Schema.Type.INT, null, Schema.Type.FIXED, LogicalTypes.decimal(10, 3), config -> config.intToDecimalFixedSupport),
+    INT_TO_DECIMAL_BYTES(Schema.Type.INT, null, Schema.Type.BYTES, LogicalTypes.decimal(10, 3), config -> config.intToDecimalBytesSupport),
 
     LONG_TO_LONG(Schema.Type.LONG, null, Schema.Type.LONG, null, config -> true),
     LONG_TO_FLOAT(Schema.Type.LONG, null, Schema.Type.FLOAT, null, config -> config.longToFloatSupport),
     LONG_TO_DOUBLE(Schema.Type.LONG, null, Schema.Type.DOUBLE, null, config -> config.longToDoubleSupport),
     LONG_TO_STRING(Schema.Type.LONG, null, Schema.Type.STRING, null, config -> config.longToStringSupport),
-    LONG_TO_DECIMAL_FIXED(Schema.Type.LONG, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.longToDecimalFixedSupport),
-    LONG_TO_DECIMAL_BYTES(Schema.Type.LONG, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.longToDecimalBytesSupport),
+    LONG_TO_DECIMAL_FIXED(Schema.Type.LONG, null, Schema.Type.FIXED, LogicalTypes.decimal(10, 3), config -> config.longToDecimalFixedSupport),
+    LONG_TO_DECIMAL_BYTES(Schema.Type.LONG, null, Schema.Type.BYTES, LogicalTypes.decimal(10, 3), config -> config.longToDecimalBytesSupport),
 
     FLOAT_TO_FLOAT(Schema.Type.FLOAT, null, Schema.Type.FLOAT, null, config -> true),
     FLOAT_TO_DOUBLE(Schema.Type.FLOAT, null, Schema.Type.DOUBLE, null, config -> config.floatToDoubleSupport),
     FLOAT_TO_STRING(Schema.Type.FLOAT, null, Schema.Type.STRING, null, config -> config.floatToStringSupport),
-    FLOAT_TO_DECIMAL_FIXED(Schema.Type.FLOAT, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.floatToDecimalFixedSupport),
-    FLOAT_TO_DECIMAL_BYTES(Schema.Type.FLOAT, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.floatToDecimalBytesSupport),
+    FLOAT_TO_DECIMAL_FIXED(Schema.Type.FLOAT, null, Schema.Type.FIXED, LogicalTypes.decimal(10, 3), config -> config.floatToDecimalFixedSupport),
+    FLOAT_TO_DECIMAL_BYTES(Schema.Type.FLOAT, null, Schema.Type.BYTES, LogicalTypes.decimal(10, 3), config -> config.floatToDecimalBytesSupport),
 
     DOUBLE_TO_DOUBLE(Schema.Type.DOUBLE, null, Schema.Type.DOUBLE, null, config -> true),
     DOUBLE_TO_STRING(Schema.Type.DOUBLE, null, Schema.Type.STRING, null, config -> config.doubleToStringSupport),
-    DOUBLE_TO_DECIMAL_FIXED(Schema.Type.DOUBLE, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.doubleToDecimalFixedSupport),
-    DOUBLE_TO_DECIMAL_BYTES(Schema.Type.DOUBLE, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.doubleToDecimalBytesSupport),
+    DOUBLE_TO_DECIMAL_FIXED(Schema.Type.DOUBLE, null, Schema.Type.FIXED, LogicalTypes.decimal(10, 3), config -> config.doubleToDecimalFixedSupport),
+    DOUBLE_TO_DECIMAL_BYTES(Schema.Type.DOUBLE, null, Schema.Type.BYTES, LogicalTypes.decimal(10, 3), config -> config.doubleToDecimalBytesSupport),
 
     STRING_TO_STRING(Schema.Type.STRING, null, Schema.Type.STRING, null, config -> true),
-    STRING_TO_DECIMAL_FIXED(Schema.Type.STRING, null, Schema.Type.FIXED, LogicalTypes.decimal(4, 3), config -> config.stringToDecimalFixedSupport),
-    STRING_TO_DECIMAL_BYTES(Schema.Type.STRING, null, Schema.Type.BYTES, LogicalTypes.decimal(4, 3), config -> config.stringToDecimalBytesSupport),
+    STRING_TO_DECIMAL_FIXED(Schema.Type.STRING, null, Schema.Type.FIXED, LogicalTypes.decimal(10, 3), config -> config.stringToDecimalFixedSupport),
+    STRING_TO_DECIMAL_BYTES(Schema.Type.STRING, null, Schema.Type.BYTES, LogicalTypes.decimal(10, 3), config -> config.stringToDecimalBytesSupport),
     STRING_TO_DATE(Schema.Type.STRING, null, Schema.Type.INT, LogicalTypes.date(), config -> config.stringToDateSupport),
 
     DECIMAL_FIXED_TO_STRING(Schema.Type.FIXED, LogicalTypes.decimal(4, 3), Schema.Type.STRING, null, config -> config.decimalFixedToStringSupport),
@@ -147,6 +162,12 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     public final LogicalType logicalTypeBefore;
     public final LogicalType logicalTypeAfter;
     public final Predicate<SchemaOnReadConfigs> isEnabled;
+
+    public String getFormattedName() {
+      return Arrays.stream(this.name().split("_"))
+          .map(word -> word.charAt(0) + word.substring(1).toLowerCase())
+          .collect(Collectors.joining(""));
+    }
 
     SchemaOnReadTypePromotionCase(Schema.Type before, LogicalType logicalTypeBefore,
                                   Schema.Type after, LogicalType logicalTypeAfter,
@@ -161,38 +182,32 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
 
   private enum SchemaOnReadStructuralCase {
 
-    REORDER_COLUMNS(
-        c -> c.reorderColumnSupport,
+    REORDER_COLUMNS(c -> c.reorderColumnSupport,
         SchemaOnReadEvolutionTestUtils::addInitialReorderFields,
         SchemaOnReadEvolutionTestUtils::applyReorderModifications
     ),
 
-    ADD_FIELD_NOT_AT_END(
-        c -> c.addNewFieldNotAtEndSupport,
+    ADD_FIELD_NOT_AT_END(c -> c.addNewFieldNotAtEndSupport,
         SchemaOnReadEvolutionTestUtils::addInitialNonEndFields,
         SchemaOnReadEvolutionTestUtils::applyNonEndFieldModifications
     ),
 
-    RENAME_COLUMN(
-        c -> c.renameColumnSupport,
+    RENAME_COLUMN(c -> c.renameColumnSupport,
         SchemaOnReadEvolutionTestUtils::addInitialRenameFields,
         SchemaOnReadEvolutionTestUtils::applyRenameModifications
     ),
 
-    REMOVE_COLUMN(
-        c -> c.removeColumnSupport,
+    REMOVE_COLUMN(c -> c.removeColumnSupport,
         SchemaOnReadEvolutionTestUtils::addInitialRemoveFields,
         SchemaOnReadEvolutionTestUtils::applyRemoveModifications
     ),
 
-    RENAME_AS_REMOVED(
-        c -> c.renameColumnAsPreviouslyRemovedSupport,
+    RENAME_AS_REMOVED(c -> c.renameColumnAsPreviouslyRemovedSupport,
         SchemaOnReadEvolutionTestUtils::addInitialRenameAsRemovedFields,
         SchemaOnReadEvolutionTestUtils::applyRenameAsRemovedModifications
     ),
 
-    ADD_FIELD_AT_END(
-        c -> c.addNewFieldSupport,
+    ADD_FIELD_AT_END(c -> c.addNewFieldSupport,
         SchemaOnReadEvolutionTestUtils::addInitialEndFields,
         SchemaOnReadEvolutionTestUtils::applyEndFieldModifications
     );
@@ -222,7 +237,6 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       return updateFunction.apply(schema, modifier, iteration, maxIterations);
     }
 
-
     @FunctionalInterface
     public interface QuadFunction<A, B, C, D, R> {
       R apply(A a, B b, C c, D d);
@@ -249,15 +263,15 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     }
   }
 
-  private static List<Pair<Schema.Type, LogicalType>> buildBaseFieldsList(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
-    List<Pair<Schema.Type, LogicalType>> baseFields = new ArrayList<>();
+  private static List<SchemaEvolutionField> buildBaseFieldsList(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
+    List<SchemaEvolutionField> baseFields = new ArrayList<>();
     for (int i = 0; i < maxIterations; i++) {
       for (SchemaOnReadTypePromotionCase evolution : SchemaOnReadTypePromotionCase.values()) {
         if (evolution.isEnabled.test(configs)) {
           if (i >= iteration) {
-            baseFields.add(Pair.of(evolution.before, evolution.logicalTypeBefore));
+            baseFields.add(new SchemaEvolutionField(evolution.getFormattedName(), evolution.before, evolution.logicalTypeBefore));
           } else {
-            baseFields.add(Pair.of(evolution.after, evolution.logicalTypeAfter));
+            baseFields.add(new SchemaEvolutionField(evolution.getFormattedName(), evolution.after, evolution.logicalTypeAfter));
           }
         }
       }
@@ -280,7 +294,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
   private static InternalSchema addInitialReorderFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
     // Collects all FieldNameHolders into a list
     List<FieldNameHolder> fieldNamesList = new ArrayList<>();
-    for (int i = 0; i < maxIterations; i++) {
+    for (int i = 0; i <= maxIterations; i++) {
       fieldNamesList.add(FieldNames.reorderField(i));
     }
     // Calls new modifier method that takes schema and List<FieldNameHolder>
@@ -301,16 +315,16 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
   }
 
   private static InternalSchema addInitialRemoveFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
-    List<FieldNameHolder> removeFields = new ArrayList<>(maxIterations - 1);
-    for (int i = 0; i < maxIterations - 1; i++) {
+    List<FieldNameHolder> removeFields = new ArrayList<>(maxIterations);
+    for (int i = 0; i < maxIterations; i++) {
       removeFields.add(FieldNames.removeField(i));
     }
     return modifier.addFields(schema, removeFields);
   }
 
   private static InternalSchema addInitialRenameAsRemovedFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
-    List<FieldNameHolder> renameAsRemovedFields = new ArrayList<>(maxIterations - 1);
-    for (int i = 0; i < maxIterations - 1; i++) {
+    List<FieldNameHolder> renameAsRemovedFields = new ArrayList<>(maxIterations);
+    for (int i = 0; i < maxIterations; i++) {
       renameAsRemovedFields.add(FieldNames.removedForRenameField(i));
       renameAsRemovedFields.add(FieldNames.renameToRemovedField(i));
     }
@@ -330,8 +344,6 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     return result;
   }
 
-
-
   private static InternalSchema applyUpdateIteration(InternalSchema schema, SchemaOnReadConfigs configs,
                                                      SchemaModifier modifier, int iteration, int maxIterations) {
     InternalSchema result = schema;
@@ -347,8 +359,8 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
 
   private static InternalSchema applyReorderModifications(InternalSchema schema, SchemaModifier modifier,
                                                           int iteration, int maxIterations) {
-    int sourceIndex = maxIterations - iteration;
-    int targetIndex = (maxIterations + 1 - iteration) % maxIterations;
+    int sourceIndex = maxIterations + 1 - iteration;
+    int targetIndex = (maxIterations + 2 - iteration) % (maxIterations + 1);
 
     FieldNameHolder sourceFields = FieldNames.reorderField(sourceIndex);
     FieldNameHolder targetFields = FieldNames.reorderField(targetIndex);
@@ -366,7 +378,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     FieldNameHolder currentFields = FieldNames.addField(iteration);
     FieldNameHolder previousFields = FieldNames.addField(iteration - 1);
 
-   return modifier.repositionFields(tempSchema,
+    return modifier.repositionFields(tempSchema,
         currentFields, previousFields,
         TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
   }
@@ -413,7 +425,6 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     FieldNameHolder endFields = FieldNames.addEndField(iteration);
     return modifier.addFields(schema, Collections.singletonList(endFields));
   }
-
 
   private static class FieldNameHolder {
     public final String baseFieldName;
@@ -480,10 +491,10 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
 
   // Apply base, nested, array and map modifications at once
   private static class SchemaModifier {
-    private final SchemaOnReadConfigs configs;
+    protected final SchemaOnReadConfigs configs;
 
     // Structure definitions as enum
-    private enum StructureType {
+    protected enum StructureType {
       BASE("", null, holder -> holder.baseFieldName),
       NESTED("fare.", "fare", holder -> holder.nestedFieldName),
       ARRAY("customFieldArray.element.", "customFieldArray.element", holder -> holder.arrayFieldName),
@@ -515,7 +526,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       this.configs = configs;
     }
 
-    private InternalSchema addFields(InternalSchema schema, List<FieldNameHolder> fieldNamesList) {
+    InternalSchema addFields(InternalSchema schema, List<FieldNameHolder> fieldNamesList) {
       TableChanges.ColumnAddChange columnAddChange = TableChanges.ColumnAddChange.get(schema);
       for (FieldNameHolder fieldNames : fieldNamesList) {
         for (StructureType structure : StructureType.values()) {
@@ -532,7 +543,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       return SchemaChangeUtils.applyTableChanges2Schema(schema, columnAddChange);
     }
 
-    private InternalSchema deleteFields(InternalSchema schema, FieldNameHolder fieldNames) {
+    InternalSchema deleteFields(InternalSchema schema, FieldNameHolder fieldNames) {
       TableChanges.ColumnDeleteChange columnDeleteChange = TableChanges.ColumnDeleteChange.get(schema);
       for (StructureType structure : StructureType.values()) {
         if (structure.isEnabled(configs)) {
@@ -543,9 +554,9 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       return SchemaChangeUtils.applyTableChanges2Schema(schema, columnDeleteChange);
     }
 
-    private InternalSchema renameFields(InternalSchema schema,
-                                        FieldNameHolder oldFieldNames,
-                                        FieldNameHolder newFieldNames) {
+    InternalSchema renameFields(InternalSchema schema,
+                                FieldNameHolder oldFieldNames,
+                                FieldNameHolder newFieldNames) {
       TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(schema);
       for (StructureType structure : StructureType.values()) {
         if (structure.isEnabled(configs)) {
@@ -557,10 +568,10 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
       return SchemaChangeUtils.applyTableChanges2Schema(schema, columnUpdateChange);
     }
 
-    private InternalSchema repositionFields(InternalSchema schema,
-                                            FieldNameHolder fieldNames,
-                                            FieldNameHolder refFieldNames,
-                                            TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+    InternalSchema repositionFields(InternalSchema schema,
+                                    FieldNameHolder fieldNames,
+                                    FieldNameHolder refFieldNames,
+                                    TableChange.ColumnPositionChange.ColumnPositionType positionType) {
       TableChanges.ColumnUpdateChange columnUpdateChange = TableChanges.ColumnUpdateChange.get(schema);
       for (StructureType structure : StructureType.values()) {
         if (structure.isEnabled(configs)) {
@@ -573,6 +584,51 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
         }
       }
       return SchemaChangeUtils.applyTableChanges2Schema(schema, columnUpdateChange);
+    }
+  }
+
+  private static class RenameCapture extends SchemaModifier {
+
+    private final Map<String, String> renameMap = new HashMap<>();
+
+    private RenameCapture(SchemaOnReadConfigs configs) {
+      super(configs);
+    }
+
+    @Override
+    InternalSchema addFields(InternalSchema schema, List<FieldNameHolder> fieldNamesList) {
+      return schema;
+    }
+
+    @Override
+    InternalSchema deleteFields(InternalSchema schema, FieldNameHolder fieldNames) {
+      return schema;
+    }
+
+    @Override
+    InternalSchema renameFields(InternalSchema schema,
+                                FieldNameHolder oldFieldNames,
+                                FieldNameHolder newFieldNames) {
+      for (StructureType structure : StructureType.values()) {
+        if (structure.isEnabled(configs)) {
+          String oldFieldName = structure.fieldExtractor.apply(oldFieldNames);
+          String newFieldName = structure.fieldExtractor.apply(newFieldNames);
+          renameMap.put(structure.prefix + newFieldName, structure.prefix + oldFieldName);
+        }
+      }
+      return schema;
+    }
+
+    @Override
+    InternalSchema repositionFields(InternalSchema schema,
+                                            FieldNameHolder fieldNames,
+                                            FieldNameHolder refFieldNames,
+                                            TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+      return schema;
+    }
+
+    public Map<String, String> getRenameMap() {
+      return renameMap;
     }
   }
 }

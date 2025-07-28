@@ -81,8 +81,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -235,6 +237,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), r.getData())).collect(Collectors.toList());
   }
 
+  private static List<Pair<String, IndexedRecord>> evolveRecords(List<Pair<String, IndexedRecord>> records, Schema newSchema, Map<String, String> renameCols) {
+    return records.stream().map(r -> Pair.of(r.getLeft(), (IndexedRecord) HoodieAvroUtils.rewriteRecordWithNewSchema(r.getRight(), newSchema, renameCols, true))).collect(Collectors.toList());
+  }
+
   /**
    * Write a base file with schema A, then write another base file with schema B.
    */
@@ -247,8 +253,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
       InternalSchema extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 0, 1);
       String historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, "");
-      commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      Schema extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      Schema extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write a base file with schema A
@@ -264,7 +269,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 1, 1);
       historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, historySchema);
       commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
+      Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(schemaOnReadConfigs, 1, 1);
+      firstIndexedRecords = evolveRecords(firstIndexedRecords, extendedSchema, renameCols);
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write another base file with schema B
@@ -291,8 +298,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
       InternalSchema extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 0, 1);
       String historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, "");
-      commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      Schema extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      Schema extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write a base file with schema A
@@ -318,7 +324,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 1, 1);
       historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, historySchema);
       commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
+      Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(schemaOnReadConfigs, 1, 1);
+      mergedRecords = evolveRecords(mergedRecords, extendedSchema, renameCols);
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write another base file with schema B
@@ -346,8 +354,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
       InternalSchema extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 0, 1);
       String historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, "");
-      commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      Schema extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      Schema extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write base file with schema A
@@ -373,7 +380,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 1, 1);
       historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, historySchema);
       commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
+      Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(schemaOnReadConfigs, 1, 1);
+      mergedRecords = evolveRecords(mergedRecords, extendedSchema, renameCols);
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write log file with schema B
@@ -401,8 +410,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
              new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
       InternalSchema extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 0, 2);
       String historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, "");
-      commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      Schema extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      Schema extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write base file with schema A
@@ -428,7 +436,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 1, 2);
       historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, historySchema);
       commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
+      Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(schemaOnReadConfigs, 1, 2);
+      mergedRecords = evolveRecords(mergedRecords, extendedSchema, renameCols);
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write log file with schema B
@@ -445,7 +455,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 2, 2);
       historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, historySchema);
       commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
+      renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(schemaOnReadConfigs, 2, 2);
+      mergedRecords = evolveRecords(mergedRecords, extendedSchema, renameCols);
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write another base file with schema C
@@ -474,8 +486,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
              new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
       InternalSchema extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 0, 1);
       String historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, "");
-      commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      Schema extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      Schema extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write base file with schema A
@@ -491,7 +502,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(schemaOnReadConfigs, 1, 1);
       historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, historySchema);
       commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      extendedSchema = AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName());
+      extendedSchema = HoodieAvroUtils.removeMetadataFields(AvroInternalSchemaConverter.convert(extendedInternalSchema, schemaOnReadConfigs.schema.getName()));
+      Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(schemaOnReadConfigs, 1, 1);
+      firstIndexedRecords = evolveRecords(firstIndexedRecords, extendedSchema, renameCols);
       dataGen.addExtendedSchema(extendedSchema);
 
       // Write log file with schema B
@@ -539,7 +552,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+          mergedRecords, false);
     }
   }
 
@@ -587,7 +600,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(),
           // use -1 to prevent validation of numlogfiles because one fg has a log file but the other doesn't
           true, -1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+          mergedRecords, false);
     }
   }
 
@@ -635,7 +648,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 2, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+          mergedRecords, false);
     }
   }
 
@@ -683,7 +696,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 2, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+          mergedRecords, false);
 
       // Evolve schema again
       extendedSchema = SchemaOnWriteEvolutionTestUtils.generateExtendedSchema(schemaOnWriteConfigs, 2, 2);
@@ -698,7 +711,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           getStorageConf(), getBasePath(),
           // use -1 to prevent validation of numlogfiles because one fg has log files but the other doesn't
           true, -1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+          mergedRecords, false);
     }
   }
 
@@ -736,7 +749,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
           true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+          mergedRecords, false);
     }
   }
 
@@ -833,6 +846,16 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                                     int expectedLogFileNum,
                                                                     RecordMergeMode recordMergeMode,
                                                                     List<Pair<String, IndexedRecord>> expectedRecords) throws Exception {
+    validateOutputFromFileGroupReaderWithNativeRecords(storageConf, tablePath, containsBaseFile, expectedLogFileNum, recordMergeMode, expectedRecords, true);
+  }
+
+  private void validateOutputFromFileGroupReaderWithNativeRecords(StorageConfiguration<?> storageConf,
+                                                                  String tablePath,
+                                                                  boolean containsBaseFile,
+                                                                  int expectedLogFileNum,
+                                                                  RecordMergeMode recordMergeMode,
+                                                                  List<Pair<String, IndexedRecord>> expectedRecords,
+                                                                  boolean expectedHasCorrectSchema) throws Exception {
     Set<String> metaCols = new HashSet<>(HoodieRecord.HOODIE_META_COLUMNS);
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
     TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
@@ -851,9 +874,15 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .collect(Collectors.toSet());
     Set<GenericRecord> expectedRecordSet = expectedRecords.stream()
         .map(r -> (GenericRecord) r.getRight())
-        .map(r -> HoodieAvroUtils.rewriteRecordWithNewSchema(r, avroSchemaWithoutMeta))
-        .collect(Collectors.toSet());
+        .map(r -> {
+          if (!expectedHasCorrectSchema) {
+            return HoodieAvroUtils.rewriteRecordWithNewSchema(r, avroSchemaWithoutMeta);
+          } else {
+            return r;
+          }
+        }).collect(Collectors.toSet());
     compareRecordSets(expectedRecordSet, actualRecordSet);
+
   }
 
   private void compareRecordSets(Set<GenericRecord> expectedRecordSet, Set<GenericRecord> actualRecordSet) {
@@ -869,7 +898,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     for (String key : actualMap.keySet()) {
       GenericRecord expectedRecord = expectedMap.get(key);
       GenericRecord actualRecord = actualMap.get(key);
-      assertEquals(expectedRecord, actualRecord);
+      HoodieAvroUtils.validateRecordsHaveSameData(expectedRecord, actualRecord);
     }
   }
 

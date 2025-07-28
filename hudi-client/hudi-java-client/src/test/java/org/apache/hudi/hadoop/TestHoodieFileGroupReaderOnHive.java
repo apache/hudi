@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderOnJavaTestBase;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaOnReadEvolutionTestUtils;
 import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;

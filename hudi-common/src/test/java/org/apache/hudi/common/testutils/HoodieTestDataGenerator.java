@@ -1305,30 +1305,72 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
   private void generateCustomValues(GenericRecord rec, String customPrefix) {
     for (Schema.Field field : rec.getSchema().getFields()) {
       if (field.name().startsWith(customPrefix)) {
-        switch (field.schema().getType()) {
+        Schema nonNullableSchema = AvroSchemaUtils.resolveNullableSchema(field.schema());
+        switch (nonNullableSchema.getType()) {
           case INT:
-            rec.put(field.name(), rand.nextInt());
+            if (nonNullableSchema.getLogicalType() != null) {
+              long randomMillis = genRandomTimeMillis(rand);
+              Instant instant = Instant.ofEpochMilli(randomMillis);
+              rec.put(field.name(), makeDatesAmbiguous ? -1000000 :
+                  (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
+            } else if (field.name().contains("Decimal")) {
+              rec.put(field.name(), rand.nextInt(1000));
+            } else {
+              rec.put(field.name(), rand.nextInt());
+            }
             break;
           case LONG:
-            rec.put(field.name(), rand.nextLong());
+            if (field.name().contains("Decimal")) {
+              rec.put(field.name(), rand.nextLong() % 1000);
+            } else {
+              rec.put(field.name(), rand.nextLong());
+            }
             break;
           case FLOAT:
-            rec.put(field.name(), rand.nextFloat());
+            if (field.name().contains("Decimal")) {
+              rec.put(field.name(), Float.valueOf(String.format(Locale.ENGLISH, "%.3f", rand.nextFloat())));
+            } else {
+              rec.put(field.name(), rand.nextFloat());
+            }
             break;
           case DOUBLE:
-            rec.put(field.name(), rand.nextDouble());
+            if (field.name().contains("Decimal")) {
+              rec.put(field.name(), Double.valueOf(String.format(Locale.ENGLISH, "%.3f", rand.nextFloat())));
+            } else {
+              rec.put(field.name(), rand.nextDouble());
+            }
             break;
           case STRING:
-            rec.put(field.name(), genPseudoRandomUUID(rand).toString());
+            if (field.name().contains("Decimal")) {
+              rec.put(field.name(), String.format(Locale.ENGLISH, "%.3f", rand.nextFloat()));
+            } else if (field.name().contains("Date")) {
+              long randomMillis = genRandomTimeMillis(rand);
+              Instant instant = Instant.ofEpochMilli(randomMillis);
+              rec.put(field.name(), HoodieAvroUtils.toJavaDate(makeDatesAmbiguous ? -1000000 :
+                  (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay()).toString());
+            } else {
+              rec.put(field.name(), genPseudoRandomUUID(rand).toString());
+            }
             break;
           case BYTES:
-            rec.put(field.name(), ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString())));
-            break;
-          case UNION:
-            if (!AvroSchemaUtils.resolveNullableSchema(field.schema()).getType().equals(Schema.Type.BOOLEAN)) {
-              throw new IllegalStateException("Union should only be boolean");
+            if (nonNullableSchema.getLogicalType() != null) {
+              LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) nonNullableSchema.getLogicalType();
+              String formatString = String.format("%%.%df", decimalType.getScale());
+              BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, formatString, rand.nextFloat()));
+              Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
+              GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, nonNullableSchema, decimalType);
+              rec.put(field.name(), ByteBuffer.wrap(genericFixed.bytes()));
+            } else {
+              rec.put(field.name(), ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString())));
             }
-            rec.put(field.name(), rand.nextBoolean());
+            break;
+          case FIXED:
+            LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) nonNullableSchema.getLogicalType();
+            String formatString = String.format("%%.%df", decimalType.getScale());
+            BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, formatString, rand.nextFloat()));
+            Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
+            GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, nonNullableSchema, decimalType);
+            rec.put(field.name(), genericFixed);
             break;
           case BOOLEAN:
             rec.put(field.name(), rand.nextBoolean());

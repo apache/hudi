@@ -19,17 +19,17 @@
 
 package org.apache.hudi.common.table.read
 
+import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFileCount
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator.SchemaOnWriteConfigs
 import org.apache.hudi.common.testutils.{HoodieTestUtils, SchemaOnReadEvolutionTestUtils}
 import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, Option => HOption}
@@ -41,22 +41,21 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{Schema, SchemaBuilder}
+import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
+import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
 import org.apache.spark.sql.internal.SQLConf.LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, Row, SaveMode, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
-import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.Mockito
