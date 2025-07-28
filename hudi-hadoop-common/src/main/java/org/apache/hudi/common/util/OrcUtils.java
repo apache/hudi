@@ -117,14 +117,7 @@ public class OrcUtils extends FileFormatUtils {
       conf.addResource(HadoopFSUtils.getFs(filePath.toString(), conf).getConf());
       Reader reader = OrcFile.createReader(convertToHadoopPath(filePath), OrcFile.readerOptions(conf));
 
-      Schema readSchema = keyGeneratorOpt
-          .map(keyGenerator -> {
-            List<String> fields = new ArrayList<>();
-            fields.addAll(keyGenerator.getRecordKeyFieldNames());
-            fields.addAll(keyGenerator.getPartitionPathFields());
-            return HoodieAvroUtils.projectSchema(readAvroSchema(storage, filePath), fields);
-          })
-          .orElse(partitionPath.isPresent() ? HoodieAvroUtils.getRecordKeySchema() : HoodieAvroUtils.getRecordKeyPartitionPathSchema());
+      Schema readSchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
       RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
 
