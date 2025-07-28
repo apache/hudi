@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDefaultValue;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
@@ -107,7 +108,7 @@ public class PartialUpdateStrategy<T> {
     // for nested columns, we do not check the leaf level data type defaults.
     for (Schema.Field field : fields) {
       String fieldName = field.name();
-      Object defaultValue = field.defaultVal();
+      Object defaultValue = toJavaDefaultValue(field);
       Object newValue = readerContext.getValue(
           newRecord.getRecord(), newSchema, fieldName);
       if (defaultValue == newValue
@@ -139,8 +140,11 @@ public class PartialUpdateStrategy<T> {
       String fieldName = field.name();
       Object newValue = readerContext.getValue(newRecord.getRecord(), newSchema, fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
+          && null != partialUpdateCustomMarker
           && (partialUpdateCustomMarker.equals(readerContext.getTypeConverter().castToString(newValue)))) {
-        updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+        updateValues.put(
+            field.pos(),
+            readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
     if (updateValues.isEmpty()) {

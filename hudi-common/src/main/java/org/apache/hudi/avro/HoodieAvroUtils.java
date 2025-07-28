@@ -1744,4 +1744,42 @@ public class HoodieAvroUtils {
       return getSchemaForField(rootField.schema(), fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1));
     }
   }
+
+  public static Object toJavaDefaultValue(Schema.Field field) {
+    Object defaultVal = field.defaultVal();
+    if (defaultVal == null || defaultVal == org.apache.avro.JsonProperties.NULL_VALUE) {
+      return null;
+    }
+
+    Schema.Type type = getNonNullType(field.schema());
+    switch (type) {
+      case STRING:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+      case ENUM:
+      case BYTES:
+        return defaultVal;
+      case ARRAY:
+      case MAP:
+      case RECORD:
+        // Use Avro's standard GenericData utility for complex types
+        return GenericData.get().getDefaultValue(field);
+      default:
+        throw new IllegalArgumentException("Unsupported Avro type: " + type);
+    }
+  }
+
+  private static Schema.Type getNonNullType(Schema schema) {
+    if (schema.getType() == Schema.Type.UNION) {
+      return schema.getTypes().stream()
+          .filter(s -> s.getType() != Schema.Type.NULL)
+          .findFirst()
+          .orElseThrow(() -> new IllegalArgumentException("Only NULL in union"))
+          .getType();
+    }
+    return schema.getType();
+  }
 }
