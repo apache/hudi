@@ -188,17 +188,17 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
       List<FileSlice> filesFileSliceList = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.FILES.getPartitionPath());
       assertEquals(1, filesFileSliceList.size(), "File partition is expected to contain just 1 file slice");
       FileSlice filesFileSlice = filesFileSliceList.get(0);
-      readFromMDTFileSliceAndValidate(metadataMetaClient, filesFileSlice, filesPartitionExpectedRecordsMap, validMetadataInstant);
+      readFromMDTFileSliceAndValidate(metadataMetaClient, filesFileSlice, filesPartitionExpectedRecordsMap, validMetadataInstant, hoodieWriteConfig);
 
       List<FileSlice> rliFileSliceList = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), MetadataPartitionType.RECORD_INDEX.getPartitionPath());
       assertEquals(1, rliFileSliceList.size(), "RLI partition is expected to contain just 1 file slice");
       FileSlice rliFileSlice = rliFileSliceList.get(0);
-      readFromMDTFileSliceAndValidate(metadataMetaClient, rliFileSlice, rliPartitionExpectedRecordsMap, validMetadataInstant);
+      readFromMDTFileSliceAndValidate(metadataMetaClient, rliFileSlice, rliPartitionExpectedRecordsMap, validMetadataInstant, hoodieWriteConfig);
     }
   }
 
   private void readFromMDTFileSliceAndValidate(HoodieTableMetaClient metadataMetaClient, FileSlice fileSlice, Map<String, HoodieRecord> expectedRecordsMap,
-                                               String validMetadataInstant)
+                                               String validMetadataInstant, HoodieWriteConfig hoodieWriteConfig)
       throws IOException {
 
     // read from the file slice of interest.
@@ -225,6 +225,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
         .withRequestedSchema(HoodieMetadataRecord.getClassSchema())
         .withDataSchema(schema)
         .withProps(new TypedProperties())
+        .withEnableOptimizedLogBlockScan(hoodieWriteConfig.getMetadataConfig().isOptimizedLogBlocksScanEnabled())
         .build();
     try (ClosableIterator<HoodieRecord<IndexedRecord>> records = fileGroupReader.getClosableHoodieRecordIterator()) {
       Map<String, HoodieRecord<HoodieMetadataPayload>> actualMdtRecordMap = new HashMap<>();
