@@ -1417,16 +1417,41 @@ public class HoodieAvroUtils {
       }
       Map expectedMap = (Map) expected;
       Map actualMap = (Map) actual;
+      if (expectedMap.size() != actualMap.size()) {
+        throw new HoodieAvroSchemaException("Expected map size " + expectedMap.size() + " but got " + actualMap.size() + " for " + createFullName(fieldNames));
+      }
       if (!expectedMap.keySet().equals(actualMap.keySet())) {
-        throw new HoodieAvroSchemaException("Expected map keys " + expectedMap.keySet() + " but got " + actualMap.keySet() + " for " + createFullName(fieldNames));
+        Set<String> expectedKeys = (Set<String>) expectedMap.keySet().stream().map(Object::toString).collect(Collectors.toSet());
+        Set<String> actualKeys = (Set<String>) actualMap.keySet().stream().map(Object::toString).collect(Collectors.toSet());
+        if (!expectedKeys.equals(actualKeys)) {
+          throw new HoodieAvroSchemaException("Expected map keys " + expectedMap.keySet() + " but got " + actualMap.keySet() + " for " + createFullName(fieldNames));
+        } else {
+          Map<String, Object> realExpectedMap = (Map<String, Object>) expectedMap.entrySet().stream()
+              .collect(Collectors.toMap(e -> ((Map.Entry) e).getKey().toString(), e -> ((Map.Entry) e).getValue()));
+          Map<String, Object> realActualMap = (Map<String, Object>) actualMap.entrySet().stream()
+              .collect(Collectors.toMap(e -> ((Map.Entry) e).getKey().toString(), e -> ((Map.Entry) e).getValue()));
+          fieldNames.push("value");
+          for (String key : realExpectedMap.keySet()) {
+            validateRecordsHaveSameData(realExpectedMap.get(key), realActualMap.get(key), fieldNames);
+          }
+          fieldNames.pop();
+        }
+      } else {
+        fieldNames.push("value");
+        for (Object key : expectedMap.keySet()) {
+          validateRecordsHaveSameData(expectedMap.get(key), actualMap.get(key), fieldNames);
+        }
+        fieldNames.pop();
       }
-      fieldNames.push("value");
-      for (Object key : expectedMap.keySet()) {
-        validateRecordsHaveSameData(expectedMap.get(key), actualMap.get(key), fieldNames);
-      }
-      fieldNames.pop();
     } else {
       if (!Objects.equals(expected, actual)) {
+        if (expected instanceof Utf8 || actual instanceof Utf8  || expected instanceof GenericData.EnumSymbol || actual instanceof GenericData.EnumSymbol) {
+          String expectedString = expected.toString();
+          String actualString = actual.toString();
+          if (expectedString.equals(actualString)) {
+            return;
+          }
+        }
         throw new HoodieAvroSchemaException("For " + createFullName(fieldNames) + " Expected " + expected + " but got " + actual);
       }
     }

@@ -68,6 +68,9 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
 
   @Override
   public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
-    return new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
+    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
+    configs.renameColumnSupport = false;
+    configs.renameColumnAsPreviouslyRemovedSupport = false;
+    return configs;
   }
 }

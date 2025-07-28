@@ -136,7 +136,40 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
 
   @Override
   public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
-    return null;
+    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
+    configs.mapSupport = false;
+
+    configs.renameColumnSupport = false;
+    configs.renameColumnAsPreviouslyRemovedSupport = false;
+
+
+    configs.intToDoubleSupport = false;
+    configs.intToStringSupport = false;
+    configs.intToDecimalFixedSupport = false;
+    configs.intToDecimalBytesSupport = false;
+
+    configs.longToStringSupport = false;
+    configs.longToDecimalFixedSupport = false;
+    configs.longToDecimalBytesSupport = false;
+
+    configs.floatToDoubleSupport = false;
+    configs.floatToStringSupport = false;
+    configs.floatToDecimalFixedSupport = false;
+    configs.floatToDecimalBytesSupport = false;
+
+    configs.doubleToStringSupport = false;
+    configs.doubleToDecimalFixedSupport = false;
+    configs.doubleToDecimalBytesSupport = false;
+
+    configs.stringToDecimalFixedSupport = false;
+    configs.stringToDecimalBytesSupport = false;
+    configs.stringToDateSupport = false;
+
+    configs.decimalFixedToStringSupport = false;
+    configs.decimalBytesToStringSupport = false;
+
+    configs.dateToStringSupport = false;
+    return configs;
   }
 
   private void setupJobconf(JobConf jobConf, Schema schema) {

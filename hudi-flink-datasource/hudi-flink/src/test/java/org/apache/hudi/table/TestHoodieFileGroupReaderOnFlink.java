@@ -77,7 +77,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -94,6 +93,7 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -278,12 +278,28 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
   @Override
   public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
-    return null;
+    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
+    configs.nestedSupport = false;
+    configs.arraySupport = false;
+    configs.mapSupport = false;
+    configs.anyArraySupport = false;
+    configs.addNewFieldSupport = false;
+    configs.intToLongSupport = false;
+    configs.intToFloatSupport = false;
+    configs.intToDoubleSupport = false;
+    configs.intToStringSupport = false;
+    configs.longToFloatSupport = false;
+    configs.longToDoubleSupport = false;
+    configs.longToStringSupport = false;
+    configs.floatToDoubleSupport = false;
+    configs.floatToStringSupport = false;
+    configs.doubleToStringSupport = false;
+    return configs;
   }
 
   @Test
   public void testGetOrderingValue() {
-    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
@@ -301,7 +317,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
   @Test
   public void getRecordKeyFromMetadataFields() {
-    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
@@ -318,7 +334,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
   @Test
   public void getRecordKeySingleKey() {
-    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1"}));
     FlinkRowDataReaderContext readerContext =
@@ -336,7 +352,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
   @Test
   public void getRecordKeyWithMultipleKeys() {
-    HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1", "field2"}));
     FlinkRowDataReaderContext readerContext =
