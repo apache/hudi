@@ -68,12 +68,16 @@ class PartitionStatsIndexSupport(spark: SparkSession,
 
   override def loadColumnStatsIndexRecords(targetColumns: Seq[String], prunedPartitions: Option[Set[String]] = None, shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     checkState(targetColumns.nonEmpty)
-    val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
-    logDebug(s"Loading column stats for columns: ${targetColumns.mkString(", ")},  Encoded column names: ${encodedTargetColumnNames.mkString(", ")}")
+    logDebug(s"Loading column stats for columns: ${targetColumns.mkString(", ")}")
+    // For partition stats, we only need column names (no partition prefix)
+    val rawKeys = targetColumns.map(colName => s"$colName|")
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(
-        HoodieListData.eager(encodedTargetColumnNames.asJava), HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, shouldReadInMemory,
-        HoodieTableMetadataUtil.IDENTITY_ENCODING)
+        HoodieListData.eager(rawKeys.asJava), HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, shouldReadInMemory,
+        (rawKey: String) => {
+          val columnName = rawKey.dropRight(1) // Remove trailing |
+          new ColumnIndexID(columnName).asBase64EncodedString()
+        })
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       metadataRecords.map(JFunction.toJavaSerializableFunction(record => {

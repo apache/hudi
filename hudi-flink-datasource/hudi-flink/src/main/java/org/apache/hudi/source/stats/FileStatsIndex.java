@@ -63,7 +63,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_DATA_TYPE;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.COL_STATS_TARGET_POS;
 import static org.apache.hudi.source.stats.ColumnStatsSchemas.METADATA_DATA_TYPE;
@@ -389,15 +388,19 @@ public class FileStatsIndex implements ColumnStatsIndex {
         "Column stats is only valid when push down filters have referenced columns");
 
     // Read Metadata Table's column stats Flink's RowData list by
-    //    - Fetching the records by key-prefixes (encoded column names)
+    //    - Fetching the records by key-prefixes (column names)
     //    - Deserializing fetched records into [[RowData]]s
-    // TODO encoding should be done internally w/in HoodieBackedTableMetadata
-    List<String> encodedTargetColumnNames = Arrays.stream(targetColumns)
-        .map(colName -> new ColumnIndexID(colName).asBase64EncodedString()).collect(Collectors.toList());
+    List<String> rawKeys = Arrays.stream(targetColumns)
+        .map(colName -> colName + "|")  // Empty partition name for partition stats
+        .collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
         getMetadataTable().getRecordsByKeyPrefixes(
-            HoodieListData.lazy(encodedTargetColumnNames), getIndexPartitionName(), false, IDENTITY_ENCODING);
+            HoodieListData.lazy(rawKeys), getIndexPartitionName(), false, 
+            (rawKey) -> {
+              String columnName = rawKey.substring(0, rawKey.length() - 1); // Remove trailing |
+              return new ColumnIndexID(columnName).asBase64EncodedString();
+            });
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());

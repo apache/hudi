@@ -164,7 +164,6 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -1474,8 +1473,9 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // prefix search for column (_hoodie_record_key)
       ColumnIndexID columnIndexID = new ColumnIndexID(HoodieRecord.RECORD_KEY_METADATA_FIELD);
       List<HoodieRecord<HoodieMetadataPayload>> result = tableMetadata.getRecordsByKeyPrefixes(
-          HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString())),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
+          HoodieListData.lazy(Collections.singletonList(HoodieRecord.RECORD_KEY_METADATA_FIELD + "|")),
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, 
+          rawKey -> new ColumnIndexID(rawKey.substring(0, rawKey.length() - 1)).asBase64EncodedString()).collectAsList();
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.
       assertEquals(result.size(), 6);
@@ -1486,8 +1486,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // prefix search for col(_hoodie_record_key) and first partition. only 2 files should be matched
       PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
       result = tableMetadata.getRecordsByKeyPrefixes(
-          HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
+          HoodieListData.lazy(HoodieTableMetadataUtil.generateRawKeyPrefixes(
+              Collections.singletonList(HoodieRecord.RECORD_KEY_METADATA_FIELD), 
+              HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)),
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, 
+          HoodieTableMetadataUtil.getColumnStatsKeyEncoder()).collectAsList();
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
       result.forEach(entry -> {
@@ -1506,8 +1509,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // prefix search for column {commit time} and first partition
       columnIndexID = new ColumnIndexID(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
       result = tableMetadata.getRecordsByKeyPrefixes(
-          HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
+          HoodieListData.lazy(HoodieTableMetadataUtil.generateRawKeyPrefixes(
+              Collections.singletonList(HoodieRecord.COMMIT_TIME_METADATA_FIELD), 
+              HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)),
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, 
+          HoodieTableMetadataUtil.getColumnStatsKeyEncoder()).collectAsList();
 
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);

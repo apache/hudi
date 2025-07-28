@@ -342,23 +342,20 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     //    - Filtering out nulls
     checkState(targetColumns.nonEmpty)
 
-    // TODO encoding should be done internally w/in HoodieBackedTableMetadata
-    val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
-    // encode column name and parition name if partition list is available
-    val keyPrefixes = if (prunedPartitions.isDefined) {
-      prunedPartitions.get.map(partitionPath =>
-        new PartitionIndexID(HoodieTableMetadataUtil.getPartitionIdentifier(partitionPath)).asBase64EncodedString()
-      ).flatMap(encodedPartition => {
-        encodedTargetColumnNames.map(encodedTargetColumn => encodedTargetColumn.concat(encodedPartition))
-      })
+    // Create raw key prefixes based on column names and optional partition names
+    val rawKeyPrefixes = if (prunedPartitions.isDefined) {
+      val partitionsList = prunedPartitions.get.toList
+      targetColumns.flatMap(colName =>
+        partitionsList.map(partitionPath => HoodieTableMetadataUtil.generateRawKeyPrefixes(List(colName).asJava, partitionPath).get(0))
+      )
     } else {
-      encodedTargetColumnNames
+      targetColumns
     }
 
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(
-        HoodieListData.eager(keyPrefixes.toSeq.asJava), HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory,
-        HoodieTableMetadataUtil.IDENTITY_ENCODING)
+        HoodieListData.eager(rawKeyPrefixes.asJava), HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory,
+        HoodieTableMetadataUtil.getColumnStatsKeyEncoder())
 
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
