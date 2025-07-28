@@ -19,9 +19,11 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
+
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.sources.Filter
@@ -43,21 +45,14 @@ class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, o
    */
   override def read(file: PartitionedFile, requiredSchema: StructType, partitionSchema: StructType, internalSchemaOpt: util.Option[InternalSchema], filters: Seq[Filter], storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
     val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
-    val fileFormat = detectFileFormat(filePath.toString)
+    val fileFormat = HoodieFileFormat.fromFileExtension(filePath.getFileExtension)
     fileFormat match {
-      case "parquet" =>
+      case HoodieFileFormat.PARQUET =>
         parquetReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
-      case "orc" =>
+      case HoodieFileFormat.ORC =>
         orcReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
       case _ =>
         throw new IllegalArgumentException(s"Unsupported file format for file: $filePath")
     }
-  }
-
-  private def detectFileFormat(filePath: String): String = {
-    // Logic to detect file format based on the filePath or its content.
-    if (filePath.endsWith(".parquet")) "parquet"
-    else if (filePath.endsWith(".orc")) "orc"
-    else ""
   }
 }
