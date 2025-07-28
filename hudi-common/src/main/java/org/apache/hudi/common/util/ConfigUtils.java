@@ -90,7 +90,8 @@ public class ConfigUtils {
     } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
-    return StringUtils.isNullOrEmpty(orderField) ? null : orderField.split(",");
+    // to do: fix. chase how we ended up with "null" string as payload ordering field and fix below line.
+    return (orderField == null || orderField.equals("null")) ? null : orderField.split(",");
   }
 
   /**
@@ -99,10 +100,12 @@ public class ConfigUtils {
    * <p> See also {@link #getOrderingFields(Properties)}.
    */
   public static TypedProperties supplementOrderingFields(TypedProperties props, List<String> orderingFields) {
-    String orderingFieldsAsString = String.join(",", orderingFields);
-    props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
-    props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELDS.key(), orderingFieldsAsString);
-    props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingFieldsAsString);
+    if (!orderingFields.isEmpty()) {
+      String orderingFieldsAsString = String.join(",", orderingFields);
+      props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
+      props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELDS.key(), orderingFieldsAsString);
+      props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingFieldsAsString);
+    }
     return props;
   }
 
