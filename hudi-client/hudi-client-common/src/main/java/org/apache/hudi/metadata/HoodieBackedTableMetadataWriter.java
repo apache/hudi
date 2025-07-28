@@ -1424,7 +1424,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     mayBeReinitMetadataReader();
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
         cleanMetadata, instantTime, dataMetaClient, dataWriteConfig.getMetadataConfig(), enabledPartitionTypes,
-        dataWriteConfig.getBloomIndexParallelism(), Option.of(dataWriteConfig.getRecordMerger().getRecordType()), dataWriteConfig.enableOptimizedLogBlocksScan()));
+        dataWriteConfig.getBloomIndexParallelism(), Option.of(dataWriteConfig.getRecordMerger().getRecordType())));
     closeInternal();
   }
 

@@ -169,7 +169,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
-import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
 import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
 import static org.apache.hudi.common.fs.FSUtils.getFileNameFromPath;
 import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD;
@@ -622,8 +621,7 @@ public class HoodieTableMetadataUtil {
                                                                                HoodieMetadataConfig metadataConfig,
                                                                                List<MetadataPartitionType> enabledPartitionTypes,
                                                                                int bloomIndexParallelism,
-                                                                               Option<HoodieRecordType> recordTypeOpt,
-                                                                               boolean enableOptimizeLogBlocksScan) {
+                                                                               Option<HoodieRecordType> recordTypeOpt) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = engineContext.parallelize(
         convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime), 1);
@@ -3112,8 +3110,6 @@ public class HoodieTableMetadataUtil {
         storageConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()).toString());
     properties.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(storageConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())));
-    properties.setProperty(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-        Boolean.toString(storageConf.getBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), Boolean.parseBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))));
     return properties;
   }
 }
