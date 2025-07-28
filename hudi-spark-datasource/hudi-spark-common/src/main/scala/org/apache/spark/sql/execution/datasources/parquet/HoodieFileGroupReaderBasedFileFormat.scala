@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
+import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
@@ -172,21 +173,16 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
-    // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.
-    // TODO: please consider to support vectorized reader in file group reader
-    val vectorizedReadOverride = supportVectorizedRead && !isMOR
-    val baseFileReader: SparkColumnarFileReader = if (isMultipleBaseFileFormatsEnabled) {
-      new MultipleColumnarFileFormatReader(
-        sparkAdapter.createParquetFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap()),
-        sparkAdapter.createOrcFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema))
-    } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
-      sparkAdapter.createParquetFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap())
-    } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
-      sparkAdapter.createOrcFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema)
+
+    val baseFileReader = spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataSchema, supportVectorizedRead))
+    val fileGroupBaseFileReader = if (isMOR && supportVectorizedRead) {
+      // for file group reader to perform read, we always need to read the record without vectorized reader because our merging is based on row level.
+      // TODO: please consider to support vectorized reader in file group reader
+      spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataSchema, enableVectorizedRead = false))
     } else {
-      null
+      baseFileReader
     }
-    val broadcastedBaseFileReader = spark.sparkContext.broadcast(baseFileReader)
+
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
@@ -204,7 +200,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
               val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                 .builder().setConf(storageConf).setBasePath(tablePath).build
-              val readerContext = new SparkFileFormatInternalRowReaderContext(broadcastedBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
               props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction))
@@ -236,18 +232,36 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 fixedPartitionIndexes)
 
             case _ =>
-              readBaseFile(file, broadcastedBaseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+              readBaseFile(file, baseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
                 requiredSchema, partitionSchema, outputSchema, filters, storageConf)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
-          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, broadcastedBaseFileReader.value, storageConf, fileIndexProps, requiredSchema)
+          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, fileGroupBaseFileReader.value, storageConf, fileIndexProps, requiredSchema)
 
         case _ =>
-          readBaseFile(file, broadcastedBaseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+          readBaseFile(file, baseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
             requiredSchema, partitionSchema, outputSchema, filters, storageConf)
       }
       CloseableIteratorListener.addListener(iter)
+    }
+  }
+
+  private def buildBaseFileReader(spark: SparkSession,
+                                  options: Map[String, String],
+                                  configuration: Configuration,
+                                  dataSchema: StructType,
+                                  enableVectorizedRead: Boolean): SparkColumnarFileReader = {
+    if (isMultipleBaseFileFormatsEnabled) {
+      new MultipleColumnarFileFormatReader(
+        sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration),
+        sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema))
+    } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
+      sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
+    } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
+      sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema)
+    } else {
+      throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
     }
   }
 
