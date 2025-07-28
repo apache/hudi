@@ -402,9 +402,8 @@ public class SparkMetadataWriterUtils {
         // Fetch EI column stat records for above files
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
             tableMetadata.getRecordsByKeyPrefixes(
-                    HoodieListData.lazy(HoodieTableMetadataUtil.generateRawKeyPrefixes(validColumnsToIndex, partitionName)),
-                    indexPartition, false,
-                    HoodieTableMetadataUtil.getColumnStatsKeyEncoder())
+                    HoodieListData.lazy(HoodieTableMetadataUtil.generateColumnStatsKeys(validColumnsToIndex, partitionName)),
+                    indexPartition, false)
                 // schema and properties are ignored in getInsertValue, so simply pass as null
                 .map(record -> record.getData().getInsertValue(null, null))
                 .filter(Option::isPresent)

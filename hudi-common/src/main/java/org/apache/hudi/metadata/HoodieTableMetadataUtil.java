@@ -2716,9 +2716,8 @@ public class HoodieTableMetadataUtil {
           // Fetch metadata table COLUMN_STATS partition records for above files
           List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
               .getRecordsByKeyPrefixes(
-                  HoodieListData.lazy(generateRawKeyPrefixes(colsToIndex, partitionName)), 
-                  MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false,
-                  getColumnStatsKeyEncoder())
+                  HoodieListData.lazy(generateColumnStatsKeys(colsToIndex, partitionName)), 
+                  MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
               // schema and properties are ignored in getInsertValue, so simply pass as null
               .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
               .filter(Option::isPresent)
@@ -2769,45 +2768,25 @@ public class HoodieTableMetadataUtil {
 
   /**
    * Generate key prefixes for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
-   * @deprecated Use {@link #generateRawKeyPrefixes} with {@link #getColumnStatsKeyEncoder} instead
+   * @deprecated Use {@link #generateColumnStatsKeys} instead
    */
   @Deprecated
   public static List<String> generateKeyPrefixes(List<String> columnsToIndex, String partitionName) {
-    List<String> rawKeys = generateRawKeyPrefixes(columnsToIndex, partitionName);
+    List<ColumnStatsIndexKey> rawKeys = generateColumnStatsKeys(columnsToIndex, partitionName);
     return rawKeys.stream()
-        .map(getColumnStatsKeyEncoder())
+        .map(key -> key.encode())
         .collect(Collectors.toList());
   }
 
   /**
-   * Generate raw key prefixes (unencoded) for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
+   * Generate column stats index keys for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
    */
-  public static List<String> generateRawKeyPrefixes(List<String> columnsToIndex, String partitionName) {
-    List<String> rawKeyPrefixes = new ArrayList<>();
+  public static List<ColumnStatsIndexKey> generateColumnStatsKeys(List<String> columnsToIndex, String partitionName) {
+    List<ColumnStatsIndexKey> keys = new ArrayList<>();
     for (String columnName : columnsToIndex) {
-      // Store column name and partition name separated by a delimiter
-      rawKeyPrefixes.add(columnName + "|" + partitionName);
+      keys.add(new ColumnStatsIndexKey(columnName, partitionName));
     }
-    return rawKeyPrefixes;
-  }
-
-  /**
-   * Get the key encoder function for column stats metadata table partition.
-   * This function encodes a raw key (format: "columnName|partitionName") to the metadata table key format.
-   */
-  public static SerializableFunctionUnchecked<String, String> getColumnStatsKeyEncoder() {
-    return (rawKey) -> {
-      String[] parts = rawKey.split("\\|", 2);
-      if (parts.length != 2) {
-        throw new IllegalArgumentException("Invalid raw key format: " + rawKey);
-      }
-      String columnName = parts[0];
-      String partitionName = parts[1];
-      PartitionIndexID partitionIndexId = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionName));
-      ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
-      return columnIndexID.asBase64EncodedString()
-          .concat(partitionIndexId.asBase64EncodedString());
-    };
+    return keys;
   }
 
   private static List<HoodieColumnRangeMetadata<Comparable>> translateWriteStatToFileStats(HoodieWriteStat writeStat,

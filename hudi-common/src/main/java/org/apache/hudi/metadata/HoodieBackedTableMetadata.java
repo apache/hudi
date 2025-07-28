@@ -223,12 +223,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
-                                                                                 String partitionName,
-                                                                                 boolean shouldLoadInMemory,
-                                                                                 SerializableFunctionUnchecked<String, String> keyEncodingFn) {
+  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
+      HoodieData<? extends RawKey> rawKeys,
+      String partitionName,
+      boolean shouldLoadInMemory) {
     // Apply key encoding
-    List<String> sortedKeyPrefixes = new ArrayList<>(keyPrefixes.map(keyEncodingFn::apply).collectAsList());
+    List<String> sortedKeyPrefixes = new ArrayList<>(rawKeys.map(key -> key.encode()).collectAsList());
     // Sort the prefixes so that keys are looked up in order
     // Sort must come after encoding.
     Collections.sort(sortedKeyPrefixes);
@@ -861,7 +861,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return HoodieListPairData.eager(Collections.emptyList());
     }
 
-    return getRecordsByKeyPrefixes(keys, partitionName, false, SecondaryIndexKeyUtils::escapeSpecialChars)
+    HoodieData<SecondaryIndexRawKey> rawKeys = keys.map(SecondaryIndexRawKey::new);
+    return getRecordsByKeyPrefixes(rawKeys, partitionName, false)
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
   }
 

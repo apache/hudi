@@ -28,8 +28,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
-import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.ColumnStatsIndexKey;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -390,17 +390,13 @@ public class FileStatsIndex implements ColumnStatsIndex {
     // Read Metadata Table's column stats Flink's RowData list by
     //    - Fetching the records by key-prefixes (column names)
     //    - Deserializing fetched records into [[RowData]]s
-    List<String> rawKeys = Arrays.stream(targetColumns)
-        .map(colName -> colName + "|")  // Empty partition name for partition stats
+    List<ColumnStatsIndexKey> rawKeys = Arrays.stream(targetColumns)
+        .map(ColumnStatsIndexKey::new)  // Just column name, no partition
         .collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
         getMetadataTable().getRecordsByKeyPrefixes(
-            HoodieListData.lazy(rawKeys), getIndexPartitionName(), false, 
-            (rawKey) -> {
-              String columnName = rawKey.substring(0, rawKey.length() - 1); // Remove trailing |
-              return new ColumnIndexID(columnName).asBase64EncodedString();
-            });
+            HoodieListData.lazy(rawKeys), getIndexPartitionName(), false);
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());

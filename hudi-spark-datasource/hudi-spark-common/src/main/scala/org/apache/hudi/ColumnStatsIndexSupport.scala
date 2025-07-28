@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{ColumnStatsIndexKey, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.util.JFunction
 
@@ -343,19 +343,18 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     checkState(targetColumns.nonEmpty)
 
     // Create raw key prefixes based on column names and optional partition names
-    val rawKeyPrefixes = if (prunedPartitions.isDefined) {
+    val rawKeys = if (prunedPartitions.isDefined) {
       val partitionsList = prunedPartitions.get.toList
       targetColumns.flatMap(colName =>
-        partitionsList.map(partitionPath => HoodieTableMetadataUtil.generateRawKeyPrefixes(List(colName).asJava, partitionPath).get(0))
+        partitionsList.map(partitionPath => new ColumnStatsIndexKey(colName, partitionPath))
       )
     } else {
-      targetColumns
+      targetColumns.map(colName => new ColumnStatsIndexKey(colName))
     }
 
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(
-        HoodieListData.eager(rawKeyPrefixes.asJava), HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory,
-        HoodieTableMetadataUtil.getColumnStatsKeyEncoder())
+        HoodieListData.eager(rawKeys.asJava), HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
 
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
