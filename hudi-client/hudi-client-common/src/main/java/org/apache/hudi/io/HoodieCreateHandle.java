@@ -135,7 +135,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     // Track event time metadata.
     if (trackEventTimeWatermark && eventTimeFieldNameOpt.isPresent()) {
-      recordMetadata = appendEventTimeMetadata(record, recordMetadata);
+      recordMetadata = appendEventTimeMetadata(record, recordMetadata, schema, props);
     }
     try {
       if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(schema, config.getProps())) {

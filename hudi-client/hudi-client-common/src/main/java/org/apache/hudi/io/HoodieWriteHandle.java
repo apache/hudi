@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -62,6 +61,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
@@ -376,19 +376,33 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    * Assume: the record type is AVRO.
    */
   Option<Map<String, String>> appendEventTimeMetadata(HoodieRecord record,
-                                                      Option<Map<String, String>> metadataOpt) {
+                                                      Option<Map<String, String>> metadataOpt,
+                                                      Schema schema,
+                                                      Properties properties) {
+    Option<HoodieAvroIndexedRecord> data;
+    try {
+      data = record.toIndexedRecord(schema, properties);
+      if (data.isEmpty()) {
+        return metadataOpt;
+      }
+    } catch (IOException e) {
+      LOG.warn("Failed to append event_time metadata to the record", e);
+      // We don't throw since the write process should succeed even with a failure of in-memory metadata.
+      return metadataOpt;
+    }
+
     // Extract event_time value.
     Object eventTime = HoodieAvroUtils.getNestedFieldVal(
-        (GenericRecord) record.getData(),
+        (GenericRecord) data.get().getData(),
         eventTimeFieldNameOpt.get(),
         true,
         keepConsistentLogicalTimestamp);
     if (eventTime != null) {
-      // Append event time.
+      // Append event_time.
       Map<String, String> metadata = metadataOpt.orElse(new HashMap<>());
       metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
       return Option.of(metadata);
     }
-    return Option.empty();
+    return metadataOpt;
   }
 }

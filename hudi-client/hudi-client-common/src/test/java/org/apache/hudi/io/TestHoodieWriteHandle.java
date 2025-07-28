@@ -46,6 +46,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -176,7 +177,7 @@ class TestHoodieWriteHandle {
 
     // Test with empty metadata
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
 
     assertTrue(result.isPresent(), "Should return metadata when event time is present");
     Map<String, String> metadata = result.get();
@@ -211,7 +212,7 @@ class TestHoodieWriteHandle {
     Option<Map<String, String>> existingMetadataOpt = Option.of(existingMetadata);
 
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, existingMetadataOpt);
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, existingMetadataOpt, schema, new Properties());
 
     assertTrue(result.isPresent(), "Should return metadata when event time is present");
     Map<String, String> metadata = result.get();
@@ -243,7 +244,7 @@ class TestHoodieWriteHandle {
     testWriteHandle.setKeepConsistentLogicalTimestamp(false);
 
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
 
     assertFalse(result.isPresent(), "Should return empty when event time field is not present");
   }
@@ -268,7 +269,7 @@ class TestHoodieWriteHandle {
     testWriteHandle.setKeepConsistentLogicalTimestamp(false);
 
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
 
     assertFalse(result.isPresent(), "Should return empty when event time value is null");
   }
@@ -293,7 +294,7 @@ class TestHoodieWriteHandle {
     testWriteHandle.setKeepConsistentLogicalTimestamp(false);
 
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
 
     assertTrue(result.isPresent(), "Should return metadata when event time is present");
     Map<String, String> metadata = result.get();
@@ -330,7 +331,7 @@ class TestHoodieWriteHandle {
     testWriteHandle.setKeepConsistentLogicalTimestamp(false);
 
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
 
     assertTrue(result.isPresent(), "Should return metadata when nested event time is present");
     Map<String, String> metadata = result.get();
@@ -357,8 +358,9 @@ class TestHoodieWriteHandle {
       return shouldTrackEventTimeWaterMarker(metaClient, config);
     }
 
-    public Option<Map<String, String>> testAppendEventTimeMetadata(HoodieRecord record, Option<Map<String, String>> metadataOpt) {
-      return appendEventTimeMetadata(record, metadataOpt);
+    public Option<Map<String, String>> testAppendEventTimeMetadata(
+        HoodieRecord record, Option<Map<String, String>> metadataOpt, Schema schema, Properties props) {
+      return appendEventTimeMetadata(record, metadataOpt, schema, props);
     }
 
     public void setEventTimeFieldNameOpt(Option<String> eventTimeFieldNameOpt) {
