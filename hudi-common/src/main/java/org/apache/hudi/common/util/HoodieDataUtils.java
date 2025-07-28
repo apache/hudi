@@ -21,8 +21,11 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.util.collection.Pair;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 /**
  * Utility class for HoodieData operations.
@@ -42,14 +45,53 @@ public class HoodieDataUtils {
    * @return a Map containing the de-duplicated key-value pairs
    */
   public static <K, V> Map<K, V> dedupeAndCollectAsMap(HoodiePairData<K, V> pairData) {
-    // Deduplicate locally before shuffling to reduce data movement
+    // Map each pair to (Option<Pair.key>, V) to handle null keys uniformly
     // If there are multiple entries sharing the same key, use the incoming one
-    return pairData.reduceByKey((existing, incoming) -> incoming, pairData.deduceNumPartitions())
-            .collectAsList()
-            .stream()
-            .collect(Collectors.toMap(
-                    Pair::getKey,
-                    Pair::getValue
-            ));
+    return pairData.mapToPair(pair -> 
+        Pair.of(
+            Option.ofNullable(pair.getKey()), 
+            pair.getValue()
+        ))
+        .reduceByKey((existing, incoming) -> incoming, pairData.deduceNumPartitions())
+        .collectAsList()
+        .stream()
+        .collect(HashMap::new,
+            (map, pair) -> {
+              K key = pair.getKey().orElse(null);
+              map.put(key, pair.getValue());
+            },
+            HashMap::putAll);
   }
-} 
+
+  /**
+   * Collects results of the pair data into a {@link Map<K, Set<V>>} where values with the same key
+   * are grouped into a set.
+   *
+   * @param pairData Hoodie Pair Data to be collected
+   * @param <K> type of the key
+   * @param <V> type of the value
+   * @return a Map containing keys mapped to sets of values
+   */
+  public static <K, V> Map<K, Set<V>> collectPairDataAsMap(HoodiePairData<K, V> pairData) {
+    // Map each pair to (Option<Pair.key>, V) to handle null keys uniformly
+    // If there are multiple entries sharing the same key, combine them into a set
+    return pairData.mapToPair(pair -> 
+        Pair.of(
+            Option.ofNullable(pair.getKey()), 
+            Collections.singleton(pair.getValue())
+        ))
+        .reduceByKey((set1, set2) -> {
+          Set<V> combined = new HashSet<>(set1);
+          combined.addAll(set2);
+          return combined;
+        }, pairData.deduceNumPartitions())
+        .collectAsList()
+        .stream()
+        .collect(HashMap::new,
+            (map, pair) -> {
+              K key = pair.getKey().orElse(null);
+              map.put(key, pair.getValue());
+            },
+            HashMap::putAll);
+  }
+}

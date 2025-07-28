@@ -534,50 +534,53 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test Chinese table ") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        spark.sql("set hoodie.schema.on.read.enable=true")
-        spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int, comb int, `名字` string, col9 string, `成绩` int, `身高` float, `体重` double, `上次更新时间` date, par date
-             |) using hudi
-             | location '$tablePath'
-             | options (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'comb'
-             | )
-             | partitioned by (par)
+        withSparkSqlSessionConfig(
+          "hoodie.schema.on.read.enable" -> "true",
+          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
+          DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert") {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int, comb int, `名字` string, col9 string, `成绩` int, `身高` float, `体重` double, `上次更新时间` date, par date
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'comb'
+               | )
+               | partitioned by (par)
              """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-25', DATE'2021-12-26')
-             |""".stripMargin)
-        spark.sql(s"alter table $tableName rename column col9 to `爱好_Best`")
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-25', DATE'2021-12-26')
+               |""".stripMargin)
+          spark.sql(s"alter table $tableName rename column col9 to `爱好_Best`")
 
-        // update current table to produce log files for mor
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-26', DATE'2021-12-26')
-             |""".stripMargin)
+          // update current table to produce log files for mor
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-26', DATE'2021-12-26')
+               |""".stripMargin)
 
-        // alter date to string
-        spark.sql(s"alter table $tableName alter column `上次更新时间` type string ")
-        checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
-          Seq("2021-12-26")
-        )
-        // alter string to date
-        spark.sql(s"alter table $tableName alter column `上次更新时间` type date ")
-        spark.sql(s"select `上次更新时间` from $tableName").collect()
-        checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
-          Seq(java.sql.Date.valueOf("2021-12-26"))
-        )
+          // alter date to string
+          spark.sql(s"alter table $tableName alter column `上次更新时间` type string ")
+          checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
+            Seq("2021-12-26")
+          )
+          // alter string to date
+          spark.sql(s"alter table $tableName alter column `上次更新时间` type date ")
+          spark.sql(s"select `上次更新时间` from $tableName").collect()
+          checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
+            Seq(java.sql.Date.valueOf("2021-12-26"))
+          )
+        }
+        spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
       }
-      spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -585,61 +588,64 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column by add rename and drop") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        spark.sql("set hoodie.schema.on.read.enable=true")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '$tablePath'
-             | options (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
+        withSparkSqlSessionConfig(
+          "hoodie.schema.on.read.enable" -> "true",
+          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
              """.stripMargin)
-        spark.sql(s"show create table ${tableName}").show(false)
-        spark.sql(s"insert into ${tableName} values (1, 'jack', 0.9, 1000)")
-        spark.sql(s"update ${tableName} set price = 1.9  where id =  1")
+          spark.sql(s"show create table ${tableName}").show(false)
+          spark.sql(s"insert into ${tableName} values (1, 'jack', 0.9, 1000)")
+          spark.sql(s"update ${tableName} set price = 1.9  where id =  1")
 
-        spark.sql(s"alter table ${tableName} alter column id type long")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", 1.9, 1000)
-        )
-        // test add action, include position change
-        spark.sql(s"alter table ${tableName} add columns(ext1 string comment 'add ext1' after name)")
-        spark.sql(s"insert into ${tableName} values (2, 'jack', 'exx1', 0.9, 1000)")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", null, 1.9, 1000), Seq(2, "jack","exx1", 0.9, 1000)
-        )
-        // test rename
-        spark.sql(s"alter table ${tableName} rename column price to newprice")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", null, 1.9, 1000), Seq(2, "jack","exx1", 0.9, 1000)
-        )
-        spark.sql(s"update ${tableName} set ext1 =  'haha' where id =  1 ")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", "haha", 1.9, 1000), Seq(2, "jack","exx1", 0.9, 1000)
-        )
-        var maxColumnId = getMaxColumnId(tablePath)
-        // drop column newprice
-        spark.sql(s"alter table ${tableName} drop column newprice")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", "haha", 1000), Seq(2, "jack","exx1", 1000)
-        )
-        validateInternalSchema(tablePath, isDropColumn = true, currentMaxColumnId = maxColumnId)
-        maxColumnId = getMaxColumnId(tablePath)
-        // add newprice back
-        spark.sql(s"alter table ${tableName} add columns(newprice string comment 'add newprice back' after ext1)")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", "haha", null, 1000), Seq(2, "jack","exx1", null, 1000)
-        )
-        validateInternalSchema(tablePath, isDropColumn = false, currentMaxColumnId = maxColumnId)
+          spark.sql(s"alter table ${tableName} alter column id type long")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", 1.9, 1000)
+          )
+          // test add action, include position change
+          spark.sql(s"alter table ${tableName} add columns(ext1 string comment 'add ext1' after name)")
+          spark.sql(s"insert into ${tableName} values (2, 'jack', 'exx1', 0.9, 1000)")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", null, 1.9, 1000), Seq(2, "jack", "exx1", 0.9, 1000)
+          )
+          // test rename
+          spark.sql(s"alter table ${tableName} rename column price to newprice")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", null, 1.9, 1000), Seq(2, "jack", "exx1", 0.9, 1000)
+          )
+          spark.sql(s"update ${tableName} set ext1 =  'haha' where id =  1 ")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", "haha", 1.9, 1000), Seq(2, "jack", "exx1", 0.9, 1000)
+          )
+          var maxColumnId = getMaxColumnId(tablePath)
+          // drop column newprice
+          spark.sql(s"alter table ${tableName} drop column newprice")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", "haha", 1000), Seq(2, "jack", "exx1", 1000)
+          )
+          validateInternalSchema(tablePath, isDropColumn = true, currentMaxColumnId = maxColumnId)
+          maxColumnId = getMaxColumnId(tablePath)
+          // add newprice back
+          spark.sql(s"alter table ${tableName} add columns(newprice string comment 'add newprice back' after ext1)")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", "haha", null, 1000), Seq(2, "jack", "exx1", null, 1000)
+          )
+          validateInternalSchema(tablePath, isDropColumn = false, currentMaxColumnId = maxColumnId)
+        }
       }
     }
   }
@@ -691,35 +697,38 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column multiple times") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        spark.sql("set hoodie.schema.on.read.enable=true")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  col1 string,
-             |  col2 string,
-             |  ts long
-             |) using hudi
-             | location '$tablePath'
-             | options (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
+        withSparkSqlSessionConfig(
+          "hoodie.schema.on.read.enable" -> "true",
+          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  col1 string,
+               |  col2 string,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
              """.stripMargin)
-        spark.sql(s"show create table ${tableName}").show(false)
-        spark.sql(s"insert into ${tableName} values (1, 'aaa', 'bbb', 1000)")
+          spark.sql(s"show create table ${tableName}").show(false)
+          spark.sql(s"insert into ${tableName} values (1, 'aaa', 'bbb', 1000)")
 
-        // Rename to a previously existing column name + insert
-        spark.sql(s"alter table ${tableName} drop column col1")
-        spark.sql(s"alter table ${tableName} rename column col2 to col1")
+          // Rename to a previously existing column name + insert
+          spark.sql(s"alter table ${tableName} drop column col1")
+          spark.sql(s"alter table ${tableName} rename column col2 to col1")
 
-        spark.sql(s"insert into ${tableName} values (2, 'aaa', 1000)")
-        checkAnswer(spark.sql(s"select col1 from ${tableName} order by id").collect())(
-          Seq("bbb"), Seq("aaa")
-        )
+          spark.sql(s"insert into ${tableName} values (2, 'aaa', 1000)")
+          checkAnswer(spark.sql(s"select col1 from ${tableName} order by id").collect())(
+            Seq("bbb"), Seq("aaa")
+          )
+        }
       }
     }
   }
@@ -727,6 +736,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column with complex schema") {
     withTempDir { tmp =>
       withSQLConf(s"${DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION}" -> "upsert",
+        "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
         "hoodie.schema.on.read.enable" -> "true",
         "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
         val tableName = generateTableName

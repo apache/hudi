@@ -35,11 +35,14 @@ import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,16 +80,30 @@ public class ConfigUtils {
   /**
    * Get ordering field.
    */
-  public static String getOrderingField(Properties properties) {
+  @Nullable
+  public static String[] getOrderingFields(Properties properties) {
     String orderField = null;
     if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
       orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
-    } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key())) {
-      orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key());
+    } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELDS.key())) {
+      orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key());
     } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
-    return orderField;
+    return orderField == null ? null : orderField.split(",");
+  }
+
+  /**
+   * Ensures that ordering field is populated for mergers and legacy payloads.
+   *
+   * <p> See also {@link #getOrderingFields(Properties)}.
+   */
+  public static TypedProperties supplementOrderingFields(TypedProperties props, List<String> orderingFields) {
+    String orderingFieldsAsString = String.join(",", orderingFields);
+    props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
+    props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELDS.key(), orderingFieldsAsString);
+    props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingFieldsAsString);
+    return props;
   }
 
   /**
@@ -641,5 +658,38 @@ public class ConfigUtils {
 
   public static TypedProperties loadGlobalProperties() {
     return ((PropertiesConfig) ReflectionUtils.loadClass("org.apache.hudi.common.config.DFSPropertiesConfiguration")).getGlobalProperties();
+  }
+
+  /**
+   * Extract all properties whose keys start with a given prefix.
+   * E.g., if the prefix is "a.b.c.", and the props contain:
+   * "a.b.c.K1=V1", "a.b.c.K2=V2", "a.b.c.K3=V3".
+   * Then the output is:
+   * Map(K1->V1, K2->V2, K3->V3).
+   */
+  public static Map<String, String> extractWithPrefix(TypedProperties props, String prefix) {
+    if (props == null || props.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    int prefixLength = prefix.length();
+    Map<String, String> mergeProperties = new HashMap<>();
+    for (Map.Entry<Object, Object> entry : props.entrySet()) {
+      String key = entry.getKey().toString();
+      // Early exit if key is shorter than prefix or doesn't start with prefix
+      if (key.length() <= prefixLength || !key.startsWith(prefix)) {
+        continue;
+      }
+      // Extract and validate the property key
+      String propKey = key.substring(prefixLength).trim();
+      if (propKey.isEmpty()) {
+        continue;
+      }
+      // Extract and trim the value
+      Object value = entry.getValue();
+      String stringValue = (value != null) ? value.toString().trim() : "";
+      mergeProperties.put(propKey, stringValue);
+    }
+    return mergeProperties;
   }
 }

@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.v2.utils;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
@@ -36,6 +37,7 @@ import org.apache.hudi.sink.v2.clustering.ClusteringCommitSinkV2;
 import org.apache.hudi.sink.v2.compact.CompactionCommitSinkV2;
 import org.apache.hudi.sink.v2.HoodieSink;
 
+import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -53,6 +55,7 @@ import static org.apache.hudi.sink.utils.Pipelines.opUID;
 public class PipelinesV2 {
 
   private static final String SINK_V2_NAME = "sink_v2";
+  private static final String FLINK_1_18_VERSION = "1.18";
 
   /**
    * Construct a write pipeline based on {@link HoodieSink}, which is implemented
@@ -72,6 +75,8 @@ public class PipelinesV2 {
       RowType rowType,
       boolean overwrite,
       boolean isBounded) {
+    ValidationUtils.checkArgument(FlinkVersion.current().toString().compareTo(FLINK_1_18_VERSION) > 0,
+        "Hudi sink v2 is not supported with Flink version: " + FlinkVersion.current());
     HoodieSink hoodieSink = new HoodieSink(conf, rowType, overwrite, isBounded);
     return dataStream.sinkTo(hoodieSink)
         .setParallelism(getParallelismForSinkV2(conf))

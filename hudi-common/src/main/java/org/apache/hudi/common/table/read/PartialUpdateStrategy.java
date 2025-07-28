@@ -21,9 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.util.StringUtils;
 
 import org.apache.avro.Schema;
 
@@ -31,15 +29,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDefaultValue;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
-import static org.apache.hudi.common.util.ConfigUtils.toMap;
+import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
 
 /**
  * This class implements the detailed partial update logic for different partial update modes,
  * which is wrapped into partial update mergers
- * {@link BufferedRecordMergerFactory.CommitTimeBufferedRecordPartialUpdateMerger} and
- * {@link BufferedRecordMergerFactory.EventTimeBufferedRecordPartialUpdateMerger}.
+ * {@link BufferedRecordMergerFactory.CommitTimePartialRecordMerger} and
+ * {@link BufferedRecordMergerFactory.EventTimePartialRecordMerger}.
  */
 public class PartialUpdateStrategy<T> {
   private final HoodieReaderContext<T> readerContext;
@@ -108,7 +108,7 @@ public class PartialUpdateStrategy<T> {
     // for nested columns, we do not check the leaf level data type defaults.
     for (Schema.Field field : fields) {
       String fieldName = field.name();
-      Object defaultValue = field.defaultVal();
+      Object defaultValue = toJavaDefaultValue(field);
       Object newValue = readerContext.getValue(
           newRecord.getRecord(), newSchema, fieldName);
       if (defaultValue == newValue
@@ -119,7 +119,7 @@ public class PartialUpdateStrategy<T> {
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = readerContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
@@ -140,14 +140,17 @@ public class PartialUpdateStrategy<T> {
       String fieldName = field.name();
       Object newValue = readerContext.getValue(newRecord.getRecord(), newSchema, fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
+          && null != partialUpdateCustomMarker
           && (partialUpdateCustomMarker.equals(readerContext.getTypeConverter().castToString(newValue)))) {
-        updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+        updateValues.put(
+            field.pos(),
+            readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.constructEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = readerContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
@@ -175,11 +178,6 @@ public class PartialUpdateStrategy<T> {
   }
 
   static Map<String, String> parseMergeProperties(TypedProperties props) {
-    Map<String, String> properties = new HashMap<>();
-    String raw = props.getProperty(HoodieTableConfig.MERGE_PROPERTIES.key());
-    if (StringUtils.isNullOrEmpty(raw)) {
-      return properties;
-    }
-    return toMap(raw, ",");
+    return extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
   }
 }

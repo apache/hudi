@@ -107,7 +107,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode.name)
       assertEquals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
     } else {
-      if (StringUtils.isNullOrEmpty(metaClient.getTableConfig.getPreCombineField)) {
+      if (metaClient.getTableConfig.getPreCombineFieldsStr.isPresent && StringUtils.isNullOrEmpty(metaClient.getTableConfig.getPreCombineFieldsStr.get())) {
         assertEquals(classOf[OverwriteWithLatestAvroPayload].getName, metaClient.getTableConfig.getPayloadClass)
         assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode.name)
         assertEquals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
