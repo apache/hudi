@@ -64,7 +64,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
+import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.AVRO;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
@@ -135,8 +137,13 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
     // For tracking event time watermark.
     this.trackEventTimeWatermark = shouldTrackEventTimeWaterMarker(getHoodieTableMetaClient(), config);
-    this.keepConsistentLogicalTimestamp = ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
-    this.eventTimeFieldNameOpt = ConfigUtils.getEventTimeFieldName(config.getProps());
+    if (trackEventTimeWatermark) {
+      this.keepConsistentLogicalTimestamp = ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
+      this.eventTimeFieldNameOpt = ConfigUtils.getEventTimeFieldName(config.getProps());
+    } else {
+      this.keepConsistentLogicalTimestamp = false;
+      this.eventTimeFieldNameOpt = Option.empty();
+    }
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {
@@ -351,22 +358,17 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     }
   }
 
-  protected boolean shouldTrackEventTimeWaterMarkerBasedOnMergeMode(HoodieTableMetaClient metaClient) {
-    // Only for event time ordering mode.
-    return metaClient.getTableConfig().getRecordMergeMode() == RecordMergeMode.EVENT_TIME_ORDERING;
-  }
-
   /**
-   * To match previous behavior, we track event time watermarker when
+   * Event time watermarker is tracked when
    * 1. Record type is AVRO.
-   * 2. Original payload class is `DefaultHoodieRecordPayload` or
-   *    the config is set to true.
+   * 2. Event time ordering merge mode is used.
+   * 3. The flag is set.
    */
   boolean shouldTrackEventTimeWaterMarker(HoodieTableMetaClient metaClient,
                                           HoodieWriteConfig config) {
-    return config.getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.AVRO
-        && shouldTrackEventTimeWaterMarkerBasedOnMergeMode(metaClient)
-        && ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(config.getProps());
+    return config.getRecordMerger().getRecordType() == AVRO
+        && metaClient.getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
+        && ConfigUtils.shouldTrackEventTimeWaterMark(config.getProps());
   }
 
   /**

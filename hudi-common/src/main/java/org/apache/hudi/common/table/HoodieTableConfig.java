@@ -99,7 +99,6 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_M
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
@@ -230,12 +229,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
-
-  public static final ConfigProperty<String> LEGACY_PAYLOAD_CLASS_NAME = ConfigProperty
-      .key("hoodie.legacy.payload.class")
-      .noDefaultValue()
-      .sinceVersion("1.1.0")
-      .withDocumentation("The payload class previously used to populate the table is now deprecated and should be avoided in future use.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
   public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
@@ -808,10 +801,6 @@ public class HoodieTableConfig extends HoodieConfig {
     return HoodieRecordPayload.getPayloadClassName(this);
   }
 
-  public String getLegacyPayloadClass() {
-    return getStringOrDefault(LEGACY_PAYLOAD_CLASS_NAME, EMPTY_STRING);
-  }
-
   public String getRecordMergeStrategyId() {
     return getString(RECORD_MERGE_STRATEGY_ID);
   }
@@ -1102,13 +1091,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public Set<String> getMetadataPartitionsInflight() {
     return new HashSet<>(StringUtils.split(
-        getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, EMPTY_STRING),
+        getStringOrDefault(TABLE_METADATA_PARTITIONS_INFLIGHT, StringUtils.EMPTY_STRING),
         CONFIG_VALUES_DELIMITER));
   }
 
   public Set<String> getMetadataPartitions() {
     return new HashSet<>(
-        StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, EMPTY_STRING),
+        StringUtils.split(getStringOrDefault(TABLE_METADATA_PARTITIONS, StringUtils.EMPTY_STRING),
             CONFIG_VALUES_DELIMITER));
   }
 

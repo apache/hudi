@@ -102,27 +102,6 @@ class TestHoodieWriteHandle {
   }
 
   @Test
-  void testShouldTrackEventTimeWaterMarkerByPayloadEventTimeOrdering() {
-    // Setup: Event time ordering mode
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-
-    // Test using reflection to access private method
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerBaseOnMergeMode(mockMetaClient);
-
-    assertTrue(result, "Should track event time watermark when using EVENT_TIME_ORDERING");
-  }
-
-  @Test
-  void testShouldTrackEventTimeWaterMarkerByPayloadCommitTimeOrdering() {
-    // Setup: Commit time ordering mode
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarkerBaseOnMergeMode(mockMetaClient);
-
-    assertFalse(result, "Should not track event time watermark when using COMMIT_TIME_ORDERING");
-  }
-
-  @Test
   void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithEventTimeOrderingAndConfigEnabled() {
     // Setup: AVRO record type with event time ordering and config enabled
     when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
@@ -371,10 +350,6 @@ class TestHoodieWriteHandle {
                                   TaskContextSupplier taskContextSupplier,
                                   boolean preserveMetadata) {
       super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, preserveMetadata);
-    }
-
-    public boolean testShouldTrackEventTimeWaterMarkerBaseOnMergeMode(HoodieTableMetaClient metaClient) {
-      return shouldTrackEventTimeWaterMarkerBasedOnMergeMode(metaClient);
     }
 
     public boolean testShouldTrackEventTimeWaterMarker(HoodieTableMetaClient metaClient,

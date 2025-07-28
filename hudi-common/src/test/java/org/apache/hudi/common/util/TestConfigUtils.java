@@ -126,22 +126,22 @@ public class TestConfigUtils {
     TypedProperties props = new TypedProperties();
 
     // Test default value (should be false)
-    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMark(props));
 
     // Test when explicitly set to true
     props.put("hoodie.write.track.event.time.watermark", "true");
-    assertTrue(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+    assertTrue(ConfigUtils.shouldTrackEventTimeWaterMark(props));
 
     // Test when explicitly set to false
     props.put("hoodie.write.track.event.time.watermark", "false");
-    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMark(props));
 
     // Test with boolean value
     props.put("hoodie.write.track.event.time.watermark", true);
-    assertTrue(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+    assertTrue(ConfigUtils.shouldTrackEventTimeWaterMark(props));
 
     props.put("hoodie.write.track.event.time.watermark", false);
-    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMarkByConfig(props));
+    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMark(props));
   }
 
   @Test
