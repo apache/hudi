@@ -28,7 +28,7 @@ public class SecondaryIndexRawKey implements RawKey {
   private final String secondaryKey;
 
   public SecondaryIndexRawKey(String secondaryKey) {
-    this.secondaryKey = Objects.requireNonNull(secondaryKey);
+    this.secondaryKey = secondaryKey;
   }
 
   @Override
