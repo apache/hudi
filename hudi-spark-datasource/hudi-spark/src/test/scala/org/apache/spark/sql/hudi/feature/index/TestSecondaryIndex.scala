@@ -792,7 +792,8 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   private def testSecondaryIndexWithNullableColumns(tableType: String): Unit = {
     withSparkSqlSessionConfig(
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> "9",
-      "hoodie.embed.timeline.server" -> "false") {
+      "hoodie.embed.timeline.server" -> "false",
+      "hoodie.parquet.small.file.limit" -> "0") {
       withTempDir { tmp =>
         val tableName = generateTableName + s"_nullable_${tableType}"
         val basePath = s"${tmp.getCanonicalPath}/$tableName"

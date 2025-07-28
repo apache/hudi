@@ -64,7 +64,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
        |) using hudi
        | options (
        |  primaryKey ='id',
-       |  type = 'cow',
+       |  type = 'mor',
        |  preCombineField = 'ts',
        |  hoodie.metadata.enable = 'true',
        |  hoodie.metadata.record.index.enable = 'true',
@@ -123,6 +123,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     // Create shared temporary directory
     tmpDir = Utils.createTempDir()
 
+    spark.sql("set hoodie.parquet.small.file.limit=0")
     // Setup shared test data
     setupSharedTestData()
   }
@@ -170,6 +171,9 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     spark.sql(s"insert into $tableName" + " values('$a', 'sec$key', 40, 1001)")
     spark.sql(s"insert into $tableName" + " values('a$a', '$sec$', 50, 1002)")
     spark.sql(s"insert into $tableName" + " values('$$', '$$', 60, 1003)")
+    // generate some deleted records
+    spark.sql(s"insert into $tableName" + " values('$$3', '$$', 60, 1003)")
+    spark.sql(s"delete from $tableName" + " where id = '$$3'")
 
     val props = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",

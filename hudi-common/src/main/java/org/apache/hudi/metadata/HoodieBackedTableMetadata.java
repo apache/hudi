@@ -53,6 +53,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ClosableSortedDedupingIterator;
+import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -249,7 +250,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                       String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
                       HoodieKey key = new HoodieKey(rowKey, partitionName);
                       return new HoodieAvroRecord<>(key, payload);
-                    }, false));
+                    }, false))
+        .filter(r -> !r.getData().isDeleted());
   }
 
   /**
@@ -268,7 +270,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param keyEncodingFn      Optional function to encode keys before lookup
    * @return Pair data containing the looked up records keyed by their original keys
    */
-  private HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> doLookup(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
+  private HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> doLookupIndexRecordPairs(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
                                                                                SerializableFunctionUnchecked<String, String> keyEncodingFn) {
     final int numFileSlices = fileSlices.size();
     if (numFileSlices == 1) {
@@ -307,10 +309,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         };
 
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
-    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> result =
-        getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true)
+    return getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true)
             .mapToPair(p -> Pair.of(p.getLeft(), p.getRight()));
-    return result.filter((String k, HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
   }
 
   /**
@@ -361,10 +361,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
-    HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
-        getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true);
-
-    return result.filter((HoodieRecord<HoodieMetadataPayload> v) -> !v.getData().isDeleted());
+    return getEngineContext().mapGroupsByKey(persistedInitialPairData, processFunction, keySpace, true);
   }
 
   /**
@@ -463,7 +460,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!fileSlices.isEmpty(), () -> "No file slices found for partition: " + partitionName);
 
-    return doLookup(keys, partitionName, fileSlices, keyEncodingFn);
+    return doLookupIndexRecordPairs(keys, partitionName, fileSlices, keyEncodingFn);
   }
 
   public HoodieData<String> getRecordKeysFromSecondaryKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
@@ -513,8 +510,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       parallelism = (int) keys.map(k -> mappingFunction.apply(keyEncodingFn.apply(k), numFileSlices)).distinct().count();
       // In case of empty lookup set, we should avoid RDD with 0 partitions.
       parallelism = Math.max(parallelism, 1);
-      LOG.info("Repartitioning keys for partition {} from list data with parallelism: {}",
-          partitionName, parallelism);
+      LOG.info("Repartitioning keys for partition {} from list data with parallelism: {}", partitionName, parallelism);
       keys = getEngineContext().parallelize(keys.collectAsList(), parallelism);
     } else if (keys.getNumPartitions() < metadataConfig.getRepartitionMinPartitionsThreshold()) {
       LOG.info("Repartitioning keys for partition {} to {} partitions", partitionName, metadataConfig.getRepartitionDefaultPartitions());
@@ -639,11 +635,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                  List<String> keys,
                                                                                  FileSlice fileSlice,
                                                                                  boolean isFullKey) {
-    return lookupRecords(partitionName, keys, fileSlice,
-        metadataRecord -> {
-          HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
-          return new HoodieAvroRecord<>(new HoodieKey(payload.key, partitionName), payload);
-        }, isFullKey);
+    return new CloseableFilterIterator<>(
+      lookupRecords(partitionName, keys, fileSlice, metadataRecord -> {
+        HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
+        return new HoodieAvroRecord<>(new HoodieKey(payload.key, partitionName), payload);
+      }, isFullKey),
+        r -> !r.getData().isDeleted());
   }
 
   /**
@@ -865,7 +862,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
 
     return getRecordsByKeyPrefixes(keys, partitionName, false, SecondaryIndexKeyUtils::escapeSpecialChars)
-        .filter(hoodieRecord -> !hoodieRecord.getData().isDeleted())
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
   }
 
@@ -875,7 +871,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
 
     return readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::escapeSpecialChars)
-        .filter(hoodieRecord -> !hoodieRecord.getData().isDeleted())
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
   }
 
