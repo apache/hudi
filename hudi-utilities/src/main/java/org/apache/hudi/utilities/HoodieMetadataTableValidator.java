@@ -1136,7 +1136,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     secondaryKeys = secondaryKeys.sortBy(x -> x, true, numPartitions);
     for (int i = 0; i < numPartitions; i++) {
       List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
-      Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = HoodieDataUtils.dedupeAndCollectAsMap(
+      Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = HoodieDataUtils.collectPairDataAsMap(
           ((HoodieBackedTableMetadata) metadataContext.tableMetadata).getSecondaryIndexRecords(
               HoodieListData.lazy(secKeys), indexDefinition.getIndexName()));
       Map<String, Set<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
