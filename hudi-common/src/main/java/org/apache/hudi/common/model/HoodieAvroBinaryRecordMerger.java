@@ -20,8 +20,8 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 
@@ -31,8 +31,27 @@ public class HoodieAvroBinaryRecordMerger implements HoodieRecordMerger, Operati
   public static final HoodieAvroBinaryRecordMerger INSTANCE = new HoodieAvroBinaryRecordMerger();
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    throw new HoodieIOException("Not supported");
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older,
+                                                  Schema oldSchema,
+                                                  HoodieRecord newer,
+                                                  Schema newSchema,
+                                                  TypedProperties props) throws IOException {
+
+    if (older == null) {
+      return Option.of(Pair.of(newer, newSchema));
+    }
+    Comparable oldOrderingValue = older.getOrderingValue(oldSchema, props);
+    Comparable newOrderingValue = newer.getOrderingValue(newSchema, props);
+    // Handle delete cases.
+    if (older.isDelete(oldSchema, props) && oldOrderingValue == OrderingValues.getDefault()
+        || newer.isDelete(newSchema, props) && newOrderingValue == OrderingValues.getDefault()) {
+      return Option.of(Pair.of(newer, newSchema));
+    }
+    // Handle regular cases.
+    if (newOrderingValue.compareTo(oldOrderingValue) >= 0) {
+      return Option.of(Pair.of(newer, newSchema));
+    }
+    return Option.of(Pair.of(older, oldSchema));
   }
 
   @Override
