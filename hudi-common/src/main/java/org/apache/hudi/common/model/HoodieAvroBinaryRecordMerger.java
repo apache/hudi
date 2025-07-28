@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
+import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
 
@@ -43,6 +44,11 @@ public class HoodieAvroBinaryRecordMerger implements HoodieRecordMerger, Operati
       return Option.of(Pair.of(newer, newSchema));
     }
     // Handle regular cases.
+    // avro indexed record and avro binary record could have difference in string handling.
+    if ((newOrderingValue instanceof String && oldOrderingValue instanceof Utf8) || (newOrderingValue instanceof Utf8 && oldOrderingValue instanceof String)) {
+      newOrderingValue = newOrderingValue.toString();
+      oldOrderingValue = oldOrderingValue.toString();
+    }
     if (newOrderingValue.compareTo(oldOrderingValue) >= 0) {
       return Option.of(Pair.of(newer, newSchema));
     }

@@ -90,6 +90,20 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }
       });
+    } else if (recordType == HoodieRecordType.AVRO_BINARY) {
+      RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace, false,
+          Option.empty());
+      return genericRecords.toJavaRDD().map(gr -> {
+        String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
+            gr, precombineKey, false, props.getBoolean(
+                KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+                Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
+        try {
+          return DataSourceUtils.createHoodieAvroBinaryRecord(gr, orderingVal, keyGenerator.getKey(gr), scala.Option.apply(null));
+        } catch (IOException ioe) {
+          throw new HoodieIOException(ioe.getMessage(), ioe);
+        }
+      });
     } else if (recordType == HoodieRecordType.SPARK) {
       SparkKeyGeneratorInterface sparkKeyGenerator = (SparkKeyGeneratorInterface) keyGenerator;
       StructType structType = inputDataset.schema();
