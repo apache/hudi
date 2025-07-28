@@ -238,7 +238,17 @@ public class HoodieAvroBinaryRecord extends HoodieRecord<byte[]> {
     if (HoodieOperation.isDelete(getOperation())) {
       return true;
     }
-    return data == null;
+    if (data == null) {
+      return true;
+    }
+
+    // Use data field to decide.
+    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) == null) {
+      return false;
+    }
+
+    Object deleteMarker = HoodieAvroUtils.bytesToAvro(data, recordSchema).get(HOODIE_IS_DELETED_FIELD);
+    return deleteMarker instanceof Boolean && (boolean) deleteMarker;
   }
 
   @Override
