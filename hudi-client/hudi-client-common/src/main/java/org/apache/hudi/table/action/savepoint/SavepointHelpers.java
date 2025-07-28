@@ -52,10 +52,10 @@ public class SavepointHelpers {
     Option<HoodieInstant> lastInstant = table.getActiveTimeline()
         .getWriteTimeline()
         .filterCompletedAndCompactionInstants()
-        .lastInstant();
+        .lastInstantByCompletionTime();
     ValidationUtils.checkArgument(lastInstant.isPresent());
     ValidationUtils.checkArgument(lastInstant.get().requestedTime().equals(savepointTime),
-        savepointTime + " is not the last commit after restoring to savepoint, last commit was "
+        () -> savepointTime + " is not the last commit after restoring to savepoint, last commit was "
             + lastInstant.get().requestedTime());
   }
 

@@ -439,6 +439,11 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     return empty() ? Option.empty() : nthInstant(countInstants() - 1);
   }
 
+  public Option<HoodieInstant> lastInstantByCompletionTime() {
+    return Option.fromJavaOptional(getInstantsAsStream()
+        .max(instantComparator.completionTimeOrderedComparator()));
+  }
+
   @Override
   public Option<HoodieInstant> nthFromLastInstant(int n) {
     if (countInstants() < n + 1) {
@@ -504,6 +509,12 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   public Stream<HoodieInstant> getInstantsOrderedByCompletionTime() {
     return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
         .sorted(instantComparator.completionTimeOrderedComparator());
+  }
+
+  @Override
+  public Stream<HoodieInstant> getReverseOrderedInstantsByCompletionTime() {
+    return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
+        .sorted(instantComparator.completionTimeOrderedComparator().reversed());
   }
 
   @Override

@@ -22,12 +22,14 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
@@ -44,7 +46,6 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_TH
  * Plans the restore action and add a restore.requested meta file to timeline.
  */
 public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieRestorePlan>> {
-
 
   private static final Logger LOG = LoggerFactory.getLogger(RestorePlanActionExecutor.class);
 
@@ -65,7 +66,8 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
   @Override
   public Option<HoodieRestorePlan> execute() {
     final HoodieInstant restoreInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
-    try {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    try (CompletionTimeQueryView completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       // Get all the commits on the timeline after the provided commit time
       // rollback pending clustering instants first before other instants (See HUDI-3362)
       List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline()
@@ -76,9 +78,11 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               .collect(Collectors.toList());
 
       // Get all the commits on the timeline after the provided commit time
+      String completionTime = completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
+          .orElseThrow(() -> new HoodieException("Unable to find completion time for instant: " + savepointToRestoreTimestamp));
       List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
-              .getReverseOrderedInstants()
-              .filter(instant -> GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp))
+              .getReverseOrderedInstantsByCompletionTime()
+              .filter(instant -> GREATER_THAN.test(instant.getCompletionTime(), completionTime))
               .filter(instant -> !pendingClusteringInstantsToRollback.contains(instant))
               .collect(Collectors.toList());
 
@@ -90,11 +94,10 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
       HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);
       table.getActiveTimeline().saveToRestoreRequested(restoreInstant, restorePlan);
       table.getMetaClient().reloadActiveTimeline();
-      LOG.info("Requesting Restore with instant time " + restoreInstant);
+      LOG.info("Requesting Restore with instant time {}", restoreInstant);
       return Option.of(restorePlan);
-    } catch (HoodieIOException e) {
-      LOG.error("Got exception when saving restore requested file", e);
-      throw e;
+    } catch (Exception e) {
+      throw new HoodieException("Unable to restore to instant: " + savepointToRestoreTimestamp, e);
     }
   }
 }

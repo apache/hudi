@@ -555,6 +555,11 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   Option<HoodieInstant> lastInstant();
 
   /**
+   * @return last completed instant by completion time if available
+   */
+  Option<HoodieInstant> lastInstantByCompletionTime();
+
+  /**
    * Get hash of timeline.
    *
    * @return
@@ -605,6 +610,12 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
    * reverse the instants later on to use this method instead.
    */
   Stream<HoodieInstant> getReverseOrderedInstants();
+
+  /**
+   * Get the stream of completed instants in reverse order by completion time.
+   * @return a stream of sorted instants
+   */
+  Stream<HoodieInstant> getReverseOrderedInstantsByCompletionTime();
 
   /**
    * @return the latest completion time of the instants

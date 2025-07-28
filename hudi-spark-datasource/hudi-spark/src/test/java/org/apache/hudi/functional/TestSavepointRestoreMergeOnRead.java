@@ -48,7 +48,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -57,6 +56,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.functional.TestHoodieFileSystemViews.assertForFSVEquality;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -343,8 +343,123 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
   }
 
   @Test
-  void rollbackWithAsyncServices() throws Exception {
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+  void rollbackWithAsyncServices_compactionCompletesDuringCommit() {
+    HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigWithCompactionAndConcurrencyControl();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      final int numRecords = 10;
+      writeInitialCommitsForAsyncServicesTests(numRecords);
+      String inflightCommit = client.startCommit();
+      List<HoodieRecord> records = dataGen.generateUniqueUpdates(inflightCommit, numRecords);
+      JavaRDD<WriteStatus> writeStatus = writeClient.upsert(jsc.parallelize(records, 1), inflightCommit);
+
+      // Run compaction while delta-commit is in-flight
+      Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
+      HoodieWriteMetadata result = client.compact(compactionInstant.get());
+      client.commitCompaction(compactionInstant.get(), result, Option.empty());
+      // commit the inflight delta commit
+      client.commit(inflightCommit, writeStatus);
+
+      client.savepoint(inflightCommit, "user1", "Savepoint for commit that completed after compaction");
+
+      // write one more commit
+      String newCommitTime = client.startCommit();
+      records = dataGen.generateInserts(newCommitTime, numRecords);
+      writeStatus = client.insert(jsc.parallelize(records, 1), newCommitTime);
+      client.commit(newCommitTime, writeStatus);
+
+      // restore to savepoint
+      client.restoreToSavepoint(inflightCommit);
+      validateFilesMetadata(hoodieWriteConfig);
+      assertRowNumberEqualsTo(numRecords);
+      // ensure the compaction instant is still present because it was completed before the target of the restore
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
+          .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get())));
+    }
+  }
+
+  @Test
+  void rollbackWithAsyncServices_commitCompletesDuringCompaction() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigWithCompactionAndConcurrencyControl();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      final int numRecords = 10;
+      writeInitialCommitsForAsyncServicesTests(numRecords);
+      String inflightCommit = client.startCommit();
+      List<HoodieRecord> records = dataGen.generateUniqueDeleteRecords(inflightCommit, numRecords);
+      JavaRDD<WriteStatus> writeStatus = client.upsert(jsc.parallelize(records, 1), inflightCommit);
+
+      Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
+      HoodieWriteMetadata result = client.compact(compactionInstant.get());
+      // commit the inflight delta commit
+      client.commit(inflightCommit, writeStatus);
+      // commit the compaction instant after the delta commit
+      client.commitCompaction(compactionInstant.get(), result, Option.empty());
+
+      client.savepoint(inflightCommit, "user1", "Savepoint for commit that completed during compaction");
+
+      // write one more commit
+      String newCommitTime = writeClient.startCommit();
+      records = dataGen.generateInserts(newCommitTime, numRecords);
+      writeStatus = client.insert(jsc.parallelize(records, 1), newCommitTime);
+      client.commit(newCommitTime, writeStatus);
+
+      // restore to savepoint
+      client.restoreToSavepoint(inflightCommit);
+      validateFilesMetadata(hoodieWriteConfig);
+      assertRowNumberEqualsTo(20);
+      // ensure the compaction instant is still present because it was completed before the target of the restore
+      assertFalse(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
+          .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get())));
+    }
+  }
+
+  @Test
+  void rollbackWithAsyncServices_commitStartsAndFinishesDuringCompaction() {
+    HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigWithCompactionAndConcurrencyControl();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      final int numRecords = 10;
+      writeInitialCommitsForAsyncServicesTests(numRecords);
+      // Schedule a compaction
+      Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
+      // Start a delta commit
+      String inflightCommit = client.startCommit();
+      List<HoodieRecord> records = dataGen.generateUniqueDeleteRecords(inflightCommit, numRecords);
+      JavaRDD<WriteStatus> writeStatus = client.upsert(jsc.parallelize(records, 1), inflightCommit);
+
+      HoodieWriteMetadata result = client.compact(compactionInstant.get());
+      // commit the inflight delta commit
+      client.commit(inflightCommit, writeStatus);
+      // commit the compaction instant after the delta commit
+      client.commitCompaction(compactionInstant.get(), result, Option.empty());
+
+      client.savepoint(inflightCommit, "user1", "Savepoint for commit that completed during compaction");
+
+      // write one more commit
+      String newCommitTime = writeClient.startCommit();
+      records = dataGen.generateInserts(newCommitTime, numRecords);
+      writeStatus = client.insert(jsc.parallelize(records, 1), newCommitTime);
+      client.commit(newCommitTime, writeStatus);
+
+      // restore to savepoint
+      client.restoreToSavepoint(inflightCommit);
+      validateFilesMetadata(hoodieWriteConfig);
+      assertRowNumberEqualsTo(20);
+      // ensure the compaction instant is still present because it was completed before the target of the restore
+      assertFalse(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
+          .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get())));
+    }
+  }
+
+  private void writeInitialCommitsForAsyncServicesTests(int numRecords) {
+    for (int i = 0; i <= 3; i++) {
+      String newCommitTime = writeClient.startCommit();
+      List<HoodieRecord> records = i == 0 ? dataGen.generateInserts(newCommitTime, numRecords) : dataGen.generateUniqueUpdates(newCommitTime, numRecords);
+      JavaRDD<WriteStatus> writeStatus = i == 0 ? writeClient.insert(jsc.parallelize(records, 1), newCommitTime) : writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
+      writeClient.commit(newCommitTime, writeStatus);
+    }
+  }
+
+  private HoodieWriteConfig getHoodieWriteConfigWithCompactionAndConcurrencyControl() {
+    return getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(InProcessLockProvider.class)
@@ -357,42 +472,6 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
         .withRollbackUsingMarkers(true)
         .withProps(Collections.singletonMap(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"))
         .build();
-    List<HoodieRecord> allRecords = new ArrayList<>();
-    JavaRDD<WriteStatus> writeStatus = null;
-    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      final int numRecords = 10;
-      for (int i = 0; i <= 3; i++) {
-        String newCommitTime = writeClient.startCommit();
-        List<HoodieRecord> records = i == 0 ? dataGen.generateInserts(newCommitTime, numRecords) : dataGen.generateUniqueUpdates(newCommitTime, numRecords);
-        allRecords.addAll(records);
-        writeStatus = i == 0 ? writeClient.insert(jsc.parallelize(records, 1), newCommitTime) : writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
-        writeClient.commit(newCommitTime, writeStatus);
-      }
-      String inflightCommit = writeClient.startCommit();
-      List<HoodieRecord> records = dataGen.generateInserts(inflightCommit, numRecords);
-      allRecords.addAll(records);
-      writeStatus = writeClient.insert(jsc.parallelize(records, 1), inflightCommit);
-
-      // Run compaction while delta-commit is in-flight
-      Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
-      HoodieWriteMetadata result = client.compact(compactionInstant.get());
-      client.commitCompaction(compactionInstant.get(), result, Option.empty());
-      // commit the inflight delta commit
-      client.commit(inflightCommit, writeStatus);
-
-      client.savepoint(inflightCommit, "user1", "Savepoint for commit that completed after compaction");
-
-      // write one more commit
-      String newCommitTime = writeClient.startCommit();
-      records = dataGen.generateInserts(newCommitTime, numRecords);
-      writeStatus = writeClient.insert(jsc.parallelize(records, 1), newCommitTime);
-      writeClient.commit(newCommitTime, writeStatus);
-
-      // restore to savepoint
-      client.restoreToSavepoint(inflightCommit);
-      validateFilesMetadata(hoodieWriteConfig);
-      assertRowNumberEqualsTo(20);
-    }
   }
 
   private void validateFilesMetadata(HoodieWriteConfig writeConfig) {
