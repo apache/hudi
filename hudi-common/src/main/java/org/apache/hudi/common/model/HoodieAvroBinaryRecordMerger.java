@@ -36,18 +36,15 @@ public class HoodieAvroBinaryRecordMerger implements HoodieRecordMerger, Operati
                                                   HoodieRecord newer,
                                                   Schema newSchema,
                                                   TypedProperties props) throws IOException {
-
-    if (older == null) {
+    if (older == null || older.isDelete(oldSchema, props)) {
       return Option.of(Pair.of(newer, newSchema));
     }
     Comparable oldOrderingValue = older.getOrderingValue(oldSchema, props);
     Comparable newOrderingValue = newer.getOrderingValue(newSchema, props);
-    // Handle delete cases.
-    if (older.isDelete(oldSchema, props) && oldOrderingValue == OrderingValues.getDefault()
-        || newer.isDelete(newSchema, props) && newOrderingValue == OrderingValues.getDefault()) {
+    if (newOrderingValue == OrderingValues.getDefault()
+        || oldOrderingValue == OrderingValues.getDefault()) {
       return Option.of(Pair.of(newer, newSchema));
     }
-    // Handle regular cases.
     if (newOrderingValue.compareTo(oldOrderingValue) >= 0) {
       return Option.of(Pair.of(newer, newSchema));
     }

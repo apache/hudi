@@ -90,7 +90,16 @@ public class ConfigUtils {
     } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
-    return orderField == null ? null : orderField.split(",");
+    return StringUtils.isNullOrEmpty(orderField) ? null : cleanFields(orderField);
+  }
+
+  public static String[] cleanFields(String orderingField) {
+    String[] fields = orderingField.split(",");
+    List<String> nonEmptyFields = Arrays.stream(fields)
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toList());
+    return nonEmptyFields.isEmpty() ? null : nonEmptyFields.toArray(new String[0]);
   }
 
   /**

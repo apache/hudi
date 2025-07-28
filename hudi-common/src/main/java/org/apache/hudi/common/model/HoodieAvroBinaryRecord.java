@@ -30,6 +30,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
@@ -111,6 +112,11 @@ public class HoodieAvroBinaryRecord extends HoodieRecord<byte[]> {
     if (orderingValue != null) {
       return orderingValue;
     }
+    if (data == null) {
+      orderingValue = OrderingValues.getDefault();
+      return orderingValue;
+    }
+
     String[] orderingFields = ConfigUtils.getOrderingFields(props);
     if (orderingFields != null) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
@@ -159,12 +165,14 @@ public class HoodieAvroBinaryRecord extends HoodieRecord<byte[]> {
 
   @Override
   protected void writeRecordPayload(byte[] payload, Kryo kryo, Output output) {
-    kryo.writeObject(output, payload);
+    Serializer<byte[]> avroSerializer = kryo.getSerializer(byte[].class);
+    kryo.writeObjectOrNull(output, payload, avroSerializer);
   }
 
   @Override
   protected byte[] readRecordPayload(Kryo kryo, Input input) {
-    return kryo.readObject(input, byte[].class);
+    Serializer<byte[]> avroSerializer = kryo.getSerializer(byte[].class);
+    return kryo.readObjectOrNull(input, byte[].class, avroSerializer);
   }
 
   @Override
@@ -237,6 +245,10 @@ public class HoodieAvroBinaryRecord extends HoodieRecord<byte[]> {
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+    if (data == null) {
+      return true;
+    }
+
     IndexedRecord avroRecord = HoodieAvroUtils.bytesToAvro(data, recordSchema);
     return avroRecord.equals(SENTINEL);
   }
