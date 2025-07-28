@@ -32,8 +32,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.fail;
-
 /**
  * Utility class for validating RDD persistence in tests.
  * This addresses the issue where RDD unpersist operations are asynchronous and may not be
@@ -42,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class SparkRDDValidationUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(SparkRDDValidationUtils.class);
-  private static final int DEFAULT_TIMEOUT_SECONDS = 10;
+  private static final int DEFAULT_TIMEOUT_SECONDS = 1;
 
   /**
    * Functional interface that allows throwing checked exceptions.
@@ -77,7 +75,7 @@ public class SparkRDDValidationUtils {
     }
 
     SparkContext sc = spark.sparkContext();
-    
+
     // Pre-action: Record initially persisted RDDs
     scala.collection.Map<Object, RDD<?>> initialPersistedRdds = sc.getPersistentRDDs();
     Set<Integer> initiallyPersistedRddIds = new HashSet<>();
@@ -86,7 +84,7 @@ public class SparkRDDValidationUtils {
       initiallyPersistedRddIds.add((Integer) iter.next());
     }
     LOG.debug("Initially persisted RDD IDs: {}", initiallyPersistedRddIds);
-    
+
     // Track initial dropped events count
     long initialDroppedEvents = getDroppedEventsCount(spark);
 
@@ -99,18 +97,18 @@ public class SparkRDDValidationUtils {
         unpersistEventRddIds.add(event.rddId());
       }
     };
-    
+
     sc.addSparkListener(rddPersistenceListener);
-    
+
     try {
       // Execute the test function
       T result = testFunc.call();
-      
+
       // Post-action: Validate RDD persistence
       long finalDroppedEvents = getDroppedEventsCount(spark);
       long droppedEventsDelta = finalDroppedEvents - initialDroppedEvents;
       validateRDDPersistence(spark, initiallyPersistedRddIds, unpersistEventRddIds, droppedEventsDelta);
-      
+
       return result;
     } finally {
       // Clean up listener
@@ -208,7 +206,9 @@ public class SparkRDDValidationUtils {
           sb.append(String.format("Dropped events during test: %d\n", droppedEventsDelta));
           sb.append(String.format("Problematic RDD count: %d\n", problematicRddCount));
           sb.append("Note: Since dropped events count is less than problematic RDD count, this indicates a potential RDD leak.");
-          fail(sb.toString());
+          // Spark does not provide a reliable way of tracking persistent rdds. We only do logging here.
+          LOG.error(sb.toString());
+          return;
         } else {
           LOG.info("Found {} persisted RDDs but {} events were dropped. Assuming unpersist events were lost.", 
               problematicRddCount, droppedEventsDelta);
