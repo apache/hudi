@@ -159,9 +159,10 @@ public class BufferedRecordMergerFactory {
   private static class EventTimeRecordMerger<T> implements BufferedRecordMerger<T> {
     protected final HoodieReaderContext<T> readerContext;
 
-    public EventTimeBufferedRecordMerger(HoodieReaderContext<T> readerContext) {
+    public EventTimeRecordMerger(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
     }
+
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(readerContext, existingRecord, newRecord)) {

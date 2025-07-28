@@ -46,7 +46,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
+import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -269,7 +269,7 @@ object HoodieDatasetBulkInsertHelper
       nestedFieldPaths.map(nestedFieldPath => {
         if (nestedFieldPath._2) {
           hoodieUTF8StringFactory.wrapUTF8String(
-            getNestedInternalRowValue(r, preCombineFieldPath._1).asInstanceOf[UTF8String])
+            getNestedInternalRowValue(r, nestedFieldPath._1).asInstanceOf[UTF8String])
         } else {
           getNestedInternalRowValue(r, nestedFieldPath._1).asInstanceOf[Comparable[_]]
         }
