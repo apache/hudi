@@ -130,9 +130,9 @@ public class StreamReadMonitoringFunction
       @Nullable PartitionPruners.PartitionPruner partitionPruner) {
     this.conf = conf;
     this.path = path;
-    this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
-    this.cdcEnabled = conf.getBoolean(FlinkOptions.CDC_ENABLED);
-    this.splitsLimit = conf.getInteger(FlinkOptions.READ_SPLITS_LIMIT);
+    this.interval = conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
+    this.cdcEnabled = conf.get(FlinkOptions.CDC_ENABLED);
+    this.splitsLimit = conf.get(FlinkOptions.READ_SPLITS_LIMIT);
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(conf)
         .path(path)
@@ -254,7 +254,7 @@ public class StreamReadMonitoringFunction
     }
 
     List<MergeOnReadInputSplit> inputSplits = result.getInputSplits();
-    LOG.info("Table {} : Read {} inputsplits for current instant", conf.getString(FlinkOptions.TABLE_NAME), inputSplits.size());
+    LOG.info("Table {} : Read {} inputsplits for current instant", conf.get(FlinkOptions.TABLE_NAME), inputSplits.size());
     int endIndex = Math.min(splitsLimit, inputSplits.size());
     for (int index = 0; index < endIndex; index++) {
       context.collect(inputSplits.get(index));
@@ -275,7 +275,7 @@ public class StreamReadMonitoringFunction
             + "---------- consumed to instant: {}\n"
             + "---------- total sent {} inputsplits out of {}, percent is {}%\n"
             + "------------------------------------------------------------",
-        conf.getString(FlinkOptions.TABLE_NAME), this.issuedInstant, sentSplits, totalSplits, sentPercent);
+        conf.get(FlinkOptions.TABLE_NAME), this.issuedInstant, sentSplits, totalSplits, sentPercent);
     if (result.isEmpty()) {
       LOG.warn("No new files to read for current run.");
     }
