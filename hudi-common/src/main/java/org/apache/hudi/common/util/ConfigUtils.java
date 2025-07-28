@@ -91,7 +91,7 @@ public class ConfigUtils {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
     // to do: fix. chase how we ended up with "null" string as payload ordering field and fix below line.
-    return (orderField == null || orderField.equals("null")) ? null : orderField.split(",");
+    return (StringUtils.isNullOrEmpty(orderField) || orderField.equals("null")) ? null : orderField.split(",");
   }
 
   /**

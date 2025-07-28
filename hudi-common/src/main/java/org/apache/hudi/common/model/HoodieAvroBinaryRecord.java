@@ -61,6 +61,7 @@ public class HoodieAvroBinaryRecord extends HoodieRecord<byte[]> {
 
   public HoodieAvroBinaryRecord(HoodieRecord<byte[]> record) {
     super(record);
+    this.orderingValue = record.orderingValue;
   }
 
   public HoodieAvroBinaryRecord(
@@ -101,9 +102,6 @@ public class HoodieAvroBinaryRecord extends HoodieRecord<byte[]> {
 
   @Override
   public byte[] getData() {
-    if (data == null) {
-      throw new IllegalStateException("Payload already deflated for record.");
-    }
     return data;
   }
 
@@ -253,11 +251,8 @@ public class HoodieAvroBinaryRecord extends HoodieRecord<byte[]> {
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
-    if (data == null) {
-      return true;
-    }
-    IndexedRecord avroRecord = HoodieAvroUtils.bytesToAvro(data, recordSchema);
-    return avroRecord.equals(SENTINEL);
+    // to fix, sentinal.
+    return false;
   }
 
   @Override

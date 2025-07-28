@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
@@ -251,7 +252,7 @@ public class DataSourceUtils {
       JavaRDD<HoodieRecord> records = hoodieKeysAndLocations.map(tuple -> {
         HoodieRecord record = recordType == HoodieRecord.HoodieRecordType.AVRO
             ? new HoodieAvroRecord(tuple._1, new EmptyHoodieRecordPayload())
-            : (recordType == HoodieRecord.HoodieRecordType.AVRO_BINARY ?  new HoodieAvroBinaryRecord(tuple._1, null)
+            : (recordType == HoodieRecord.HoodieRecordType.AVRO_BINARY ?  new HoodieAvroBinaryRecord(tuple._1, null, OrderingValues.getDefault())
             : new HoodieEmptyRecord(tuple._1, HoodieRecord.HoodieRecordType.SPARK));
         record.setCurrentLocation(tuple._2.get());
         return record;
@@ -298,7 +299,7 @@ public class DataSourceUtils {
 
   public static HoodieRecord createHoodieAvroBinaryRecord(GenericRecord gr, HoodieKey hKey,
                                                 scala.Option<HoodieRecordLocation> recordLocation) throws IOException {
-    HoodieAvroBinaryRecord record = new HoodieAvroBinaryRecord(hKey, HoodieAvroUtils.avroToBytes(gr));
+    HoodieAvroBinaryRecord record = new HoodieAvroBinaryRecord(hKey, HoodieAvroUtils.avroToBytes(gr), OrderingValues.getDefault());
     if (recordLocation.isDefined()) {
       record.setCurrentLocation(recordLocation.get());
     }

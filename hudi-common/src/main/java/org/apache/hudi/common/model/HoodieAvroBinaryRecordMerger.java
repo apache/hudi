@@ -38,8 +38,8 @@ public class HoodieAvroBinaryRecordMerger implements HoodieRecordMerger, Operati
     Comparable oldOrderingValue = older.getOrderingValue(oldSchema, props);
     Comparable newOrderingValue = newer.getOrderingValue(newSchema, props);
     // Handle delete cases.
-    if (older.isDelete(oldSchema, props) && oldOrderingValue == OrderingValues.getDefault()
-        || newer.isDelete(newSchema, props) && newOrderingValue == OrderingValues.getDefault()) {
+    if ((older.isDelete(oldSchema, props) && oldOrderingValue == OrderingValues.getDefault())
+        || (newer.isDelete(newSchema, props) && newOrderingValue == OrderingValues.getDefault())) {
       return Option.of(Pair.of(newer, newSchema));
     }
     // Handle regular cases.
