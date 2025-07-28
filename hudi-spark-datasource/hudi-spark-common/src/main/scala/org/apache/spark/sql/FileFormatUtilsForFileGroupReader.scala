@@ -126,9 +126,9 @@ object FileFormatUtilsForFileGroupReader extends SparkAdapterSupport {
   }
 
   def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame = {
-    val logRel = LogicalRelation(relation, isStreaming = true)
-    val resolvedSchema = logRel.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
-    Dataset.ofRows(sqlContext.sparkSession, applyFiltersToPlan(logRel, requiredSchema, resolvedSchema,
+    val logicalRelation = LogicalRelation(relation, isStreaming = true)
+    val resolvedSchema = logicalRelation.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
+    Dataset.ofRows(sqlContext.sparkSession, applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
       relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
   }
 }

@@ -27,8 +27,9 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV1}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
+import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -55,8 +56,9 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
                            writeTableVersion: HoodieTableVersion)
   extends Source with Logging with Serializable with SparkAdapterSupport {
 
-  private lazy val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
-    HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean
+  private lazy val enableFileGroupReader = SparkConfigUtils
+    .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
+
 
   private lazy val tableType = metaClient.getTableType
 
@@ -150,7 +152,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
           DataSourceReadOptions.START_COMMIT.key()-> startCommitTime(startOffset),
           DataSourceReadOptions.END_COMMIT.key() -> endOffset.offsetCommitTime
         )
-        if (useNewParquetFileFormat) {
+        if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
               sqlContext, metaClient, parameters ++ cdcOptions, None, false).build()
@@ -173,7 +175,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
           DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime,
           INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandlingMode.name
         )
-        if (useNewParquetFileFormat) {
+        if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), false)
               .build()

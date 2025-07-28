@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, 
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV2}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
+import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -53,8 +54,8 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
 
   private lazy val tableType = metaClient.getTableType
 
-  private lazy val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
-    HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean
+  private lazy val enableFileGroupReader = SparkConfigUtils
+    .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
 
   private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
@@ -127,7 +128,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
           DataSourceReadOptions.START_COMMIT.key() -> startCompletionTime,
           DataSourceReadOptions.END_COMMIT.key() -> endOffset.offsetCommitTime
         )
-        if (useNewParquetFileFormat) {
+        if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
               sqlContext, metaClient, parameters ++ cdcOptions, None, false, rangeType).build()
@@ -150,7 +151,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
           DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime
         )
 
-        if (useNewParquetFileFormat) {
+        if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), false, rangeType)
               .build()

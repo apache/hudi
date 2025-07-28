@@ -297,8 +297,8 @@ object DefaultSource {
         Option(schema)
       }
 
-      val useNewParquetFileFormat = parameters.getOrElse(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(),
-        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue().toString).toBoolean &&
+      val enableFileGroupReader = SparkConfigUtils
+        .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
         !metaClient.isMetadataTable && (globPaths == null || globPaths.isEmpty)
       lazy val tableVersion = if (SparkConfigUtils.containsConfigProperty(parameters, INCREMENTAL_READ_TABLE_VERSION)) {
         Integer.parseInt(parameters(INCREMENTAL_READ_TABLE_VERSION.key))
@@ -309,7 +309,7 @@ object DefaultSource {
       if (metaClient.getCommitsTimeline.filterCompletedInstants.countInstants() == 0) {
         new EmptyRelation(sqlContext, resolveSchema(metaClient, parameters, Some(schema)))
       } else if (isCdcQuery) {
-        if (useNewParquetFileFormat) {
+        if (enableFileGroupReader) {
           if (tableType == COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
               sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
@@ -326,14 +326,14 @@ object DefaultSource {
           case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
                (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
                (MERGE_ON_READ, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) =>
-            if (useNewParquetFileFormat) {
+            if (enableFileGroupReader) {
               new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
                 sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
             } else {
               resolveBaseFileOnlyRelation(sqlContext, globPaths, userSchema, metaClient, parameters)
             }
           case (COPY_ON_WRITE, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            (hoodieTableSupportsCompletionTime, useNewParquetFileFormat) match {
+            (hoodieTableSupportsCompletionTime, enableFileGroupReader) match {
               case (true, true) => new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable, RangeType.CLOSED_CLOSED).build()
               case (true, false) => new IncrementalRelationV2(sqlContext, parameters, userSchema, metaClient, RangeType.CLOSED_CLOSED)
@@ -343,7 +343,7 @@ object DefaultSource {
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-            if (useNewParquetFileFormat) {
+            if (enableFileGroupReader) {
               new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
                 sqlContext, metaClient, parameters, userSchema, isBootstrap = false).build()
             } else {
@@ -351,7 +351,7 @@ object DefaultSource {
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, true) =>
-            if (useNewParquetFileFormat) {
+            if (enableFileGroupReader) {
               new HoodieMergeOnReadSnapshotHadoopFsRelationFactory(
                 sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
             } else {
@@ -359,7 +359,7 @@ object DefaultSource {
             }
 
           case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
-            (hoodieTableSupportsCompletionTime, useNewParquetFileFormat) match {
+            (hoodieTableSupportsCompletionTime, enableFileGroupReader) match {
               case (true, true) => new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(
                 sqlContext, metaClient, parameters, userSchema, isBootstrappedTable).build()
               case (true, false) => MergeOnReadIncrementalRelationV2(sqlContext, parameters, metaClient, userSchema)
@@ -369,7 +369,7 @@ object DefaultSource {
             }
 
           case (_, _, true) =>
-            if (useNewParquetFileFormat) {
+            if (enableFileGroupReader) {
               new HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(
                 sqlContext, metaClient, parameters, userSchema, isBootstrap = true).build()
             } else {
