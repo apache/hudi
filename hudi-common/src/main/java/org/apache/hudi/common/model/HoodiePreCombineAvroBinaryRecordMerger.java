@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 
@@ -31,22 +32,46 @@ public class HoodiePreCombineAvroBinaryRecordMerger extends HoodieAvroRecordMerg
 
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return Option.of(preCombine(older, oldSchema, newer, newSchema, props));
+    // To be fixed.
+    // if newer is deleted and default ordering value, return new.
+    // if newer is deleted and non default ordering value, compare w/ old and return.
+    // if old is deleted, and default ordering value, return new.
+    // if not, compare ordering values and return the record that has higher ord value.
+
+    try {
+      Option<Pair<HoodieRecord, Schema>> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
+      if (deleteHandlingResult != null) {
+        return deleteHandlingResult;
+      }
+
+      if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+        return Option.of(Pair.of(older, oldSchema));
+      } else {
+        return Option.of(Pair.of(newer, newSchema));
+      }
+
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to deser records ", e);
+    }
   }
 
   @SuppressWarnings("rawtypes, unchecked")
   private Pair<HoodieRecord, Schema> preCombine(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) {
     // To be fixed.
-    HoodieRecordPayload newerPayload = ((HoodieAvroRecord) newer).getData();
-    HoodieRecordPayload olderPayload = ((HoodieAvroRecord) older).getData();
-    HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema, props);
-    if (payload == olderPayload) {
-      return Pair.of(older, oldSchema);
-    } else if (payload == newerPayload) {
-      return Pair.of(newer, newSchema);
-    } else {
-      HoodieRecord mergedRecord = new HoodieAvroRecord(newer.getKey(), payload, newer.getOperation());
-      return Pair.of(mergedRecord, newSchema);
+    throw new HoodieIOException("Not implemented");
+  }
+
+  protected Option<Pair<HoodieRecord, Schema>> handleDeletes(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    // if newer is delete,
+    if (newer.isDelete(newSchema, props)) {
+      // Delete record
+      return Option.empty();
     }
+
+    if (older.isDelete(oldSchema, props)) {
+      // use natural order for delete record
+      return Option.of(Pair.of(newer, newSchema));
+    }
+    return null;
   }
 }
