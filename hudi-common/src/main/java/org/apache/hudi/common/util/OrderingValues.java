@@ -27,7 +27,8 @@ import java.util.function.Function;
  * Factory class for ordering values.
  */
 public class OrderingValues {
-  public static final Comparable<?> DEFAULT_VALUE = org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+  // Please do not make this variable public and always use `OrderingValues.getDefault` instead.
+  private static final Comparable<?> DEFAULT_VALUE = org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
   /**
    * Creates an {@code OrderingValue} with given values.

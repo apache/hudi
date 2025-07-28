@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.expression.Predicate;
@@ -74,7 +75,6 @@ import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
-import static org.apache.hudi.common.util.OrderingValues.DEFAULT_VALUE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -432,7 +432,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // New record is delete with default ordering value.
     newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, DEFAULT_VALUE, newRecord, 1, true);
+        new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), newRecord, 1, true);
     result = merger.deltaMerge(newBufferedRecord, null);
     assertTrue(result.isPresent());
     assertEquals(newRecord, result.get().getRecord());
@@ -578,7 +578,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // new record has default ordering value.
     newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, DEFAULT_VALUE, newRecord, 1, true);
+        new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), newRecord, 1, true);
     result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertTrue(result.isDelete());
     assertEquals(newRecord, result.getMergedRecord());
