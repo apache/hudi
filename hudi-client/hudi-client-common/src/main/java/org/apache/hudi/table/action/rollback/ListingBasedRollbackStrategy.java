@@ -280,6 +280,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     return hoodieRollbackRequests;
   }
 
+  // TODO: does this make sense? won't we rollback all the log files leading up to this? how would this handle multi-file format
   private List<StoragePathInfo> listAllFilesSinceCommit(String commit,
                                                         String baseFileExtension,
                                                         String partitionPath,

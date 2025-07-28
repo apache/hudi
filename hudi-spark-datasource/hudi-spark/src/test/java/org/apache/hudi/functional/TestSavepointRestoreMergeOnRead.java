@@ -21,14 +21,24 @@ package org.apache.hudi.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -38,11 +48,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.functional.TestHoodieFileSystemViews.assertForFSVEquality;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -328,6 +340,72 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
       assertRowNumberEqualsTo(20);
     }
+  }
+
+  @Test
+  void rollbackWithAsyncServices() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(3) // the 3rd delta_commit triggers compaction
+            .withInlineCompaction(false)
+            .withScheduleInlineCompaction(false)
+            .build())
+        .withRollbackUsingMarkers(true)
+        .withProps(Collections.singletonMap(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"))
+        .build();
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    JavaRDD<WriteStatus> writeStatus = null;
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      final int numRecords = 10;
+      for (int i = 0; i <= 3; i++) {
+        String newCommitTime = writeClient.startCommit();
+        List<HoodieRecord> records = i == 0 ? dataGen.generateInserts(newCommitTime, numRecords) : dataGen.generateUniqueUpdates(newCommitTime, numRecords);
+        allRecords.addAll(records);
+        writeStatus = i == 0 ? writeClient.insert(jsc.parallelize(records, 1), newCommitTime) : writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
+        writeClient.commit(newCommitTime, writeStatus);
+      }
+      String inflightCommit = writeClient.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(inflightCommit, numRecords);
+      allRecords.addAll(records);
+      writeStatus = writeClient.insert(jsc.parallelize(records, 1), inflightCommit);
+
+      // Run compaction while delta-commit is in-flight
+      Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
+      HoodieWriteMetadata result = client.compact(compactionInstant.get());
+      client.commitCompaction(compactionInstant.get(), result, Option.empty());
+      // commit the inflight delta commit
+      client.commit(inflightCommit, writeStatus);
+
+      client.savepoint(inflightCommit, "user1", "Savepoint for commit that completed after compaction");
+
+      // write one more commit
+      String newCommitTime = writeClient.startCommit();
+      records = dataGen.generateInserts(newCommitTime, numRecords);
+      writeStatus = writeClient.insert(jsc.parallelize(records, 1), newCommitTime);
+      writeClient.commit(newCommitTime, writeStatus);
+
+      // restore to savepoint
+      client.restoreToSavepoint(inflightCommit);
+      validateFilesMetadata(hoodieWriteConfig);
+      assertRowNumberEqualsTo(20);
+    }
+  }
+
+  private void validateFilesMetadata(HoodieWriteConfig writeConfig) {
+    HoodieTableFileSystemView fileListingBasedView = FileSystemViewManager.createInMemoryFileSystemView(context, metaClient,
+        HoodieMetadataConfig.newBuilder().enable(false).build());
+    FileSystemViewStorageConfig viewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(writeConfig.getProps())
+        .withStorageType(FileSystemViewStorageType.MEMORY).build();
+    HoodieTableFileSystemView metadataBasedView = (HoodieTableFileSystemView) FileSystemViewManager
+        .createViewManager(context, writeConfig.getMetadataConfig(), viewStorageConfig, writeConfig.getCommonConfig(),
+            (SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata>) v1 ->
+                metaClient.getTableFormat().getMetadataFactory().create(context, metaClient.getStorage(), writeConfig.getMetadataConfig(), writeConfig.getBasePath()))
+        .getFileSystemView(basePath);
+    assertForFSVEquality(fileListingBasedView, metadataBasedView, true, Option.empty());
   }
 
   private void upsertBatch(SparkRDDWriteClient client, List<HoodieRecord> baseRecordsToUpdate) throws IOException {

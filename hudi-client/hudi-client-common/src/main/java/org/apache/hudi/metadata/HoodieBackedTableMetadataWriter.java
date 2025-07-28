@@ -1755,6 +1755,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       if (validateCompactionScheduling(inFlightInstantTimestamp, lastInstant.get().requestedTime())) {
         String latestDeltacommitTime = lastInstant.get().requestedTime();
         LOG.info("Latest deltacommit time found is {}, running compaction operations.", latestDeltacommitTime);
+        if (metadataMetaClient.reloadActiveTimeline().filterInflightsAndRequested().countInstants() > 0) {
+          LOG.warn("inflights!!!");
+        }
         compactIfNecessary(writeClient, Option.of(latestDeltacommitTime));
       }
       writeClient.archive();
@@ -1813,6 +1816,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // IMPORTANT: Trigger compaction with max instant time that is smaller than(or equals) the earliest pending instant from DT.
     // The compaction planner will manage to filter out the log files that finished with greater completion time.
     // see BaseHoodieCompactionPlanGenerator.generateCompactionPlan for more details.
+    if (metadataMetaClient.getActiveTimeline().getCommitTimeline().countInstants() > 0) {
+      LOG.warn("HERE!!!");
+    }
     HoodieTimeline metadataCompletedTimeline = metadataMetaClient.getActiveTimeline().filterCompletedInstants();
     final String compactionInstantTime = dataMetaClient.reloadActiveTimeline()
         // The filtering strategy is kept in line with the rollback premise, if an instant is pending on DT but completed on MDT,
