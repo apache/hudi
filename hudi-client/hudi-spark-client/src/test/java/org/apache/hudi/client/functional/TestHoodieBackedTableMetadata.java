@@ -302,7 +302,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     // Compaction has not yet kicked in. Verify all the log files
     // for the metadata records persisted on disk as per the config.
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000001");
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000001", metadataTableWriteConfig);
     }, "Metadata table should have valid log files!");
 
     verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table);
@@ -314,7 +314,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     // Compaction should be triggered by now. Let's verify the log files
     // if any for the metadata records persisted on disk as per the config.
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000002");
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "0000002", metadataTableWriteConfig);
     }, "Metadata table should have valid log files!");
 
     // Verify the base file created by the just completed compaction.
@@ -328,7 +328,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, "0000007", UPSERT);
 
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "7");
+      verifyMetadataRecordKeyExcludeFromPayloadLogFiles(table, metadataMetaClient, "7", metadataTableWriteConfig);
     }, "Metadata table should have valid log files!");
 
     assertDoesNotThrow(() -> {
@@ -463,7 +463,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    * @throws IOException
    */
   private void verifyMetadataRecordKeyExcludeFromPayloadLogFiles(HoodieTable table, HoodieTableMetaClient metadataMetaClient,
-                                                                 String latestCommitTimestamp) throws IOException {
+                                                                 String latestCommitTimestamp, HoodieWriteConfig metadataTableWriteConfig) throws IOException {
     table.getHoodieView().sync();
 
     // Compaction should not be triggered yet. Let's verify no base file
@@ -481,7 +481,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     verifyMetadataRawRecords(table, logFiles);
 
     // Verify the in-memory materialized and merged records
-    verifyMetadataMergedRecords(metadataMetaClient, logFiles, latestCommitTimestamp);
+    verifyMetadataMergedRecords(metadataMetaClient, logFiles, latestCommitTimestamp, metadataTableWriteConfig);
   }
 
   /**
@@ -534,7 +534,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
    * @param logFiles              - Metadata table log files
    * @param latestCommitTimestamp - Latest commit timestamp
    */
-  private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<HoodieLogFile> logFiles, String latestCommitTimestamp) {
+  private void verifyMetadataMergedRecords(HoodieTableMetaClient metadataMetaClient, List<HoodieLogFile> logFiles, String latestCommitTimestamp, HoodieWriteConfig metadataTableWriteConfig) {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     HoodieAvroReaderContext readerContext = new HoodieAvroReaderContext(metadataMetaClient.getStorageConf(), metadataMetaClient.getTableConfig(), Option.empty(), Option.empty());
     HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
@@ -547,6 +547,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
         .withRequestedSchema(schema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
+        .withEnableOptimizedLogBlockScan(metadataTableWriteConfig.getMetadataConfig().isOptimizedLogBlocksScanEnabled())
         .build();
 
     try (ClosableIterator<HoodieRecord<IndexedRecord>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {

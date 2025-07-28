@@ -364,7 +364,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
     private boolean sortOutput = false;
-    private boolean enableOptimizedLogBlockScan = false;
+    private Boolean enableOptimizedLogBlockScan = false;
     private Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback = Option.empty();
     private FileGroupRecordBufferLoader<T> recordBufferLoader;
 
@@ -492,6 +492,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(baseFileOption != null, "Base file option is required");
       ValidationUtils.checkArgument(logFiles != null, "Log files stream is required");
       ValidationUtils.checkArgument(partitionPath != null, "Partition path is required");
+      if (enableOptimizedLogBlockScan == null) {
+        // check to see if props contains this key if not explicitly set
+        // otherwise use the default value from the config itself
+        enableOptimizedLogBlockScan = Boolean.valueOf(ConfigUtils.getRawValueWithAltKeys(props, HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, true));
+      }
 
       if (recordBufferLoader == null) {
         recordBufferLoader = FileGroupRecordBufferLoader.createDefault();
