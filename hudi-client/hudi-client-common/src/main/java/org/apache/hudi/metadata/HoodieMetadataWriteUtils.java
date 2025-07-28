@@ -172,7 +172,7 @@ public class HoodieMetadataWriteUtils {
             .logFileDataBlockMaxSize(maxLogFileSizeBytes)
                                .withBloomFilterType(writeConfig.getMetadataConfig().getBloomFilterType())
                                .withBloomFilterNumEntries(writeConfig.getMetadataConfig().getBloomFilterNumEntries())
-                               .withBloomFilterFpp(writeConfig.getMetadataConfig().getBloomFilterFPP())
+                               .withBloomFilterFpp(writeConfig.getMetadataConfig().getBloomFilterFpp())
                                .withBloomFilterDynamicMaxEntries(writeConfig.getMetadataConfig().getDynamicBloomFilterMaxNumEntries())
                                .build())
         .withRollbackParallelism(MDT_DEFAULT_PARALLELISM)
