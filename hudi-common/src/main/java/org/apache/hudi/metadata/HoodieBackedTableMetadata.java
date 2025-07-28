@@ -669,7 +669,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (isFullKey) {
       ValidationUtils.checkArgument(
           !MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX),
-          "Secondary index should never be full key look up");
+          "Secondary index should never use full-key lookup");
       // For non-secondary index with full key matching
       return Predicates.in(null, sortedKeys.stream()
           .map(Literal::from)

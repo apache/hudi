@@ -42,9 +42,9 @@ public class TestHoodieBackedTableMetadataBuildPredicate {
     String partitionName = MetadataPartitionType.SECONDARY_INDEX.getPartitionPath();
     List<String> sortedKeys = Arrays.asList("key1", "key2", "key3");
     
-    Exception ex = assertThrows(IllegalArgumentException.class, () -> HoodieBackedTableMetadata.buildPredicate(partitionName, sortedKeys, true));
+    Exception exception = assertThrows(IllegalArgumentException.class, () -> HoodieBackedTableMetadata.buildPredicate(partitionName, sortedKeys, true));
     // Verify it uses startsWithAny for secondary index
-    assertTrue(ex.getMessage().contains("Secondary index should never be full key look up"));
+    assertTrue(exception.getMessage().contains("Secondary index should never use full-key lookup"));
     
     // Test case 2: Secondary index partition with isFullKey = false
     Predicate predicatePrefixKey = HoodieBackedTableMetadata.buildPredicate(partitionName, sortedKeys, false);
