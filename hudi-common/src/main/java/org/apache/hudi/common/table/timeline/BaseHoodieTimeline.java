@@ -509,8 +509,7 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
 
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstantsByCompletionTime() {
-    return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
-        .sorted(instantComparator.completionTimeOrderedComparator().reversed());
+    return getInstantsAsStream().sorted(instantComparator.completionTimeOrderedComparator().reversed());
   }
 
   @Override

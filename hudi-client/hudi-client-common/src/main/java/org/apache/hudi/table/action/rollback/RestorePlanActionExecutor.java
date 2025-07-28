@@ -81,9 +81,8 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
       String completionTime = completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
           .orElseThrow(() -> new HoodieException("Unable to find completion time for instant: " + savepointToRestoreTimestamp));
       List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
-              .filterCompletedInstants()
               .getReverseOrderedInstantsByCompletionTime()
-              .filter(instant -> GREATER_THAN.test(instant.getCompletionTime(), completionTime))
+              .filter(instant -> GREATER_THAN.test(instant.isCompleted() ? instant.getCompletionTime() : instant.requestedTime(), completionTime))
               .filter(instant -> !pendingClusteringInstantsToRollback.contains(instant))
               .collect(Collectors.toList());
 

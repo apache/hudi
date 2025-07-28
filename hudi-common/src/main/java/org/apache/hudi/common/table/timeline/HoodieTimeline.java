@@ -612,7 +612,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   Stream<HoodieInstant> getReverseOrderedInstants();
 
   /**
-   * Get the stream of completed instants in reverse order by completion time.
+   * Get the stream of instants in reverse order by completion time. Any incomplete instants are returned as the first elements of the stream.
    * @return a stream of sorted instants
    */
   Stream<HoodieInstant> getReverseOrderedInstantsByCompletionTime();
