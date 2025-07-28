@@ -623,7 +623,7 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   Option<String> getLatestCompletionTime();
 
   /**
-   * Get the stream of instants in order by completion timestamp of actions.
+   * Get the stream of completed instants in order by completion timestamp of actions.
    */
   Stream<HoodieInstant> getInstantsOrderedByCompletionTime();
 

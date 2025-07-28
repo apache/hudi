@@ -145,8 +145,18 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.REPLACE_COMMIT_ACTION:
             case HoodieTimeline.CLUSTERING_ACTION:
-            case HoodieTimeline.COMPACTION_ACTION:
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
+              break;
+            case HoodieTimeline.COMPACTION_ACTION:
+              if (instantToRollback.isCompleted()) {
+                // If the compaction is completed, use the commit metadata to get the files to delete
+                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
+              } else {
+                // Otherwise, we need to find any base files that were created by the compaction and delete those.
+                // Any log files matching this requested instant time should not be deleted.
+                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
+                    listBaseFilesToBeDeleted(instantToRollback.requestedTime(), baseFileExtension, partitionPath, metaClient.getStorage())));
+              }
               break;
             case HoodieTimeline.DELTA_COMMIT_ACTION:
             case HoodieTimeline.LOG_COMPACTION_ACTION:
