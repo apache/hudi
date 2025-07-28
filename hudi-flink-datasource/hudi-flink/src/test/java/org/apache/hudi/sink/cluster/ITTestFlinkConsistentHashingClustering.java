@@ -134,7 +134,7 @@ public class ITTestFlinkConsistentHashingClustering {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
     tableEnv.getConfig().getConfiguration()
-        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+        .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
     return tableEnv;
   }
 
@@ -145,9 +145,9 @@ public class ITTestFlinkConsistentHashingClustering {
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
 
-    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
+    conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
     for (Map.Entry<String, String> e : getDefaultConsistentHashingOption().entrySet()) {
       conf.setString(e.getKey(), e.getValue());
     }

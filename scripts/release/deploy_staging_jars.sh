@@ -62,12 +62,11 @@ declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.12 -Dspark3 -pl packaging/hudi-spark-bundle -am" # for legacy bundle name hudi-spark3-bundle_2.12
 
 # Upload Flink bundles (overwriting previous uploads)
-"-Dscala-2.12 -Dflink1.15 -Davro.version=1.10.0 -pl packaging/hudi-flink-bundle -am"
-"-Dscala-2.12 -Dflink1.16 -Davro.version=1.11.1 -pl packaging/hudi-flink-bundle -am"
 "-Dscala-2.12 -Dflink1.17 -Davro.version=1.11.1 -pl packaging/hudi-flink-bundle -am"
 "-Dscala-2.12 -Dflink1.18 -Davro.version=1.11.1 -pl packaging/hudi-flink-bundle -am"
 "-Dscala-2.12 -Dflink1.19 -Davro.version=1.11.1 -pl packaging/hudi-flink-bundle -am"
 "-Dscala-2.12 -Dflink1.20 -Davro.version=1.11.3 -pl packaging/hudi-flink-bundle -am"
+"-Dscala-2.12 -Dflink2.0 -Davro.version=1.11.4 -pl packaging/hudi-flink-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 

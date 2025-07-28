@@ -133,7 +133,7 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
   @ParameterizedTest
   @CsvSource({"true,6", "true,8", "false,6", "false,8"})
   public void testMultiReaderForHoodieBackedTableMetadata(boolean reuse, int tableVersion) throws Exception {
-    final int taskNumber = 3;
+    final int taskNumber = 18;
     HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
     initPath();
     HoodieWriteConfig config = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false, true, false)
@@ -141,47 +141,47 @@ public class TestHoodieBackedTableMetadata extends TestHoodieMetadataBase {
     config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(tableVersion));
     init(tableType, config);
     testTable.doWriteOperation("000001", INSERT, emptyList(), asList("p1"), 1);
+    testTable.doWriteOperation("000002", INSERT, emptyList(), asList("p2"), 2);
+    testTable.doWriteOperation("000003", INSERT, emptyList(), asList("p3"), 3);
     HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), reuse);
     assertTrue(tableMetadata.enabled());
-    List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
-    String partition = metadataPartitions.get(0);
-    String finalPartition = basePath + "/" + partition;
     ExecutorService executors = Executors.newFixedThreadPool(taskNumber);
     AtomicBoolean flag = new AtomicBoolean(false);
     CountDownLatch downLatch = new CountDownLatch(taskNumber);
     AtomicInteger filesNumber = new AtomicInteger(0);
 
-    // call getAllFilesInPartition api from meta data table in parallel
+    // call getAllFilesInPartition api from metadata table in parallel across different partitions
+    // when reuse is true, we will reuse the same buffer of merged log records so we must ensure this works in a multithreaded environment
     for (int i = 0; i < taskNumber; i++) {
-      executors.submit(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            downLatch.countDown();
-            downLatch.await();
-            List<StoragePathInfo> files =
-                tableMetadata.getAllFilesInPartition(new StoragePath(finalPartition));
-            if (files.size() != 1) {
-              LOG.warn("Miss match data file numbers.");
-              throw new RuntimeException("Miss match data file numbers.");
-            }
-            filesNumber.addAndGet(files.size());
-          } catch (Exception e) {
-            LOG.warn("Catch Exception while reading data files from MDT.", e);
-            flag.compareAndSet(false, true);
+      final int partitionNumber = (i % 3) + 1;
+      executors.submit(() -> {
+        try {
+          String finalPartition = basePath + "/p" + partitionNumber;
+          downLatch.countDown();
+          downLatch.await();
+          List<StoragePathInfo> files =
+              tableMetadata.getAllFilesInPartition(new StoragePath(finalPartition));
+          // p1 has 1 file, p2 has 2 files, p3 has 3 files for convenience
+          if (files.size() != partitionNumber) {
+            throw new RuntimeException("Miss match data file numbers for partition: " + finalPartition + ", expected: " + partitionNumber + ", actual: " + files.size());
           }
+          filesNumber.addAndGet(files.size());
+        } catch (Exception e) {
+          LOG.warn("Catch Exception while reading data files from MDT.", e);
+          flag.compareAndSet(false, true);
         }
       });
     }
     executors.shutdown();
     executors.awaitTermination(5, TimeUnit.MINUTES);
     assertFalse(flag.get());
-    assertEquals(filesNumber.get(), taskNumber);
+    assertEquals(36, filesNumber.get()); // 3 files for p3, 2 files for p2, 1 file for p1 and two readers for each partition
 
     // validate table version
     HoodieTableVersion finalTableVersion = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
         .getTableConfig().getTableVersion();
     assertEquals(tableVersion, finalTableVersion.versionCode());
+    tableMetadata.close();
   }
 
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {

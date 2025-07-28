@@ -209,7 +209,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     cleanupClients();
     Properties props = new Properties();
-    props.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+    props.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "timestamp");
     initMetaClient(tableType, props);
     cleanupTimelineService();
     initTimelineService();
@@ -307,7 +307,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
     HoodieTableType tableType = HoodieTableType.MERGE_ON_READ;
     cleanupClients();
     Properties props = new Properties();
-    props.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+    props.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "timestamp");
     initMetaClient(tableType, props);
     cleanupTimelineService();
     initTimelineService();

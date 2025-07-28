@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.parseDateFromInstantT
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathInfo}
+import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -378,5 +379,19 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     if (!valid) {
       throw new HoodieException(s"Got an invalid instant ($queryInstant)")
     }
+  }
+
+  /**
+   * Check if Polaris catalog is enabled in the Spark session.
+   * @param sparkSession The Spark session
+   * @return true if Polaris catalog is configured, false otherwise
+   */
+  def isUsingPolarisCatalog(sparkSession: SparkSession): Boolean = {
+    val sparkSessionConfigs = sparkSession.conf.getAll
+    val polarisCatalogClassName = SparkConfigUtils.getStringWithAltKeys(
+      sparkSessionConfigs, DataSourceReadOptions.POLARIS_CATALOG_CLASS_NAME)
+    sparkSessionConfigs
+      .filter(_._1.startsWith("spark.sql.catalog."))
+      .exists(_._2 == polarisCatalogClassName)
   }
 }

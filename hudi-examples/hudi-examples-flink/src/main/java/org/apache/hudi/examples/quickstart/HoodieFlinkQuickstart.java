@@ -95,7 +95,7 @@ public final class HoodieFlinkQuickstart {
       settings = EnvironmentSettings.newInstance().build();
       TableEnvironment streamTableEnv = TableEnvironmentImpl.create(settings);
       streamTableEnv.getConfig().getConfiguration()
-          .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+          .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
       Configuration execConf = streamTableEnv.getConfig().getConfiguration();
       execConf.setString("execution.checkpointing.interval", "2s");
       // configure not to retry after failure
@@ -123,13 +123,13 @@ public final class HoodieFlinkQuickstart {
     // the index records must be loaded first before data records for BucketAssignFunction to keep upsert semantics correct,
     // so we suggest disabling these 2 options to use streaming state-backend for batch execution mode
     // to keep the strategy before 1.14.
-    conf.setBoolean("execution.sorted-inputs.enabled", false);
-    conf.setBoolean("execution.batch-state-backend.enabled", false);
+    conf.setString("execution.sorted-inputs.enabled", "false");
+    conf.setString("execution.batch-state-backend.enabled", "false");
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment(conf);
     settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment batchTableEnv = StreamTableEnvironment.create(execEnv, settings);
     batchTableEnv.getConfig().getConfiguration()
-        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+        .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
     return batchTableEnv;
   }
 

@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils._
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
@@ -91,13 +92,13 @@ class HoodieCDCRDD(
 
   private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty, metaClient.getTableConfig)
 
-  protected val payloadProps: Properties = Option(metaClient.getTableConfig.getPreCombineField)
-    .map { preCombineField =>
+  protected val payloadProps: Properties = metaClient.getTableConfig.getPreCombineFieldsStr
+    .map[TypedProperties](JFunction.toJavaFunction(preCombineFields =>
       HoodiePayloadConfig.newBuilder
-        .withPayloadOrderingField(preCombineField)
+        .withPayloadOrderingFields(preCombineFields)
         .build
         .getProps
-    }.getOrElse(new Properties())
+    )).orElse(new TypedProperties())
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val cdcPartition = split.asInstanceOf[HoodieCDCFileGroupPartition]
@@ -137,7 +138,7 @@ class HoodieCDCRDD(
       keyFields.head
     }
 
-    private lazy val preCombineFieldOpt: Option[String] = Option(metaClient.getTableConfig.getPreCombineField)
+    private lazy val preCombineFields: List[String] = metaClient.getTableConfig.getPreCombineFields.asScala.toList
 
     private lazy val tableState = {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -147,7 +148,7 @@ class HoodieCDCRDD(
         basePath.toUri.toString,
         Some(split.changes.last.getInstant),
         recordKeyField,
-        preCombineFieldOpt,
+        preCombineFields,
         usesVirtualKeys = !populateMetaFields,
         metaClient.getTableConfig.getPayloadClass,
         metadataConfig,

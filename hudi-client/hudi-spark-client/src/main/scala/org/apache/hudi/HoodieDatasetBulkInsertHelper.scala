@@ -17,39 +17,40 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
 import org.apache.hudi.HoodieSparkUtils.injectSQLConf
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.util.ReflectionUtils
+import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.util.{OrderingValues, ReflectionUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
-import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
+import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndexFactory}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
+import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGenerator, KeyGenUtils}
 import org.apache.hudi.table.action.commit.{BucketBulkInsertDataInternalWriterHelper, BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
+import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
-import org.apache.avro.Schema
+
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
-import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue}
+import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Dataset, HoodieUnsafeUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.JavaConverters.asScalaBufferConverter
-import scala.collection.mutable
+import scala.collection.{JavaConverters, mutable}
 
 object HoodieDatasetBulkInsertHelper
   extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => sparkAdapter.getHoodieUnsafeUtils.getNumPartitions(df)))
@@ -124,7 +125,7 @@ object HoodieDatasetBulkInsertHelper
       }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupeRows(prependedRdd, updatedSchema, config.getPreCombineField, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
+        dedupeRows(prependedRdd, updatedSchema, config.getPreCombineFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
       } else {
         prependedRdd
       }
@@ -217,13 +218,15 @@ object HoodieDatasetBulkInsertHelper
       }), SQLConf.get).toJavaRDD())
   }
 
-  private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFieldRef: String, isGlobalIndex: Boolean, targetParallelism: Int): RDD[InternalRow] = {
+  private def dedupeRows(rdd: RDD[InternalRow], schema: StructType, preCombineFields: List[String], isGlobalIndex: Boolean, targetParallelism: Int): RDD[InternalRow] = {
     val recordKeyMetaFieldOrd = schema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)
     val partitionPathMetaFieldOrd = schema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
     // NOTE: Pre-combine field could be a nested field
-    val preCombineFieldPath = composeNestedFieldPath(schema, preCombineFieldRef)
-      .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineFieldRef is missing in $schema"))
-    val isStringType = preCombineFieldPath.parts(0)._2.dataType.isInstanceOf[StringType]
+    val preCombineFieldPaths = preCombineFields.map(preCombineField => {
+      val nestedFieldPath = composeNestedFieldPath(schema, preCombineField)
+        .getOrElse(throw new HoodieException(s"Pre-combine field $preCombineField is missing in $schema"))
+      (nestedFieldPath, nestedFieldPath.parts(0)._2.dataType.isInstanceOf[StringType])
+    })
 
     rdd.map { row =>
         val rowKey = if (isGlobalIndex) {
@@ -238,25 +241,14 @@ object HoodieDatasetBulkInsertHelper
         (rowKey, row.copy())
       }
       .reduceByKey ((oneRow, otherRow) => {
-        if (!isStringType) {
-          val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-          if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
-            oneRow
-          } else {
-            otherRow
-          }
+        val onePreCombineVal = getOrderingValue(preCombineFieldPaths, oneRow).asInstanceOf[Comparable[AnyRef]]
+        val otherPreCombineVal = getOrderingValue(preCombineFieldPaths, otherRow)
+        val selectedRow: InternalRow = if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+          oneRow
         } else {
-          val onePreCombineVal = hoodieUTF8StringFactory.wrapUTF8String(
-            getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[UTF8String])
-          val otherPreCombineVal = hoodieUTF8StringFactory.wrapUTF8String(
-            getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[UTF8String])
-          if (onePreCombineVal.compareTo(otherPreCombineVal) >= 0) {
-            oneRow
-          } else {
-            otherRow
-          }
+          otherRow
         }
+        selectedRow
       }, targetParallelism)
       .values
   }
@@ -270,6 +262,18 @@ object HoodieDatasetBulkInsertHelper
     } else {
       input.sparkSession.sparkContext.defaultParallelism
     }
+  }
+
+  private def getOrderingValue(nestedFieldPaths: List[(NestedFieldPath, Boolean)], r: InternalRow): Comparable[_] = {
+    OrderingValues.create(
+      nestedFieldPaths.map(nestedFieldPath => {
+        if (nestedFieldPath._2) {
+          hoodieUTF8StringFactory.wrapUTF8String(
+            getNestedInternalRowValue(r, preCombineFieldPath._1).asInstanceOf[UTF8String])
+        } else {
+          getNestedInternalRowValue(r, nestedFieldPath._1).asInstanceOf[Comparable[_]]
+        }
+      }).toArray)
   }
 
   private def getPartitionPathFields(config: HoodieWriteConfig): mutable.Seq[String] = {

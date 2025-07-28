@@ -36,7 +36,8 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, KeyBasedFileGroupRecordBuffer, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
+import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
 import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, Option}
 import org.apache.hudi.common.util.collection.{ExternalSpillableMap, ImmutablePair}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -500,9 +501,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       new FileGroupReaderSchemaHandler[InternalRow](readerContext, avroSchema, avroSchema,
         Option.empty(), metaClient.getTableConfig, readerProperties))
     val stats = new HoodieReadStats
-    val recordBuffer = new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient,
-      readerContext.getMergeMode, metaClient.getTableConfig.getPartialUpdateMode, readerProperties,
-      Option.ofNullable(metaClient.getTableConfig.getPreCombineField),
+    val recordBuffer = new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,
+      metaClient.getTableConfig.getPartialUpdateMode, readerProperties, metaClient.getTableConfig.getPreCombineFields,
       UpdateProcessor.create(stats, readerContext, true, Option.empty()))
 
     HoodieMergedLogRecordReader.newBuilder[InternalRow]

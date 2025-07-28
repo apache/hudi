@@ -24,7 +24,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -36,7 +36,6 @@ import org.apache.avro.Schema
 import org.apache.commons.io.FileUtils
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{DataFrame, Row, SaveMode}
-import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -486,7 +485,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       .setBaseFileFormat(fooTableParams.getOrElse(HoodieWriteConfig.BASE_FILE_FORMAT.key,
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name))
       .setArchiveLogFolder(HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue())
-      .setPreCombineField(fooTableParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, null))
+      .setPreCombineFields(fooTableParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, null))
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
       .setKeyGeneratorClassProp(fooTableParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key,
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue()))

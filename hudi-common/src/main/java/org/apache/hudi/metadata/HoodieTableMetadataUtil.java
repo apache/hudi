@@ -55,6 +55,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
@@ -84,7 +85,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
-import org.apache.hudi.common.table.read.KeyBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -160,7 +161,6 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
@@ -210,6 +210,7 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_EXPRESSION_INDEX_PREFIX = "expr_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
+  public static final SerializableFunctionUnchecked<String, String> IDENTITY_ENCODING = key -> key;
 
   private static final Set<Schema.Type> SUPPORTED_TYPES_PARTITION_STATS = new HashSet<>(Arrays.asList(
       Schema.Type.INT, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING, Schema.Type.BOOLEAN, Schema.Type.NULL, Schema.Type.BYTES));
@@ -1035,7 +1036,7 @@ public class HoodieTableMetadataUtil {
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), tableConfig, properties));
       HoodieReadStats readStats = new HoodieReadStats();
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, Option.ofNullable(tableConfig.getPreCombineField()),
+          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, tableConfig.getPreCombineFields(),
           UpdateProcessor.create(readStats, readerContext, true, Option.empty()));
 
       // CRITICAL: Ensure allowInflightInstants is set to true
@@ -1343,7 +1344,7 @@ public class HoodieTableMetadataUtil {
    * (either all containing the secondary index separator or none containing it).
    * <p>
    * For secondary index partitions (version >= 2), if the record keys contain the secondary index separator,
-   * the secondary key portion is used for hashing. Otherwise, the full record key is used.
+   * the unescaped secondary key portion is used for hashing. Otherwise, the full record key is used.
    *
    * @param needsSecondaryKeyExtraction Whether to extract secondary key from composite keys (should be determined by caller)
    *
@@ -1352,7 +1353,7 @@ public class HoodieTableMetadataUtil {
   public static SerializableBiFunction<String, Integer, Integer> getSecondaryKeyToFileGroupMappingFunction(boolean needsSecondaryKeyExtraction) {
     if (needsSecondaryKeyExtraction) {
       return (recordKey, numFileGroups) -> {
-        String secondaryKey = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(recordKey);
+        String secondaryKey = SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey);
         return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
       };
     }
@@ -2455,20 +2456,6 @@ public class HoodieTableMetadataUtil {
     return addMetadataFields(projectSchema(tableSchema, mergedFields));
   }
 
-  /**
-   * Given table schema and fields to index, checks if each field's data type are supported.
-   *
-   * @param sourceFields fields to index
-   * @param tableSchema  table schema
-   * @return true if each field's data type are supported, false otherwise
-   */
-  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, Schema tableSchema) {
-    return sourceFields.stream().anyMatch(fieldToIndex -> {
-      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
-      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
-    });
-  }
-
   public static StoragePath filePath(StoragePath basePath, String partition, String filename) {
     if (partition.isEmpty()) {
       return new StoragePath(basePath, filename);
@@ -2716,7 +2703,7 @@ public class HoodieTableMetadataUtil {
           // Fetch metadata table COLUMN_STATS partition records for above files
           List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
               .getRecordsByKeyPrefixes(
-                  HoodieListData.lazy(generateKeyPrefixes(colsToIndex, partitionName)), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false, Option.empty())
+                  HoodieListData.lazy(generateKeyPrefixes(colsToIndex, partitionName)), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false, IDENTITY_ENCODING)
               // schema and properties are ignored in getInsertValue, so simply pass as null
               .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
               .filter(Option::isPresent)

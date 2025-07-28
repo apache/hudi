@@ -40,6 +40,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.CatalogUtils;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -158,11 +159,11 @@ public class TestHoodieCatalog {
   }
 
   private static final ResolvedCatalogTable EXPECTED_CATALOG_TABLE = new ResolvedCatalogTable(
-      CatalogTable.of(
+      CatalogUtils.createCatalogTable(
           Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
-          "test",
           Arrays.asList("partition"),
-          EXPECTED_OPTIONS),
+          EXPECTED_OPTIONS,
+          "test"),
       CREATE_TABLE_SCHEMA
   );
 
@@ -178,7 +179,7 @@ public class TestHoodieCatalog {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().build();
     streamTableEnv = TableEnvironmentImpl.create(settings);
     streamTableEnv.getConfig().getConfiguration()
-        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 2);
+        .set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 2);
 
     try {
       FileSystem fs = FileSystem.get(HadoopConfigurations.getHadoopConf(new Configuration()));
@@ -285,11 +286,11 @@ public class TestHoodieCatalog {
     // validate single key and multiple partition for partitioned table
     ObjectPath singleKeyMultiplePartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_skmp" + System.currentTimeMillis());
     final ResolvedCatalogTable singleKeyMultiplePartitionTable = new ResolvedCatalogTable(
-        CatalogTable.of(
+        CatalogUtils.createCatalogTable(
             Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
-            "test",
             Lists.newArrayList("par1", "par2"),
-            EXPECTED_OPTIONS),
+            EXPECTED_OPTIONS,
+            "test"),
         CREATE_TABLE_SCHEMA
     );
 
@@ -303,11 +304,11 @@ public class TestHoodieCatalog {
     // validate multiple key and single partition for partitioned table
     ObjectPath multipleKeySinglePartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb_mksp" + System.currentTimeMillis());
     final ResolvedCatalogTable multipleKeySinglePartitionTable = new ResolvedCatalogTable(
-        CatalogTable.of(
+        CatalogUtils.createCatalogTable(
             Schema.newBuilder().fromResolvedSchema(CREATE_MULTI_KEY_TABLE_SCHEMA).build(),
-            "test",
             Lists.newArrayList("par1"),
-            EXPECTED_OPTIONS),
+            EXPECTED_OPTIONS,
+            "test"),
         CREATE_TABLE_SCHEMA
     );
 
@@ -321,11 +322,11 @@ public class TestHoodieCatalog {
     // validate key generator for non partitioned table
     ObjectPath nonPartitionPath = new ObjectPath(TEST_DEFAULT_DATABASE, "tb");
     final ResolvedCatalogTable nonPartitionCatalogTable = new ResolvedCatalogTable(
-        CatalogTable.of(
+        CatalogUtils.createCatalogTable(
             Schema.newBuilder().fromResolvedSchema(CREATE_TABLE_SCHEMA).build(),
-            "test",
             new ArrayList<>(),
-            EXPECTED_OPTIONS),
+            EXPECTED_OPTIONS,
+            "test"),
         CREATE_TABLE_SCHEMA
     );
 

@@ -31,10 +31,14 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.JavaTypeConverter;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -62,7 +66,6 @@ import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
@@ -96,7 +99,7 @@ public abstract class HoodieReaderContext<T> {
   protected String partitionPath;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
-  protected ReaderContextTypeConverter typeConverter;
+  protected JavaTypeConverter typeConverter;
 
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
@@ -112,7 +115,7 @@ public abstract class HoodieReaderContext<T> {
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
-    this.typeConverter = new ReaderContextTypeConverter();
+    this.typeConverter = new DefaultJavaTypeConverter();
   }
 
   // Getter and Setter for schemaHandler
@@ -207,7 +210,7 @@ public abstract class HoodieReaderContext<T> {
     return new DefaultSerializer<>();
   }
 
-  public ReaderContextTypeConverter getTypeConverter() {
+  public JavaTypeConverter getTypeConverter() {
     return typeConverter;
   }
 
@@ -380,21 +383,23 @@ public abstract class HoodieReaderContext<T> {
   /**
    * Gets the ordering value in particular type.
    *
-   * @param record An option of record.
-   * @param schema The Avro schema of the record.
-   * @param orderingFieldName name of the ordering field
+   * @param record             An option of record.
+   * @param schema             The Avro schema of the record.
+   * @param orderingFieldNames name of the ordering field
    * @return The ordering value.
    */
   public Comparable getOrderingValue(T record,
                                      Schema schema,
-                                     Option<String> orderingFieldName) {
-    if (orderingFieldName.isEmpty()) {
-      return DEFAULT_ORDERING_VALUE;
+                                     List<String> orderingFieldNames) {
+    if (orderingFieldNames.isEmpty()) {
+      return OrderingValues.getDefault();
     }
 
-    Object value = getValue(record, schema, orderingFieldName.get());
-    Comparable finalOrderingVal = value != null ? convertValueToEngineType((Comparable) value) : DEFAULT_ORDERING_VALUE;
-    return finalOrderingVal;
+    return OrderingValues.create(orderingFieldNames, field -> {
+      Object value = getValue(record, schema, field);
+      // API getDefaultOrderingValue is only used inside Comparables constructor
+      return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
+    });
   }
 
   /**
@@ -413,7 +418,7 @@ public abstract class HoodieReaderContext<T> {
    * @param baseRecord       The record based on which the engine record is built.
    * @return A new instance of engine record type {@link T}.
    */
-  public abstract T constructEngineRecord(Schema schema,
+  public abstract T mergeWithEngineRecord(Schema schema,
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
 
@@ -477,6 +482,15 @@ public abstract class HoodieReaderContext<T> {
 
   public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
     return projectRecord(from, to, Collections.emptyMap());
+  }
+
+  /**
+   * Converts the ordering value to the specific engine type.
+   */
+  public final Comparable convertOrderingValueToEngineType(Comparable value) {
+    return value instanceof ArrayComparable
+        ? ((ArrayComparable) value).apply(comparable -> convertValueToEngineType(comparable))
+        : convertValueToEngineType(value);
   }
 
   /**

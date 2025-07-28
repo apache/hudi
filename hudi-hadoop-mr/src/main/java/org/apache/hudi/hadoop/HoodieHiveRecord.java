@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -46,8 +47,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
-
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * {@link HoodieRecord} implementation for Hive records of {@link ArrayWritable}.
@@ -103,11 +102,12 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
-      return DEFAULT_ORDERING_VALUE;
+    String[] orderingFields = ConfigUtils.getOrderingFields(props);
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
+    } else {
+      return OrderingValues.create(orderingFields, field -> (Comparable<?>) getValue(field));
     }
-    return (Comparable<?>) getValue(orderingField);
   }
 
   @Override

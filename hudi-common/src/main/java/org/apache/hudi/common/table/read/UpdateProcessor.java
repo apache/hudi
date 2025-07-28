@@ -38,7 +38,7 @@ public interface UpdateProcessor<T> {
   T processUpdate(String recordKey, T previousRecord, T mergedRecord, boolean isDelete);
 
   static <T> UpdateProcessor<T> create(HoodieReadStats readStats, HoodieReaderContext<T> readerContext,
-                                       boolean emitDeletes, Option<BaseFileUpdateCallback> updateCallback) {
+                                       boolean emitDeletes, Option<BaseFileUpdateCallback<T>> updateCallback) {
     UpdateProcessor<T> handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
     if (updateCallback.isPresent()) {
       return new CallbackProcessor<>(updateCallback.get(), handler);
