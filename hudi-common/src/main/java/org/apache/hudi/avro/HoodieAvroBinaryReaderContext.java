@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.AvroJavaTypeConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -84,7 +85,7 @@ public class HoodieAvroBinaryReaderContext extends HoodieReaderContext<byte[]> {
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
-    this.typeConverter = new AvroReaderContextTypeConverter();
+    this.typeConverter = new AvroJavaTypeConverter();
     this.reusableFileReaders = reusableFileReaders;
   }
 
@@ -168,7 +169,7 @@ public class HoodieAvroBinaryReaderContext extends HoodieReaderContext<byte[]> {
   }
 
   @Override
-  public byte[] constructEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<byte[]> baseRecord) {
+  public byte[] mergeWithEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<byte[]> baseRecord) {
     try {
       IndexedRecord engineRecord = HoodieAvroUtils.bytesToAvro(baseRecord.getRecord(), schema);
       for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
