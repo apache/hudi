@@ -18,7 +18,6 @@
 
 package org.apache.spark
 
-import org.apache.hudi.IncrementalRelationV1
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.{HoodieKey, HoodieSparkRecord}
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
