@@ -180,9 +180,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
         sparkAdapter.createParquetFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap()),
         sparkAdapter.createOrcFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema))
     } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
-      sparkAdapter.createParquetFileReader(supportVectorizedRead, spark.sessionState.conf, options, augmentedStorageConf.unwrap())
+      sparkAdapter.createParquetFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap())
     } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
-      sparkAdapter.createOrcFileReader(supportVectorizedRead, spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema)
+      sparkAdapter.createOrcFileReader(vectorizedReadOverride, spark.sessionState.conf, options, augmentedStorageConf.unwrap(), dataSchema)
     } else {
       null
     }
