@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -41,9 +42,9 @@ public class TestHoodieBackedTableMetadataBuildPredicate {
     String partitionName = MetadataPartitionType.SECONDARY_INDEX.getPartitionPath();
     List<String> sortedKeys = Arrays.asList("key1", "key2", "key3");
     
-    Predicate predicateFullKey = HoodieBackedTableMetadata.buildPredicate(partitionName, sortedKeys, true);
+    Exception exception = assertThrows(IllegalArgumentException.class, () -> HoodieBackedTableMetadata.buildPredicate(partitionName, sortedKeys, true));
     // Verify it uses startsWithAny for secondary index
-    assertTrue(predicateFullKey.getOperator().equals(Expression.Operator.STARTS_WITH));
+    assertTrue(exception.getMessage().contains("Secondary index should never use full-key lookup"));
     
     // Test case 2: Secondary index partition with isFullKey = false
     Predicate predicatePrefixKey = HoodieBackedTableMetadata.buildPredicate(partitionName, sortedKeys, false);
