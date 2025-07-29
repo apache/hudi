@@ -193,9 +193,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     HoodieTimer timer = HoodieTimer.start();
     Map<String, Pair<String, String>> fileToKeyMap = new HashMap<>();
-    List<BloomFilterRawKey> bloomFilterKeys = new ArrayList<>();
+    List<BloomFilterIndexRawKey> bloomFilterKeys = new ArrayList<>();
     partitionNameFileNameList.forEach(partitionNameFileNamePair -> {
-      BloomFilterRawKey rawKey = new BloomFilterRawKey(partitionNameFileNamePair.getLeft(), partitionNameFileNamePair.getRight());
+      BloomFilterIndexRawKey rawKey = new BloomFilterIndexRawKey(partitionNameFileNamePair.getLeft(), partitionNameFileNamePair.getRight());
       bloomFilterKeys.add(rawKey);
       fileToKeyMap.put(rawKey.encode(), partitionNameFileNamePair);
     });

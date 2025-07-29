@@ -27,11 +27,11 @@ import java.util.Objects;
 /**
  * Represents a raw key for bloom filter metadata.
  */
-public class BloomFilterRawKey implements RawKey {
+public class BloomFilterIndexRawKey implements RawKey {
   private final String partitionName;
   private final String fileName;
 
-  public BloomFilterRawKey(String partitionName, String fileName) {
+  public BloomFilterIndexRawKey(String partitionName, String fileName) {
     this.partitionName = Objects.requireNonNull(partitionName);
     this.fileName = Objects.requireNonNull(fileName);
   }
@@ -59,7 +59,7 @@ public class BloomFilterRawKey implements RawKey {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    BloomFilterRawKey that = (BloomFilterRawKey) o;
+    BloomFilterIndexRawKey that = (BloomFilterIndexRawKey) o;
     return Objects.equals(partitionName, that.partitionName) && Objects.equals(fileName, that.fileName);
   }
 
