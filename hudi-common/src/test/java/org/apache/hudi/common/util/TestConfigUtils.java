@@ -41,6 +41,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -126,22 +127,22 @@ public class TestConfigUtils {
     TypedProperties props = new TypedProperties();
 
     // Test default value (should be false)
-    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMark(props));
+    assertFalse(ConfigUtils.isTrackingEventTimeWatermark(props));
 
     // Test when explicitly set to true
     props.put("hoodie.write.track.event.time.watermark", "true");
-    assertTrue(ConfigUtils.shouldTrackEventTimeWaterMark(props));
+    assertTrue(ConfigUtils.isTrackingEventTimeWatermark(props));
 
     // Test when explicitly set to false
     props.put("hoodie.write.track.event.time.watermark", "false");
-    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMark(props));
+    assertFalse(ConfigUtils.isTrackingEventTimeWatermark(props));
 
     // Test with boolean value
     props.put("hoodie.write.track.event.time.watermark", true);
-    assertTrue(ConfigUtils.shouldTrackEventTimeWaterMark(props));
+    assertTrue(ConfigUtils.isTrackingEventTimeWatermark(props));
 
     props.put("hoodie.write.track.event.time.watermark", false);
-    assertFalse(ConfigUtils.shouldTrackEventTimeWaterMark(props));
+    assertFalse(ConfigUtils.isTrackingEventTimeWatermark(props));
   }
 
   @Test
@@ -172,24 +173,24 @@ public class TestConfigUtils {
     TypedProperties props = new TypedProperties();
 
     // Test when property is not set (should return empty Option)
-    assertFalse(ConfigUtils.getEventTimeFieldName(props).isPresent());
+    assertFalse(ConfigUtils.getEventTimeFieldName(props) != null);
 
     // Test when property is set to a field name
     String eventTimeField = "event_timestamp";
     props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, eventTimeField);
-    assertTrue(ConfigUtils.getEventTimeFieldName(props).isPresent());
-    assertEquals(eventTimeField, ConfigUtils.getEventTimeFieldName(props).get());
+    assertNotNull(ConfigUtils.getEventTimeFieldName(props));
+    assertEquals(eventTimeField, ConfigUtils.getEventTimeFieldName(props));
 
     // Test with different field name
     String anotherField = "created_at";
     props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, anotherField);
-    assertTrue(ConfigUtils.getEventTimeFieldName(props).isPresent());
-    assertEquals(anotherField, ConfigUtils.getEventTimeFieldName(props).get());
+    assertNotNull(ConfigUtils.getEventTimeFieldName(props));
+    assertEquals(anotherField, ConfigUtils.getEventTimeFieldName(props));
 
     // Test with empty string
     props.put(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "");
-    assertTrue(ConfigUtils.getEventTimeFieldName(props).isPresent());
-    assertEquals("", ConfigUtils.getEventTimeFieldName(props).get());
+    assertNotNull(ConfigUtils.getEventTimeFieldName(props));
+    assertEquals("", ConfigUtils.getEventTimeFieldName(props));
   }
 
   private Map<String, String> toMap(String config, Option<String> separator) {

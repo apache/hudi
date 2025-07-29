@@ -132,11 +132,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    */
   @Override
   protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
-    Option<Map<String, String>> recordMetadata = record.getMetadata();
-    // Track event time metadata.
-    if (trackEventTimeWatermark && eventTimeFieldNameOpt.isPresent()) {
-      recordMetadata = appendEventTimeMetadata(record, recordMetadata, schema, props);
-    }
+    Option<Map<String, String>> recordMetadata = getRecordMetadata(record, schema, props);
     try {
       if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(schema, config.getProps())) {
         if (record.shouldIgnore(schema, config.getProps())) {

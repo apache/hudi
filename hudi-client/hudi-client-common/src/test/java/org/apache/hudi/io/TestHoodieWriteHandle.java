@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -68,8 +69,6 @@ class TestHoodieWriteHandle {
   @Mock
   private HoodieWriteConfig mockWriteConfig;
 
-  private DummyHoodieWriteHandle testWriteHandle;
-
   @BeforeEach
   public void setUp() {
     MockitoAnnotations.initMocks(this);
@@ -90,69 +89,35 @@ class TestHoodieWriteHandle {
     when(mockTableConfig.getTableVersion()).thenReturn(org.apache.hudi.common.table.HoodieTableVersion.EIGHT);
 
     when(mockHoodieTable.getBaseFileExtension()).thenReturn(".parquet");
-    
-    TaskContextSupplier taskContextSupplier = new LocalTaskContextSupplier();
-    testWriteHandle = new DummyHoodieWriteHandle(
-        mockWriteConfig,
-        "test_instant",
-        "test_partition",
-        "test_file_id",
-        mockHoodieTable,
-        taskContextSupplier,
-        false);
   }
 
   @Test
   void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithEventTimeOrderingAndConfigEnabled() {
     // Setup: AVRO record type with event time ordering and config enabled
-    when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    
-    TypedProperties props = new TypedProperties();
-    props.put("hoodie.write.track.event.time.watermark", "true");
-    when(mockWriteConfig.getProps()).thenReturn(props);
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarker(mockMetaClient, mockWriteConfig);
-
+    boolean result = mockWriteHandle(true, "ts").isTrackingEventTimeWaterMarker();
     assertTrue(result, "Should track event time watermark for AVRO records with event time ordering and config enabled");
   }
 
   @Test
   void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithEventTimeOrderingAndConfigDisabled() {
     // Setup: AVRO record type with event time ordering but config disabled
-    when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    
-    TypedProperties props = new TypedProperties();
-    props.put("hoodie.write.track.event.time.watermark", "false");
-    when(mockWriteConfig.getProps()).thenReturn(props);
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarker(mockMetaClient, mockWriteConfig);
-
+    boolean result = mockWriteHandle(false, null).isTrackingEventTimeWaterMarker();
     assertFalse(result, "Should not track event time watermark when config is disabled");
   }
 
   @Test
   void testShouldTrackEventTimeWaterMarkerNonAvroRecordType() {
     // Setup: Non-AVRO record type
-    when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.SPARK);
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarker(mockMetaClient, mockWriteConfig);
-
-    assertFalse(result, "Should not track event time watermark for non-AVRO record types");
+    boolean result = mockWriteHandle(true, "ts", false, HoodieRecord.HoodieRecordType.SPARK, RecordMergeMode.EVENT_TIME_ORDERING)
+        .isTrackingEventTimeWaterMarker();
+    assertTrue(result, "Should track event time watermark for SPARK record type");
   }
 
   @Test
   void testShouldTrackEventTimeWaterMarkerAvroRecordTypeWithCommitTimeOrdering() {
     // Setup: AVRO record type but with commit time ordering
-    when(mockRecordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
-    when(mockTableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
-    TypedProperties props = new TypedProperties();
-    props.put("hoodie.write.track.event.time.watermark", "true");
-    when(mockWriteConfig.getProps()).thenReturn(props);
-
-    boolean result = testWriteHandle.testShouldTrackEventTimeWaterMarker(mockMetaClient, mockWriteConfig);
-
+    boolean result = mockWriteHandle(true, null, false, HoodieRecord.HoodieRecordType.AVRO, RecordMergeMode.COMMIT_TIME_ORDERING)
+        .isTrackingEventTimeWaterMarker();
     assertFalse(result, "Should not track event time watermark when using commit time ordering");
   }
 
@@ -170,14 +135,12 @@ class TestHoodieWriteHandle {
     record.put("event_time", 1234567890L);
 
     HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
-    
-    // Setup event time field name
-    testWriteHandle.setEventTimeFieldNameOpt(Option.of("event_time"));
-    testWriteHandle.setKeepConsistentLogicalTimestamp(false);
+
+    DummyHoodieWriteHandle testWriteHandle = mockWriteHandle(true, "event_time");
 
     // Test with empty metadata
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, schema, new Properties());
 
     assertTrue(result.isPresent(), "Should return metadata when event time is present");
     Map<String, String> metadata = result.get();
@@ -200,19 +163,15 @@ class TestHoodieWriteHandle {
     record.put("id", "test_id");
     record.put("event_time", 1234567890L);
 
-    HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
-    
-    // Setup event time field name
-    testWriteHandle.setEventTimeFieldNameOpt(Option.of("event_time"));
-    testWriteHandle.setKeepConsistentLogicalTimestamp(false);
-
-    // Test with existing metadata
     Map<String, String> existingMetadata = new HashMap<>();
     existingMetadata.put("existing_key", "existing_value");
-    Option<Map<String, String>> existingMetadataOpt = Option.of(existingMetadata);
+    HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record, HoodieOperation.INSERT, Option.of(existingMetadata));
 
+    DummyHoodieWriteHandle testWriteHandle = mockWriteHandle(true, "event_time");
+
+    // Test with existing metadata
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, existingMetadataOpt, schema, new Properties());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, schema, new Properties());
 
     assertTrue(result.isPresent(), "Should return metadata when event time is present");
     Map<String, String> metadata = result.get();
@@ -238,13 +197,11 @@ class TestHoodieWriteHandle {
     record.put("id", "test_id");
 
     HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
-    
-    // Setup event time field name
-    testWriteHandle.setEventTimeFieldNameOpt(Option.of("event_time"));
-    testWriteHandle.setKeepConsistentLogicalTimestamp(false);
+
+    DummyHoodieWriteHandle testWriteHandle = mockWriteHandle(true, "event_time");
 
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, schema, new Properties());
 
     assertFalse(result.isPresent(), "Should return empty when event time field is not present");
   }
@@ -263,13 +220,11 @@ class TestHoodieWriteHandle {
     record.put("event_time", null);
 
     HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
-    
-    // Setup event time field name
-    testWriteHandle.setEventTimeFieldNameOpt(Option.of("event_time"));
-    testWriteHandle.setKeepConsistentLogicalTimestamp(false);
+
+    DummyHoodieWriteHandle testWriteHandle = mockWriteHandle(true, "event_time");
 
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, schema, new Properties());
 
     assertFalse(result.isPresent(), "Should return empty when event time value is null");
   }
@@ -288,13 +243,11 @@ class TestHoodieWriteHandle {
     record.put("event_time", "2023-01-01T00:00:00Z");
 
     HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
-    
-    // Setup event time field name
-    testWriteHandle.setEventTimeFieldNameOpt(Option.of("event_time"));
-    testWriteHandle.setKeepConsistentLogicalTimestamp(false);
+
+    DummyHoodieWriteHandle testWriteHandle = mockWriteHandle(true, "event_time");
 
     Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
+        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, schema, new Properties());
 
     assertTrue(result.isPresent(), "Should return metadata when event time is present");
     Map<String, String> metadata = result.get();
@@ -325,13 +278,11 @@ class TestHoodieWriteHandle {
     record.put("id", "test_id");
     record.put("nested", nestedRecord);
 
-    HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
-    // Setup event time field name for nested field
-    testWriteHandle.setEventTimeFieldNameOpt(Option.of("nested.event_time"));
-    testWriteHandle.setKeepConsistentLogicalTimestamp(false);
+    DummyHoodieWriteHandle testWriteHandle = mockWriteHandle(true, "nested.event_time");
 
-    Option<Map<String, String>> result =
-        testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, Option.empty(), schema, new Properties());
+    HoodieRecord hoodieRecord = new HoodieAvroIndexedRecord(null, record);
+
+    Option<Map<String, String>> result = testWriteHandle.testAppendEventTimeMetadata(hoodieRecord, schema, new Properties());
 
     assertTrue(result.isPresent(), "Should return metadata when nested event time is present");
     Map<String, String> metadata = result.get();
@@ -339,6 +290,37 @@ class TestHoodieWriteHandle {
         "1234567890",
         metadata.get(METADATA_EVENT_TIME_KEY),
         "Nested event time should be correctly extracted");
+  }
+
+  private DummyHoodieWriteHandle mockWriteHandle(boolean isTrackingEventTimeMetadata, String eventTimeField) {
+    return mockWriteHandle(isTrackingEventTimeMetadata, eventTimeField, false, HoodieRecord.HoodieRecordType.AVRO, RecordMergeMode.EVENT_TIME_ORDERING);
+  }
+
+  private DummyHoodieWriteHandle mockWriteHandle(
+      boolean isTrackingEventTimeMetadata,
+      String eventTimeField,
+      boolean keepConsistentLogicalTimestamp,
+      HoodieRecord.HoodieRecordType recordType,
+      RecordMergeMode mergeMode) {
+    when(mockRecordMerger.getRecordType()).thenReturn(recordType);
+    when(mockTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.write.track.event.time.watermark", String.valueOf(isTrackingEventTimeMetadata));
+    if (eventTimeField != null) {
+      props.put("hoodie.payload.event.time.field", eventTimeField);
+    }
+    props.put("hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled", String.valueOf(keepConsistentLogicalTimestamp));
+    when(mockWriteConfig.getProps()).thenReturn(props);
+
+    TaskContextSupplier taskContextSupplier = new LocalTaskContextSupplier();
+    return new DummyHoodieWriteHandle(
+        mockWriteConfig,
+        "test_instant",
+        "test_partition",
+        "test_file_id",
+        mockHoodieTable,
+        taskContextSupplier,
+        false);
   }
 
   // Test implementation class to access private methods
@@ -353,34 +335,12 @@ class TestHoodieWriteHandle {
       super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, preserveMetadata);
     }
 
-    public boolean testShouldTrackEventTimeWaterMarker(HoodieTableMetaClient metaClient,
-                                                       HoodieWriteConfig config) {
-      return shouldTrackEventTimeWaterMarker(metaClient, config);
+    public boolean isTrackingEventTimeWaterMarker() {
+      return isTrackingEventTimeWatermark;
     }
 
-    public Option<Map<String, String>> testAppendEventTimeMetadata(
-        HoodieRecord record, Option<Map<String, String>> metadataOpt, Schema schema, Properties props) {
-      return appendEventTimeMetadata(record, metadataOpt, schema, props);
-    }
-
-    public void setEventTimeFieldNameOpt(Option<String> eventTimeFieldNameOpt) {
-      try {
-        java.lang.reflect.Field field = HoodieWriteHandle.class.getDeclaredField("eventTimeFieldNameOpt");
-        field.setAccessible(true);
-        field.set(this, eventTimeFieldNameOpt);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    public void setKeepConsistentLogicalTimestamp(boolean keepConsistentLogicalTimestamp) {
-      try {
-        java.lang.reflect.Field field = HoodieWriteHandle.class.getDeclaredField("keepConsistentLogicalTimestamp");
-        field.setAccessible(true);
-        field.set(this, keepConsistentLogicalTimestamp);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
+    public Option<Map<String, String>> testAppendEventTimeMetadata(HoodieRecord record, Schema schema, Properties props) {
+      return getRecordMetadata(record, schema, props);
     }
 
     @Override

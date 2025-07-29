@@ -51,7 +51,6 @@ import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +65,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.AVRO;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
@@ -100,9 +98,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
-  protected boolean trackEventTimeWatermark;
+  protected boolean isTrackingEventTimeWatermark;
   protected boolean keepConsistentLogicalTimestamp;
-  protected Option<String> eventTimeFieldNameOpt;
+  protected String eventTimeFieldName;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
@@ -136,14 +134,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     }
 
     // For tracking event time watermark.
-    this.trackEventTimeWatermark = shouldTrackEventTimeWaterMarker(getHoodieTableMetaClient(), config);
-    if (trackEventTimeWatermark) {
-      this.keepConsistentLogicalTimestamp = ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
-      this.eventTimeFieldNameOpt = ConfigUtils.getEventTimeFieldName(config.getProps());
-    } else {
-      this.keepConsistentLogicalTimestamp = false;
-      this.eventTimeFieldNameOpt = Option.empty();
-    }
+    this.eventTimeFieldName = ConfigUtils.getEventTimeFieldName(config.getProps());
+    this.isTrackingEventTimeWatermark = this.eventTimeFieldName != null
+        && hoodieTable.getMetaClient().getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
+        && ConfigUtils.isTrackingEventTimeWatermark(config.getProps());
+    this.keepConsistentLogicalTimestamp = isTrackingEventTimeWatermark && ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {
@@ -358,51 +353,17 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     }
   }
 
-  /**
-   * Event time watermarker is tracked when
-   * 1. Record type is AVRO.
-   * 2. Event time ordering merge mode is used.
-   * 3. The flag is set.
-   */
-  boolean shouldTrackEventTimeWaterMarker(HoodieTableMetaClient metaClient,
-                                          HoodieWriteConfig config) {
-    return config.getRecordMerger().getRecordType() == AVRO
-        && metaClient.getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
-        && ConfigUtils.shouldTrackEventTimeWaterMark(config.getProps());
-  }
-
-  /**
-   * Extract the event_time value and put into metadata.
-   * Assume: the record type is AVRO.
-   */
-  Option<Map<String, String>> appendEventTimeMetadata(HoodieRecord record,
-                                                      Option<Map<String, String>> metadataOpt,
-                                                      Schema schema,
-                                                      Properties properties) {
-    Option<HoodieAvroIndexedRecord> data;
-    try {
-      data = record.toIndexedRecord(schema, properties);
-      if (data.isEmpty()) {
-        return metadataOpt;
+  protected Option<Map<String, String>> getRecordMetadata(HoodieRecord record, Schema schema, Properties props) {
+    Option<Map<String, String>> recordMetadata = record.getMetadata();
+    if (isTrackingEventTimeWatermark) {
+      Object eventTime = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
+      if (eventTime != null) {
+        // Append event_time.
+        Map<String, String> metadata = recordMetadata.orElse(new HashMap<>());
+        metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
+        return Option.of(metadata);
       }
-    } catch (IOException e) {
-      LOG.warn("Failed to append event_time metadata to the record", e);
-      // We don't throw since the write process should succeed even with a failure of in-memory metadata.
-      return metadataOpt;
     }
-
-    // Extract event_time value.
-    Object eventTime = HoodieAvroUtils.getNestedFieldVal(
-        (GenericRecord) data.get().getData(),
-        eventTimeFieldNameOpt.get(),
-        true,
-        keepConsistentLogicalTimestamp);
-    if (eventTime != null) {
-      // Append event_time.
-      Map<String, String> metadata = metadataOpt.orElse(new HashMap<>());
-      metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
-      return Option.of(metadata);
-    }
-    return metadataOpt;
+    return recordMetadata;
   }
 }
