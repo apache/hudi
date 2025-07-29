@@ -44,7 +44,6 @@ import scala.collection.JavaConverters._
 class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
-  private val log = LoggerFactory.getLogger(classOf[TestMORDataSource])
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",

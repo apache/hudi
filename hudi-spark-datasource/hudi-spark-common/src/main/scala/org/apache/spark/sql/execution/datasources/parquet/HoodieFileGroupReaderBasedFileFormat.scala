@@ -36,13 +36,16 @@ import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
+import org.apache.spark.sql.execution.datasources.orc.OrcUtils
+import org.apache.spark.sql.execution.datasources.{FileFormat, OutputWriterFactory, PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
@@ -78,7 +81,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            shouldUseRecordPosition: Boolean,
                                            requiredFilters: Seq[Filter],
                                            isMultipleBaseFileFormatsEnabled: Boolean,
-                                           hoodieFileFormat: HoodieFileFormat) extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait {
+                                           hoodieFileFormat: HoodieFileFormat)
+  extends FileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
@@ -106,11 +110,25 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
    *
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    val superSupportBatch = super.supportBatch(sparkSession, schema)
-    supportVectorizedRead = !isIncremental && !isBootstrap && superSupportBatch
+    val conf = sparkSession.sessionState.conf
+    val parquetBatchSupported = ParquetUtils.isBatchReadSupportedForSchema(conf, schema)
+    val orcBatchSupported = conf.orcVectorizedReaderEnabled &&
+      schema.forall(s => OrcUtils.supportColumnarReads(
+        s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
+
+    val supportBatch = if (isMultipleBaseFileFormatsEnabled) {
+      parquetBatchSupported && orcBatchSupported
+    } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
+      parquetBatchSupported
+    } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
+      orcBatchSupported
+    } else {
+      throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
+    }
+    supportVectorizedRead = !isIncremental && !isBootstrap && supportBatch
     supportReturningBatch = !isMOR && supportVectorizedRead
     logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
-      s"isBootstrap: $isBootstrap, superSupportBatch: $superSupportBatch")
+      s"isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
     supportReturningBatch
   }
 
@@ -373,5 +391,17 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   private def getFixedPartitionValues(allPartitionValues: InternalRow, partitionSchema: StructType, fixedPartitionIndexes: Set[Int]): InternalRow = {
     InternalRow.fromSeq(allPartitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
+  }
+
+  override def inferSchema(sparkSession: SparkSession, options: Map[String, String], files: Seq[FileStatus]): Option[StructType] = {
+    if (isMultipleBaseFileFormatsEnabled || hoodieFileFormat == HoodieFileFormat.PARQUET) {
+      ParquetUtils.inferSchema(sparkSession, options, files)
+    } else {
+      OrcUtils.inferSchema(sparkSession, files, options)
+    }
+  }
+
+  override def prepareWrite(sparkSession: SparkSession, job: Job, options: Map[String, String], dataSchema: StructType): OutputWriterFactory = {
+    throw new HoodieNotSupportedException("HoodieFileGroupReaderBasedFileFormat does not support writing")
   }
 }

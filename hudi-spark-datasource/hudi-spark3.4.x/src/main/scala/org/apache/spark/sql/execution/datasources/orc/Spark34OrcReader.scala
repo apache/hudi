@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.memory.MemoryMode
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{FileFormat, PartitionedFile}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
@@ -73,8 +73,15 @@ object Spark34OrcReader {
       MemoryMode.ON_HEAP
     }
 
+    val enableVectorizedReader = sqlConf.orcVectorizedReaderEnabled &&
+      options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
+          throw new IllegalArgumentException(
+            "OPTION_RETURNING_BATCH should always be set for OrcFileFormat. " +
+              "To workaround this issue, set spark.sql.orc.enableVectorizedReader=false."))
+        .equals("true")
+
     new Spark34OrcReader(
-      enableVectorizedReader = vectorized,
+      enableVectorizedReader = enableVectorizedReader && vectorized,
       memoryMode = memoryMode,
       isCaseSensitive = sqlConf.caseSensitiveAnalysis,
       capacity = sqlConf.orcVectorizedReaderBatchSize,

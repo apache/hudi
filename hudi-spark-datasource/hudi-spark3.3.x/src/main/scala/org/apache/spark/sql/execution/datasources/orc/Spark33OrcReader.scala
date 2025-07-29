@@ -22,7 +22,7 @@ package org.apache.spark.sql.execution.datasources.orc
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{FileFormat, PartitionedFile}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
@@ -67,8 +67,15 @@ object Spark33OrcReader {
     hadoopConf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, sqlConf.nestedSchemaPruningEnabled)
     hadoopConf.setBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis)
 
+    val enableVectorizedReader = sqlConf.orcVectorizedReaderEnabled &&
+      options.getOrElse(FileFormat.OPTION_RETURNING_BATCH,
+          throw new IllegalArgumentException(
+            "OPTION_RETURNING_BATCH should always be set for OrcFileFormat. " +
+              "To workaround this issue, set spark.sql.orc.enableVectorizedReader=false."))
+        .equals("true")
+
     new Spark33OrcReader(
-      enableVectorizedReader = vectorized,
+      enableVectorizedReader = enableVectorizedReader && vectorized,
       isCaseSensitive = sqlConf.caseSensitiveAnalysis,
       capacity = sqlConf.orcVectorizedReaderBatchSize,
       orcFilterPushDown = sqlConf.orcFilterPushDown,

@@ -33,9 +33,9 @@ class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, o
   extends SparkColumnarFileReader with SparkAdapterSupport {
 
   /**
-   * Read an individual parquet file
+   * Read an individual file
    *
-   * @param file              parquet file to read
+   * @param file              file to read
    * @param requiredSchema    desired output schema of the data
    * @param partitionSchema   schema of the partition columns. Partition values will be appended to the end of every row
    * @param internalSchemaOpt option of internal schema for schema.on.read
