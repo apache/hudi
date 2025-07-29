@@ -313,14 +313,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private Option<BloomFilter> getBloomFilter() {
     Option<BloomFilter> bloomFilter = Option.empty();
-    if (config.enabled()) {
-      try {
-        bloomFilter = Option.of(readBloomFilter());
-        LOG.info("Successfully read the bloom filter to look up RLI keys");
-      } catch (Throwable ignore) {
-        LOG.error("Exception while reading the bloom filter to look up RLI keys");
-      }
+    //if (config.enabled()) {
+    try {
+      bloomFilter = Option.of(readBloomFilter());
+      LOG.info("Successfully read the bloom filter to look up RLI keys");
+    } catch (Throwable ignore) {
+      LOG.error("Exception while reading the bloom filter to look up RLI keys");
     }
+    //}
     return bloomFilter;
   }
 

@@ -38,7 +38,7 @@ public class TestHoodieStorageConfig {
   void testHoodieStorageConfig() {
     String bloomFilterType = BloomFilterTypeCode.SIMPLE.name();
     assertNotEquals(BLOOM_FILTER_TYPE.defaultValue().toUpperCase(),
-                    bloomFilterType.toUpperCase());
+        bloomFilterType.toUpperCase());
     Properties props = new Properties();
     props.put(BLOOM_FILTER_TYPE.key(), bloomFilterType);
     HoodieStorageConfig config = HoodieStorageConfig.newBuilder()

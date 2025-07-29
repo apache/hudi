@@ -516,11 +516,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BLOOM_FILTER_NUM_ENTRIES_VALUE = ConfigProperty
       .key(String.format("%s.%s", METADATA_PREFIX, "bloom.filter.num.entries"))
-      .defaultValue("100000")
+      .defaultValue("10000")
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("This is the number of entries stored in a bloom filter in the metadata table. "
-          + "The rationale for the default: 100000 is chosen to be a good tradeoff between false positive rate and "
+          + "The rationale for the default: 10000 is chosen to be a good tradeoff between false positive rate and "
           + "storage size. Warning: Setting this very low generates a lot of false positives and the metadata "
           + "table reading have to scan a lot more files than it has to and setting this to a very high number "
           + "increases the size every base file linearly (roughly 4KB for every 50000 entries). "
@@ -540,8 +540,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BLOOM_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
       .key(String.format("%s.%s", METADATA_PREFIX, "bloom.filter.dynamic.max.entries"))
-      .defaultValue("500000")
+      .defaultValue("100000")
       .markAdvanced()
+      .sinceVersion("1.1.0")
       .withDocumentation("The threshold for the maximum number of keys to record in a dynamic bloom filter row. "
           + "Only applies if the filter type (" + BLOOM_FILTER_TYPE.key() + " ) is BloomFilterTypeCode.DYNAMIC_V0.");
 
