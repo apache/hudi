@@ -8,6 +8,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.io.SeekableDataInputStream;
+
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -52,11 +55,10 @@ class TestHFileReaderFactory {
 
   @Test
   void testCreateHFileReader_FileSizeBelowThreshold_ShouldUseContentCache() throws IOException {
-    // Arrange
     final long fileSizeBelow = 5L; // 5 bytes - below default threshold
     final int thresholdMB = 10; // 10MB threshold
 
-    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_THRESHOLD_SIZE_MB.key(), String.valueOf(thresholdMB));
+    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), String.valueOf(thresholdMB));
 
     when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
     when(mockPathInfo.getLength()).thenReturn(fileSizeBelow);
@@ -67,16 +69,13 @@ class TestHFileReaderFactory {
       return null;
     }).when(mockInputStream).readFully(any(byte[].class));
 
-    HFileReaderFactory factory = HFileReaderFactory.newBuilder()
+    HFileReaderFactory factory = HFileReaderFactory.builder()
         .withStorage(mockStorage)
         .withProps(properties)
         .withPath(mockPath)
         .build();
-
-    // Act
     HFileReader result = factory.createHFileReader();
 
-    // Assert
     assertNotNull(result);
     assertInstanceOf(HFileReaderImpl.class, result);
 
@@ -88,26 +87,22 @@ class TestHFileReaderFactory {
 
   @Test
   void testCreateHFileReader_FileSizeAboveThreshold_ShouldNotUseContentCache() throws IOException {
-    // Arrange
     final long fileSizeAbove = 15L * 1024L * 1024L; // 15MB - above 10MB threshold
     final int thresholdMB = 10; // 10MB threshold
 
-    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_THRESHOLD_SIZE_MB.key(), String.valueOf(thresholdMB));
+    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), String.valueOf(thresholdMB));
 
     when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
     when(mockPathInfo.getLength()).thenReturn(fileSizeAbove);
     when(mockStorage.openSeekable(mockPath, false)).thenReturn(mockInputStream);
 
-    HFileReaderFactory factory = HFileReaderFactory.newBuilder()
+    HFileReaderFactory factory = HFileReaderFactory.builder()
         .withStorage(mockStorage)
         .withProps(properties)
         .withPath(mockPath)
         .build();
-
-    // Act
     HFileReader result = factory.createHFileReader();
 
-    // Assert
     assertNotNull(result);
     assertInstanceOf(HFileReaderImpl.class, result);
 
@@ -119,152 +114,83 @@ class TestHFileReaderFactory {
 
   @Test
   void testCreateHFileReader_ContentProvidedInConstructor_ShouldUseProvidedContent() throws IOException {
-    // Arrange
     final int thresholdMB = 10; // 10MB threshold
 
-    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_THRESHOLD_SIZE_MB.key(), String.valueOf(thresholdMB));
+    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), String.valueOf(thresholdMB));
 
-    HFileReaderFactory factory = HFileReaderFactory.newBuilder()
+    HFileReaderFactory factory = HFileReaderFactory.builder()
         .withStorage(mockStorage)
         .withProps(properties)
         .withContent(testContent)
         .build();
-
-    // Act
     HFileReader result = factory.createHFileReader();
 
-    // Assert
     assertNotNull(result);
     assertInstanceOf(HFileReaderImpl.class, result);
 
     // Verify that storage was never accessed since content was provided
     verify(mockStorage, never()).getPathInfo(any());
     verify(mockStorage, never()).openSeekable(any(), anyBoolean());
-
-    // The file size should be determined from content length
-    //assertEquals(testContent.length, ((HFileReaderImpl) result).getFileSize());
   }
 
   @Test
-  void testCreateHFileReader_ContentProvidedAndPathProvided_ShouldPreferContent() throws IOException {
-    // Arrange
+  void testCreateHFileReader_ContentProvidedAndPathProvided_ShouldFail() throws IOException {
     final int thresholdMB = 10;
 
-    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_THRESHOLD_SIZE_MB.key(), String.valueOf(thresholdMB));
+    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), String.valueOf(thresholdMB));
 
-    HFileReaderFactory factory = HFileReaderFactory.newBuilder()
+    IllegalStateException exception = Assertions.assertThrows(IllegalStateException.class, () -> HFileReaderFactory.builder()
         .withStorage(mockStorage)
         .withProps(properties)
-        .withPath(mockPath) // Both path and content provided
+        .withPath(mockPath)
         .withContent(testContent)
-        .build();
+        .build());
+    assertEquals("HFile source already set, cannot set bytes content", exception.getMessage());
 
-    // Act
-    HFileReader result = factory.createHFileReader();
-
-    // Assert
-    assertNotNull(result);
-    assertInstanceOf(HFileReaderImpl.class, result);
-
-    // Verify that path was not used for getting file info since content was provided
-    verify(mockStorage, never()).getPathInfo(mockPath);
-    verify(mockStorage, never()).openSeekable(any(), anyBoolean());
-
-    // File size should be from content
-    //assertEquals(testContent.length, ((HFileReaderImpl) result).getFileSize());
+    exception = Assertions.assertThrows(IllegalStateException.class, () -> HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withContent(testContent)
+        .withPath(mockPath)
+        .build());
+    assertEquals("HFile source already set, cannot set path", exception.getMessage());
   }
 
   @Test
   void testCreateHFileReader_NoPathOrContent_ShouldThrowException() {
-    // Arrange & Act & Assert
-    assertThrows(IllegalArgumentException.class, () -> {
-      HFileReaderFactory.newBuilder()
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+      HFileReaderFactory.builder()
           .withStorage(mockStorage)
           .withProps(properties)
           .build();
     });
-  }
-
-  @Test
-  void testShouldUseContentCache_WithContentPresent_ShouldReturnFalse() {
-    // Arrange
-    HFileReaderFactory factory = HFileReaderFactory.newBuilder()
-        .withStorage(mockStorage)
-        .withProps(properties)
-        .withContent(testContent)
-        .build();
-
-    // We can't directly test the private method, but we can verify behavior
-    // by checking that no download occurs when content is already present
-
-    // This is implicitly tested in testCreateHFileReader_ContentProvidedInConstructor_ShouldUseProvidedContent
-  }
-
-  @Test
-  void testDetermineFileSize_WithPath_ShouldReturnPathLength() throws IOException {
-    // Arrange
-    final long expectedSize = 1024L;
-    when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
-    when(mockPathInfo.getLength()).thenReturn(expectedSize);
-
-    HFileReaderFactory factory = HFileReaderFactory.newBuilder()
-        .withStorage(mockStorage)
-        .withProps(properties)
-        .withPath(mockPath)
-        .build();
-
-    // Act
-    HFileReader result = factory.createHFileReader();
-
-    // Assert
-    verify(mockStorage, times(1)).getPathInfo(mockPath);
-    //assertEquals(expectedSize, ((HFileReaderImpl) result).getFileSize());
-  }
-
-  @Test
-  void testDetermineFileSize_WithContent_ShouldReturnContentLength() throws IOException {
-    // Arrange
-    HFileReaderFactory factory = HFileReaderFactory.newBuilder()
-        .withStorage(mockStorage)
-        .withProps(properties)
-        .withContent(testContent)
-        .build();
-
-    // Act
-    HFileReader result = factory.createHFileReader();
-
-    // Assert
-    //assertEquals(testContent.length, ((HFileReaderImpl) result).getFileSize());
+    assertEquals("HFile source cannot be null", exception.getMessage());
   }
 
   @Test
   void testBuilder_WithNullStorage_ShouldThrowException() {
-    // Arrange & Act & Assert
-    assertThrows(IllegalArgumentException.class, () -> {
-      HFileReaderFactory.newBuilder()
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+      HFileReaderFactory.builder()
           .withStorage(null)
           .withPath(mockPath)
           .build();
     });
+    assertEquals("Storage cannot be null", exception.getMessage());
   }
 
   @Test
   void testBuilder_WithoutPropertiesProvided_ShouldUseDefaultProperties() throws IOException {
-    // Arrange
     when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
     when(mockPathInfo.getLength()).thenReturn(1024L);
     when(mockStorage.openSeekable(mockPath, false)).thenReturn(mockInputStream);
 
-    // Act - Not providing properties, should use defaults
-    HFileReaderFactory factory = HFileReaderFactory.newBuilder()
+    // Not providing properties, should use defaults
+    HFileReaderFactory factory = HFileReaderFactory.builder()
         .withStorage(mockStorage)
         .withPath(mockPath)
         .build();
 
     HFileReader result = factory.createHFileReader();
-
-    // Assert
     assertNotNull(result);
-    // If no exception is thrown, default properties were used successfully
   }
 }

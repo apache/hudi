@@ -46,7 +46,7 @@ class TestHoodieNativeAvroHFileReader {
   TestHoodieNativeAvroHFileReader() {
     HoodieStorage storage = mock(HoodieStorage.class);
     StoragePath path = new StoragePath("anyPath");
-    HFileReaderFactory readerFactory = HFileReaderFactory.newBuilder()
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(DEFAULT_PROPS)
         .withPath(path).build();
     reader = new HoodieNativeAvroHFileReader(readerFactory, path, Option.empty());
