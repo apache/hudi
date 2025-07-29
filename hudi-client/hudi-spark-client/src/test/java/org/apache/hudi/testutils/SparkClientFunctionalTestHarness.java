@@ -232,6 +232,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
           context, basePath(), incrementTimelineServicePortToUse());
       timelineServicePort = timelineService.getServerPort();
     }
+    spark.sparkContext().persistentRdds().foreach(rdd -> rdd._2.unpersist(false));
   }
 
   /**
