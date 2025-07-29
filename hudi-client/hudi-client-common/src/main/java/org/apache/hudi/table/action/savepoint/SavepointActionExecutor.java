@@ -125,7 +125,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         }, null);
       }
 
-      try (TransactionManager transactionManager = new TransactionManager(config, table.getStorage())) {
+      try (TransactionManager transactionManager = new TransactionManager(config, false, table.getStorage())) {
         HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
         // Nothing to save in the savepoint
         table.getActiveTimeline().createNewInstant(
