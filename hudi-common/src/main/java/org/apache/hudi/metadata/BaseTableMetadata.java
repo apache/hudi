@@ -251,7 +251,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       return Collections.emptyMap();
     }
 
-    Pair<List<ColumnStatsFileRawKey>, Map<String, Pair<String, String>>> rawKeysAndMap = computeColStatRawKeys(partitionNameFileNameList, columnNames);
+    Pair<List<ColumnStatsIndexRawKey>, Map<String, Pair<String, String>>> rawKeysAndMap = computeColStatRawKeys(partitionNameFileNameList, columnNames);
     return computeFileToColumnStatsMap(rawKeysAndMap.getLeft(), rawKeysAndMap.getRight());
   }
 
@@ -365,15 +365,15 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param columnNames - List of column name for which stats are needed.
    * @return Pair of raw keys list and a map from encoded key to partition/file pair
    */
-  private Pair<List<ColumnStatsFileRawKey>, Map<String, Pair<String, String>>> computeColStatRawKeys(
+  private Pair<List<ColumnStatsIndexRawKey>, Map<String, Pair<String, String>>> computeColStatRawKeys(
       final List<Pair<String, String>> partitionNameFileNameList,
       final List<String> columnNames) {
-    List<ColumnStatsFileRawKey> rawKeys = new ArrayList<>();
+    List<ColumnStatsIndexRawKey> rawKeys = new ArrayList<>();
     Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
     
     for (String columnName : columnNames) {
       for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
-        ColumnStatsFileRawKey rawKey = new ColumnStatsFileRawKey(
+        ColumnStatsIndexRawKey rawKey = new ColumnStatsIndexRawKey(
             partitionNameFileNamePair.getLeft(),
             partitionNameFileNamePair.getRight(),
             columnName);
@@ -391,7 +391,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param columnStatKeyToFileNameMap - A map from col-stats key to partition and file name pair.
    */
   private Map<Pair<String, String>, List<HoodieMetadataColumnStats>> computeFileToColumnStatsMap(
-      List<ColumnStatsFileRawKey> rawKeys, Map<String, Pair<String, String>> columnStatKeyToFileNameMap) {
+      List<ColumnStatsIndexRawKey> rawKeys, Map<String, Pair<String, String>> columnStatKeyToFileNameMap) {
     HoodieTimer timer = HoodieTimer.start();
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
         getRecordsByKeys(

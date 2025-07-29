@@ -29,12 +29,12 @@ import java.util.Objects;
  * Represents a raw key for column stats indexed by partition, file and column.
  * This is different from ColumnStatsIndexKey which is used for prefix lookups.
  */
-public class ColumnStatsFileRawKey implements RawKey {
+public class ColumnStatsIndexRawKey implements RawKey {
   private final String partitionName;
   private final String fileName;
   private final String columnName;
 
-  public ColumnStatsFileRawKey(String partitionName, String fileName, String columnName) {
+  public ColumnStatsIndexRawKey(String partitionName, String fileName, String columnName) {
     this.partitionName = Objects.requireNonNull(partitionName);
     this.fileName = Objects.requireNonNull(fileName);
     this.columnName = Objects.requireNonNull(columnName);
@@ -68,7 +68,7 @@ public class ColumnStatsFileRawKey implements RawKey {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    ColumnStatsFileRawKey that = (ColumnStatsFileRawKey) o;
+    ColumnStatsIndexRawKey that = (ColumnStatsIndexRawKey) o;
     return Objects.equals(partitionName, that.partitionName)
         && Objects.equals(fileName, that.fileName)
         && Objects.equals(columnName, that.columnName);
