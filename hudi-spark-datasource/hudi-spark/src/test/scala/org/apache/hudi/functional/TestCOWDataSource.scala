@@ -24,8 +24,7 @@ import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteC
 import org.apache.hudi.avro.AvroSchemaCompatibility.SchemaIncompatibilityType
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.HoodiePendingRollbackInfo
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
@@ -140,6 +139,58 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
 
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
+  }
+
+  @Test
+  def testMultipleOrderingFields() {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    // Insert Operation
+    var records = recordsToStrings(dataGen.generateInserts("003", 100)).asScala.toList
+    var inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val commonOptsWithMultipleOrderingFields = writeOpts ++ Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "timestamp,rider",
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
+    )
+    inputDF.write.format("hudi")
+      .options(commonOptsWithMultipleOrderingFields)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    records = recordsToStrings(dataGen.generateUniqueUpdates("002", 10)).asScala.toList
+    inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("hudi")
+      .options(commonOptsWithMultipleOrderingFields)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertEquals(0, spark.read.format("org.apache.hudi").load(basePath).filter("rider = 'rider-002'").count())
+
+    records = recordsToStrings(dataGen.generateUniqueUpdates("004", 10)).asScala.toList
+    inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("hudi")
+      .options(commonOptsWithMultipleOrderingFields)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertEquals(10, spark.read.format("org.apache.hudi").load(basePath).filter("rider = 'rider-004'").count())
+
+    records = recordsToStrings(dataGen.generateUniqueUpdates("001", 10)).asScala.toList
+    inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF = inputDF.withColumn("timestamp", lit(1))
+    inputDF.write.format("hudi")
+      .options(commonOptsWithMultipleOrderingFields)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    assertEquals(10, spark.read.format("org.apache.hudi").load(basePath).filter("rider = 'rider-001'").count())
   }
 
   @Test

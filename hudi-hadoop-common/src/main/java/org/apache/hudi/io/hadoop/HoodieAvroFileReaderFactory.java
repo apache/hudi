@@ -21,6 +21,7 @@ package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.storage.HFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieAvroBootstrapFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -47,7 +48,10 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
   protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
                                                 StoragePath path,
                                                 Option<Schema> schemaOption) throws IOException {
-    return new HoodieNativeAvroHFileReader(storage, path, schemaOption);
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
+        .withStorage(storage).withProps(hoodieConfig.getProps())
+        .withPath(path).build();
+    return new HoodieNativeAvroHFileReader(readerFactory, path, schemaOption);
   }
 
   @Override
@@ -56,7 +60,10 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
                                                 HoodieStorage storage,
                                                 byte[] content,
                                                 Option<Schema> schemaOption) throws IOException {
-    return new HoodieNativeAvroHFileReader(this.storage, content, schemaOption);
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
+        .withStorage(storage).withProps(hoodieConfig.getProps())
+        .withContent(content).build();
+    return new HoodieNativeAvroHFileReader(readerFactory, path, schemaOption);
   }
 
   @Override

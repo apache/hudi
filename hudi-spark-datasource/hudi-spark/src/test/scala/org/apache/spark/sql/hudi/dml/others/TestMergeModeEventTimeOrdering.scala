@@ -71,12 +71,12 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
       Map(
         HoodieTableConfig.VERSION.key -> "6",
         HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
-        HoodieTableConfig.PRECOMBINE_FIELD.key -> "ts"
+        HoodieTableConfig.PRECOMBINE_FIELDS.key -> "ts"
       )
     } else {
       Map(
         HoodieTableConfig.VERSION.key -> String.valueOf(HoodieTableVersion.current().versionCode()),
-        HoodieTableConfig.PRECOMBINE_FIELD.key -> "ts",
+        HoodieTableConfig.PRECOMBINE_FIELDS.key -> "ts",
         HoodieTableConfig.RECORD_MERGE_MODE.key -> EVENT_TIME_ORDERING.name(),
         HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName,
         HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> EVENT_TIME_BASED_MERGE_STRATEGY_UUID)

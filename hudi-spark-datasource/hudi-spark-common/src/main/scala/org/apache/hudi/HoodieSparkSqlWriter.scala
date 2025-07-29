@@ -310,7 +310,7 @@ class HoodieSparkSqlWriterInternal {
           .setArchiveLogFolder(archiveLogFolder)
           // we can't fetch preCombine field from hoodieConfig object, since it falls back to "ts" as default value,
           // but we are interested in what user has set, hence fetching from optParams.
-          .setPreCombineField(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
+          .setPreCombineFields(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
           .setPartitionFields(partitionColumnsForKeyGenerator)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
@@ -772,7 +772,7 @@ class HoodieSparkSqlWriterInternal {
           .setPayloadClassName(payloadClass)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setRecordMergeStrategyId(recordMergerStrategy)
-          .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
+          .setPreCombineFields(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBaseFileFormat(baseFileFormat)
           .setBootstrapBasePath(bootstrapBasePath)

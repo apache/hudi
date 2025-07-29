@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.avro.model.ArrayWrapper;
 import org.apache.hudi.avro.model.BooleanWrapper;
 import org.apache.hudi.avro.model.BytesWrapper;
 import org.apache.hudi.avro.model.DateWrapper;
@@ -32,7 +33,9 @@ import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -153,6 +156,7 @@ public class HoodieAvroUtils {
   private static final Lazy<DecimalWrapper.Builder> DECIMAL_WRAPPER_BUILDER_STUB = Lazy.lazily(DecimalWrapper::newBuilder);
   private static final Lazy<DateWrapper.Builder> DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(DateWrapper::newBuilder);
   private static final Lazy<LocalDateWrapper.Builder> LOCAL_DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(LocalDateWrapper::newBuilder);
+  private static final Lazy<ArrayWrapper.Builder> ARRAY_WRAPPER_BUILDER_STUB = Lazy.lazily(ArrayWrapper::newBuilder);
 
   private static final long MILLIS_PER_DAY = 86400000L;
 
@@ -1499,7 +1503,7 @@ public class HoodieAvroUtils {
   public static HoodieRecord createHoodieRecordFromAvro(
       IndexedRecord data,
       String payloadClass,
-      String preCombineField,
+      String[] preCombineFields,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
       Boolean withOperation,
       Option<String> partitionNameOp,
@@ -1507,13 +1511,13 @@ public class HoodieAvroUtils {
       Option<Schema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, withOperation);
+          payloadClass, preCombineFields, withOperation);
     } else if (simpleKeyGenFieldsOpt.isPresent()) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
+          payloadClass, preCombineFields, simpleKeyGenFieldsOpt.get(), withOperation, partitionNameOp, schemaWithoutMetaFields);
     } else {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
-          payloadClass, preCombineField, withOperation, partitionNameOp, schemaWithoutMetaFields);
+          payloadClass, preCombineFields, withOperation, partitionNameOp, schemaWithoutMetaFields);
     }
   }
 
@@ -1615,6 +1619,9 @@ public class HoodieAvroUtils {
       return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB.get()).setValue((ByteBuffer) value).build();
     } else if (value instanceof String || value instanceof Utf8) {
       return StringWrapper.newBuilder(STRING_WRAPPER_BUILDER_STUB.get()).setValue(value.toString()).build();
+    } else if (value instanceof ArrayComparable) {
+      List<Object> avroValues = OrderingValues.getValues((ArrayComparable) value).stream().map(HoodieAvroUtils::wrapValueIntoAvro).collect(Collectors.toList());
+      return ArrayWrapper.newBuilder(ARRAY_WRAPPER_BUILDER_STUB.get()).setWrappedValues(avroValues).build();
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", value.getClass()));
     }
@@ -1659,6 +1666,11 @@ public class HoodieAvroUtils {
       return ((BytesWrapper) avroValueWrapper).getValue();
     } else if (avroValueWrapper instanceof StringWrapper) {
       return ((StringWrapper) avroValueWrapper).getValue();
+    } else if (avroValueWrapper instanceof ArrayWrapper) {
+      ArrayWrapper arrayWrapper = (ArrayWrapper) avroValueWrapper;
+      return OrderingValues.create(arrayWrapper.getWrappedValues().stream()
+          .map(HoodieAvroUtils::unwrapAvroValueWrapper)
+          .toArray(Comparable[]::new));
     } else if (avroValueWrapper instanceof GenericRecord) {
       // NOTE: This branch could be hit b/c Avro records could be reconstructed
       //       as {@code GenericRecord)
@@ -1731,5 +1743,43 @@ public class HoodieAvroUtils {
       }
       return getSchemaForField(rootField.schema(), fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1));
     }
+  }
+
+  public static Object toJavaDefaultValue(Schema.Field field) {
+    Object defaultVal = field.defaultVal();
+    if (defaultVal == null || defaultVal == org.apache.avro.JsonProperties.NULL_VALUE) {
+      return null;
+    }
+
+    Schema.Type type = getNonNullType(field.schema());
+    switch (type) {
+      case STRING:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+      case ENUM:
+      case BYTES:
+        return defaultVal;
+      case ARRAY:
+      case MAP:
+      case RECORD:
+        // Use Avro's standard GenericData utility for complex types
+        return GenericData.get().getDefaultValue(field);
+      default:
+        throw new IllegalArgumentException("Unsupported Avro type: " + type);
+    }
+  }
+
+  private static Schema.Type getNonNullType(Schema schema) {
+    if (schema.getType() == Schema.Type.UNION) {
+      return schema.getTypes().stream()
+          .filter(s -> s.getType() != Schema.Type.NULL)
+          .findFirst()
+          .orElseThrow(() -> new IllegalArgumentException("Only NULL in union"))
+          .getType();
+    }
+    return schema.getType();
   }
 }

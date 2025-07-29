@@ -52,7 +52,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.AVRO;
-import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELD;
+import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
@@ -60,14 +60,14 @@ import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.Operati
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestCustomBufferedRecordMerger extends HoodieFileGroupReaderTestHarness {
+public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
 
   @Override
   protected Properties getMetaProps() {
     Properties metaProps = super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), CustomAvroMerger.KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY);
-    metaProps.setProperty(PRECOMBINE_FIELD.key(), "timestamp");
+    metaProps.setProperty(PRECOMBINE_FIELDS.key(), "timestamp");
     return metaProps;
   }
 
@@ -122,7 +122,7 @@ public class TestCustomBufferedRecordMerger extends HoodieFileGroupReaderTestHar
 
   @BeforeEach
   public void initialize() throws Exception {
-    setTableName(TestCustomBufferedRecordMerger.class.getName());
+    setTableName(TestCustomRecordMerger.class.getName());
     initPath(tableName);
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});

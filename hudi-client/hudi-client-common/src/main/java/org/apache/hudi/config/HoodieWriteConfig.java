@@ -101,6 +101,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -172,8 +173,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
       .noDefaultValue()
-      .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
-          + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
+      .withDocumentation("Comma separated list of fields used in preCombining before actual write. When two records have the same key value, "
+          + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..). "
+          + "For multiple fields if first key comparison is same, second key comparison is made and so on. This config is used for combining records "
+          + "within the same batch and also for merging using event time merge mode");
 
   public static final ConfigProperty<String> WRITE_PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.payload.class")
@@ -1401,8 +1404,13 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
   }
 
-  public String getPreCombineField() {
-    return getString(PRECOMBINE_FIELD_NAME);
+  public List<String> getPreCombineFields() {
+    return Option.ofNullable(getString(PRECOMBINE_FIELD_NAME))
+        .map(preCombine -> Arrays.asList(preCombine.split(",")))
+        .orElse(Collections.emptyList())
+        .stream()
+        .filter(StringUtils::nonEmpty)
+        .collect(Collectors.toList());
   }
 
   public String getKeyGeneratorClass() {

@@ -23,7 +23,7 @@ import org.apache.hudi.{AvroConversionUtils, HoodieTableSchema, SparkAdapterSupp
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieCommonConfig.{DISK_MAP_BITCASK_COMPRESSION_ENABLED, SPILLABLE_DISK_MAP_TYPE}
 import org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH
 import org.apache.hudi.common.engine.HoodieReaderContext
@@ -36,7 +36,8 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, KeyBasedFileGroupRecordBuffer, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
+import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
 import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, Option}
 import org.apache.hudi.common.util.collection.{ExternalSpillableMap, ImmutablePair}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -93,6 +94,9 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerProps.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key,
       configuration.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()).toString)
+    readerProps.setProperty(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key,
+      configuration.get(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
+        HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
     readerProps
   }
 
@@ -500,9 +504,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       new FileGroupReaderSchemaHandler[InternalRow](readerContext, avroSchema, avroSchema,
         Option.empty(), metaClient.getTableConfig, readerProperties))
     val stats = new HoodieReadStats
-    val recordBuffer = new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient,
-      readerContext.getMergeMode, metaClient.getTableConfig.getPartialUpdateMode, readerProperties,
-      Option.ofNullable(metaClient.getTableConfig.getPreCombineField),
+    val recordBuffer = new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,
+      metaClient.getTableConfig.getPartialUpdateMode, readerProperties, metaClient.getTableConfig.getPreCombineFields,
       UpdateProcessor.create(stats, readerContext, true, Option.empty()))
 
     HoodieMergedLogRecordReader.newBuilder[InternalRow]

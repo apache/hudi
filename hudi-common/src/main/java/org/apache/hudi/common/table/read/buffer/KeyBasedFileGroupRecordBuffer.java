@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -29,6 +29,9 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -40,6 +43,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -54,9 +58,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        RecordMergeMode recordMergeMode,
                                        PartialUpdateMode partialUpdateMode,
                                        TypedProperties props,
-                                       Option<String> orderingFieldName,
+                                       List<String> orderingFieldNames,
                                        UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
   }
 
   @Override
@@ -77,7 +81,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           recordMergeMode,
           true,
           recordMerger,
-          orderingFieldName,
+          orderingFieldNames,
           payloadClass,
           readerSchema,
           props,
@@ -90,7 +94,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord) || isDeleteHoodieOperation(nextRecord);
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldName, isDelete);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
     }
@@ -99,11 +103,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   @Override
   public void processNextDataRecord(BufferedRecord<T> record, Serializable recordKey) throws IOException {
     BufferedRecord<T> existingRecord = records.get(recordKey);
-    Option<BufferedRecord<T>> bufferRecord = doProcessNextDataRecord(record, existingRecord);
-
-    if (bufferRecord.isPresent()) {
-      records.put(recordKey, bufferRecord.get().toBinary(readerContext));
-    }
+    totalLogRecords++;
+    bufferedRecordMerger.deltaMerge(record, existingRecord).ifPresent(bufferedRecord ->
+        records.put(recordKey, bufferedRecord.toBinary(readerContext)));
   }
 
   @Override
@@ -116,13 +118,14 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
-    BufferedRecord<T> existingRecord = records.get(recordKey);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
-    if (recordOpt.isPresent()) {
-      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordKey, BufferedRecord.forDeleteRecord(deleteRecord, orderingValue));
-    }
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordIdentifier) {
+    BufferedRecord<T> existingRecord = records.get(recordIdentifier);
+    totalLogRecords++;
+    Option<DeleteRecord> recordOpt = bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
+    recordOpt.ifPresent(deleteRec -> {
+      Comparable orderingValue = getOrderingValue(readerContext, deleteRec);
+      records.put(recordIdentifier, BufferedRecord.forDeleteRecord(deleteRec, orderingValue));
+    });
   }
 
   @Override

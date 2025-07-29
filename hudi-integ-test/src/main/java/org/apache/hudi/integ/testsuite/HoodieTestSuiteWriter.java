@@ -95,7 +95,7 @@ public abstract class HoodieTestSuiteWriter implements Serializable {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
             .withPayloadConfig(HoodiePayloadConfig.newBuilder()
-                .withPayloadOrderingField(cfg.sourceOrderingField)
+                .withPayloadOrderingFields(cfg.sourceOrderingFields)
                 .withPayloadClass(cfg.payloadClassName)
                 .build())
             .forTable(cfg.targetTableName)

@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
+import org.apache.hudi.common.util.JavaTypeConverter;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,8 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestReaderContextTypeConverter {
-  private final ReaderContextTypeConverter typeHandler = new ReaderContextTypeConverter();
+class TestDefaultJavaTypeConverter {
+  private final JavaTypeConverter typeHandler = new DefaultJavaTypeConverter();
 
   @Test
   void testCastToBoolean_withBooleanTrue() {
@@ -42,10 +45,7 @@ class TestReaderContextTypeConverter {
 
   @Test
   void testCastToBoolean_withInvalidType() {
-    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-      typeHandler.castToBoolean("true");
-    });
-    assertTrue(exception.getMessage().contains("cannot be cast to boolean"));
+    assertThrows(IllegalArgumentException.class, () -> typeHandler.castToBoolean("true"), "cannot be cast to boolean");
   }
 
   @Test

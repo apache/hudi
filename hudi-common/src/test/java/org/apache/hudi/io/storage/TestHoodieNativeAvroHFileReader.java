@@ -19,6 +19,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Predicate;
@@ -38,13 +39,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestHoodieNativeAvroHFileReader {
+
+  private static final TypedProperties DEFAULT_PROPS = new TypedProperties();
   private static HoodieNativeAvroHFileReader reader;
 
   TestHoodieNativeAvroHFileReader() {
     HoodieStorage storage = mock(HoodieStorage.class);
     StoragePath path = new StoragePath("anyPath");
-    reader = new HoodieNativeAvroHFileReader(
-        storage, path, Option.empty());
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
+        .withStorage(storage).withProps(DEFAULT_PROPS)
+        .withPath(path).build();
+    reader = new HoodieNativeAvroHFileReader(readerFactory, path, Option.empty());
   }
 
   @Test

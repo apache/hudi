@@ -46,7 +46,8 @@ public class LogFileColStatsTestUtil {
     if (writerSchemaOpt.isPresent()) {
       String partitionPath = FSUtils.getRelativePartitionPath(datasetMetaClient.getBasePath(), new StoragePath(filePath).getParent());
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList =
-          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt, maxBufferSize);
+          HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(filePath, partitionPath, datasetMetaClient, columnsToIndex, writerSchemaOpt,
+                  maxBufferSize);
       return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {
       throw new HoodieException("Writer schema needs to be set");

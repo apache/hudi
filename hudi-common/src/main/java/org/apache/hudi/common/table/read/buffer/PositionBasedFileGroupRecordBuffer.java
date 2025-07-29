@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -30,6 +30,9 @@ import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -72,9 +75,9 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
                                             PartialUpdateMode partialUpdateMode,
                                             String baseFileInstantTime,
                                             TypedProperties props,
-                                            Option<String> orderingFieldName,
+                                            List<String> orderingFieldNames,
                                             UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -116,7 +119,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           recordMergeMode,
           true,
           recordMerger,
-          orderingFieldName,
+          orderingFieldNames,
           payloadClass,
           readerSchema,
           props,
@@ -143,7 +146,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         boolean isDelete = isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord) || isDeleteHoodieOperation(evolvedNextRecord);
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldName, isDelete);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
     }
@@ -213,16 +216,6 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           long recordPosition = recordPositions.get(recordIndex++);
           processNextDeletedRecord(record, recordPosition);
         }
-    }
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
-    BufferedRecord<T> existingRecord = records.get(recordPosition);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecord);
-    if (recordOpt.isPresent()) {
-      Comparable orderingValue = getOrderingValue(readerContext, recordOpt.get());
-      records.put(recordPosition, BufferedRecord.forDeleteRecord(recordOpt.get(), orderingValue));
     }
   }
 

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -25,17 +25,22 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.MergeResult;
+import org.apache.hudi.common.table.read.UpdateProcessor;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -50,6 +55,7 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
@@ -58,15 +64,14 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
-public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
+abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
-  protected final Option<String> orderingFieldName;
+  protected final List<String> orderingFieldNames;
   protected final RecordMergeMode recordMergeMode;
   protected final PartialUpdateMode partialUpdateMode;
   protected final Option<HoodieRecordMerger> recordMerger;
@@ -83,14 +88,14 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
   protected BufferedRecordMerger<T> bufferedRecordMerger;
-  private long totalLogRecords = 0;
+  protected long totalLogRecords = 0;
 
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
                                   RecordMergeMode recordMergeMode,
                                   PartialUpdateMode partialUpdateMode,
                                   TypedProperties props,
-                                  Option<String> orderingFieldName,
+                                  List<String> orderingFieldNames,
                                   UpdateProcessor<T> updateProcessor) {
     this.readerContext = readerContext;
     this.updateProcessor = updateProcessor;
@@ -103,27 +108,15 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     } else {
       this.payloadClass = Option.empty();
     }
-    this.orderingFieldName = orderingFieldName;
+    this.orderingFieldNames = orderingFieldNames;
     // Ensure that ordering field is populated for mergers and legacy payloads
-    orderingFieldName.ifPresent(orderingField -> {
-      props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingField);
-      props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
-      props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingField);
-    });
-    this.props = props;
-
+    this.props = ConfigUtils.supplementOrderingFields(props, orderingFieldNames);
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
-    long maxMemorySizeInBytes = props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
     String spillableMapBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath());
-    ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.valueOf(props.getString(SPILLABLE_DISK_MAP_TYPE.key(),
-        SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
-    boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
-        DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
-      this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
-          readerContext.getRecordSizeEstimator(), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
+      this.records = initializeRecordsMap(spillableMapBasePath);
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -132,7 +125,17 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     this.shouldCheckBuiltInDeleteMarker =
         readerContext.getSchemaHandler().hasBuiltInDelete();
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
+  }
+
+  protected ExternalSpillableMap<Serializable, BufferedRecord<T>> initializeRecordsMap(String spillableMapBasePath) throws IOException {
+    long maxMemorySizeInBytes = props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
+    ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.valueOf(props.getString(SPILLABLE_DISK_MAP_TYPE.key(),
+        SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
+    boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+        DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
+    return new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
+        readerContext.getRecordSizeEstimator(), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
   }
 
   /**
@@ -226,32 +229,6 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   /**
-   * Merge two log data records if needed.
-   *
-   * @param newRecord      The new incoming record
-   * @param existingRecord The existing record
-   * @return the {@link BufferedRecord} that needs to be updated, returns empty to skip the update.
-   */
-  protected Option<BufferedRecord<T>> doProcessNextDataRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord)
-      throws IOException {
-    totalLogRecords++;
-    return bufferedRecordMerger.deltaMerge(newRecord, existingRecord);
-  }
-
-  /**
-   * Merge a delete record with another record (data, or delete).
-   *
-   * @param deleteRecord               The delete record
-   * @param existingRecord             The existing {@link BufferedRecord}
-   *
-   * @return The option of new delete record that needs to be updated with.
-   */
-  protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
-    totalLogRecords++;
-    return bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
-  }
-
-  /**
    * Create a record iterator for a data block. The records are filtered by a key set specified by {@code keySpecOpt}.
    *
    * @param dataBlock
@@ -299,23 +276,11 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
     return Option.of(Pair.of(readerContext.projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
-  /**
-   * Merge two records using the configured record merger.
-   *
-   * @param olderRecord  old {@link BufferedRecord}
-   * @param newerRecord  newer {@link BufferedRecord}
-   * @return a value pair, left is boolean value `isDelete`, and right is engine row.
-   * @throws IOException
-   */
-  protected Pair<Boolean, T> merge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-    return bufferedRecordMerger.finalMerge(olderRecord, newerRecord);
-  }
-
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
-      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldName, false);
-      Pair<Boolean, T> isDeleteAndRecord = merge(baseRecordInfo, logRecordInfo);
-      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, isDeleteAndRecord.getRight(), isDeleteAndRecord.getLeft());
+      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldNames, false);
+      MergeResult<T> mergeResult = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
+      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, mergeResult.getMergedRecord(), mergeResult.isDelete());
       return nextRecord != null;
     }
 
@@ -359,14 +324,15 @@ public abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordB
   }
 
   static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
-    return orderingValue == null || orderingValue.equals(DEFAULT_ORDERING_VALUE);
+    return orderingValue == null || OrderingValues.isDefault(orderingValue);
   }
 
   static Comparable getOrderingValue(HoodieReaderContext readerContext,
                                      DeleteRecord deleteRecord) {
-    return isCommitTimeOrderingValue(deleteRecord.getOrderingValue())
-        ? DEFAULT_ORDERING_VALUE
-        : readerContext.convertValueToEngineType(deleteRecord.getOrderingValue());
+    Comparable orderingValue = deleteRecord.getOrderingValue();
+    return isCommitTimeOrderingValue(orderingValue)
+        ? OrderingValues.getDefault()
+        : readerContext.convertOrderingValueToEngineType(orderingValue);
   }
 
   private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {

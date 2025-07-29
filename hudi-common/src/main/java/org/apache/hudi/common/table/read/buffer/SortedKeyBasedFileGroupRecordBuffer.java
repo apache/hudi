@@ -17,18 +17,21 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.stream.Collectors;
@@ -37,20 +40,20 @@ import java.util.stream.Collectors;
  * An extension of {@link KeyBasedFileGroupRecordBuffer} that sorts the log records based on the record key when joining with the base file records.
  * This assumes that the base file records are already sorted by the record key.
  */
-public class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
+class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuffer<T> {
 
   // when sorting is enabled, this will hold the base file record if it was not used in the previous iteration
   private Option<T> queuedBaseFileRecord = Option.empty();
   private Queue<String> logRecordKeysSorted = null;
 
-  public SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+  SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                              HoodieTableMetaClient hoodieTableMetaClient,
                                              RecordMergeMode recordMergeMode,
                                              PartialUpdateMode partialUpdateMode,
                                              TypedProperties props,
-                                             Option<String> orderingFieldName,
+                                             List<String> orderingFieldNames,
                                              UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldName, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
   }
 
   @Override

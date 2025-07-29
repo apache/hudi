@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -35,8 +36,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Default payload.
@@ -58,7 +57,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
+    this(record.isPresent() ? record.get() : null, OrderingValues.getDefault()); // natural order
   }
 
   @Override
@@ -193,20 +192,20 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
      */
-    String orderField = ConfigUtils.getOrderingField(properties);
-    if (orderField == null) {
+    String[] orderingFields = ConfigUtils.getOrderingFields(properties);
+    if (orderingFields == null) {
       return true;
     }
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
-        orderField,
-        true, consistentLogicalTimestampEnabled);
-    Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
-        orderField,
-        true, consistentLogicalTimestampEnabled);
-    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+    Comparable persistedOrderingVal = OrderingValues.create(
+        orderingFields,
+        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled));
+    Comparable incomingOrderingVal = OrderingValues.create(
+        orderingFields,
+        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord, field, true, consistentLogicalTimestampEnabled));
+    return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
   }
 
 }

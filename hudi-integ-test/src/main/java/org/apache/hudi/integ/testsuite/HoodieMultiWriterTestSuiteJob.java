@@ -203,7 +203,7 @@ public class HoodieMultiWriterTestSuiteJob {
     tableConfig.enableHiveSync = globalConfig.enableHiveSync;
     tableConfig.enableMetaSync = globalConfig.enableMetaSync;
     tableConfig.schemaProviderClassName = globalConfig.schemaProviderClassName;
-    tableConfig.sourceOrderingField = globalConfig.sourceOrderingField;
+    tableConfig.sourceOrderingFields = globalConfig.sourceOrderingFields;
     tableConfig.sourceClassName = globalConfig.sourceClassName;
     tableConfig.tableType = globalConfig.tableType;
     tableConfig.targetTableName = globalConfig.targetTableName;
