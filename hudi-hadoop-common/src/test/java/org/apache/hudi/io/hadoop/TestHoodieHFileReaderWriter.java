@@ -103,7 +103,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @Override
   protected HoodieAvroFileReader createReader(
       HoodieStorage storage) throws Exception {
-    HFileReaderFactory readerFactory = HFileReaderFactory.newBuilder()
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(DEFAULT_PROPS)
         .withPath(getFilePath()).build();
     return new HoodieNativeAvroHFileReader(readerFactory, getFilePath(), Option.empty());
@@ -111,7 +111,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
   protected HoodieAvroHFileReaderImplBase createHFileReader(HoodieStorage storage,
                                                             byte[] content) throws IOException {
-    HFileReaderFactory readerFactory = HFileReaderFactory.newBuilder()
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(DEFAULT_PROPS)
         .withContent(content).build();
     return new HoodieNativeAvroHFileReader(readerFactory, getFilePath(), Option.empty());
