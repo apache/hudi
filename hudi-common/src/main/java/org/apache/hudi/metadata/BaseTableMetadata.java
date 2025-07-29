@@ -201,7 +201,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     });
 
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
-        getRecordsByKeys(HoodieListData.eager(bloomFilterKeys), metadataPartitionName);
+        readIndexRecordsWithKeys(HoodieListData.eager(bloomFilterKeys), metadataPartitionName);
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords;
     try {
       hoodieRecords = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
@@ -328,7 +328,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         .map(FilesIndexRawKey::new)
         .collect(Collectors.toList());
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
-        getRecordsByKeys(HoodieListData.eager(filesKeys),
+        readIndexRecordsWithKeys(HoodieListData.eager(filesKeys),
             MetadataPartitionType.FILES.getPartitionPath());
     Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs;
     try {
@@ -394,7 +394,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       List<ColumnStatsIndexRawKey> rawKeys, Map<String, Pair<String, String>> columnStatKeyToFileNameMap) {
     HoodieTimer timer = HoodieTimer.start();
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
-        getRecordsByKeys(
+        readIndexRecordsWithKeys(
             HoodieListData.eager(rawKeys), MetadataPartitionType.COLUMN_STATS.getPartitionPath());
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords;
     try {
@@ -449,7 +449,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param partitionName The partition name where the records are stored
    * @return A collection of pairs (key -> record)
    */
-  public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(
+  public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
           HoodieData<? extends RawKey> rawKeys, String partitionName);
 
   /**
@@ -460,7 +460,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @return A collection of pairs where each key is a secondary key and the value is record key that are indexed by that secondary key.
    * If a secondary key value is mapped to different record keys, they are tracked as multiple pairs for each of them.
    */
-  public abstract HoodiePairData<String, String> getSecondaryIndexRecords(HoodieData<String> keys, String partitionName);
+  public abstract HoodiePairData<String, String> readSecondaryIndexDataTableRecordKeysWithKeys(HoodieData<String> keys, String partitionName);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;
