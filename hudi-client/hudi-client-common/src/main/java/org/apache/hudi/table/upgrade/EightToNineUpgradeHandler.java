@@ -48,11 +48,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.NINE);
 
-    // If auto upgrade is disabled, set writer version to 8 and return
-    if (!config.autoUpgrade()) {
-      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-      return Collections.emptyMap();
-    }
     HoodieTableMetaClient metaClient = table.getMetaClient();
 
     // Populate missing index versions indexes

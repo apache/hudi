@@ -130,6 +130,17 @@ public class UpgradeDowngrade {
    * @param instantTime current instant time that should not be touched.
    */
   public void run(HoodieTableVersion toVersion, String instantTime) {
+    // Fetch version from property file and current version
+    HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
+    if (!needsUpgradeOrDowngrade(toVersion)) {
+      return;
+    }
+
+    // Handle auto-upgrade disabled case - may skip upgrade logic
+    if (handleAutoUpgradeDisabled(fromVersion, toVersion)) {
+      return;
+    }
+
     // Change metadata table version automatically
     if (toVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {
       String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
@@ -147,12 +158,6 @@ public class UpgradeDowngrade {
         LOG.warn("Unable to upgrade or downgrade the metadata table to version " + toVersion
             + ", ignoring the error and continue.", e);
       }
-    }
-
-    // Fetch version from property file and current version
-    HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
-    if (!needsUpgradeOrDowngrade(toVersion)) {
-      return;
     }
 
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
@@ -274,5 +279,26 @@ public class UpgradeDowngrade {
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }
+  }
+
+  /**
+   * Handles the case when auto-upgrade is disabled for upgrade operations.
+   * Sets compatible writer version and determines if upgrade logic should be skipped.
+   *
+   * @param fromVersion current table version
+   * @param toVersion target table version  
+   * @return true if upgrade logic should be skipped, false otherwise
+   */
+  private boolean handleAutoUpgradeDisabled(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
+    if (!config.autoUpgrade() && fromVersion.versionCode() < toVersion.versionCode()) {
+      // Set appropriate writer version based on upgrade transition to maintain compatibility
+      if (fromVersion == HoodieTableVersion.SEVEN && toVersion == HoodieTableVersion.EIGHT) {
+        config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
+      } else if (fromVersion == HoodieTableVersion.EIGHT && toVersion == HoodieTableVersion.NINE) {
+        config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+      }
+      return true; // Skip all upgrade logic when auto-upgrade is disabled
+    }
+    return false; // Continue with normal upgrade/downgrade flow
   }
 }
