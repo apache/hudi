@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metadata.ColumnStatsIndexKey;
+import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -390,8 +390,8 @@ public class FileStatsIndex implements ColumnStatsIndex {
     // Read Metadata Table's column stats Flink's RowData list by
     //    - Fetching the records by key-prefixes (column names)
     //    - Deserializing fetched records into [[RowData]]s
-    List<ColumnStatsIndexKey> rawKeys = Arrays.stream(targetColumns)
-        .map(ColumnStatsIndexKey::new)  // Just column name, no partition
+    List<ColumnStatsIndexPrefixRawKey> rawKeys = Arrays.stream(targetColumns)
+        .map(ColumnStatsIndexPrefixRawKey::new)  // Just column name, no partition
         .collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =

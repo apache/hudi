@@ -27,21 +27,21 @@ import java.util.Objects;
 /**
  * Represents a raw key for column stats index consisting of column name and optional partition name.
  */
-public class ColumnStatsIndexKey implements RawKey {
+public class ColumnStatsIndexPrefixRawKey implements RawKey {
   private static final long serialVersionUID = 1L;
   
   private final String columnName;
   private final Option<String> partitionName;
   
-  public ColumnStatsIndexKey(String columnName) {
+  public ColumnStatsIndexPrefixRawKey(String columnName) {
     this(columnName, Option.empty());
   }
   
-  public ColumnStatsIndexKey(String columnName, String partitionName) {
+  public ColumnStatsIndexPrefixRawKey(String columnName, String partitionName) {
     this(columnName, Option.of(partitionName));
   }
   
-  public ColumnStatsIndexKey(String columnName, Option<String> partitionName) {
+  public ColumnStatsIndexPrefixRawKey(String columnName, Option<String> partitionName) {
     this.columnName = Objects.requireNonNull(columnName, "Column name cannot be null");
     this.partitionName = Objects.requireNonNull(partitionName, "Partition name option cannot be null");
   }
@@ -79,7 +79,7 @@ public class ColumnStatsIndexKey implements RawKey {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    ColumnStatsIndexKey that = (ColumnStatsIndexKey) o;
+    ColumnStatsIndexPrefixRawKey that = (ColumnStatsIndexPrefixRawKey) o;
     return Objects.equals(columnName, that.columnName) && Objects.equals(partitionName, that.partitionName);
   }
   

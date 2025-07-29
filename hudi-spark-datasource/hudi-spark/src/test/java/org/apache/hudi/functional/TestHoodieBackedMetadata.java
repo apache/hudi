@@ -102,7 +102,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
-import org.apache.hudi.metadata.ColumnStatsIndexKey;
+import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
@@ -2011,7 +2011,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       HoodieTableMetadata tableMetadata = metadata(client, storage);
       // prefix search for column (_hoodie_record_key)
-      ColumnStatsIndexKey columnKey = new ColumnStatsIndexKey(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      ColumnStatsIndexPrefixRawKey columnKey = new ColumnStatsIndexPrefixRawKey(HoodieRecord.RECORD_KEY_METADATA_FIELD);
       List<HoodieRecord<HoodieMetadataPayload>> result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.lazy(Collections.singletonList(columnKey)),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
@@ -2020,7 +2020,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertEquals(result.size(), 6);
 
       // prefix search for col(_hoodie_record_key) and first partition. only 2 files should be matched
-      ColumnStatsIndexKey columnWithPartitionKey = new ColumnStatsIndexKey(HoodieRecord.RECORD_KEY_METADATA_FIELD, 
+      ColumnStatsIndexPrefixRawKey columnWithPartitionKey = new ColumnStatsIndexPrefixRawKey(HoodieRecord.RECORD_KEY_METADATA_FIELD,
           HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
       result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.lazy(Collections.singletonList(columnWithPartitionKey)),
@@ -2040,7 +2040,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       });
 
       // prefix search for column {commit time} and first partition
-      ColumnStatsIndexKey commitTimeKey = new ColumnStatsIndexKey(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+      ColumnStatsIndexPrefixRawKey commitTimeKey = new ColumnStatsIndexPrefixRawKey(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
           HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
       result = tableMetadata.getRecordsByKeyPrefixes(
           HoodieListData.lazy(Collections.singletonList(commitTimeKey)),

@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection
 import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.metadata.{ColumnStatsIndexKey, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.util.JFunction
 
@@ -346,10 +346,10 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     val rawKeys = if (prunedPartitions.isDefined) {
       val partitionsList = prunedPartitions.get.toList
       targetColumns.flatMap(colName =>
-        partitionsList.map(partitionPath => new ColumnStatsIndexKey(colName, partitionPath))
+        partitionsList.map(partitionPath => new ColumnStatsIndexPrefixRawKey(colName, partitionPath))
       )
     } else {
-      targetColumns.map(colName => new ColumnStatsIndexKey(colName))
+      targetColumns.map(colName => new ColumnStatsIndexPrefixRawKey(colName))
     }
 
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =

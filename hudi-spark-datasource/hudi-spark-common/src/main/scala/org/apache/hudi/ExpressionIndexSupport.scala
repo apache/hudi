@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
-import org.apache.hudi.metadata.{ColumnStatsIndexKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.util.JFunction
 
@@ -348,10 +348,10 @@ class ExpressionIndexSupport(spark: SparkSession,
     val rawKeys = if (prunedPartitions.isDefined) {
       val partitionsList = prunedPartitions.get.toList
       targetColumns.flatMap(colName =>
-        partitionsList.map(partitionPath => new ColumnStatsIndexKey(colName, partitionPath))
+        partitionsList.map(partitionPath => new ColumnStatsIndexPrefixRawKey(colName, partitionPath))
       )
     } else {
-      targetColumns.map(colName => new ColumnStatsIndexKey(colName))
+      targetColumns.map(colName => new ColumnStatsIndexPrefixRawKey(colName))
     }
 
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
@@ -501,7 +501,7 @@ class ExpressionIndexSupport(spark: SparkSession,
   private def loadExpressionIndexPartitionStatRecords(indexDefinition: HoodieIndexDefinition, shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     // We are omitting the partition name and only using the column name and expression index partition stat prefix to fetch the records
     // Create a ColumnStatsIndexKey with the column and partition prefix
-    val rawKey = new ColumnStatsIndexKey(indexDefinition.getSourceFields.get(0),
+    val rawKey = new ColumnStatsIndexPrefixRawKey(indexDefinition.getSourceFields.get(0),
       toJavaOption(Option(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION_STAT_PREFIX)))
     val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadExpressionIndexForColumnsInternal(
       indexDefinition.getIndexName, shouldReadInMemory, Seq(rawKey))
@@ -550,16 +550,16 @@ class ExpressionIndexSupport(spark: SparkSession,
     val rawKeys = if (prunedPartitions.nonEmpty) {
       val partitionsList = prunedPartitions.toList
       targetColumns.flatMap(colName =>
-        partitionsList.map(partitionPath => new ColumnStatsIndexKey(colName, partitionPath))
+        partitionsList.map(partitionPath => new ColumnStatsIndexPrefixRawKey(colName, partitionPath))
       )
     } else {
-      targetColumns.map(colName => new ColumnStatsIndexKey(colName))
+      targetColumns.map(colName => new ColumnStatsIndexPrefixRawKey(colName))
     }
 
     loadExpressionIndexForColumnsInternal(indexPartition, shouldReadInMemory, rawKeys)
   }
 
-  private def loadExpressionIndexForColumnsInternal(indexPartition: String, shouldReadInMemory: Boolean, keyPrefixes: Iterable[ColumnStatsIndexKey]) = {
+  private def loadExpressionIndexForColumnsInternal(indexPartition: String, shouldReadInMemory: Boolean, keyPrefixes: Iterable[ColumnStatsIndexPrefixRawKey]) = {
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(
         HoodieListData.eager(keyPrefixes.toSeq.asJava), indexPartition, shouldReadInMemory)

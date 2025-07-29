@@ -79,7 +79,7 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
-import org.apache.hudi.metadata.ColumnStatsIndexKey;
+import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -1472,7 +1472,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetadata tableMetadata = metadata(client);
       // prefix search for column (_hoodie_record_key)
       List<HoodieRecord<HoodieMetadataPayload>> result = tableMetadata.getRecordsByKeyPrefixes(
-          HoodieListData.lazy(Collections.singletonList(new ColumnStatsIndexKey(HoodieRecord.RECORD_KEY_METADATA_FIELD))),
+          HoodieListData.lazy(Collections.singletonList(new ColumnStatsIndexPrefixRawKey(HoodieRecord.RECORD_KEY_METADATA_FIELD))),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.

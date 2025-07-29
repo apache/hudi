@@ -29,7 +29,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
-import org.apache.hudi.metadata.{ColumnStatsIndexKey, HoodieMetadataPayload, HoodieTableMetadataUtil}
+import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.util.JFunction
 
@@ -70,7 +70,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     checkState(targetColumns.nonEmpty)
     logDebug(s"Loading column stats for columns: ${targetColumns.mkString(", ")}")
     // For partition stats, we only need column names (no partition name)
-    val rawKeys = targetColumns.map(colName => new ColumnStatsIndexKey(colName))
+    val rawKeys = targetColumns.map(colName => new ColumnStatsIndexPrefixRawKey(colName))
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(
         HoodieListData.eager(rawKeys.asJava), HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, shouldReadInMemory)

@@ -2770,7 +2770,7 @@ public class HoodieTableMetadataUtil {
    */
   @Deprecated
   public static List<String> generateKeyPrefixes(List<String> columnsToIndex, String partitionName) {
-    List<ColumnStatsIndexKey> rawKeys = generateColumnStatsKeys(columnsToIndex, partitionName);
+    List<ColumnStatsIndexPrefixRawKey> rawKeys = generateColumnStatsKeys(columnsToIndex, partitionName);
     return rawKeys.stream()
         .map(key -> key.encode())
         .collect(Collectors.toList());
@@ -2779,10 +2779,10 @@ public class HoodieTableMetadataUtil {
   /**
    * Generate column stats index keys for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
    */
-  public static List<ColumnStatsIndexKey> generateColumnStatsKeys(List<String> columnsToIndex, String partitionName) {
-    List<ColumnStatsIndexKey> keys = new ArrayList<>();
+  public static List<ColumnStatsIndexPrefixRawKey> generateColumnStatsKeys(List<String> columnsToIndex, String partitionName) {
+    List<ColumnStatsIndexPrefixRawKey> keys = new ArrayList<>();
     for (String columnName : columnsToIndex) {
-      keys.add(new ColumnStatsIndexKey(columnName, partitionName));
+      keys.add(new ColumnStatsIndexPrefixRawKey(columnName, partitionName));
     }
     return keys;
   }
