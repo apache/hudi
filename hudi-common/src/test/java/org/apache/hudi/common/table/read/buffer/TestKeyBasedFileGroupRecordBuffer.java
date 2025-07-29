@@ -58,6 +58,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -267,12 +269,14 @@ class TestKeyBasedFileGroupRecordBuffer {
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
     when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
-    when(fileGroupReaderSchemaHandler.getCustomDeleteMarkerKeyValue()).thenReturn(deleteMarkerKeyValue);
-    when(fileGroupReaderSchemaHandler.getHoodieOperationPos()).thenReturn(-1);
+    TypedProperties props = new TypedProperties();
+    deleteMarkerKeyValue.ifPresent(markerKeyValue -> {
+      props.setProperty(DELETE_KEY, markerKeyValue.getLeft());
+      props.setProperty(DELETE_MARKER, markerKeyValue.getRight());
+    });
     readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
-    TypedProperties props = new TypedProperties();
     UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
     return new KeyBasedFileGroupRecordBuffer<>(
         readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, orderingFieldNames, updateProcessor);

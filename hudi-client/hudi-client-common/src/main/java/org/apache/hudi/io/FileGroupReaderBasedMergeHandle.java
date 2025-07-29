@@ -286,7 +286,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
     private GenericRecord convertOutput(T record) {
       T convertedRecord = outputConverter.get().map(converter -> record == null ? null : converter.apply(record)).orElse(record);
-      return convertedRecord == null ? null : readerContext.convertToAvroRecord(convertedRecord, requestedSchema.get());
+      return convertedRecord == null ? null : readerContext.getRecordContext().convertToAvroRecord(convertedRecord, requestedSchema.get());
     }
   }
 }

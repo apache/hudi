@@ -20,7 +20,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.table.PartialUpdateMode;
 
 import org.apache.avro.Schema;
@@ -42,14 +42,14 @@ import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
  * {@link BufferedRecordMergerFactory.EventTimePartialRecordMerger}.
  */
 public class PartialUpdateStrategy<T> {
-  private final HoodieReaderContext<T> readerContext;
+  private final RecordContext<T> recordContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
 
-  public PartialUpdateStrategy(HoodieReaderContext<T> readerContext,
+  public PartialUpdateStrategy(RecordContext<T> recordContext,
                                PartialUpdateMode partialUpdateMode,
                                TypedProperties props) {
-    this.readerContext = readerContext;
+    this.recordContext = recordContext;
     this.partialUpdateMode = partialUpdateMode;
     this.mergeProperties = parseMergeProperties(props);
   }
@@ -109,17 +109,17 @@ public class PartialUpdateStrategy<T> {
     for (Schema.Field field : fields) {
       String fieldName = field.name();
       Object defaultValue = toJavaDefaultValue(field);
-      Object newValue = readerContext.getValue(
+      Object newValue = recordContext.getValue(
           newRecord.getRecord(), newSchema, fieldName);
       if (defaultValue == newValue
           || (keepOldMetadataColumns && HOODIE_META_COLUMNS_NAME_TO_POS.containsKey(fieldName))) {
-        updateValues.put(field.pos(), readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+        updateValues.put(field.pos(), recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = recordContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
@@ -138,19 +138,19 @@ public class PartialUpdateStrategy<T> {
     String partialUpdateCustomMarker = mergeProperties.get(PARTIAL_UPDATE_CUSTOM_MARKER);
     for (Schema.Field field : fields) {
       String fieldName = field.name();
-      Object newValue = readerContext.getValue(newRecord.getRecord(), newSchema, fieldName);
+      Object newValue = recordContext.getValue(newRecord.getRecord(), newSchema, fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
           && null != partialUpdateCustomMarker
-          && (partialUpdateCustomMarker.equals(readerContext.getTypeConverter().castToString(newValue)))) {
+          && (partialUpdateCustomMarker.equals(recordContext.getTypeConverter().castToString(newValue)))) {
         updateValues.put(
             field.pos(),
-            readerContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+            recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = readerContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
+    engineRecord = recordContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
