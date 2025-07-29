@@ -107,6 +107,7 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-io</artifactId>
       <version>${project.version}</version>
+      <classifier>shaded</classifier>
     </dependency>
 
     <dependency>
