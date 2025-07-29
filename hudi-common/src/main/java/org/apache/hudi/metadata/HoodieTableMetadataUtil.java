@@ -190,6 +190,7 @@ import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSIN
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewExpressionIndexDefinitionRequired;
 import static org.apache.hudi.metadata.MetadataPartitionType.isNewSecondaryIndexDefinitionRequired;
@@ -1102,7 +1103,7 @@ public class HoodieTableMetadataUtil {
     if (isPartitionedRLI) {
       recordIndexRecordsPair = recordIndexRecords.mapToPair(r -> {
         String recordPartitionPath = r.getData() instanceof EmptyHoodieRecordPayloadWithPartition
-            ? ((EmptyHoodieRecordPayloadWithPartition) r.getData()).getPartitionPath() : ((HoodieMetadataPayload) r.getData()).getRecordGlobalLocation().getPartitionPath();
+            ? ((EmptyHoodieRecordPayloadWithPartition) r.getData()).getPartitionPath() : ((HoodieMetadataPayload) r.getData()).getDataPartition();
         return Pair.of(new HoodieKey(recordPartitionPath, r.getRecordKey()), r);
       });
     } else {

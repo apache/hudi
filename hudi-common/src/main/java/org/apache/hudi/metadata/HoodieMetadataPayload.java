@@ -723,6 +723,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return getLocationFromRecordIndexInfo(recordIndexMetadata);
   }
 
+  public String getDataPartition() {
+    return recordIndexMetadata.getPartitionName();
+  }
+
   public boolean isDeleted() {
     return isDeletedRecord;
   }

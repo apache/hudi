@@ -198,9 +198,11 @@ public abstract class HoodieIndex<I, O> implements Serializable {
     RECORD_INDEX,
 
     @EnumFieldDescription("Index which saves the record key to location mappings in the "
-        + "HUDI Metadata Table. This is a non global index, keys only need to be unique inside each "
-        + "partition in the table. Supports sharding to achieve very high scale. If a table has keys "
-        + "that are unique across all partitions, use `RECORD_INDEX` instead.")
+        + "HUDI Metadata Table. Supports sharding to achieve very high scale. This is a "
+        + "non global index, where keys can be replicated across partitions, since a "
+        + "pair of partition path and record keys will uniquely map to a location using "
+        + "this index. If users expect record keys to be unique across all partitions, "
+        + "use `RECORD_INDEX` instead.")
     PARTITIONED_RECORD_INDEX
   }
 

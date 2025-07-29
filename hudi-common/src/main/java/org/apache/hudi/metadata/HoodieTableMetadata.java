@@ -243,7 +243,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return map from recordkey to the location of the record that was read from the index
    *
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation>  readRecordIndex(HoodieData<String> recordKeys, Option<String> dataTablePartition);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndex(HoodieData<String> recordKeys, Option<String> dataTablePartition);
 
   /**
    * Returns the location of record keys which are found in the record index.
