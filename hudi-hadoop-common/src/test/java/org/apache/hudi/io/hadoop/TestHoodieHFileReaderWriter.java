@@ -260,7 +260,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
         createReader(HoodieTestUtils.getStorage(getFilePath()))) {
       List<String> keys =
-          IntStream.concat(IntStream.range(40, NUM_RECORDS * 2), IntStream.range(10, 20))
+          IntStream.concat(IntStream.range(10, 20), IntStream.range(40, NUM_RECORDS * 2))
               .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toList());
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
@@ -268,7 +268,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
           hfileReader.getRecordsByKeysIterator(keys, avroSchema);
 
       List<Integer> expectedIds =
-          IntStream.concat(IntStream.range(40, NUM_RECORDS), IntStream.range(10, 20))
+          IntStream.concat(IntStream.range(10, 20), IntStream.range(40, NUM_RECORDS))
               .boxed().collect(Collectors.toList());
       int index = 0;
       while (iterator.hasNext()) {
