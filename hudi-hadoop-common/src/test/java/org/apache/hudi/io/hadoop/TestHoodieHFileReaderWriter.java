@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.storage.HFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -87,6 +89,7 @@ import static org.mockito.Mockito.when;
 
 public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   protected static final int NUM_RECORDS_FIXTURE = 50;
+  protected static final TypedProperties DEFAULT_PROPS = new TypedProperties();
 
   protected static Stream<Arguments> populateMetaFieldsAndTestAvroWithMeta() {
     return Arrays.stream(new Boolean[][] {
@@ -100,12 +103,18 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @Override
   protected HoodieAvroFileReader createReader(
       HoodieStorage storage) throws Exception {
-    return new HoodieNativeAvroHFileReader(storage, getFilePath(), Option.empty());
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
+        .withStorage(storage).withProps(DEFAULT_PROPS)
+        .withPath(getFilePath()).build();
+    return new HoodieNativeAvroHFileReader(readerFactory, getFilePath(), Option.empty());
   }
 
   protected HoodieAvroHFileReaderImplBase createHFileReader(HoodieStorage storage,
                                                             byte[] content) throws IOException {
-    return new HoodieNativeAvroHFileReader(storage, content, Option.empty());
+    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
+        .withStorage(storage).withProps(DEFAULT_PROPS)
+        .withContent(content).build();
+    return new HoodieNativeAvroHFileReader(readerFactory, getFilePath(), Option.empty());
   }
 
   protected void verifyHFileReader(byte[] content,

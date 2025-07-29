@@ -29,19 +29,14 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.expression.Predicates;
-import org.apache.hudi.io.ByteArraySeekableDataInputStream;
-import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
-import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.io.hfile.KeyValue;
 import org.apache.hudi.io.hfile.UTF8StringKey;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
@@ -79,27 +74,17 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static final Set<String> PRELOADED_META_INFO_KEYS = new HashSet<>(
       Arrays.asList(KEY_MIN_RECORD, KEY_MAX_RECORD, SCHEMA_KEY));
 
-  private final HoodieStorage storage;
-  private final Option<StoragePath> path;
-  private final Option<byte[]> bytesContent;
+  private final HFileReaderFactory readerFactory;
+  private final StoragePath path;
   // In-memory cache for meta info
   private final Map<String, byte[]> metaInfoMap;
   private final Lazy<Schema> schema;
   private boolean isMetaInfoLoaded = false;
   private long numKeyValueEntries = -1L;
 
-  public HoodieNativeAvroHFileReader(HoodieStorage storage, StoragePath path, Option<Schema> schemaOption) {
-    this.storage = storage;
-    this.path = Option.of(path);
-    this.bytesContent = Option.empty();
-    this.metaInfoMap = new HashMap<>();
-    this.schema = schemaOption.map(Lazy::eagerly).orElseGet(() -> Lazy.lazily(this::fetchSchema));
-  }
-
-  public HoodieNativeAvroHFileReader(HoodieStorage storage, byte[] content, Option<Schema> schemaOption) {
-    this.storage = storage;
-    this.path = Option.empty();
-    this.bytesContent = Option.of(content);
+  public HoodieNativeAvroHFileReader(HFileReaderFactory readerFactory, StoragePath path, Option<Schema> schemaOption) {
+    this.readerFactory = readerFactory;
+    this.path = path;
     this.metaInfoMap = new HashMap<>();
     this.schema = schemaOption.map(Lazy::eagerly).orElseGet(() -> Lazy.lazily(this::fetchSchema));
   }
@@ -113,7 +98,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           "Schema projections are not supported in HFile reader");
     }
 
-    HFileReader reader = newHFileReader();
+    HFileReader reader = readerFactory.createHFileReader();
     return new RecordIterator(reader, getSchema(), readerSchema);
   }
 
@@ -130,7 +115,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public BloomFilter readBloomFilter() {
-    try (HFileReader reader = newHFileReader()) {
+    try (HFileReader reader = readerFactory.createHFileReader()) {
       ByteBuffer byteBuffer = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).get();
       return BloomFilterFactory.fromByteBuffer(byteBuffer,
           fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)).get()));
@@ -141,7 +126,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
-    try (HFileReader reader = newHFileReader()) {
+    try (HFileReader reader = readerFactory.createHFileReader()) {
       reader.seekTo();
       // candidateRowKeys must be sorted
       return new TreeSet<>(candidateRowKeys).stream()
@@ -163,7 +148,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    HFileReader reader = newHFileReader();
+    HFileReader reader = readerFactory.createHFileReader();
     return new ClosableIterator<String>() {
       @Override
       public boolean hasNext() {
@@ -220,7 +205,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeysIterator(
       List<String> sortedKeys, Schema schema) throws IOException {
-    HFileReader reader = newHFileReader();
+    HFileReader reader = readerFactory.createHFileReader();
     ClosableIterator<IndexedRecord> iterator =
         new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema);
     return new CloseableMappingIterator<>(
@@ -230,7 +215,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   @Override
   public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordsByKeyPrefixIterator(
       List<String> sortedKeyPrefixes, Schema schema) throws IOException {
-    HFileReader reader = newHFileReader();
+    HFileReader reader = readerFactory.createHFileReader();
     ClosableIterator<IndexedRecord> iterator =
         new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), schema);
     return new CloseableMappingIterator<>(
@@ -310,7 +295,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private synchronized void loadAllMetaInfoIntoCacheIfNeeded() throws IOException {
     if (!isMetaInfoLoaded) {
       // Load all meta info that are small into cache
-      try (HFileReader reader = newHFileReader()) {
+      try (HFileReader reader = readerFactory.createHFileReader()) {
         this.numKeyValueEntries = reader.getNumKeyValueEntries();
         for (String metaInfoKey : PRELOADED_META_INFO_KEYS) {
           Option<byte[]> metaInfo = reader.getMetaInfo(new UTF8StringKey(metaInfoKey));
@@ -325,29 +310,16 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     }
   }
 
-  private HFileReader newHFileReader() throws IOException {
-    SeekableDataInputStream inputStream;
-    long fileSize;
-    if (path.isPresent()) {
-      fileSize = storage.getPathInfo(path.get()).getLength();
-      inputStream = storage.openSeekable(path.get(), false);
-    } else {
-      fileSize = bytesContent.get().length;
-      inputStream = new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(bytesContent.get()));
-    }
-    return new HFileReaderImpl(inputStream, fileSize);
-  }
-
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
                                                                          Schema readerSchema) throws IOException {
-    HFileReader reader = newHFileReader();
+    HFileReader reader = readerFactory.createHFileReader();
     return new RecordByKeyIterator(reader, sortedKeys, getSchema(), readerSchema);
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeyPrefixIterator(List<String> sortedKeyPrefixes,
                                                                               Schema readerSchema) throws IOException {
-    HFileReader reader = newHFileReader();
+    HFileReader reader = readerFactory.createHFileReader();
     return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), readerSchema);
   }
 
