@@ -46,9 +46,9 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
@@ -102,27 +102,35 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   @Override
   protected HoodieAvroFileReader createReader(
       HoodieStorage storage) throws Exception {
+    return createReader(storage, true);
+  }
+
+  protected HoodieAvroHFileReaderImplBase createReader(HoodieStorage storage,
+                                                       boolean useBloomFilter) throws Exception {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(DEFAULT_PROPS)
         .withPath(getFilePath()).build();
     return HoodieNativeAvroHFileReader.builder()
-        .readerFactory(readerFactory).path(getFilePath()).build();
+        .readerFactory(readerFactory).path(getFilePath()).useBloomFilter(useBloomFilter).build();
   }
 
   protected HoodieAvroHFileReaderImplBase createHFileReader(HoodieStorage storage,
-                                                            byte[] content) throws IOException {
+                                                            byte[] content,
+                                                            boolean useBloomFilter) throws IOException {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(DEFAULT_PROPS)
         .withContent(content).build();
     return HoodieNativeAvroHFileReader.builder()
-        .readerFactory(readerFactory).path(getFilePath()).build();
+        .readerFactory(readerFactory).path(getFilePath()).useBloomFilter(useBloomFilter).build();
   }
 
   protected void verifyHFileReader(byte[] content,
                                    String hfileName,
                                    boolean mayUseDefaultComparator,
+                                   boolean useBloomFilter,
                                    int count) throws IOException {
-    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(HoodieTestUtils.getStorage(hfileName), content)) {
+    try (HoodieAvroHFileReaderImplBase hfileReader =
+             createHFileReader(HoodieTestUtils.getStorage(hfileName), content, useBloomFilter)) {
       assertEquals(count, hfileReader.getTotalRecords());
     }
   }
@@ -240,14 +248,15 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     // TODO(HUDI-3683): fix the schema evolution for HFile
   }
 
-  @Test
-  public void testReadHFileFormatRecords() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testReadHFileFormatRecords(boolean useBloomFilter) throws Exception {
     writeFileWithSimpleSchema();
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     byte[] content = FileIOUtils.readAsByteArray(
         storage.open(getFilePath()), (int) storage.getPathInfo(getFilePath()).getLength());
     // Reading byte array in HFile format, without actual file path
-    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content, useBloomFilter)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
@@ -255,11 +264,12 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
-  @Test
-  public void testReaderGetRecordIterator() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testReaderGetRecordIterator(boolean useBloomFilter) throws Exception {
     writeFileWithSimpleSchema();
-    try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
-        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
+    try (HoodieAvroHFileReaderImplBase hfileReader =
+             createReader(HoodieTestUtils.getStorage(getFilePath()), useBloomFilter)) {
       List<String> keys =
           IntStream.concat(IntStream.range(10, 20), IntStream.range(40, NUM_RECORDS * 2))
               .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toList());
@@ -283,13 +293,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
-  @Test
-  public void testReaderGetRecordIteratorByKeys() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testReaderGetRecordIteratorByKeys(boolean useBloomFilter) throws Exception {
     writeFileWithSimpleSchema();
     Schema avroSchema =
         getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-    try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
-        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
+    try (HoodieAvroHFileReaderImplBase hfileReader =
+             createReader(HoodieTestUtils.getStorage(getFilePath()), useBloomFilter)) {
       List<String> keys = Collections.singletonList("key");
       Iterator<IndexedRecord> iterator =
           hfileReader.getIndexedRecordsByKeysIterator(keys, avroSchema);
@@ -324,7 +335,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
               .collect(Collectors.toList());
       assertEquals(expectedKey1s, recordsByKeys);
     }
-    try (HoodieAvroHFileReaderImplBase hfileReader = getHFileReaderFromFixture()) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = getHFileReaderFromFixture(useBloomFilter)) {
       List<GenericRecord> allRecords = toStream(hfileReader.getRecordIterator())
           .map(r -> (GenericRecord) r.getData()).collect(Collectors.toList());
       Iterator<IndexedRecord> iterator = hfileReader.getIndexedRecordsByKeysIterator(
@@ -343,13 +354,14 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
-  @Test
-  public void testReaderGetRecordIteratorByKeyPrefixes() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testReaderGetRecordIteratorByKeyPrefixes(boolean useBloomFilter) throws Exception {
     writeFileWithSimpleSchema();
     Schema avroSchema =
         getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
-    try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
-        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
+    try (HoodieAvroHFileReaderImplBase hfileReader =
+             createReader(HoodieTestUtils.getStorage(getFilePath()), useBloomFilter)) {
       List<String> keyPrefixes = Collections.singletonList("key");
       Iterator<IndexedRecord> iterator =
           hfileReader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, avroSchema);
@@ -465,7 +477,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       });
       assertEquals(expectedKey1s, recordsByPrefix);
     }
-    try (HoodieAvroHFileReaderImplBase hfileReader = getHFileReaderFromFixture()) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = getHFileReaderFromFixture(useBloomFilter)) {
       List<GenericRecord> allRecords = toStream(hfileReader.getRecordIterator())
           .map(r -> (GenericRecord) r.getData()).collect(Collectors.toList());
       Iterator<IndexedRecord> iterator = hfileReader.getIndexedRecordsByKeyPrefixIterator(
@@ -486,11 +498,12 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     }
   }
 
-  @Test
-  public void testReaderGetRecordIteratorByKeysWithBackwardSeek() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testReaderGetRecordIteratorByKeysWithBackwardSeek(boolean useBloomFilter) throws Exception {
     writeFileWithSimpleSchema();
-    try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
-        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
+    try (HoodieAvroHFileReaderImplBase hfileReader =
+             createReader(HoodieTestUtils.getStorage(getFilePath()), useBloomFilter)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       // Filter for "key00001, key05, key24, key16, key31, key61".
@@ -511,9 +524,11 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {
-      "/hfile/hudi_0_9_hbase_1_2_3", "/hfile/hudi_0_10_hbase_1_2_3", "/hfile/hudi_0_11_hbase_2_4_9"})
-  public void testHoodieHFileCompatibility(String hfilePrefix) throws IOException {
+  @CsvSource(value = {
+      "/hfile/hudi_0_9_hbase_1_2_3,true", "/hfile/hudi_0_9_hbase_1_2_3,false",
+      "/hfile/hudi_0_10_hbase_1_2_3,true", "/hfile/hudi_0_10_hbase_1_2_3,false",
+      "/hfile/hudi_0_11_hbase_2_4_9,true", "/hfile/hudi_0_11_hbase_2_4_9,false"})
+  public void testHoodieHFileCompatibility(String hfilePrefix, boolean useBloomFilter) throws IOException {
     // This fixture is generated from TestHoodieReaderWriterBase#testWriteReadPrimitiveRecord()
     // using different Hudi releases
     String simpleHFile = hfilePrefix + SIMPLE_SCHEMA_HFILE_SUFFIX;
@@ -527,10 +542,10 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     FileSystem fs = HadoopFSUtils.getFs(getFilePath().toString(), new Configuration());
     byte[] content = readHFileFromResources(simpleHFile);
     verifyHFileReader(
-        content, hfilePrefix, true, NUM_RECORDS_FIXTURE);
+        content, hfilePrefix, true, useBloomFilter, NUM_RECORDS_FIXTURE);
 
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
-    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content, useBloomFilter)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
@@ -539,8 +554,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
     content = readHFileFromResources(complexHFile);
     verifyHFileReader(
-        content, hfilePrefix, true, NUM_RECORDS_FIXTURE);
-    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
+        content, hfilePrefix, true, useBloomFilter, NUM_RECORDS_FIXTURE);
+    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content, useBloomFilter)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
       assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
@@ -549,7 +564,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
 
     content = readHFileFromResources(bootstrapIndexFile);
     verifyHFileReader(
-        content, hfilePrefix, false, 4);
+        content, hfilePrefix, false, useBloomFilter, 4);
   }
 
   private Set<String> getRandomKeys(int count, List<String> keys) {
@@ -564,7 +579,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     return rowKeys;
   }
 
-  private HoodieAvroHFileReaderImplBase getHFileReaderFromFixture() throws IOException {
+  private HoodieAvroHFileReaderImplBase getHFileReaderFromFixture(boolean useBloomFilter) throws IOException {
     // This HFile has the following key and value
     // key: key000000-abcdefghij to key019999-abcdefghij
     // value: avro record based on exampleSchema.avsc
@@ -574,6 +589,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     // "Key{key010769}" -> "BlockIndexEntry{firstKey=Key{key010769}, offset=98878, size=2112}"
     // Last: "Key{key019889}" -> "BlockIndexEntry{firstKey=Key{key019889}, offset=183324, size=1103}"
     return createHFileReader(HoodieTestUtils.getStorage(getFilePath()),
-        readHFileFromResources("/hfile/hudi_1_0_hbase_2_4_13_avro_simple_schema_fake_first_key.hfile"));
+        readHFileFromResources("/hfile/hudi_1_0_hbase_2_4_13_avro_simple_schema_fake_first_key.hfile"),
+        useBloomFilter);
   }
 }

@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class TestHoodieStorageConfig {
-
   @Test
   void testHoodieStorageConfig() {
     String bloomFilterType = BloomFilterTypeCode.SIMPLE.name();

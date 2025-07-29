@@ -438,7 +438,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         }
 
         while (sortedKeyIterator.hasNext()) {
-          // First check if the key is present in the file using bloom filter, skip checking hfile if not present.
+          // First check if the key is present in the file using bloom filter;
+          // skip seekTo in HFile if the key is not present.
           String rawKey = sortedKeyIterator.next();
           if (bloomFilterOption.isPresent() && !bloomFilterOption.get().mightContain(rawKey)) {
             continue;
