@@ -27,7 +27,7 @@ import java.util.Objects;
 
 /**
  * Represents a raw key for column stats indexed by partition, file and column.
- * This is different from ColumnStatsIndexKey which is used for prefix lookups.
+ * This is different from ColumnStatsIndexPrefixRawKey which is used for prefix lookups.
  */
 public class ColumnStatsIndexRawKey implements RawKey {
   private final String partitionName;
