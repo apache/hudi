@@ -42,8 +42,8 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.ReusableFileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -316,12 +316,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> doLookupIndexRecords(HoodieData<String> keys, String partitionName, List<FileSlice> fileSlices,
                                                                                SerializableFunctionUnchecked<String, String> keyEncodingFn) {
+    boolean isSecondaryIndex = MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX);
 
     final int numFileSlices = fileSlices.size();
     if (numFileSlices == 1) {
       List<String> keysList = keys.map(keyEncodingFn::apply).collectAsList();
       TreeSet<String> distinctSortedKeys = new TreeSet<>(keysList);
-      return lookupRecords(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0));
+      return lookupRecords(partitionName, new ArrayList<>(distinctSortedKeys), fileSlices.get(0), !isSecondaryIndex);
     }
 
     // For SI v2, there are 2 cases require different implementation:
@@ -350,7 +351,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             distinctSortedKeyIter.forEachRemaining(keysList::add);
           }
           FileSlice fileSlice = fileSlices.get(mappingFunction.apply(keysList.get(0), numFileSlices));
-          return lookupRecordsItr(partitionName, keysList, fileSlice);
+          return lookupRecordsItr(partitionName, keysList, fileSlice, !isSecondaryIndex);
         };
     List<Integer> keySpace = IntStream.range(0, numFileSlices).boxed().collect(Collectors.toList());
     HoodieData<HoodieRecord<HoodieMetadataPayload>> result =
@@ -481,7 +482,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, getMetadataFileSystemView(), partitionName));
     checkState(!fileSlices.isEmpty(), "No file slices found for partition: " + partitionName);
-
     return doLookupIndexRecords(keys, partitionName, fileSlices, keyEncodingFn);
   }
 
@@ -594,9 +594,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private HoodieData<HoodieRecord<HoodieMetadataPayload>> lookupRecords(String partitionName,
                                                                         List<String> sortedKeys,
-                                                                        FileSlice fileSlice) {
+                                                                        FileSlice fileSlice,
+                                                                        boolean isFullKey) {
     List<HoodieRecord<HoodieMetadataPayload>> res = new ArrayList<>();
-    try (ClosableIterator<HoodieRecord<HoodieMetadataPayload>> iterator = lookupRecordsItr(partitionName, sortedKeys, fileSlice)) {
+    try (ClosableIterator<HoodieRecord<HoodieMetadataPayload>> iterator = lookupRecordsItr(partitionName, sortedKeys, fileSlice, isFullKey)) {
       iterator.forEachRemaining(res::add);
     }
     return HoodieListData.lazy(res);
@@ -605,22 +606,24 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private ClosableIterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>> lookupKeyRecordPairsItr(String partitionName,
                                                                                                       List<String> sortedKeys,
                                                                                                       FileSlice fileSlice) {
+    boolean isSecondaryIndex = MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX);
     return lookupRecords(partitionName, sortedKeys, fileSlice, metadataRecord -> {
       HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
       String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
       HoodieKey hoodieKey = new HoodieKey(rowKey, partitionName);
       return Pair.of(rowKey, new HoodieAvroRecord<>(hoodieKey, payload));
-    }, true);
+    }, !isSecondaryIndex);
   }
 
   private ClosableIterator<HoodieRecord<HoodieMetadataPayload>> lookupRecordsItr(String partitionName,
                                                                                  List<String> keys,
-                                                                                 FileSlice fileSlice) {
+                                                                                 FileSlice fileSlice,
+                                                                                 boolean isFullKey) {
     return lookupRecords(partitionName, keys, fileSlice,
         metadataRecord -> {
           HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
           return new HoodieAvroRecord<>(new HoodieKey(payload.key, partitionName), payload);
-        }, true);
+        }, isFullKey);
   }
 
   /**
@@ -663,20 +666,25 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @return A predicate for filtering records
    */
   static Predicate buildPredicate(String partitionName, List<String> sortedKeys, boolean isFullKey) {
-    if (MetadataPartitionType.fromPartitionPath(partitionName)
-          .equals(MetadataPartitionType.SECONDARY_INDEX)) {
-      // For secondary index, always use prefix matching
-      return Predicates.startsWithAny(null,
-          sortedKeys.stream()
-          .map(escapedKey -> escapedKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR)
-          .map(Literal::from)
-          .collect(Collectors.toList()));
-    } else if (isFullKey) {
+    if (isFullKey) {
+      ValidationUtils.checkArgument(
+          !MetadataPartitionType.fromPartitionPath(partitionName).equals(MetadataPartitionType.SECONDARY_INDEX),
+          "Secondary index should never use full-key lookup");
       // For non-secondary index with full key matching
       return Predicates.in(null, sortedKeys.stream()
           .map(Literal::from)
           .collect(Collectors.toList()));
     } else {
+      // For secondary index we need an extra step of processing the key to lookup before handing it over to filegroup reader.
+      if (MetadataPartitionType.fromPartitionPath(partitionName)
+          .equals(MetadataPartitionType.SECONDARY_INDEX)) {
+        // For secondary index, always use prefix matching
+        return Predicates.startsWithAny(null,
+            sortedKeys.stream()
+                .map(escapedKey -> escapedKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR)
+                .map(Literal::from)
+                .collect(Collectors.toList()));
+      }
       // For non-secondary index with prefix matching
       return Predicates.startsWithAny(null, sortedKeys.stream()
           .map(Literal::from)
