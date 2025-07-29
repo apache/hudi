@@ -98,7 +98,7 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     HoodieData<String> recordKeys = HoodieListData.eager(Arrays.asList("key1", "key2"));
     
     // Setup mock behavior
-    when(mockMetadata.getRecordsByKeys(any(), any(), any())).thenReturn(mockPairData);
+    when(mockMetadata.getRecordsByKeys(any(), any())).thenReturn(mockPairData);
     when(mockPairData.mapToPair(any())).thenReturn(mockResult);
     
     // Call real method on the mock
@@ -124,7 +124,7 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     
     // Setup mock behavior for readIndexRecords
     HoodieData mockIndexRecords = mock(HoodieData.class);
-    when(mockMetadata.readIndexRecords(any(), anyString(), any())).thenReturn(mockIndexRecords);
+    when(mockMetadata.readIndexRecords(any(), anyString())).thenReturn(mockIndexRecords);
     when(mockIndexRecords.map(any())).thenReturn(mockHoodieData);
     
     // Call real method on the mock
