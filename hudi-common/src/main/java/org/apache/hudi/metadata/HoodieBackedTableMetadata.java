@@ -116,6 +116,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private static final Schema SCHEMA = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
 
   private final String metadataBasePath;
+  private final HoodieDataCleanupManager dataCleanupManager = new HoodieDataCleanupManager();
 
   private HoodieTableMetaClient metadataMetaClient;
   private Set<String> validInstantTimestamps = null;
@@ -174,11 +175,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName) {
-    List<HoodieRecord<HoodieMetadataPayload>> records = getRecordsByKeys(
-        HoodieListData.eager(Collections.singletonList(key)), partitionName, IDENTITY_ENCODING)
-        .values().collectAsList();
-    ValidationUtils.checkArgument(records.size() <= 1, () -> "Found more than 1 record for record key " + key);
-    return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
+    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData = getRecordsByKeys(
+        HoodieListData.eager(Collections.singletonList(key)), partitionName, IDENTITY_ENCODING);
+    try {
+      List<HoodieRecord<HoodieMetadataPayload>> records = recordsData.values().collectAsList();
+      ValidationUtils.checkArgument(records.size() <= 1, () -> "Found more than 1 record for record key " + key);
+      return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
+    } finally {
+      recordsData.unpersistWithDependencies();
+    }
   }
 
   @Override
@@ -285,6 +290,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           return new ImmutablePair<>(mappingFunction.apply(encodedKey, numFileSlices), encodedKey);
         });
     persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
+    dataCleanupManager.trackPersistedData(persistedInitialPairData);
     // Use the new processValuesOfTheSameShards API instead of explicit rangeBasedRepartitionForEachKey
     SerializableFunction<Iterator<String>, Iterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>>> processFunction =
         sortedKeys -> {
@@ -338,6 +344,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           return new ImmutablePair<>(mappingFunction.apply(encodedKey, numFileSlices), encodedKey);
         });
     persistedInitialPairData.persist("MEMORY_AND_DISK_SER");
+    dataCleanupManager.trackPersistedData(persistedInitialPairData);
 
     // Use the new processValuesOfTheSameShards API instead of explicit rangeBasedRepartitionForEachKey
     SerializableFunction<Iterator<String>, Iterator<HoodieRecord<HoodieMetadataPayload>>> processFunction =
@@ -376,9 +383,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
 
-    // TODO [HUDI-9544]: Metric does not work for rdd based API due to lazy evaluation.
-    return getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), IDENTITY_ENCODING)
-        .mapToPair((Pair<String, HoodieRecord<HoodieMetadataPayload>> p) -> Pair.of(p.getLeft(), p.getRight().getData().getRecordGlobalLocation()));
+    return dataCleanupManager.ensureDataCleanupOnException(v -> {
+      // TODO [HUDI-9544]: Metric does not work for rdd based API due to lazy evaluation.
+      return getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), IDENTITY_ENCODING)
+          .mapToPair((Pair<String, HoodieRecord<HoodieMetadataPayload>> p) -> Pair.of(p.getLeft(), p.getRight().getData().getRecordGlobalLocation()));
+    });
   }
 
   /**
@@ -396,8 +405,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // The caller is required to check for record index existence in MDT before calling this method.
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
-    return readIndexRecords(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), IDENTITY_ENCODING)
-        .map(r -> r.getData().getRecordGlobalLocation());
+    
+    return dataCleanupManager.ensureDataCleanupOnException(v ->
+        readIndexRecords(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), IDENTITY_ENCODING)
+            .map(r -> r.getData().getRecordGlobalLocation())
+    );
   }
 
   /**
@@ -411,13 +423,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndex(HoodieData<String> secondaryKeys, String partitionName) {
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
-    if (indexVersion.equals(HoodieIndexVersion.V1)) {
-      return readSecondaryIndexV1(secondaryKeys, partitionName);
-    } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
-      return readSecondaryIndexV2(secondaryKeys, partitionName);
-    } else {
-      throw new IllegalArgumentException("readSecondaryIndex does not support index with version " + indexVersion);
-    }
+    return dataCleanupManager.ensureDataCleanupOnException(v -> {
+      if (indexVersion.equals(HoodieIndexVersion.V1)) {
+        return readSecondaryIndexV1(secondaryKeys, partitionName);
+      } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
+        return readSecondaryIndexV2(secondaryKeys, partitionName);
+      } else {
+        throw new IllegalArgumentException("readSecondaryIndex does not support index with version " + indexVersion);
+      }
+    });
   }
 
   /**
@@ -431,13 +445,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public HoodieData<HoodieRecordGlobalLocation> readSecondaryIndexLocations(HoodieData<String> secondaryKeys, String partitionName) {
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
-    if (indexVersion.equals(HoodieIndexVersion.V1)) {
-      return readSecondaryIndexV1(secondaryKeys, partitionName).values();
-    } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
-      return readRecordIndexLocations(getRecordKeysFromSecondaryKeysV2(secondaryKeys, partitionName));
-    } else {
-      throw new IllegalArgumentException("readSecondaryIndexResult does not support index with version " + indexVersion);
-    }
+    return dataCleanupManager.ensureDataCleanupOnException(v -> {
+      if (indexVersion.equals(HoodieIndexVersion.V1)) {
+        return readSecondaryIndexV1(secondaryKeys, partitionName).values();
+      } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
+        return readRecordIndexLocations(getRecordKeysFromSecondaryKeysV2(secondaryKeys, partitionName));
+      } else {
+        throw new IllegalArgumentException("readSecondaryIndexResult does not support index with version " + indexVersion);
+      }
+    });
   }
 
   @Override
@@ -451,8 +467,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   public HoodieData<String> getRecordKeysFromSecondaryKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
-    return readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::escapeSpecialChars).map(
-        hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getRecordKey()));
+    return dataCleanupManager.ensureDataCleanupOnException(v ->
+        readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::escapeSpecialChars).map(
+            hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getRecordKey()))
+    );
   }
 
   private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexV2(HoodieData<String> secondaryKeys, String partitionName) {
@@ -828,13 +846,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public HoodiePairData<String, String> getSecondaryIndexRecords(HoodieData<String> secondaryKeys, String partitionName) {
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
-    if (indexVersion.equals(HoodieIndexVersion.V1)) {
-      return getSecondaryIndexRecordsV1(secondaryKeys, partitionName);
-    } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
-      return getSecondaryIndexRecordsV2(secondaryKeys, partitionName);
-    } else {
-      throw new IllegalArgumentException("getSecondaryIndexRecords does not support index with version " + indexVersion);
-    }
+    return dataCleanupManager.ensureDataCleanupOnException(v -> {
+      if (indexVersion.equals(HoodieIndexVersion.V1)) {
+        return getSecondaryIndexRecordsV1(secondaryKeys, partitionName);
+      } else if (indexVersion.equals(HoodieIndexVersion.V2)) {
+        return getSecondaryIndexRecordsV2(secondaryKeys, partitionName);
+      } else {
+        throw new IllegalArgumentException("getSecondaryIndexRecords does not support index with version " + indexVersion);
+      }
+    });
   }
 
   private HoodiePairData<String, String> getSecondaryIndexRecordsV1(HoodieData<String> keys, String partitionName) {

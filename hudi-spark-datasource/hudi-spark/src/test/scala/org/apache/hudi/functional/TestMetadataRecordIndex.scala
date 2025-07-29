@@ -82,34 +82,42 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     cleanupSparkContexts()
   }
 
+  protected def withRDDPersistenceValidation(f: => Unit): Unit = {
+    org.apache.hudi.testutils.SparkRDDValidationUtils.withRDDPersistenceValidation(spark, new org.apache.hudi.testutils.SparkRDDValidationUtils.ThrowingRunnable {
+      override def run(): Unit = f
+    })
+  }
+
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testClusteringWithRecordIndex(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      TABLE_TYPE.key -> tableType.name(),
-      HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
-      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
-    )
+    withRDDPersistenceValidation {
+      val hudiOpts = commonOpts ++ Map(
+        TABLE_TYPE.key -> tableType.name(),
+        HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
+        HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
+      )
 
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
+      doWriteAndValidateDataAndRecordIndex(hudiOpts,
+        operation = INSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Overwrite)
+      doWriteAndValidateDataAndRecordIndex(hudiOpts,
+        operation = UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append)
 
-    val lastClusteringInstant = getLatestClusteringInstant()
-    assertTrue(lastClusteringInstant.isPresent)
+      val lastClusteringInstant = getLatestClusteringInstant()
+      assertTrue(lastClusteringInstant.isPresent)
 
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
-      operation = UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
+      doWriteAndValidateDataAndRecordIndex(hudiOpts,
+        operation = UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append)
+      doWriteAndValidateDataAndRecordIndex(hudiOpts,
+        operation = UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append)
 
-    assertTrue(getLatestClusteringInstant().get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
-    validateDataAndRecordIndices(hudiOpts)
+      assertTrue(getLatestClusteringInstant().get().requestedTime.compareTo(lastClusteringInstant.get().requestedTime) > 0)
+      validateDataAndRecordIndices(hudiOpts)
+    }
   }
 
   private def getLatestClusteringInstant(): Option[HoodieInstant] = {
@@ -178,8 +186,10 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val readDf = spark.read.format("hudi").load(basePath)
     val rowArr = readDf.collect()
-    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndex(
-      HoodieListData.eager(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava)))
+    val res = metadata.readRecordIndex(
+      HoodieListData.eager(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList.asJava));
+    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(res);
+    res.unpersistWithDependencies()
 
     assertTrue(rowArr.length > 0)
     for (row <- rowArr) {
