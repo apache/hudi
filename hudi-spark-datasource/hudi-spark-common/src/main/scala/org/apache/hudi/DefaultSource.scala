@@ -234,6 +234,16 @@ class DefaultSource extends RelationProvider
         HoodieSpecifiedOffsetRangeLimit(instantTime)
     }
 
+    // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
+    //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
+    //       case  we opt in to not be providing catalog's schema, and instead force Hudi relations to fetch the schema
+    //       from the table itself
+    val userSchema = if (isUsingHiveCatalog(sqlContext.sparkSession)) {
+      None
+    } else {
+      schema
+    }
+
     val storageConf = HadoopFSUtils.getStorageConf(sqlContext.sparkSession.sessionState.newHadoopConf())
     val tablePath: StoragePath = {
       val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
@@ -254,10 +264,10 @@ class DefaultSource extends RelationProvider
     }
     if (readTableVersion >= HoodieTableVersion.EIGHT.versionCode()) {
       new HoodieStreamSourceV2(
-        sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
+        sqlContext, metaClient, metadataPath, userSchema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
     } else {
       new HoodieStreamSourceV1(
-        sqlContext, metaClient, metadataPath, schema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
+        sqlContext, metaClient, metadataPath, userSchema, parameters, offsetRangeLimit, HoodieTableVersion.fromVersionCode(targetTableVersion))
     }
   }
 }

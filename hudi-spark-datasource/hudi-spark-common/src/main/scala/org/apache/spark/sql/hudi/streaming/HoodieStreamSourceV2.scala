@@ -54,6 +54,8 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
 
   private lazy val tableType = metaClient.getTableType
 
+  private lazy val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
+
   private lazy val enableFileGroupReader = SparkConfigUtils
     .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
 
@@ -131,10 +133,10 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
         if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, None, false, rangeType).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, None, isBootstrappedTable, rangeType).build()
           } else {
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, None, false, rangeType).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, None, isBootstrappedTable, rangeType).build()
           }
           FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         } else {
@@ -153,10 +155,10 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
 
         if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
-            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), false, rangeType)
+            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable, rangeType)
               .build()
           } else {
-            new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), false, rangeType)
+            new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable, rangeType)
               .build()
           }
           FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, schema)

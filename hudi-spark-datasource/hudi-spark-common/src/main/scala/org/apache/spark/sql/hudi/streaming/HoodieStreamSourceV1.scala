@@ -62,6 +62,8 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
 
   private lazy val tableType = metaClient.getTableType
 
+  private lazy val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
+
   private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
     parameters.get(DataSourceReadOptions.INCREMENTAL_FORMAT.key).contains(DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
@@ -155,10 +157,10 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
         if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, None, false).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, None, isBootstrappedTable).build()
           } else {
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, None, false).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, None, isBootstrappedTable).build()
           }
           FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         } else {
@@ -177,10 +179,10 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
         )
         if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
-            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), false)
+            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
               .build()
           } else {
-            new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), false)
+            new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
               .build()
           }
           FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, schema)
