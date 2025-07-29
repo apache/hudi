@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -259,6 +260,7 @@ public class BufferedRecordMergerFactory {
     private final BufferedRecordMerger<T> deleteRecordMerger;
     private final Schema readerSchema;
     private final TypedProperties props;
+    private final String[] orderingFields;
 
     public PartialUpdateBufferedRecordMerger(
         RecordContext<T> recordContext,
@@ -271,6 +273,7 @@ public class BufferedRecordMergerFactory {
       this.deleteRecordMerger = deleteRecordMerger;
       this.readerSchema = readerSchema;
       this.props = props;
+      this.orderingFields = ConfigUtils.getOrderingFields(props);
     }
 
     @Override
@@ -296,7 +299,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props));
+        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
@@ -333,12 +336,15 @@ public class BufferedRecordMergerFactory {
    * based on {@code CUSTOM} merge mode.
    */
   private static class CustomRecordMerger<T> extends BaseCustomMerger<T> {
+    private final String[] orderingFields;
+
     public CustomRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         Schema readerSchema,
         TypedProperties props) {
       super(recordContext, recordMerger, readerSchema, props);
+      this.orderingFields = ConfigUtils.getOrderingFields(props);
     }
 
     @Override
@@ -360,7 +366,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props));
+        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }

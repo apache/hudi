@@ -92,11 +92,7 @@ public class HoodieFileSliceTestUtils {
   public static final HoodieTestDataGenerator DATA_GEN =
       new HoodieTestDataGenerator(0xDEED);
   public static final TypedProperties PROPERTIES = new TypedProperties();
-
-  static {
-    PROPERTIES.setProperty(
-        "hoodie.datasource.write.precombine.field", "timestamp");
-  }
+  private static String[] orderingFields = new String[] {"timestamp"};
 
   // We use a number to represent a record key, and a (start, end) range
   // to represent a set of record keys between start <= k <= end.
@@ -235,7 +231,7 @@ public class HoodieFileSliceTestUtils {
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
-                r.getKey(), r.getOrderingValue(schema, props)), r.getCurrentLocation().getPosition()))
+                r.getKey(), r.getOrderingValue(schema, props, orderingFields)), r.getCurrentLocation().getPosition()))
             .collect(Collectors.toList()),
         header);
   }

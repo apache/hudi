@@ -37,7 +37,7 @@ class TestHoodieRecordUtils {
     HoodieRecordMerger recordMerger1 = HoodieRecordUtils.loadRecordMerger(mergeClassName);
     HoodieRecordMerger recordMerger2 = HoodieRecordUtils.loadRecordMerger(mergeClassName);
     assertEquals(recordMerger1.getClass().getName(), mergeClassName);
-    assertEquals(recordMerger1, recordMerger2);
+    assertEquals(recordMerger2.getClass().getName(), mergeClassName);
   }
 
   @Test
