@@ -405,7 +405,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       // restore to savepoint
       client.restoreToSavepoint(inflightCommit);
       validateFilesMetadata(hoodieWriteConfig);
-      assertRowNumberEqualsTo(20);
+      assertRowNumberEqualsTo(numRecords);
       // ensure the compaction instant is still present because it was completed before the target of the restore
       assertFalse(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
           .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get())));
@@ -442,7 +442,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       // restore to savepoint
       client.restoreToSavepoint(inflightCommit);
       validateFilesMetadata(hoodieWriteConfig);
-      assertRowNumberEqualsTo(20);
+      assertRowNumberEqualsTo(numRecords);
       // ensure the compaction instant is still present because it was completed before the target of the restore
       assertFalse(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
           .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get())));
@@ -450,7 +450,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
   }
 
   private void writeInitialCommitsForAsyncServicesTests(int numRecords) {
-    for (int i = 0; i <= 3; i++) {
+    for (int i = 0; i < 3; i++) {
       String newCommitTime = writeClient.startCommit();
       List<HoodieRecord> records = i == 0 ? dataGen.generateInserts(newCommitTime, numRecords) : dataGen.generateUniqueUpdates(newCommitTime, numRecords);
       JavaRDD<WriteStatus> writeStatus = i == 0 ? writeClient.insert(jsc.parallelize(records, 1), newCommitTime) : writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
@@ -465,7 +465,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
             .withLockProvider(InProcessLockProvider.class)
             .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(3) // the 3rd delta_commit triggers compaction
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
             .withInlineCompaction(false)
             .withScheduleInlineCompaction(false)
             .build())
