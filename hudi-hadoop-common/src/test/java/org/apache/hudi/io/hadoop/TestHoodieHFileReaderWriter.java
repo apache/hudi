@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.hadoop;
 
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -29,8 +31,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.hfile.HFileReader;
+import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.io.storage.HFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
@@ -51,9 +56,9 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -73,17 +78,28 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static org.apache.hudi.common.bloom.BloomFilterFactory.createBloomFilter;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.readHFileFromResources;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.KEY_MAX_RECORD;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.KEY_MIN_RECORD;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.SCHEMA_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
@@ -142,8 +158,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), Boolean.toString(populateMetaFields));
-    TaskContextSupplier mockTaskContextSupplier = Mockito.mock(TaskContextSupplier.class);
-    Supplier<Integer> partitionSupplier = Mockito.mock(Supplier.class);
+    TaskContextSupplier mockTaskContextSupplier = mock(TaskContextSupplier.class);
+    Supplier<Integer> partitionSupplier = mock(Supplier.class);
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
 
@@ -261,6 +277,68 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
       verifySimpleRecords(hfileReader.getRecordIterator(avroSchema));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testBloomFilterInitializationInRecordIterator(boolean useBloomFilter) throws IOException {
+    HFileReaderFactory readerFactory = mock(HFileReaderFactory.class);
+    HFileReader hfileReader = mock(HFileReader.class);
+    when(readerFactory.createHFileReader()).thenReturn(hfileReader);
+    when(hfileReader.getMetaInfo(new UTF8StringKey(KEY_MIN_RECORD)))
+        .thenReturn(Option.of(getUTF8Bytes("key00")));
+    when(hfileReader.getMetaInfo(new UTF8StringKey(KEY_MAX_RECORD)))
+        .thenReturn(Option.of(getUTF8Bytes("key99")));
+    Schema schema = Schema.create(Schema.Type.STRING);
+    when(hfileReader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)))
+        .thenReturn(Option.of(getUTF8Bytes(schema.toString())));
+
+    BloomFilter bloomFilter = createBloomFilter(100, 0.001, 1000, BloomFilterTypeCode.DYNAMIC_V0.name());
+    when(hfileReader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK))
+        .thenReturn(Option.of(ByteBuffer.wrap(getUTF8Bytes(bloomFilter.serializeToString()))));
+    when(hfileReader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)))
+        .thenReturn(Option.of(getUTF8Bytes(bloomFilter.getBloomFilterTypeCode().toString())));
+
+    List<String> filterKeys = Collections.singletonList("key");
+    try (HoodieNativeAvroHFileReader reader = HoodieNativeAvroHFileReader.builder()
+        .readerFactory(readerFactory).path(new StoragePath("dummy")).useBloomFilter(useBloomFilter)
+        .build()) {
+      reader.getRecordIterator();
+      verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getRecordIterator(schema);
+      verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getRecordIterator(schema, schema);
+      verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getRecordKeyIterator();
+      verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getIndexedRecordIterator(schema, schema);
+      verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getRecordsByKeyPrefixIterator(filterKeys);
+      verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getRecordsByKeyPrefixIterator(filterKeys, schema);
+      verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getIndexedRecordsByKeyPrefixIterator(filterKeys, schema);
+      verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getRecordsByKeysIterator(filterKeys);
+      verify(hfileReader, useBloomFilter ? times(1) : never())
+          .getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getRecordsByKeysIterator(filterKeys, schema);
+      verify(hfileReader, useBloomFilter ? times(2) : never())
+          .getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
+
+      reader.getIndexedRecordsByKeysIterator(filterKeys, schema);
+      verify(hfileReader, useBloomFilter ? times(3) : never())
+          .getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
     }
   }
 
