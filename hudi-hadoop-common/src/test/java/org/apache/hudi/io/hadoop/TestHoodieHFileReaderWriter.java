@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HFileReaderFactory;
@@ -106,7 +105,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(DEFAULT_PROPS)
         .withPath(getFilePath()).build();
-    return new HoodieNativeAvroHFileReader(readerFactory, getFilePath(), Option.empty());
+    return HoodieNativeAvroHFileReader.builder()
+        .readerFactory(readerFactory).path(getFilePath()).build();
   }
 
   protected HoodieAvroHFileReaderImplBase createHFileReader(HoodieStorage storage,
@@ -114,7 +114,8 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(DEFAULT_PROPS)
         .withContent(content).build();
-    return new HoodieNativeAvroHFileReader(readerFactory, getFilePath(), Option.empty());
+    return HoodieNativeAvroHFileReader.builder()
+        .readerFactory(readerFactory).path(getFilePath()).build();
   }
 
   protected void verifyHFileReader(byte[] content,
