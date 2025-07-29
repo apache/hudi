@@ -284,7 +284,11 @@ class HoodieSparkSqlWriterInternal {
       val partitionColumnsForKeyGenerator = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(toProperties(parameters), HoodieTableVersion.fromVersionCode(tableVersion))
       val timelineTimeZone = HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE))
       val tableMetaClient = if (tableExists) {
-        payloadClass = tableConfig.getPayloadClass
+        payloadClass = if (tableConfig != null) {
+          tableConfig.getPayloadClass
+        } else {
+          hoodieConfig.getString(DataSourceWriteOptions.PAYLOAD_CLASS_NAME)
+        }
         HoodieInstantTimeGenerator.setCommitTimeZone(timelineTimeZone)
         HoodieTableMetaClient.builder
           .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))

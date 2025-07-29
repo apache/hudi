@@ -65,7 +65,7 @@ public class HoodiePreCombineAvroBinaryRecordMerger extends HoodieAvroRecordMerg
     // if newer is delete,
     if (newer.isDelete(newSchema, props)) {
       // Delete record
-      return Option.empty();
+      return Option.of(Pair.of(newer, newSchema));
     }
 
     if (older.isDelete(oldSchema, props)) {
