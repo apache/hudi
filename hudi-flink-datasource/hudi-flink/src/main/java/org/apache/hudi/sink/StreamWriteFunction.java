@@ -226,7 +226,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   }
 
   private void initMergeClass() {
-    recordMerger = HoodieRecordUtils.mergerToPreCombineMode(writeClient.getConfig().getRecordMerger());
+    recordMerger = HoodieRecordUtils.mergerToPreCombineMode(writeClient.getConfig().getRecordMerger(null));
     LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
   }
 

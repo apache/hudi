@@ -480,6 +480,7 @@ public class HoodieIndexUtils {
       HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     Pair<HoodieWriteConfig, Option<BaseKeyGenerator>> keyGeneratorWriteConfigOpt = getKeygenAndUpdatedWriteConfig(config, hoodieTable.getMetaClient().getTableConfig());
     HoodieWriteConfig updatedConfig = keyGeneratorWriteConfigOpt.getLeft();
+    String payloadClass = hoodieTable.getMetaClient().getTableConfig().getPayloadClass();
     Option<BaseKeyGenerator> expressionPayloadKeygen = keyGeneratorWriteConfigOpt.getRight();
     // completely new records
     HoodieData<HoodieRecord<R>> taggedNewRecords = incomingRecordsAndLocations.filter(p -> !p.getRight().isPresent()).map(Pair::getLeft);
@@ -496,7 +497,7 @@ public class HoodieIndexUtils {
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, keyGeneratorWriteConfigOpt.getLeft(), hoodieTable);
 
-    final HoodieRecordMerger recordMerger = updatedConfig.getRecordMerger();
+    final HoodieRecordMerger recordMerger = updatedConfig.getRecordMerger(hoodieTable.getMetaClient().getTableConfig().getPayloadClass());
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
@@ -528,7 +529,7 @@ public class HoodieIndexUtils {
             return Collections.singletonList(tagRecord(merged, existing.getCurrentLocation())).iterator();
           } else {
             // merged record has a different partition: issue a delete to the old partition and insert the merged record to the new partition
-            HoodieRecord<R> deleteRecord = createDeleteRecord(updatedConfig, existing.getKey());
+            HoodieRecord<R> deleteRecord = createDeleteRecord(updatedConfig, existing.getKey(), payloadClass);
             deleteRecord.setIgnoreIndexUpdate(true);
             return Arrays.asList(tagRecord(deleteRecord, existing.getCurrentLocation()), merged).iterator();
           }
@@ -543,7 +544,7 @@ public class HoodieIndexUtils {
       boolean shouldUpdatePartitionPath,
       HoodieWriteConfig config,
       HoodieTable table) {
-    final HoodieRecordMerger merger = config.getRecordMerger();
+    final HoodieRecordMerger merger = config.getRecordMerger(table.getMetaClient().getTableConfig().getPayloadClass());
 
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
         incomingRecords.mapToPair(record -> Pair.of(record.getRecordKey(), record));

@@ -23,6 +23,7 @@ import org.apache.hudi.avro.{AvroSchemaCache, HoodieAvroUtils}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{OrderingValues, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
@@ -52,6 +53,7 @@ object HoodieCreateRecordUtils {
                                        parameters: Map[String, String],
                                        recordName: String,
                                        recordNameSpace: String,
+                                       payloadClassName: String = null,
                                        writerSchema: Schema,
                                        dataFileSchema: Schema,
                                        operation: WriteOperationType,
@@ -75,7 +77,7 @@ object HoodieCreateRecordUtils {
     val preppedWriteOperation = args.preppedWriteOperation
 
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
-    val recordType = config.getRecordMerger.getRecordType
+    val recordType = config.getRecordMerger(args.payloadClassName).getRecordType
     val autoGenerateRecordKeys: Boolean = !parameters.asJava.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
 
     var shouldCombine = false
@@ -106,8 +108,16 @@ object HoodieCreateRecordUtils {
     val dataFileSchemaStr = dataFileSchema.toString
 
     log.debug(s"Creating HoodieRecords (as $recordType)")
-
-    recordType match {
+    val deducedRecordType = if (recordType == HoodieRecord.HoodieRecordType.SPARK) {
+      HoodieRecord.HoodieRecordType.SPARK
+    } else {
+      if (StringUtils.isNullOrEmpty(args.payloadClassName) || HoodieTableConfig.AVRO_BINARY_PAYLOADS.contains(args.payloadClassName)) {
+        HoodieRecord.HoodieRecordType.AVRO_BINARY
+      } else {
+        HoodieRecord.HoodieRecordType.AVRO
+      }
+    }
+    deducedRecordType match {
       case HoodieRecord.HoodieRecordType.AVRO =>
         // avroRecords will contain meta fields when isPrepped is true.
         val avroRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, recordName, recordNameSpace,

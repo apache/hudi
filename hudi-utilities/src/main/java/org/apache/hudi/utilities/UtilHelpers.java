@@ -134,9 +134,14 @@ public class UtilHelpers {
   private static final Logger LOG = LoggerFactory.getLogger(UtilHelpers.class);
 
   public static HoodieRecordMerger createRecordMerger(Properties props) {
+    return createRecordMerger(props, null);
+  }
+
+  public static HoodieRecordMerger createRecordMerger(Properties props, String payloadClass) {
     return HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK,
         StringUtils.split(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES, null), ","),
-        ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID, null));
+        ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID, null),
+        payloadClass);
   }
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,

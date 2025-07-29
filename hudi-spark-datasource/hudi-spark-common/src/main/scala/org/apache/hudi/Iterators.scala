@@ -265,8 +265,9 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   private val requiredSchemaProjection = generateUnsafeProjection(readerSchema, structTypeSchema)
   private val requiredSchemaAvroProjection = AvroProjection.create(avroSchema)
 
+  // to fix.
   private val recordMerger = HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK,
-    tableState.recordMergeImplClasses.asJava, tableState.recordMergeStrategyId)
+    tableState.recordMergeImplClasses.asJava, tableState.recordMergeStrategyId, null)
 
   override def doHasNext: Boolean = hasNextInternal
 
@@ -376,7 +377,8 @@ object LogFileIterator extends SparkAdapterSupport {
     }
 
     logRecordScannerBuilder.withRecordMerger(
-      HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergeImplClasses.asJava, tableState.recordMergeStrategyId))
+      HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergeImplClasses.asJava, tableState.recordMergeStrategyId,
+        null))
 
     val scanner = logRecordScannerBuilder.build()
 

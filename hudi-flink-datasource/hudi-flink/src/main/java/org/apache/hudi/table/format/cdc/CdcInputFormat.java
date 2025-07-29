@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
@@ -354,8 +355,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       this.projection = tableState.getRequiredRowType().equals(tableState.getRowType())
           ? null
           : RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
-      this.recordMerger = imageManager.writeConfig.getRecordMerger();
       this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
+      this.recordMerger = imageManager.writeConfig.getRecordMerger(this.payloadProps.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), null));
       this.logRecordIterator = logRecordIterator;
       initImages(cdcFileSplit);
     }

@@ -103,7 +103,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
       this.fileWriter =
           HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), config,
-              writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
+              writeSchemaWithMetaFields, this.taskContextSupplier,
+              config.getRecordMerger(hoodieTable.getMetaClient().getTableConfig().getPayloadClass()).getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }

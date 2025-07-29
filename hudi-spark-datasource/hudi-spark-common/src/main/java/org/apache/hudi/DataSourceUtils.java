@@ -244,11 +244,11 @@ public class DataSourceUtils {
     }
   }
 
-  public static HoodieWriteResult doDeleteOperation(SparkRDDWriteClient client, JavaRDD<Tuple2<HoodieKey, scala.Option<HoodieRecordLocation>>> hoodieKeysAndLocations,
+  public static HoodieWriteResult doDeleteOperation(SparkRDDWriteClient client, String payloadClass, JavaRDD<Tuple2<HoodieKey, scala.Option<HoodieRecordLocation>>> hoodieKeysAndLocations,
       String instantTime, boolean isPrepped) {
 
     if (isPrepped) {
-      HoodieRecord.HoodieRecordType recordType = client.getConfig().getRecordMerger().getRecordType();
+      HoodieRecord.HoodieRecordType recordType = client.getConfig().getRecordMerger(payloadClass).getRecordType();
       JavaRDD<HoodieRecord> records = hoodieKeysAndLocations.map(tuple -> {
         HoodieRecord record = recordType == HoodieRecord.HoodieRecordType.AVRO
             ? new HoodieAvroRecord(tuple._1, new EmptyHoodieRecordPayload())

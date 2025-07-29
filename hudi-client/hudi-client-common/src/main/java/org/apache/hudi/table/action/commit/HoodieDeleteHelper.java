@@ -94,7 +94,7 @@ public class HoodieDeleteHelper<T, R> extends
         dedupedKeys = keys.repartition(targetParallelism);
       }
 
-      HoodieData dedupedRecords = createDeleteRecords(config, dedupedKeys);
+      HoodieData dedupedRecords = createDeleteRecords(config, dedupedKeys, table.getMetaClient().getTableConfig().getPayloadClass());
 
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
@@ -123,8 +123,8 @@ public class HoodieDeleteHelper<T, R> extends
     }
   }
 
-  public static HoodieData createDeleteRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys) {
-    HoodieRecordType recordType = config.getRecordMerger().getRecordType();
+  public static HoodieData createDeleteRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys, String payloadClass) {
+    HoodieRecordType recordType = config.getRecordMerger(payloadClass).getRecordType();
     if (recordType == HoodieRecordType.AVRO) {
       return keys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
     } else if (recordType == HoodieRecordType.AVRO_BINARY) {
@@ -134,8 +134,8 @@ public class HoodieDeleteHelper<T, R> extends
     }
   }
 
-  public static <T> HoodieRecord<T> createDeleteRecord(HoodieWriteConfig config, HoodieKey key) {
-    HoodieRecordType recordType = config.getRecordMerger().getRecordType();
+  public static <T> HoodieRecord<T> createDeleteRecord(HoodieWriteConfig config, HoodieKey key, String payloadClass) {
+    HoodieRecordType recordType = config.getRecordMerger(payloadClass).getRecordType();
     if (recordType == HoodieRecordType.AVRO) {
       return new HoodieAvroRecord(key, new EmptyHoodieRecordPayload());
     } else if (recordType == HoodieRecordType.AVRO_BINARY) {

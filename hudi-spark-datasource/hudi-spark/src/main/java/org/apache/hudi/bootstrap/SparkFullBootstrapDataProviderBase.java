@@ -69,7 +69,8 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
 
     // NOTE: "basePath" option is required for spark to discover the partition column
     // More details at https://spark.apache.org/docs/latest/sql-data-sources-parquet.html#partition-discovery
-    HoodieRecordType recordType =  config.getRecordMerger().getRecordType();
+    String payloadClassName = ConfigUtils.getPayloadClass(props);
+    HoodieRecordType recordType =  config.getRecordMerger(payloadClassName).getRecordType();
     Dataset inputDataset = sparkSession.read().format(getFormat()).option("basePath", sourceBasePath).load(filePaths);
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     String precombineKey = props.getString("hoodie.datasource.write.precombine.field");
@@ -85,7 +86,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
                 Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
         try {
           return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-              ConfigUtils.getPayloadClass(props), scala.Option.apply(null));
+              payloadClassName, scala.Option.apply(null));
         } catch (IOException ioe) {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }
