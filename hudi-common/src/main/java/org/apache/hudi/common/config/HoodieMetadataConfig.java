@@ -499,7 +499,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> METADATA_FILE_CACHE_THRESHOLD_SIZE_MB = ConfigProperty
       .key(METADATA_PREFIX + ".file.cache.max.size.mb")
       .defaultValue(0)
-      .sinceVersion("1.1")
+      .sinceVersion("1.1.0")
       .withDocumentation("Max size below which metadata file (HFile) will be downloaded and cached entirely for the HfileReader.");
 
   public long getMaxLogFileSize() {
