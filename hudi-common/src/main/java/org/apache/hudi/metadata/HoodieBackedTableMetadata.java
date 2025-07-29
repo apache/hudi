@@ -100,7 +100,6 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BAS
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.KEY_FIELD_NAME;
-import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
@@ -465,7 +464,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public HoodieData<String> getRecordKeysFromSecondaryKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
     return dataCleanupManager.ensureDataCleanupOnException(v ->
-        readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::escapeSpecialChars).map(
+        readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::getEscapedSecondaryKeyPrefixFromSecondaryKey).map(
             hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getRecordKey()))
     );
   }
@@ -692,16 +691,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .map(Literal::from)
           .collect(Collectors.toList()));
     } else {
-      // For secondary index we need an extra step of processing the key to lookup before handing it over to filegroup reader.
-      if (MetadataPartitionType.fromPartitionPath(partitionName)
-          .equals(MetadataPartitionType.SECONDARY_INDEX)) {
-        // For secondary index, always use prefix matching
-        return Predicates.startsWithAny(null,
-            sortedKeys.stream()
-                .map(escapedKey -> escapedKey + SECONDARY_INDEX_RECORD_KEY_SEPARATOR)
-                .map(Literal::from)
-                .collect(Collectors.toList()));
-      }
       // For non-secondary index with prefix matching
       return Predicates.startsWithAny(null, sortedKeys.stream()
           .map(Literal::from)
@@ -871,7 +860,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return HoodieListPairData.eager(Collections.emptyList());
     }
 
-    return readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::escapeSpecialChars)
+    return readIndexRecords(secondaryKeys, partitionName, SecondaryIndexKeyUtils::getEscapedSecondaryKeyPrefixFromSecondaryKey)
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
   }
 

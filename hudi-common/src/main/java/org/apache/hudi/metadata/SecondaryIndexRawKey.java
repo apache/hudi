@@ -33,7 +33,7 @@ public class SecondaryIndexRawKey implements RawKey {
 
   @Override
   public String encode() {
-    return SecondaryIndexKeyUtils.escapeSpecialChars(secondaryKey);
+    return SecondaryIndexKeyUtils.getEscapedSecondaryKeyPrefixFromSecondaryKey(secondaryKey);
   }
 
   public String getSecondaryKey() {
