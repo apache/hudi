@@ -408,7 +408,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public HoodieData<String> getRecordKeysFromSecondaryKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
-      HoodieData<SecondaryIndexRawKey> rawKeys = secondaryKeys.map(SecondaryIndexRawKey::new);
+      HoodieData<SecondaryIndexPrefixRawKey> rawKeys = secondaryKeys.map(SecondaryIndexPrefixRawKey::new);
       return readIndexRecords(rawKeys, partitionName)
             .map(hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getRecordKey()));
     });
@@ -796,7 +796,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return HoodieListPairData.eager(Collections.emptyList());
     }
 
-    HoodieData<SecondaryIndexRawKey> rawKeys = keys.map(SecondaryIndexRawKey::new);
+    HoodieData<SecondaryIndexPrefixRawKey> rawKeys = keys.map(SecondaryIndexPrefixRawKey::new);
     return getRecordsByKeyPrefixes(rawKeys, partitionName, false)
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
   }
@@ -806,7 +806,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return HoodieListPairData.eager(Collections.emptyList());
     }
 
-    HoodieData<SecondaryIndexRawKey> rawKeys = secondaryKeys.map(SecondaryIndexRawKey::new);
+    HoodieData<SecondaryIndexPrefixRawKey> rawKeys = secondaryKeys.map(SecondaryIndexPrefixRawKey::new);
     return readIndexRecords(rawKeys, partitionName)
         .mapToPair(hoodieRecord -> SecondaryIndexKeyUtils.getSecondaryKeyRecordKeyPair(hoodieRecord.getRecordKey()));
   }

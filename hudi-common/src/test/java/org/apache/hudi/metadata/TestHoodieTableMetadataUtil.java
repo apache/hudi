@@ -33,7 +33,7 @@ public class TestHoodieTableMetadataUtil {
     String recordKey = "recordKey$";
     String secondaryKey = "secondaryKey$";
     // Raw key used for read path
-    SecondaryIndexRawKey rawKey1 = new SecondaryIndexRawKey(secondaryKey);
+    SecondaryIndexPrefixRawKey rawKey1 = new SecondaryIndexPrefixRawKey(secondaryKey);
     // Composite key used for write path
     String compositeKey = constructSecondaryIndexKey(secondaryKey, recordKey);
 

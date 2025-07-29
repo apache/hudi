@@ -24,10 +24,10 @@ import java.util.Objects;
 /**
  * Represents a secondary index key, whose raw content is the column value of the data table.
  */
-public class SecondaryIndexRawKey implements RawKey {
+public class SecondaryIndexPrefixRawKey implements RawKey {
   private final String secondaryKey;
 
-  public SecondaryIndexRawKey(String secondaryKey) {
+  public SecondaryIndexPrefixRawKey(String secondaryKey) {
     this.secondaryKey = secondaryKey;
   }
 
@@ -48,7 +48,7 @@ public class SecondaryIndexRawKey implements RawKey {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    SecondaryIndexRawKey that = (SecondaryIndexRawKey) o;
+    SecondaryIndexPrefixRawKey that = (SecondaryIndexPrefixRawKey) o;
     return Objects.equals(secondaryKey, that.secondaryKey);
   }
 

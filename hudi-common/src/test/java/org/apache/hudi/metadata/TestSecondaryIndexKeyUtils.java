@@ -205,7 +205,7 @@ public class TestSecondaryIndexKeyUtils {
     // Construct the key used by the writer path
     String constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
     // The key used by the reader path and the key used by the writer path have the following invariant.
-    assertEquals(new SecondaryIndexRawKey(secondaryKey).encode(), getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey(constructedKey));
+    assertEquals(new SecondaryIndexPrefixRawKey(secondaryKey).encode(), getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey(constructedKey));
     
     // Extract both parts
     String extractedSecondary = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey);
