@@ -324,8 +324,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
             );
 
     HoodieTimer timer = HoodieTimer.start();
-    List<FilesPartitionRawKey> filesKeys = partitionIdToPathMap.keySet().stream()
-        .map(FilesPartitionRawKey::new)
+    List<FilesIndexRawKey> filesKeys = partitionIdToPathMap.keySet().stream()
+        .map(FilesIndexRawKey::new)
         .collect(Collectors.toList());
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
         getRecordsByKeys(HoodieListData.eager(filesKeys),
