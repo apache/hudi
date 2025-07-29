@@ -486,8 +486,6 @@
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
               <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
-              <!-- native HFile reader uses protobuf -->
-              <include>com.google.protobuf:protobuf-java</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -591,10 +589,6 @@
               <pattern>com.fasterxml.jackson.module</pattern>
               <shadedPattern>org.apache.hudi.com.fasterxml.jackson.module
               </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>com.google.protobuf.</pattern>
-              <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
             </relocation>
           </relocations>
         </configuration>

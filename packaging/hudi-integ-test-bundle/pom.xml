@@ -122,6 +122,7 @@
                   <include>org.apache.parquet:parquet-avro</include>
                   <include>com.twitter:parquet-avro</include>
                   <include>com.twitter.common:objectsize</include>
+                  <include>com.google.protobuf:protobuf-java</include>
 
                   <include>io.confluent:kafka-avro-serializer</include>
                   <include>io.confluent:common-config</include>
