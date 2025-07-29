@@ -304,6 +304,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
     try (HoodieNativeAvroHFileReader reader = HoodieNativeAvroHFileReader.builder()
         .readerFactory(readerFactory).path(new StoragePath("dummy")).useBloomFilter(useBloomFilter)
         .build()) {
+      // These iterators should not use bloom filters in any case
       reader.getRecordIterator();
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
@@ -328,6 +329,7 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
       reader.getIndexedRecordsByKeyPrefixIterator(filterKeys, schema);
       verify(hfileReader, never()).getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);
 
+      // Only iterators filtering full keys should use bloom filters for filtering
       reader.getRecordsByKeysIterator(filterKeys);
       verify(hfileReader, useBloomFilter ? times(1) : never())
           .getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK);

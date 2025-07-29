@@ -529,7 +529,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("This is the number of entries stored in a bloom filter for the files in the metadata table. "
           + "The rationale for the default: 10000 is chosen to be a good tradeoff between false positive rate and "
           + "storage size. Warning: Setting this very low generates a lot of false positives and the metadata "
-          + "table reading have to scan a lot more files than it has to and setting this to a very high number "
+          + "table reading has to scan a lot more files than it has to and setting this to a very high number "
           + "increases the size every base file linearly (roughly 4KB for every 50000 entries). "
           + "This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.");
 
