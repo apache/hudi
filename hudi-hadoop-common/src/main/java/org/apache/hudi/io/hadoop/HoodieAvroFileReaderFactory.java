@@ -51,7 +51,8 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withPath(path).build();
-    return new HoodieNativeAvroHFileReader(readerFactory, path, schemaOption);
+    return HoodieNativeAvroHFileReader.builder()
+        .readerFactory(readerFactory).path(path).schema(schemaOption).build();
   }
 
   @Override
@@ -63,7 +64,8 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
         .withContent(content).build();
-    return new HoodieNativeAvroHFileReader(readerFactory, path, schemaOption);
+    return HoodieNativeAvroHFileReader.builder()
+        .readerFactory(readerFactory).path(path).schema(schemaOption).build();
   }
 
   @Override

@@ -647,8 +647,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       return this;
     }
 
-    public Builder schema(Schema schema) {
-      this.schemaOption = Option.of(schema);
+    public Builder schema(Option<Schema> schemaOption) {
+      this.schemaOption = schemaOption;
       return this;
     }
 
