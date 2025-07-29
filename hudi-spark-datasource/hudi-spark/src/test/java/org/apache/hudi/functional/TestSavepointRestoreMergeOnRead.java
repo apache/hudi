@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -44,8 +45,12 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -57,6 +62,7 @@ import static org.apache.hudi.functional.TestHoodieFileSystemViews.assertForFSVE
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -64,6 +70,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("functional")
 public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
+  // Overrides setup to avoid creating a table with the default table version
+  @BeforeEach
+  public void setUp() throws Exception {
+    initPath();
+    initSparkContexts();
+    initTestDataGenerator();
+    initHoodieStorage();
+    initTimelineService();
+  }
+
+  // TODO: add some v6 tests to cover the case where there are log files for an incomplete delta-commit
+  // case: restore with inflight delta-commit to a previous delta-commit
 
   /**
    * Actions: DC1, DC2, DC3, savepoint DC3,(snapshot query) DC4, C5, DC6, DC7. restore to DC3.
@@ -81,15 +99,22 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
    * snapshot query: total rec matches.
    * checking the row count by updating columns in (val4,val5,val6, val7).
    */
-  @Test
-  void testCleaningDeltaCommits() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"NINE"})
+  void testCleaningDeltaCommits(HoodieTableVersion tableVersion) throws Exception {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER) // eager cleaning
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(4) // the 4th delta_commit triggers compaction
             .withInlineCompaction(false)
             .build())
         .withRollbackUsingMarkers(true)
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withStreamingWriteEnabled(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
+            .build())
         .build();
+    initMetaClient(HoodieTableType.MERGE_ON_READ, hoodieWriteConfig.getProps());
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       String savepointCommit = null;
       final int numRecords = 10;
@@ -138,6 +163,56 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
             FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath),
             filter).size());
       }
+    }
+    validateFilesMetadata(hoodieWriteConfig);
+    List<Row> rows = sparkSession.read().format("hudi").load(basePath).groupBy("rider").df().collectAsList();
+    rows.forEach(row -> {
+      assertNotNull(row);
+    });
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE"})
+  public void testRestoreToWithInflightDeltaCommit(HoodieTableVersion tableVersion) throws IOException {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER) // eager cleaning
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(4)
+            .withInlineCompaction(false)
+            .compactionSmallFileSize(0)
+            .build())
+        .withRollbackUsingMarkers(true)
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withStreamingWriteEnabled(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
+            .build())
+        .build();
+    initMetaClient(HoodieTableType.MERGE_ON_READ, hoodieWriteConfig.getProps());
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      // establish base files
+      String firstCommitTime = client.startCommit();
+      int numRecords = 10;
+      List<HoodieRecord> initialRecords = dataGen.generateInserts(firstCommitTime, numRecords);
+      client.commit(firstCommitTime, client.insert(jsc.parallelize(initialRecords, 1), firstCommitTime));
+      // add updates that go to log files
+      String secondCommitTime = client.startCommit();
+      List<HoodieRecord> updatedRecords = dataGen.generateUniqueUpdates(secondCommitTime, numRecords);
+      client.commit(secondCommitTime, client.upsert(jsc.parallelize(updatedRecords, 1), secondCommitTime));
+      // create a savepoint
+      client.savepoint("user1", "Savepoint for 2nd commit");
+      // add a third delta commit
+      String thirdCommitTime = client.startCommit();
+      List<HoodieRecord> updatedRecordsToBeRolledBack = dataGen.generateUniqueUpdates(thirdCommitTime, numRecords);
+      client.commit(thirdCommitTime, client.upsert(jsc.parallelize(updatedRecordsToBeRolledBack, 1), thirdCommitTime));
+      // add a fourth delta commit but leave it in-flight
+      String fourthCommitTime = client.startCommit();
+      List<HoodieRecord> inFlightRecords = dataGen.generateUniqueUpdates(fourthCommitTime, numRecords);
+      // collect result to trigger file creation
+      List<WriteStatus> writes = client.upsert(jsc.parallelize(inFlightRecords, 1), fourthCommitTime).collect();
+      // restore to the savepoint
+      client.restoreToSavepoint(secondCommitTime);
+      // Validate metadata and records match expectations
+      validateFilesMetadata(hoodieWriteConfig);
     }
   }
 
@@ -226,6 +301,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
               FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath),
               filter).size());
     }
+    validateFilesMetadata(hoodieWriteConfig);
   }
 
   /**
@@ -280,6 +356,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       // restore
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
       assertRowNumberEqualsTo(30);
+      validateFilesMetadata(hoodieWriteConfig);
     }
   }
 
@@ -339,6 +416,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       // restore
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
       assertRowNumberEqualsTo(20);
+      validateFilesMetadata(hoodieWriteConfig);
     }
   }
 

@@ -243,7 +243,7 @@ public class HoodieTestUtils {
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
-      builder.setPartitionFields("some_nonexistent_field");
+      builder.setPartitionFields("partition_path");
     }
     builder.fromProperties(properties);
     return builder;
