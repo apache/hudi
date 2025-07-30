@@ -1562,9 +1562,15 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       if (null != keyGeneratorClassProp) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.fromClassName(keyGeneratorClassProp).name());
+        KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
+        // For USER_PROVIDED type, key generator class is recorded as well.
+        if (type == KeyGeneratorType.USER_PROVIDED) {
+          tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+        }
       } else if (null != keyGeneratorType) {
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, keyGeneratorType);
+        // For USER_PROVIDED type, key generator class should be set when it is configured.
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));

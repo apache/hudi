@@ -2412,13 +2412,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  @Test
-  def testUserProvidedKeyGeneratorClass(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("provideParamsForKeyGenTest"))
+  def testUserProvidedKeyGeneratorClass(keyGenClass: String): Unit = {
     val recordType = HoodieRecordType.AVRO
-    val customKeyGeneratorClass = "org.apache.hudi.keygen.UserProvidedKeyGenerator"
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType,
       CommonOptionUtils.commonOpts ++ Map(
-        "hoodie.datasource.write.keygenerator.class" -> customKeyGeneratorClass,
+        "hoodie.datasource.write.keygenerator.class" -> keyGenClass,
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition"
       ))
 
@@ -2440,25 +2440,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
 
     // Second update.
-    // Change keyGenerator class name.
+    // Change keyGenerator class name to generate exception.
     val opt = writeOpts ++ Map(
-      "hoodie.datasource.write.keygenerator.class"
-        -> "org.apache.hudi.keygen.ComplexKeyGenerator")
-    val secondRecord = recordsToStrings(dataGen.generateInserts("002", 10)).asScala.toList
-    val secondUpdateDF = spark.read.json(spark.sparkContext.parallelize(secondRecord, 2))
-    // NOTE: Only key generator type is stored in table config for custom key generator class.
-    //       Therefore, it does not complain when the class is changed between writes.
-    //       This may cause data inconsistency for users.
-    assertDoesNotThrow(
-      new Executable {
-        override def execute(): Unit =
-        writeToHudi(opt, secondUpdateDF)
-        spark.read.format("hudi").options(readOpts).load(basePath).count()
-      }
-    )
-    actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
-    actualKeyDF = actualDF.select("_row_key").sort("_row_key")
-    assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).count() > 0)
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.ComplexKeyGenerator")
+    assertThrows(classOf[HoodieException])({
+      writeToHudi(opt, firstUpdateDF)
+    })
   }
 }
 
@@ -2477,5 +2464,12 @@ object TestCOWDataSource {
     autoUpgradeValues.flatMap(
       (autoUpgrade: String) => targetVersions.map(
         (targetVersion: String) => Arguments.of(autoUpgrade, targetVersion)))
+  }
+
+  def provideParamsForKeyGenTest(): java.util.List[Arguments] = {
+    java.util.Arrays.asList(
+      Arguments.of("org.apache.hudi.keygen.UserProvidedKeyGenerator"),
+      Arguments.of("org.apache.hudi.keygen.SimpleKeyGenerator")
+    )
   }
 }
