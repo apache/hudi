@@ -1108,7 +1108,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           }
         }
       }
-      return null;
+      // empty result.
+      return Option.empty();
     });
   }
 
