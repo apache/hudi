@@ -102,7 +102,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
    * @return the result of the action
    * @param <T> type of the result
    */
-  public <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
+  public synchronized <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
     if (isLockRequired()) {
       acquireLock();
     }
@@ -126,8 +126,8 @@ public class TransactionManager implements Serializable, AutoCloseable {
     beginStateChange(Option.empty(), Option.empty());
   }
 
-  public void beginStateChange(Option<HoodieInstant> changeActionInstant,
-                               Option<HoodieInstant> lastCompletedActionInstant) {
+  public synchronized void beginStateChange(Option<HoodieInstant> changeActionInstant,
+                                            Option<HoodieInstant> lastCompletedActionInstant) {
     if (isLockRequired) {
       LOG.info("State change starting for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);
@@ -140,6 +140,16 @@ public class TransactionManager implements Serializable, AutoCloseable {
 
   public void endStateChange() {
     endStateChange(Option.empty());
+  }
+
+  public synchronized void endStateChange(Option<HoodieInstant> changeActionInstant) {
+    if (isLockRequired) {
+      LOG.info("State change ending for action instant {}", changeActionInstant);
+      if (reset(changeActionInstant, Option.empty(), Option.empty())) {
+        releaseLock();
+        LOG.info("State change ended for action instant {}", changeActionInstant);
+      }
+    }
   }
 
   private void acquireLock() {
@@ -155,16 +165,6 @@ public class TransactionManager implements Serializable, AutoCloseable {
     if (hasLock) {
       lockManager.unlock();
       hasLock = false;
-    }
-  }
-
-  public void endStateChange(Option<HoodieInstant> changeActionInstant) {
-    if (isLockRequired) {
-      LOG.info("State change ending for action instant {}", changeActionInstant);
-      if (reset(changeActionInstant, Option.empty(), Option.empty())) {
-        releaseLock();
-        LOG.info("State change ended for action instant {}", changeActionInstant);
-      }
     }
   }
 
