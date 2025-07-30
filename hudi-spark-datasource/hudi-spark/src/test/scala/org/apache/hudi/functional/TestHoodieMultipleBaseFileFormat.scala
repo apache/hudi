@@ -134,5 +134,13 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     // Snapshot Read the table
     val hudiDfAfterUpdate = spark.read.format("hudi").load(basePath)
     assertEquals(20, hudiDfAfterUpdate.count())
+
+    // Select subset of columns
+    val rows = spark.read.format("hudi").load(basePath).select("driver", "rider").collect()
+    assertEquals(20, rows.length);
+    rows.foreach(row => {
+      assertTrue(row.getAs[String](0).nonEmpty)
+      assertTrue(row.getAs[String](1).nonEmpty)
+    })
   }
 }
