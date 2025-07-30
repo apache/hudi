@@ -174,7 +174,7 @@ experience the new features and enhancements.
 ## Known Regressions
 - We discovered a regression in Hudi 1.0.0 release for backwards compatible writer for MOR table.
 It can silently deletes committed data after upgrade when new data is ingested to the table.
-- If you use ComplexKeyGenerator with a single field, there is a known regression with key encoding format change that could introduce duplicates. Please refrain from migrating. and raise a GH issue to work through fixes. Note, if you have multiple fields as a part of complex key generator, there there are no issues. You can safely proceed.
+- We also have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating. if you have single field as a part of complex key generator.
 
 :::tip
 Avoid upgrading any existing table to 1.0.0 if any of the above scenario matches your workload. Incase of backwards compatible writer for MOR table, you are good to upgrade to 1.0.2 release. 

@@ -32,11 +32,10 @@ import TabItem from '@theme/TabItem';
 * Unit, functional, integration tests and CI
 
 ## Known Regressions
-If you use ComplexKeyGenerator with a single field, there is a known regression with key encoding format change that could introduce duplicates. Please refrain from migrating. and raise a GH issue to work through fixes. Note, if you have multiple fields as a part of complex key generator, there there are no issues. You can safely proceed.
+We have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you have single field as a part of complex key generator.
 
 :::tip
-Avoid upgrading any existing table to 1.0.1 if you are using ComplexKeyGenerator with single record key
-configured.
+Avoid upgrading any existing table to 1.0.1 if you are using ComplexKeyGenerator with single record key configured.
 :::
 
 ## Raw Release Notes
