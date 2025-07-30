@@ -171,7 +171,7 @@ public class SparkMetadataTableRecordIndex extends HoodieIndex<Object, Object> {
 
       // recordIndexInfo object only contains records that are present in record_index.
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
-          hoodieTable.getMetadataTable().readRecordIndex(HoodieListData.eager(keysToLookup));
+          hoodieTable.getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
       try {
         Map<String, HoodieRecordGlobalLocation> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData);
         return recordIndexInfo.entrySet().stream()

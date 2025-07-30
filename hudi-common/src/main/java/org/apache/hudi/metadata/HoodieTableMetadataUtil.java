@@ -55,7 +55,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
-import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
@@ -210,7 +209,6 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_EXPRESSION_INDEX_PREFIX = "expr_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
-  public static final SerializableFunctionUnchecked<String, String> IDENTITY_ENCODING = key -> key;
 
   private static final Set<Schema.Type> SUPPORTED_TYPES_PARTITION_STATS = new HashSet<>(Arrays.asList(
       Schema.Type.INT, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING, Schema.Type.BOOLEAN, Schema.Type.NULL, Schema.Type.BYTES));
@@ -1366,7 +1364,7 @@ public class HoodieTableMetadataUtil {
   public static SerializableBiFunction<String, Integer, Integer> getSecondaryKeyToFileGroupMappingFunction(boolean needsSecondaryKeyExtraction) {
     if (needsSecondaryKeyExtraction) {
       return (recordKey, numFileGroups) -> {
-        String secondaryKey = SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey);
+        String secondaryKey = SecondaryIndexKeyUtils.getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey(recordKey);
         return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
       };
     }
@@ -2716,7 +2714,8 @@ public class HoodieTableMetadataUtil {
           // Fetch metadata table COLUMN_STATS partition records for above files
           List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
               .getRecordsByKeyPrefixes(
-                  HoodieListData.lazy(generateKeyPrefixes(colsToIndex, partitionName)), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false, IDENTITY_ENCODING)
+                  HoodieListData.lazy(generateColumnStatsKeys(colsToIndex, partitionName)), 
+                  MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
               // schema and properties are ignored in getInsertValue, so simply pass as null
               .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
               .filter(Option::isPresent)
@@ -2767,18 +2766,25 @@ public class HoodieTableMetadataUtil {
 
   /**
    * Generate key prefixes for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
+   * @deprecated Use {@link #generateColumnStatsKeys} instead
    */
+  @Deprecated
   public static List<String> generateKeyPrefixes(List<String> columnsToIndex, String partitionName) {
-    List<String> keyPrefixes = new ArrayList<>();
-    PartitionIndexID partitionIndexId = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionName));
-    for (String columnName : columnsToIndex) {
-      ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
-      String keyPrefix = columnIndexID.asBase64EncodedString()
-          .concat(partitionIndexId.asBase64EncodedString());
-      keyPrefixes.add(keyPrefix);
-    }
+    List<ColumnStatsIndexPrefixRawKey> rawKeys = generateColumnStatsKeys(columnsToIndex, partitionName);
+    return rawKeys.stream()
+        .map(key -> key.encode())
+        .collect(Collectors.toList());
+  }
 
-    return keyPrefixes;
+  /**
+   * Generate column stats index keys for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
+   */
+  public static List<ColumnStatsIndexPrefixRawKey> generateColumnStatsKeys(List<String> columnsToIndex, String partitionName) {
+    List<ColumnStatsIndexPrefixRawKey> keys = new ArrayList<>();
+    for (String columnName : columnsToIndex) {
+      keys.add(new ColumnStatsIndexPrefixRawKey(columnName, partitionName));
+    }
+    return keys;
   }
 
   private static List<HoodieColumnRangeMetadata<Comparable>> translateWriteStatToFileStats(HoodieWriteStat writeStat,

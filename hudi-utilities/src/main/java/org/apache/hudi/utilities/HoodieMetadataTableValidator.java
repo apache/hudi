@@ -1139,7 +1139,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     try {
       for (int i = 0; i < numPartitions; i++) {
         List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
-        HoodiePairData<String, String> secondaryIndexData = ((HoodieBackedTableMetadata) metadataContext.tableMetadata).getSecondaryIndexRecords(
+        HoodiePairData<String, String> secondaryIndexData = ((HoodieBackedTableMetadata) metadataContext.tableMetadata).readSecondaryIndexDataTableRecordKeysWithKeys(
             HoodieListData.lazy(secKeys), indexDefinition.getIndexName());
         try {
           Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = HoodieDataUtils.collectPairDataAsMap(secondaryIndexData);

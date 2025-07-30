@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
-import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -230,42 +229,43 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Returns pairs of (record key, location of record key) which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndex(HoodieData<String> recordKeys);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys);
 
   /**
    * Returns the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
   default HoodieData<HoodieRecordGlobalLocation> readRecordIndexLocations(HoodieData<String> recordKeys) {
-    return readRecordIndex(recordKeys).values();
+    return readRecordIndexLocationsWithKeys(recordKeys).values();
   }
 
   /**
    * Returns pairs of (secondary key, location of secondary key) which the provided secondary keys maps to.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndex(HoodieData<String> secondaryKeys, String partitionName);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexLocationsWithKeys(HoodieData<String> secondaryKeys, String partitionName);
 
   /**
    * Returns the location of secondary keys which are found in the secondary index.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
   default HoodieData<HoodieRecordGlobalLocation> readSecondaryIndexLocations(HoodieData<String> secondaryKeys, String partitionName) {
-    return readSecondaryIndex(secondaryKeys, partitionName).values();
+    return readSecondaryIndexLocationsWithKeys(secondaryKeys, partitionName).values();
   }
 
   /**
-   * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
-   * actual keys in metadata partition is encoded values of column name, partition name and file name. So, key prefixes passed to this method is expected to be encoded already.
+   * Fetch records by key prefixes. The raw keys are encoded using their encode() method to generate
+   * the actual key prefixes used for lookup in the metadata table partitions.
    *
-   * @param keyPrefixes   list of key prefixes for which interested records are looked up for.
-   * @param partitionName partition name in metadata table where the records are looked up for.
-   * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the passed in key prefixes.
+   * @param rawKeys           list of raw key objects to be encoded into key prefixes
+   * @param partitionName     partition name in metadata table where the records are looked up for
+   * @param shouldLoadInMemory whether to load records in memory
+   * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the encoded key prefixes
    */
-  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
-                                                                          String partitionName,
-                                                                          boolean shouldLoadInMemory,
-                                                                          SerializableFunctionUnchecked<String, String> keyEncoder);
+  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
+      HoodieData<? extends RawKey> rawKeys,
+      String partitionName,
+      boolean shouldLoadInMemory);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.
