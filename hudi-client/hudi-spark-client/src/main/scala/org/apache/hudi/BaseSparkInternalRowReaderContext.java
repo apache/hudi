@@ -36,7 +36,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
-import org.apache.spark.sql.HoodieUTF8StringFactory;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
@@ -62,7 +61,6 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
 
-  private final HoodieUTF8StringFactory utf8StringFactory = SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory();
 
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
                                               HoodieTableConfig tableConfig) {
@@ -187,7 +185,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       return UTF8String.fromString((String) value);
       // [SPARK-46832] UTF8String doesn't support compareTo anymore
     } else if (value instanceof UTF8String) {
-      return utf8StringFactory.wrapUTF8String((UTF8String) value);
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory().wrapUTF8String((UTF8String) value);
     }
     return value;
   }
