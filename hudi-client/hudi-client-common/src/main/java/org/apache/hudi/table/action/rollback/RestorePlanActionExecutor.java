@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
+import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
 /**
  * Plans the restore action and add a restore.requested meta file to timeline.
@@ -79,8 +80,8 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               .filter(instant -> GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp))
               .collect(Collectors.toList());
 
-      // Get all the commits on the timeline after the provided commit's completion time
-      String completionTime = completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
+      // Get all the commits on the timeline after the provided commit's completion time unless it is the SOLO_COMMIT_TIMESTAMP which indicates there are no commits for the table
+      String completionTime = savepointToRestoreTimestamp.equals(SOLO_COMMIT_TIMESTAMP) ? savepointToRestoreTimestamp : completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
           .orElseThrow(() -> new HoodieException("Unable to find completion time for instant: " + savepointToRestoreTimestamp));
       List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
               .getReverseOrderedInstantsByCompletionTime()
