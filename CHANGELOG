@@ -914,3 +914,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 [ENG-30732][HUDI-9666] Fix the record key encoding with a single record key field for complex key generator (#1466)
 [ENG-30713][INTERNAL] revise LP metrics definition (#1463)
 [AUDIT-1071]: Changelog for release-v1.154.0 (#1462)
+
+--- [2025-07-30 21:19:13] [release-vrelease-v1.155.1] ---
+[ENG-30732][INTERNAL] Fix the record key encoding with a single record key field for complex key generator (#1468)
+[AUDIT-1071]: Changelog for release-v1.155.0 (#1467)
