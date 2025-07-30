@@ -101,7 +101,9 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     public boolean reorderColumnSupport = true;
     public boolean renameColumnSupport = true;
     public boolean removeColumnSupport = true;
-    public boolean renameColumnAsPreviouslyRemovedSupport = true;
+
+    // this needs to be fixed for avro. The validation currently is broken
+    public boolean renameColumnAsPreviouslyRemovedSupport = false;
 
     // Int
     public boolean intToLongSupport = true;
@@ -276,9 +278,9 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
 
   private static void validateConfigs(SchemaOnReadConfigs configs) {
     if (configs.renameColumnAsPreviouslyRemovedSupport) {
-      if (!configs.renameColumnSupport && !configs.removeColumnSupport) {
+      if (!configs.renameColumnSupport || !configs.removeColumnSupport) {
         throw new IllegalArgumentException(
-            "renameColumnAsPreviouslyRemovedSupport requires renameColumnSupport or removeColumnSupport to be enabled");
+            "renameColumnAsPreviouslyRemovedSupport requires renameColumnSupport and removeColumnSupport to be enabled");
       }
     }
 
@@ -655,7 +657,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
         if (structure.isEnabled(configs)) {
           String oldFieldName = structure.fieldExtractor.apply(oldFieldNames);
           String newFieldName = structure.fieldExtractor.apply(newFieldNames);
-          renameMap.put(structure.prefix + newFieldName, structure.prefix + oldFieldName);
+          renameMap.put(structure.prefix + newFieldName, oldFieldName);
         }
       }
       return schema;

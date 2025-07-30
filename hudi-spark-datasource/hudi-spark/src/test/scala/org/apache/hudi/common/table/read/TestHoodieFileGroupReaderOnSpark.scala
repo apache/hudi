@@ -74,8 +74,11 @@ import scala.collection.JavaConverters._
 class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[InternalRow] with SparkAdapterSupport {
   var spark: SparkSession = _
 
+  private var internalStorageConf: StorageConfiguration[Configuration] = _
+
   @BeforeEach
   def setup() {
+    internalStorageConf = HoodieTestUtils.getDefaultStorageConf.getInline
     val sparkConf = new SparkConf
     sparkConf.set("spark.app.name", getClass.getName)
     sparkConf.set("spark.master", "local[8]")
@@ -103,7 +106,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def getStorageConf: StorageConfiguration[_] = {
-    HoodieTestUtils.getDefaultStorageConf.getInline
+    internalStorageConf
   }
 
   override def getBasePath: String = {
@@ -478,13 +481,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)
     schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(schema, historySchemaStr))
     client.commit(instantTime, jsc.emptyRDD, HOption.of(extraMeta))
-
-    getStorageConf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, getBasePath)
-    val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator
-    val validCommits = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
-      .getInstants.iterator.asScala.map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
-    getStorageConf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
-
   }
 
   override def getSchemaOnReadConfigs: SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs = {
@@ -501,7 +497,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     configs.stringToDecimalBytesSupport = false
     configs.stringToDecimalFixedSupport = false
     configs.stringToDateSupport = false
-    configs.renameColumnSupport = false
+
+    //this still needs to be fixed for avro
     configs.renameColumnAsPreviouslyRemovedSupport = false
     configs
   }

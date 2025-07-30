@@ -1449,7 +1449,7 @@ public class HoodieAvroUtils {
       }
     } else {
       if (!Objects.equals(expected, actual)) {
-        if (expected instanceof Utf8 || actual instanceof Utf8  || expected instanceof GenericData.EnumSymbol || actual instanceof GenericData.EnumSymbol) {
+        if (expected != null && actual != null && (expected instanceof Utf8 || actual instanceof Utf8  || expected instanceof GenericData.EnumSymbol || actual instanceof GenericData.EnumSymbol)) {
           String expectedString = expected.toString();
           String actualString = actual.toString();
           if (expectedString.equals(actualString)) {

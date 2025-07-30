@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -86,12 +87,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.config.HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -164,6 +167,10 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
     conf.set(FlinkOptions.PRECOMBINE_FIELD, writeConfigs.get("hoodie.datasource.write.precombine.field"));
     conf.set(FlinkOptions.OPERATION, operation);
+    if (Objects.equals(writeConfigs.get(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key()).toLowerCase(), "true")) {
+      // TODO: This is needed, but not sure if it is supposed to be needed
+      conf.setString(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key(), "true");
+    }
     Schema localSchema = getRecordAvroSchema(schemaStr);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());
     AvroToRowDataConverters.AvroToRowDataConverter avroConverter =
@@ -214,8 +221,6 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
           .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
           .build();
 
-
-
       String commitActionType = CommitUtils.getCommitActionType(operationType, metaClient.getTableType());
 
       String instantTime = client.startCommit(commitActionType);
@@ -234,9 +239,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       timeline.transitionRequestedToInflight(requested, Option.of(metadata));
 
       Map<String, String> extraMeta = new HashMap<>();
-      long schemaId = Long.parseLong(instantTime);
-      InternalSchema withId = schema.setSchemaId(schemaId);
-      extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(withId));
+      schema.setSchemaId(Long.parseLong(instantTime));
+      extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(schema));
 
       FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
       schemaManager.persistHistorySchemaStr(instantTime,
@@ -289,41 +293,6 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
     configs.arraySupport = false;
     configs.anyArraySupport = false;
-
-    configs.renameColumnSupport = false;
-    configs.renameColumnAsPreviouslyRemovedSupport = false;
-    configs.removeColumnSupport = false;
-
-    configs.intToLongSupport = false;
-    configs.intToFloatSupport = false;
-    configs.intToDoubleSupport = false;
-    configs.intToStringSupport = false;
-    configs.intToDecimalFixedSupport = false;
-    configs.intToDecimalBytesSupport = false;
-
-    configs.longToFloatSupport = false;
-    configs.longToDoubleSupport = false;
-    configs.longToStringSupport = false;
-    configs.longToDecimalFixedSupport = false;
-    configs.longToDecimalBytesSupport = false;
-
-    configs.floatToDoubleSupport = false;
-    configs.floatToStringSupport = false;
-    configs.floatToDecimalFixedSupport = false;
-    configs.floatToDecimalBytesSupport = false;
-
-    configs.doubleToStringSupport = false;
-    configs.doubleToDecimalFixedSupport = false;
-    configs.doubleToDecimalBytesSupport = false;
-
-    configs.stringToDecimalFixedSupport = false;
-    configs.stringToDecimalBytesSupport = false;
-    configs.stringToDateSupport = false;
-
-    configs.decimalFixedToStringSupport = false;
-    configs.decimalBytesToStringSupport = false;
-
-    configs.dateToStringSupport = false;
     return configs;
   }
 
