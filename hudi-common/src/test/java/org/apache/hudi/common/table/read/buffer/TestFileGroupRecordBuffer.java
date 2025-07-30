@@ -22,14 +22,14 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.DefaultSerializer;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.UpdateProcessor;
@@ -37,7 +37,6 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -64,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -84,17 +84,21 @@ class TestFileGroupRecordBuffer {
       + "}";
   private Schema schema = new Schema.Parser().parse(schemaString);
   private final HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+  private final RecordContext recordContext = mock(RecordContext.class);
   private final FileGroupReaderSchemaHandler schemaHandler =
       mock(FileGroupReaderSchemaHandler.class);
   private final UpdateProcessor updateProcessor = mock(UpdateProcessor.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
-  private TypedProperties props = new TypedProperties();
+  private TypedProperties props;
   private HoodieReadStats readStats = mock(HoodieReadStats.class);
 
   @BeforeEach
   void setUp() {
+    props = new TypedProperties();
+    when(readerContext.getRecordContext()).thenReturn(recordContext);
     when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
     when(schemaHandler.getRequiredSchema()).thenReturn(schema);
+    when(schemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, schema));
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
     when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
     when(readerContext.getRecordSizeEstimator()).thenReturn(new DefaultSizeEstimator<>());
@@ -111,7 +115,8 @@ class TestFileGroupRecordBuffer {
     Comparable orderingValue = "xyz";
     Comparable convertedValue = "_xyz";
     mockDeleteRecord(deleteRecord, orderingValue);
-    when(readerContext.convertOrderingValueToEngineType(orderingValue)).thenReturn(convertedValue);
+    when(recordContext.convertOrderingValueToEngineType(orderingValue)).thenReturn(convertedValue);
+    when(readerContext.getRecordContext()).thenReturn(recordContext);
     assertEquals(convertedValue, getOrderingValue(readerContext, deleteRecord));
   }
 
@@ -119,13 +124,6 @@ class TestFileGroupRecordBuffer {
   @CsvSource({"true,false", "false,true"})
   void testInvalidCustomDeleteConfigs(boolean configureCustomDeleteKey,
                                       boolean configureCustomDeleteMarker) {
-    HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
-    when(readerContext.getHasBootstrapBaseFile()).thenReturn(false);
-    when(readerContext.getHasLogFiles()).thenReturn(true);
-    HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
-    when(readerContext.getRecordMerger()).thenReturn(Option.of(recordMerger));
-    when(recordMerger.isProjectionCompatible()).thenReturn(false);
-
     String customDeleteKey = "colC";
     String customDeleteValue = "D";
     List<String> dataSchemaFields = new ArrayList<>(Arrays.asList(
@@ -133,9 +131,6 @@ class TestFileGroupRecordBuffer {
         "colA", "colB", "colC", "colD"));
 
     Schema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
-    Schema requestedSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
-
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
 
     TypedProperties props = new TypedProperties();
     if (configureCustomDeleteKey) {
@@ -145,8 +140,7 @@ class TestFileGroupRecordBuffer {
       props.setProperty(DELETE_MARKER, customDeleteValue);
     }
     Throwable exception = assertThrows(IllegalArgumentException.class,
-        () -> new FileGroupReaderSchemaHandler(readerContext,
-            dataSchema, requestedSchema, Option.empty(), tableConfig, props));
+        () -> new DeleteContext(props, dataSchema));
     assertEquals("Either custom delete key or marker is not specified",
         exception.getMessage());
   }
@@ -164,46 +158,26 @@ class TestFileGroupRecordBuffer {
     record.put("id", "12345");
     record.put("ts", System.currentTimeMillis());
     record.put(customDeleteKey, "d");
-
-    when(schemaHandler.getCustomDeleteMarkerKeyValue())
-        .thenReturn(Option.of(Pair.of(customDeleteKey, customDeleteValue)));
-    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
-        new KeyBasedFileGroupRecordBuffer(
-            readerContext,
-            hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
-            PartialUpdateMode.NONE,
-            props,
-            Collections.emptyList(),
-            updateProcessor
-        );
-    when(readerContext.getValue(any(), any(), any())).thenReturn(null);
-    assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
+    when(recordContext.isDeleteRecord(any(), any())).thenCallRealMethod();
 
     props.setProperty(DELETE_KEY, customDeleteKey);
     props.setProperty(DELETE_MARKER, customDeleteValue);
-    keyBasedBuffer = new KeyBasedFileGroupRecordBuffer(
-            readerContext,
-            hoodieTableMetaClient,
-            RecordMergeMode.COMMIT_TIME_ORDERING,
-            PartialUpdateMode.NONE,
-            props,
-            Collections.emptyList(),
-            updateProcessor
-    );
-    when(readerContext.getValue(any(), any(), any())).thenReturn("i");
-    assertFalse(keyBasedBuffer.isCustomDeleteRecord(record));
-    when(readerContext.getValue(any(), any(), any())).thenReturn("d");
-    assertTrue(keyBasedBuffer.isCustomDeleteRecord(record));
+    DeleteContext deleteContext = new DeleteContext(props, schema);
+    when(recordContext.getValue(any(), any(), any())).thenReturn(null);
+    assertFalse(recordContext.isDeleteRecord(record, deleteContext));
+
+    props.setProperty(DELETE_KEY, customDeleteKey);
+    props.setProperty(DELETE_MARKER, customDeleteValue);
+    when(recordContext.getValue(eq(record), any(), eq(customDeleteKey))).thenReturn("d");
+    assertTrue(readerContext.getRecordContext().isDeleteRecord(record, deleteContext));
   }
 
   @Test
   void testProcessCustomDeleteRecord() throws IOException {
     String customDeleteKey = "op";
     String customDeleteValue = "d";
-    when(schemaHandler.getCustomDeleteMarkerKeyValue())
-        .thenReturn(Option.of(Pair.of(customDeleteKey, customDeleteValue)));
-    when(schemaHandler.hasBuiltInDelete()).thenReturn(true);
+    props.setProperty(DELETE_KEY, customDeleteKey);
+    props.setProperty(DELETE_MARKER, customDeleteValue);
     KeyBasedFileGroupRecordBuffer keyBasedBuffer =
         new KeyBasedFileGroupRecordBuffer(
             readerContext,
@@ -221,9 +195,9 @@ class TestFileGroupRecordBuffer {
     record.put("ts", System.currentTimeMillis());
     record.put("op", "d");
     record.put("_hoodie_is_deleted", false);
-    when(readerContext.getOrderingValue(any(), any(), any())).thenReturn(1);
-    when(readerContext.convertOrderingValueToEngineType(any())).thenReturn(1);
-    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext, Collections.singletonList("ts"), true);
+    when(recordContext.getOrderingValue(any(), any(), any())).thenReturn(1);
+    when(recordContext.convertOrderingValueToEngineType(any())).thenReturn(1);
+    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "12345");
     Map<Serializable, BufferedRecord<GenericRecord>> records = keyBasedBuffer.getLogRecords();
@@ -238,7 +212,7 @@ class TestFileGroupRecordBuffer {
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");
     anotherRecord.put("_hoodie_is_deleted", true);
-    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext, Collections.singletonList("ts"), true);
+    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "54321");
     records = keyBasedBuffer.getLogRecords();

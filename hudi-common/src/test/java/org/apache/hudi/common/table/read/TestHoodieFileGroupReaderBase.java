@@ -541,9 +541,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                      new HoodieRecordSizeEstimator(avroSchema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, getClass().getSimpleName())) {
           Long position = 0L;
           for (T record : records) {
-            String recordKey = readerContext.getRecordKey(record, avroSchema);
+            String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
             //test key based
-            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext, Collections.singletonList("timestamp"), false);
+            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
             spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
 
             //test position based
@@ -554,7 +554,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           //Validate that everything is correct
           position = 0L;
           for (T record : records) {
-            String recordKey = readerContext.getRecordKey(record, avroSchema);
+            String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
             BufferedRecord<T> keyBased = spillableMap.get(recordKey);
             assertNotNull(keyBased);
             BufferedRecord<T> positionBased = spillableMap.get(position++);
@@ -563,9 +563,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             assertRecordsEqual(avroSchema, record, positionBased.getRecord());
             assertEquals(keyBased.getRecordKey(), recordKey);
             assertEquals(positionBased.getRecordKey(), recordKey);
-            assertEquals(avroSchema, readerContext.getSchemaFromBufferRecord(keyBased));
+            assertEquals(avroSchema, readerContext.getRecordContext().getSchemaFromBufferRecord(keyBased));
             // generate field value is hardcoded as 0 for ordering field: timestamp, see HoodieTestDataGenerator#generateRandomValue
-            assertEquals(readerContext.convertValueToEngineType(0L), positionBased.getOrderingValue());
+            assertEquals(readerContext.getRecordContext().convertValueToEngineType(0L), positionBased.getOrderingValue());
           }
         }
       }
@@ -612,7 +612,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false, sortOutput);
     assertEquals(expectedRecords.size(), actualRecordList.size());
     actualRecordList.forEach(r -> assertRecordMatchesSchema(avroSchema, r));
-    Set<GenericRecord> actualRecordSet = actualRecordList.stream().map(r ->  readerContext.convertToAvroRecord(r, avroSchema))
+    Set<GenericRecord> actualRecordSet = actualRecordList.stream().map(r ->  readerContext.getRecordContext().convertToAvroRecord(r, avroSchema))
         .map(r -> HoodieAvroUtils.removeFields(r, metaCols))
         .collect(Collectors.toSet());
     Set<GenericRecord> expectedRecordSet = expectedRecords.stream()
@@ -803,7 +803,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       while (fileGroupReaderIterator.hasNext()) {
         T next = fileGroupReaderIterator.next();
         if (sortOutput) {
-          String currentKey = readerContext.getRecordKey(next, avroSchema);
+          String currentKey = readerContext.getRecordContext().getRecordKey(next, avroSchema);
           assertTrue(lastKey == null || lastKey.compareTo(currentKey) < 0, "Record keys should be sorted within the file group");
           lastKey = currentKey;
         }
@@ -887,12 +887,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   private List<HoodieTestDataGenerator.RecordIdentifier> convertEngineRecords(List<T> records, Schema schema, HoodieReaderContext<T> readerContext, List<String> preCombineFields) {
     return records.stream()
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
-            readerContext.getValue(record, schema, KEY_FIELD_NAME).toString(),
-            readerContext.getValue(record, schema, PARTITION_FIELD_NAME).toString(),
+            readerContext.getRecordContext().getValue(record, schema, KEY_FIELD_NAME).toString(),
+            readerContext.getRecordContext().getValue(record, schema, PARTITION_FIELD_NAME).toString(),
             OrderingValues.create(preCombineFields,
-                    field -> (Comparable) readerContext.getValue(record, schema, field))
+                    field -> (Comparable) readerContext.getRecordContext().getValue(record, schema, field))
                 .toString(),
-            readerContext.getValue(record, schema, RIDER_FIELD_NAME).toString()))
+            readerContext.getRecordContext().getValue(record, schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }
 
@@ -905,7 +905,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             record.getRecordKey(),
             removeHiveStylePartition(record.getPartitionPath()),
             record.getOrderingValue(schema, props).toString(),
-            readerContext.getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
+            readerContext.getRecordContext().getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }
 

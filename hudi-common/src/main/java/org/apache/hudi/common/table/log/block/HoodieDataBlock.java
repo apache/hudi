@@ -272,7 +272,7 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
 
     HashSet<String> keySet = new HashSet<>(keys);
     return FilteringEngineRecordIterator.getInstance(allRecords, keySet, fullKey, record ->
-        Option.of(readerContext.getRecordKey(record, readerSchema)));
+        Option.of(readerContext.getRecordContext().getRecordKey(record, readerSchema)));
   }
 
   protected <T> ClosableIterator<HoodieRecord<T>> readRecordsFromBlockPayload(HoodieRecordType type) throws IOException {

@@ -25,6 +25,7 @@ import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -70,7 +71,7 @@ import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.BaseSparkInternalRowReaderContext.getFieldValueFromInternalRow;
+import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
@@ -113,7 +114,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     props = new TypedProperties();
     props.put(PRECOMBINE_FIELDS.key(), "precombine");
     readerContext = new DummyInternalRowReaderContext(
-        storageConfig, tableConfig, Option.empty(), Option.empty());
+        storageConfig, tableConfig, Option.empty(), Option.empty(), new DummyRecordContext(tableConfig));
   }
 
   // ============================================================================
@@ -781,22 +782,10 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     return fullSchema;
   }
 
-  static class DummyInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
-    protected DummyInternalRowReaderContext(StorageConfiguration<?> storageConfiguration,
-                                            HoodieTableConfig tableConfig,
-                                            Option<InstantRange> instantRangeOpt,
-                                            Option<Predicate> keyFilterOpt) {
-      super(storageConfiguration, tableConfig, instantRangeOpt, keyFilterOpt);
-    }
+  static class DummyRecordContext extends RecordContext<InternalRow> {
 
-    @Override
-    public ClosableIterator<InternalRow> getFileRecordIterator(StoragePath filePath,
-                                                               long start,
-                                                               long length,
-                                                               Schema dataSchema,
-                                                               Schema requiredSchema,
-                                                               HoodieStorage storage) throws IOException {
-      return null;
+    public DummyRecordContext(HoodieTableConfig tableConfig) {
+      super(tableConfig);
     }
 
     @Override
@@ -812,13 +801,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     @Nullable
     @Override
     public InternalRow getDeleteRow(InternalRow record, String recordKey) {
-      return null;
-    }
-
-    @Override
-    protected Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode,
-                                                         String mergeStrategyId,
-                                                         String mergeImplClasses) {
       return null;
     }
 
@@ -865,6 +847,43 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
+    public Schema getSchemaFromBufferRecord(BufferedRecord<InternalRow> record) {
+      int id = record.getSchemaId();
+      if (id >= 1 && id <= SCHEMAS.size()) {
+        return SCHEMAS.get(id - 1);
+      } else {
+        throw new RuntimeException("Schema id is illegal: " + id);
+      }
+    }
+  }
+
+  static class DummyInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
+    protected DummyInternalRowReaderContext(StorageConfiguration<?> storageConfiguration,
+                                            HoodieTableConfig tableConfig,
+                                            Option<InstantRange> instantRangeOpt,
+                                            Option<Predicate> keyFilterOpt,
+                                            RecordContext<InternalRow> recordContext) {
+      super(storageConfiguration, tableConfig, instantRangeOpt, keyFilterOpt, recordContext);
+    }
+
+    @Override
+    public ClosableIterator<InternalRow> getFileRecordIterator(StoragePath filePath,
+                                                               long start,
+                                                               long length,
+                                                               Schema dataSchema,
+                                                               Schema requiredSchema,
+                                                               HoodieStorage storage) throws IOException {
+      return null;
+    }
+
+    @Override
+    protected Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode,
+                                                         String mergeStrategyId,
+                                                         String mergeImplClasses) {
+      return null;
+    }
+
+    @Override
     public InternalRow seal(InternalRow record) {
       return null;
     }
@@ -888,16 +907,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     public UnaryOperator<InternalRow> projectRecord(
         Schema from, Schema to, Map<String, String> renamedColumns) {
       return null;
-    }
-
-    @Override
-    public Schema getSchemaFromBufferRecord(BufferedRecord<InternalRow> record) {
-      int id = record.getSchemaId();
-      if (id >= 1 && id <= SCHEMAS.size()) {
-        return SCHEMAS.get(id - 1);
-      } else {
-        throw new RuntimeException("Schema id is illegal: " + id);
-      }
     }
   }
 

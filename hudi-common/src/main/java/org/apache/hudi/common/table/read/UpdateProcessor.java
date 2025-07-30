@@ -67,7 +67,7 @@ public interface UpdateProcessor<T> {
       if (isDelete) {
         readStats.incrementNumDeletes();
         if (emitDeletes) {
-          return readerContext.getDeleteRow(mergedRecord, recordKey);
+          return readerContext.getRecordContext().getDeleteRow(mergedRecord, recordKey);
         }
         return null;
       } else {

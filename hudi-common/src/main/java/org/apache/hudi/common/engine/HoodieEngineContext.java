@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -27,14 +28,17 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.collection.ClosableSortingIterator;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -131,6 +135,19 @@ public abstract class HoodieEngineContext {
 
   public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
 
+  public ReaderContextFactory<?> getReaderContextFactoryDuringWrite(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType) {
+    if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
+      return new AvroReaderContextFactory(metaClient);
+    }
+    return getDefaultContextFactory(metaClient);
+  }
+
+  /**
+   * Returns default reader context factory for the engine.
+   * @param metaClient Table metadata client
+   */
+  public abstract ReaderContextFactory<?> getDefaultContextFactory(HoodieTableMetaClient metaClient);
+
   /**
    * Groups values by key and applies a processing function to each group.
    *
@@ -173,4 +190,6 @@ public abstract class HoodieEngineContext {
             .values()
             .flatMap(it -> processFunc.apply(new ClosableSortingIterator<>(it.iterator())));
   }
+
+  public abstract KeyGenerator createKeyGenerator(TypedProperties props) throws IOException;
 }

@@ -229,13 +229,14 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     Schema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
     when(recordMerger.getMandatoryFieldsForMerging(dataSchema, tableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
-    FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
-        dataSchema, requestedSchema, Option.empty(), tableConfig, props);
-    Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema();
-    assertEquals(expectedSchema, actualSchema);
-    assertEquals(addHoodieIsDeleted, fileGroupReaderSchemaHandler.hasBuiltInDelete());
+    DeleteContext deleteContext = new DeleteContext(props, dataSchema);
+    assertEquals(addHoodieIsDeleted, deleteContext.hasBuiltInDeleteField());
     assertEquals(addCustomDeleteMarker
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
-        fileGroupReaderSchemaHandler.getCustomDeleteMarkerKeyValue());
+        deleteContext.getCustomDeleteMarkerKeyValue());
+    FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
+        dataSchema, requestedSchema, Option.empty(), tableConfig, props);
+    Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
+    assertEquals(expectedSchema, actualSchema);
   }
 }

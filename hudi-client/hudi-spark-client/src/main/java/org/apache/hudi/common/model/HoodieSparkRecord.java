@@ -62,7 +62,7 @@ import java.util.Properties;
 
 import scala.Function1;
 
-import static org.apache.hudi.BaseSparkInternalRowReaderContext.getFieldValueFromInternalRow;
+import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;

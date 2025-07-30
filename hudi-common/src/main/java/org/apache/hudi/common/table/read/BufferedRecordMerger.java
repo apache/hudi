@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.util.Option;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 /**
  * A {@link BufferedRecord} merger that covers three core merging scenarios within {@link org.apache.hudi.common.table.read.buffer.FileGroupRecordBuffer}:
@@ -32,7 +33,9 @@ import java.io.IOException;
  *   <li>base & log merging.</li>
  * </ol>
  */
-public interface BufferedRecordMerger<T> {
+public interface BufferedRecordMerger<T> extends Serializable {
+
+  long serialVersionUID = 1L;
 
   /**
    * Merges incoming record from log file with existing record in record buffer.

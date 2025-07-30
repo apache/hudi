@@ -97,7 +97,7 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
-    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    String recordKey = readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema);
     // Avoid removing from the map so the map can be reused later
     BufferedRecord<T> logRecordInfo = existingRecords.get(recordKey);
     if (logRecordInfo != null) {

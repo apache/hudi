@@ -63,7 +63,7 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
 
   @Override
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
-    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    String recordKey = readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema);
     int comparison = 0;
     while (!getLogRecordKeysSorted().isEmpty() && (comparison = getLogRecordKeysSorted().peek().compareTo(recordKey)) <= 0) {
       String nextLogRecordKey = getLogRecordKeysSorted().poll();

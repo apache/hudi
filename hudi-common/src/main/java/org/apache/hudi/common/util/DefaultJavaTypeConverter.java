@@ -19,7 +19,10 @@
 
 package org.apache.hudi.common.util;
 
-public class DefaultJavaTypeConverter implements JavaTypeConverter {
+import java.io.Serializable;
+
+public class DefaultJavaTypeConverter implements JavaTypeConverter, Serializable {
+  private static final long serialVersionUID = 1L;
 
   public boolean castToBoolean(Object value) {
     if (value instanceof Boolean) {
