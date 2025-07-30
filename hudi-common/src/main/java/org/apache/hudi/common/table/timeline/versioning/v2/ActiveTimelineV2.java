@@ -480,13 +480,14 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
   }
 
   @Override
-  public HoodieInstant transitionReplaceInflightToComplete(
-      HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant) {
+  public HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant,
+                                                           HoodieReplaceCommitMetadata metadata,
+                                                           String completionTime) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    return transitionStateToComplete(inflightInstant, commitInstant, Option.of(metadata), completionInstant);
+    return transitionStateToComplete(inflightInstant, commitInstant, Option.of(metadata), completionTime);
   }
 
   @Override
