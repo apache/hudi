@@ -95,7 +95,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        boolean isDelete = recordContext.isDeleteRecord(nextRecord, deleteConfigs);
+        boolean isDelete = recordContext.isDeleteRecord(nextRecord, deleteContext);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }

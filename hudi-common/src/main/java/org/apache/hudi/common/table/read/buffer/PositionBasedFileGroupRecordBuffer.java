@@ -23,7 +23,6 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -146,8 +145,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
-        RecordContext.DeleteConfigs deleteConfigs = new RecordContext.DeleteConfigs(props, readerSchema);
-        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(evolvedNextRecord, deleteConfigs);
+        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(evolvedNextRecord, deleteContext);
         BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }

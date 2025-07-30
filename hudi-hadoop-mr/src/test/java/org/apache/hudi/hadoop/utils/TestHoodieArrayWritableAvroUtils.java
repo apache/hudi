@@ -20,9 +20,11 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
+import org.apache.hudi.hadoop.HiveRecordContext;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -46,6 +48,8 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieArrayWritableAvroUtils {
 
@@ -96,7 +100,9 @@ public class TestHoodieArrayWritableAvroUtils {
 
   @Test
   public void testCastOrderingField() {
-    HiveHoodieReaderContext readerContext = Mockito.mock(HiveHoodieReaderContext.class, Mockito.CALLS_REAL_METHODS);
+    HiveHoodieReaderContext readerContext = mock(HiveHoodieReaderContext.class, Mockito.CALLS_REAL_METHODS);
+    RecordContext recordContext = mock(HiveRecordContext.class, Mockito.CALLS_REAL_METHODS);
+    when(readerContext.getRecordContext()).thenReturn(recordContext);
     assertEquals(new Text("ASDF"), readerContext.getRecordContext().convertValueToEngineType(new Text("ASDF")));
     assertEquals(new Text("ASDF"), readerContext.getRecordContext().convertValueToEngineType("ASDF"));
     assertEquals(new IntWritable(8), readerContext.getRecordContext().convertValueToEngineType(new IntWritable(8)));

@@ -22,7 +22,6 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -230,14 +229,14 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     Schema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
     when(recordMerger.getMandatoryFieldsForMerging(dataSchema, tableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
-    RecordContext.DeleteConfigs deleteConfigs = new RecordContext.DeleteConfigs(props, dataSchema);
-    assertEquals(addHoodieIsDeleted, deleteConfigs.hasBuiltInDelete());
+    DeleteContext deleteContext = new DeleteContext(props, dataSchema);
+    assertEquals(addHoodieIsDeleted, deleteContext.hasBuiltInDelete());
     assertEquals(addCustomDeleteMarker
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
-        deleteConfigs.getCustomDeleteMarkerKeyValue());
+        deleteContext.getCustomDeleteMarkerKeyValue());
     FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
         dataSchema, requestedSchema, Option.empty(), tableConfig, props);
-    Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(props, dataSchema);
+    Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
     assertEquals(expectedSchema, actualSchema);
   }
 }

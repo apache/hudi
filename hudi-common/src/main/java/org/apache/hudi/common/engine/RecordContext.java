@@ -19,18 +19,16 @@
 
 package org.apache.hudi.common.engine;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.JavaTypeConverter;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.KeyGenerator;
@@ -46,8 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
-import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
@@ -209,29 +205,27 @@ public abstract class RecordContext<T> implements Serializable {
   @Nullable
   public abstract T getDeleteRow(T record, String recordKey);
 
-  public boolean isDeleteRecord(T record, DeleteConfigs deleteConfigs) {
-    return isBuiltInDeleteRecord(record, deleteConfigs) || isDeleteHoodieOperation(record, deleteConfigs)
-        || isCustomDeleteRecord(record, deleteConfigs);
+  public boolean isDeleteRecord(T record, DeleteContext deleteContext) {
+    return isBuiltInDeleteRecord(record, deleteContext) || isDeleteHoodieOperation(record, deleteContext)
+        || isCustomDeleteRecord(record, deleteContext);
   }
 
   /**
    * Check if the value of column "_hoodie_is_deleted" is true.
    */
-  private boolean isBuiltInDeleteRecord(T record,
-                                        DeleteConfigs deleteConfigs) {
-    if (!deleteConfigs.getCustomDeleteMarkerKeyValue().isPresent()) {
+  private boolean isBuiltInDeleteRecord(T record, DeleteContext deleteContext) {
+    if (!deleteContext.getCustomDeleteMarkerKeyValue().isPresent()) {
       return false;
     }
-    Object columnValue = getValue(record, deleteConfigs.getSchema(), HOODIE_IS_DELETED_FIELD);
+    Object columnValue = getValue(record, deleteContext.getReaderSchema(), HOODIE_IS_DELETED_FIELD);
     return columnValue != null && getTypeConverter().castToBoolean(columnValue);
   }
 
   /**
    * Check if a record is a DELETE marked by the '_hoodie_operation' field.
    */
-  private boolean isDeleteHoodieOperation(T record,
-                                          DeleteConfigs deleteConfigs) {
-    int hoodieOperationPos = deleteConfigs.getHoodieOperationPos();
+  private boolean isDeleteHoodieOperation(T record, DeleteContext deleteContext) {
+    int hoodieOperationPos = deleteContext.getHoodieOperationPos();
     if (hoodieOperationPos < 0) {
       return false;
     }
@@ -242,14 +236,12 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Check if a record is a DELETE marked by a custom delete marker.
    */
-  private boolean isCustomDeleteRecord(T record,
-                                       DeleteConfigs deleteConfigs) {
-    if (deleteConfigs.getCustomDeleteMarkerKeyValue().isEmpty()) {
+  private boolean isCustomDeleteRecord(T record, DeleteContext deleteContext) {
+    if (deleteContext.getCustomDeleteMarkerKeyValue().isEmpty()) {
       return false;
     }
-    Pair<String, String> markerKeyValue = deleteConfigs.getCustomDeleteMarkerKeyValue().get();
-    Object deleteMarkerValue =
-        getValue(record, deleteConfigs.getSchema(), markerKeyValue.getLeft());
+    Pair<String, String> markerKeyValue = deleteContext.getCustomDeleteMarkerKeyValue().get();
+    Object deleteMarkerValue = getValue(record, deleteContext.getReaderSchema(), markerKeyValue.getLeft());
     return deleteMarkerValue != null
         && markerKeyValue.getRight().equals(deleteMarkerValue.toString());
   }
@@ -309,78 +301,5 @@ public abstract class RecordContext<T> implements Serializable {
       };
       return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
     };
-  }
-
-  public static class DeleteConfigs {
-    private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
-    private final boolean hasBuiltInDelete;
-    private final int hoodieOperationPos;
-    private final Schema schema;
-
-    public DeleteConfigs(TypedProperties props, Schema schema) {
-      this.customDeleteMarkerKeyValue = updateCustomDeleteMarkerKevValue(props);
-      this.hasBuiltInDelete = updateHasBuiltInDeleteField(schema);
-      this.hoodieOperationPos = updateHoodieOperationPos(schema);
-      this.schema = schema;
-    }
-
-    /**
-     * Returns an option pair containing delete key and corresponding marker value. Delete key represents
-     * the field which contains the corresponding delete marker if a record is deleted. If no delete key and marker
-     * are configured, the function returns an empty option.
-     */
-    private static Option<Pair<String, String>> updateCustomDeleteMarkerKevValue(TypedProperties props) {
-      String deleteKey = props.getProperty(DELETE_KEY);
-      String deleteMarker = props.getProperty(DELETE_MARKER);
-      boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);
-      boolean deleteMarkerExists = !StringUtils.isNullOrEmpty(deleteMarker);
-
-      Option<Pair<String, String>> customDeleteMarkerKeyValue;
-      // DELETE_KEY and DELETE_MARKER both should be set.
-      if (deleteKeyExists && deleteMarkerExists) {
-        // DELETE_KEY field exists in the schema.
-        customDeleteMarkerKeyValue = Option.of(Pair.of(deleteKey, deleteMarker));
-      } else if (!deleteKeyExists && !deleteMarkerExists) {
-        // Normal case.
-        customDeleteMarkerKeyValue = Option.empty();
-      } else {
-        throw new IllegalArgumentException("Either custom delete key or marker is not specified");
-      }
-      return customDeleteMarkerKeyValue;
-    }
-
-    /**
-     * Check if "_hoodie_is_deleted" field (built-in deletes) exists in the schema.
-     * Assume the type of this column is boolean.
-     *
-     * @param schema table schema to check
-     * @return whether built-in delete field is included in the table schema
-     */
-    private static boolean updateHasBuiltInDeleteField(Schema schema) {
-      return schema.getField(HOODIE_IS_DELETED_FIELD) != null;
-    }
-
-    /**
-     * Returns position of hoodie operation meta field in the schema
-     */
-    private static Integer updateHoodieOperationPos(Schema schema) {
-      return Option.ofNullable(schema.getField(HoodieRecord.OPERATION_METADATA_FIELD)).map(Schema.Field::pos).orElse(-1);
-    }
-
-    public Option<Pair<String, String>> getCustomDeleteMarkerKeyValue() {
-      return customDeleteMarkerKeyValue;
-    }
-
-    public boolean hasBuiltInDelete() {
-      return hasBuiltInDelete;
-    }
-
-    public int getHoodieOperationPos() {
-      return hoodieOperationPos;
-    }
-
-    public Schema getSchema() {
-      return schema;
-    }
   }
 }

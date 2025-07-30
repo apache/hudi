@@ -29,6 +29,7 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.UpdateProcessor;
@@ -97,6 +98,7 @@ class TestFileGroupRecordBuffer {
     when(readerContext.getRecordContext()).thenReturn(recordContext);
     when(readerContext.getSchemaHandler()).thenReturn(schemaHandler);
     when(schemaHandler.getRequiredSchema()).thenReturn(schema);
+    when(schemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, schema));
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
     when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
     when(readerContext.getRecordSizeEstimator()).thenReturn(new DefaultSizeEstimator<>());
@@ -138,7 +140,7 @@ class TestFileGroupRecordBuffer {
       props.setProperty(DELETE_MARKER, customDeleteValue);
     }
     Throwable exception = assertThrows(IllegalArgumentException.class,
-        () -> new RecordContext.DeleteConfigs(props, dataSchema));
+        () -> new DeleteContext(props, dataSchema));
     assertEquals("Either custom delete key or marker is not specified",
         exception.getMessage());
   }
@@ -160,14 +162,14 @@ class TestFileGroupRecordBuffer {
 
     props.setProperty(DELETE_KEY, customDeleteKey);
     props.setProperty(DELETE_MARKER, customDeleteValue);
-    RecordContext.DeleteConfigs deleteConfigs = new RecordContext.DeleteConfigs(props, schema);
+    DeleteContext deleteContext = new DeleteContext(props, schema);
     when(recordContext.getValue(any(), any(), any())).thenReturn(null);
-    assertFalse(recordContext.isDeleteRecord(record, deleteConfigs));
+    assertFalse(recordContext.isDeleteRecord(record, deleteContext));
 
     props.setProperty(DELETE_KEY, customDeleteKey);
     props.setProperty(DELETE_MARKER, customDeleteValue);
     when(recordContext.getValue(eq(record), any(), eq(customDeleteKey))).thenReturn("d");
-    assertTrue(readerContext.getRecordContext().isDeleteRecord(record, deleteConfigs));
+    assertTrue(readerContext.getRecordContext().isDeleteRecord(record, deleteContext));
   }
 
   @Test

@@ -55,8 +55,8 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   @Override
-  protected Schema prepareRequiredSchema(TypedProperties properties, Schema tableSchema) {
-    Schema preMergeSchema = super.prepareRequiredSchema(properties, tableSchema);
+  protected Schema prepareRequiredSchema(DeleteContext deleteContext) {
+    Schema preMergeSchema = super.prepareRequiredSchema(deleteContext);
     return readerContext.getShouldMergeUseRecordPosition()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;

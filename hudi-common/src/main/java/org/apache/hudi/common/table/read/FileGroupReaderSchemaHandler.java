@@ -23,7 +23,6 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -75,6 +74,7 @@ public class FileGroupReaderSchemaHandler<T> {
   protected final HoodieReaderContext<T> readerContext;
 
   protected final TypedProperties properties;
+  private final DeleteContext deleteContext;
 
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                       Schema tableSchema,
@@ -87,7 +87,8 @@ public class FileGroupReaderSchemaHandler<T> {
     this.tableSchema = tableSchema;
     this.requestedSchema = AvroSchemaCache.intern(requestedSchema);
     this.hoodieTableConfig = hoodieTableConfig;
-    this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(properties, tableSchema));
+    this.deleteContext = new DeleteContext(properties, tableSchema);
+    this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
   }
@@ -119,6 +120,10 @@ public class FileGroupReaderSchemaHandler<T> {
     return Option.empty();
   }
 
+  public DeleteContext getDeleteContext() {
+    return deleteContext;
+  }
+
   private InternalSchema pruneInternalSchema(Schema requiredSchema, Option<InternalSchema> internalSchemaOption) {
     if (!internalSchemaOption.isPresent()) {
       return InternalSchema.getEmptyInternalSchema();
@@ -140,7 +145,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   @VisibleForTesting
-  Schema generateRequiredSchema(TypedProperties properties, Schema tableSchema) {
+  Schema generateRequiredSchema(DeleteContext deleteContext) {
     boolean hasInstantRange = readerContext.getInstantRange().isPresent();
     //might need to change this if other queries than mor have mandatory fields
     if (!readerContext.getHasLogFiles()) {
@@ -159,10 +164,9 @@ public class FileGroupReaderSchemaHandler<T> {
     }
 
     List<Schema.Field> addedFields = new ArrayList<>();
-    RecordContext.DeleteConfigs deleteConfigs = new RecordContext.DeleteConfigs(properties, tableSchema);
     for (String field : getMandatoryFieldsForMerging(
         hoodieTableConfig, this.properties, this.tableSchema, readerContext.getRecordMerger(),
-        deleteConfigs.hasBuiltInDelete(), deleteConfigs.getCustomDeleteMarkerKeyValue(), hasInstantRange)) {
+        deleteContext.hasBuiltInDelete(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         addedFields.add(getField(this.tableSchema, field));
       }
@@ -230,8 +234,8 @@ public class FileGroupReaderSchemaHandler<T> {
     return requiredFields.toArray(new String[0]);
   }
 
-  protected Schema prepareRequiredSchema(TypedProperties properties, Schema tableSchema) {
-    Schema preReorderRequiredSchema = generateRequiredSchema(properties, tableSchema);
+  protected Schema prepareRequiredSchema(DeleteContext deleteContext) {
+    Schema preReorderRequiredSchema = generateRequiredSchema(deleteContext);
     Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = getDataAndMetaCols(preReorderRequiredSchema);
     readerContext.setNeedsBootstrapMerge(readerContext.getHasBootstrapBaseFile()
         && !requiredFields.getLeft().isEmpty() && !requiredFields.getRight().isEmpty());

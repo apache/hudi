@@ -23,7 +23,6 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -77,7 +77,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
-  protected final RecordContext.DeleteConfigs deleteConfigs;
+  protected final DeleteContext deleteContext;
   protected ClosableIterator<T> baseFileIterator;
   protected UpdateProcessor<T> updateProcessor;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
@@ -120,7 +120,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     }
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
-    this.deleteConfigs = new RecordContext.DeleteConfigs(props, readerSchema);
+    this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
   }
 
   protected ExternalSpillableMap<Serializable, BufferedRecord<T>> initializeRecordsMap(String spillableMapBasePath) throws IOException {
