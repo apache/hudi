@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -54,6 +55,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -183,7 +186,44 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
+    if (!renamedColumns.isEmpty()) {
+      throw new UnsupportedOperationException("Column renaming is not supported for the HoodieAvroReaderContext");
+    }
+    Map<String, Integer> fromFields = IntStream.range(0, from.getFields().size())
+        .boxed()
+        .collect(Collectors.toMap(
+            i -> from.getFields().get(i).name(), i -> i));
+    Map<String, Integer> toFields = IntStream.range(0, to.getFields().size())
+        .boxed()
+        .collect(Collectors.toMap(
+            i -> to.getFields().get(i).name(), i -> i));
+
+    // Check if source schema contains all fields from target schema.
+    List<Schema.Field> missingFields = to.getFields().stream()
+        .filter(f -> !fromFields.containsKey(f.name())).collect(Collectors.toList());
+    if (!missingFields.isEmpty()) {
+      throw new HoodieException("There are some fields missing in source schema: "
+          + missingFields);
+    }
+
+    // Build the mapping from source schema to target schema.
+    Map<Integer, Integer> fieldMap = toFields.entrySet().stream()
+        .filter(e -> fromFields.containsKey(e.getKey()))
+        .collect(Collectors.toMap(
+            e -> fromFields.get(e.getKey()), Map.Entry::getValue));
+
+    // Do the transformation.
+    return record -> {
+      IndexedRecord outputRecord = new GenericData.Record(to);
+      for (int i = 0; i < from.getFields().size(); i++) {
+        if (!fieldMap.containsKey(i)) {
+          continue;
+        }
+        int j = fieldMap.get(i);
+        outputRecord.put(j, record.get(i));
+      }
+      return outputRecord;
+    };
   }
 
   /**
