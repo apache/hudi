@@ -17,11 +17,9 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
@@ -29,8 +27,6 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME;
 
 /**
  * Key generator prefixing field names before corresponding record-key parts.
@@ -42,7 +38,6 @@ import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SIN
 public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   private final ComplexAvroKeyGenerator complexAvroKeyGenerator;
-  private final boolean encodeSingleKeyFieldName;
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
@@ -52,7 +47,6 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
     this.complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
-    this.encodeSingleKeyFieldName = ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME);
   }
 
   @Override
@@ -68,15 +62,13 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getRecordKey(Row row) {
     tryInitRowAccessor(row.schema());
-    return combineCompositeRecordKey(
-        encodeSingleKeyFieldName, rowAccessor.getRecordKeyParts(row));
+    return combineCompositeRecordKey(rowAccessor.getRecordKeyParts(row));
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
     tryInitRowAccessor(schema);
-    return combineCompositeRecordKeyUnsafe(
-        encodeSingleKeyFieldName, rowAccessor.getRecordKeyParts(internalRow));
+    return combineCompositeRecordKeyUnsafe(rowAccessor.getRecordKeyParts(internalRow));
   }
 
   @Override
