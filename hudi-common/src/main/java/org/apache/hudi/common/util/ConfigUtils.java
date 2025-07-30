@@ -32,10 +32,9 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import edu.umd.cs.findbugs.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -53,6 +52,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 
 public class ConfigUtils {
   public static final String STREAMER_CONFIG_PREFIX = "hoodie.streamer.";
@@ -111,6 +111,30 @@ public class ConfigUtils {
    */
   public static String getPayloadClass(Properties props) {
     return HoodieRecordPayload.getPayloadClassName(props);
+  }
+
+  /**
+   * Check if event time metadata should be tracked.
+   */
+  public static boolean isTrackingEventTimeWatermark(TypedProperties props) {
+    return props.getBoolean("hoodie.write.track.event.time.watermark", false);
+  }
+
+  /**
+   * Check if logical timestamp should be made consistent.
+   */
+  public static boolean shouldKeepConsistentLogicalTimestamp(TypedProperties props) {
+    return Boolean.parseBoolean(props.getProperty(
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
+        KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
+  }
+
+  /**
+   * Extract event_time field name from configuration.
+   */
+  @Nullable
+  public static String getEventTimeFieldName(TypedProperties props) {
+    return props.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY);
   }
 
   public static List<String> split2List(String param) {

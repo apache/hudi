@@ -411,6 +411,18 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   /**
+   * This method converts a value for a column with certain Avro Logical data types that require special handling.
+   * <p>
+   * E.g., Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
+   * represented/stored in parquet.
+   * <p>
+   * E.g., Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
+   * represented/stored in parquet.
+   */
+  public abstract Object convertColumnValueForLogicalType(
+      Schema fieldSchema, Object fieldValue, boolean keepConsistentLogicalTimestamp);
+
+  /**
    * Get column in record to support RDDCustomColumnsSortPartitioner
    * @return
    */

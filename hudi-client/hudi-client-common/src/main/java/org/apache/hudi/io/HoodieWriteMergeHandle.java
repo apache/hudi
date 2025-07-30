@@ -280,7 +280,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
    * @param oldRecord     The value of old record
    * @param combineRecord Record created by merging the old record with the new incoming record
    * @param schema        Record schema
-   * @param prop          Properties
+   * @param props         Properties
    * @param isDelete      Whether the new record is a delete record
    *
    * @return true if the record was written successfully
@@ -290,9 +290,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
                               @Nullable HoodieRecord<T> oldRecord,
                               Option<HoodieRecord> combineRecord,
                               Schema schema,
-                              Properties prop,
+                              Properties props,
                               boolean isDelete) {
-    Option recordMetadata = newRecord.getMetadata();
+    Option<Map<String, String>> recordMetadata = getRecordMetadata(newRecord, schema, props);
     if (!partitionPath.equals(newRecord.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
           + newRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
@@ -311,7 +311,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
             SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
                 writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
           }
-          writeToFile(hoodieKey, combineRecord.get(), schema, prop, preserveMetadata);
+          writeToFile(hoodieKey, combineRecord.get(), schema, props, preserveMetadata);
           recordsWritten++;
         } else {
           // CASE (2): A delete operation.

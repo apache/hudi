@@ -206,7 +206,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Option<Map<String, String>> getMetadata() {
-    return Option.empty();
+    if (metaData == null) {
+      return Option.empty();
+    }
+    return metaData;
   }
 
   @Override
@@ -257,6 +260,14 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     Serializer<GenericRecord> avroSerializer = kryo.getSerializer(GenericRecord.class);
 
     return kryo.readObjectOrNull(input, GenericRecord.class, avroSerializer);
+  }
+
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    return HoodieAvroUtils.convertValueForAvroLogicalTypes(
+        fieldSchema, fieldValue, keepConsistentLogicalTimestamp);
   }
 
   static void updateMetadataValuesInternal(GenericRecord avroRecord, MetadataValues metadataValues) {
