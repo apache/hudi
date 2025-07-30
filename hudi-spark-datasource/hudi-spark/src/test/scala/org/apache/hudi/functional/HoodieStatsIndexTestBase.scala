@@ -24,7 +24,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline, MetadataConversionUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
@@ -118,24 +118,22 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def rollbackLastInstant(hudiOpts: Map[String, String]): HoodieInstant = {
-    val timeline = getLatestMetaClient(true).getActiveTimeline.getWriteTimeline
-    val lastInstant = timeline.lastInstant().get()
-    if (getLatestCompactionInstant != timeline.lastInstant()
+    val lastInstant = getLatestMetaClient(true).getActiveTimeline
+      .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
+      .lastInstant().get()
+    if (getLatestCompactionInstant != getLatestMetaClient(false).getActiveTimeline.lastInstant()
       && lastInstant.getAction != ActionType.replacecommit.name()
       && lastInstant.getAction != ActionType.clean.name()) {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     }
     val writeConfig = getWriteConfig(hudiOpts)
     val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-    if (lastInstant.isCompleted) {
-      val restoreTarget = timeline.getInstants.get(timeline.countInstants() - 2)
-      client.savepoint(restoreTarget.requestedTime(), "user", "rollback to earlier instant")
-      client.restoreToSavepoint(restoreTarget.requestedTime())
-      client.deleteSavepoint(restoreTarget.requestedTime())
-    } else {
-      client.rollback(lastInstant.requestedTime)
-    }
+    client.rollback(lastInstant.requestedTime)
     client.close()
+
+    if (lastInstant.getAction != ActionType.clean.name()) {
+      assertEquals(ActionType.rollback.name(), getLatestMetaClient(true).getActiveTimeline.lastInstant().get().getAction)
+    }
     lastInstant
   }
 

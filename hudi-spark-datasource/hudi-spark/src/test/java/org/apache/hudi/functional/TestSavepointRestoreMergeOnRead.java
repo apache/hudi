@@ -40,6 +40,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -59,6 +60,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.functional.TestHoodieFileSystemViews.assertForFSVEquality;
@@ -184,7 +187,8 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       client.commit(thirdCommitTime, client.upsert(jsc.parallelize(updatedRecordsToBeRolledBack, 1), thirdCommitTime));
       // add a fourth delta commit but leave it in-flight
       String fourthCommitTime = client.startCommit();
-      List<HoodieRecord> inFlightRecords = dataGen.generateUniqueUpdates(fourthCommitTime, numRecords);
+      List<HoodieRecord> inFlightRecords = Stream.concat(dataGen.generateUniqueUpdates(fourthCommitTime, numRecords).stream(),
+          dataGen.generateInserts(fourthCommitTime, numRecords).stream()).collect(Collectors.toList());
       // collect result to trigger file creation
       List<WriteStatus> writes = client.upsert(jsc.parallelize(inFlightRecords, 1), fourthCommitTime).collect();
       // restore to the savepoint
@@ -517,6 +521,54 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
         assertTrue(compactionIsPresent);
       }
       assertEquals(tableVersion, HoodieTableMetaClient.reload(metaClient).getTableConfig().getTableVersion());
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE"})
+  void testMissingFileDoesNotFallRestore(HoodieTableVersion tableVersion) throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
+        .withMaxNumDeltaCommitsBeforeCompaction(4)
+        .withInlineCompaction(false)
+        .compactionSmallFileSize(0), tableVersion);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      // establish base files
+      String firstCommitTime = client.startCommit();
+      int numRecords = 10;
+      List<HoodieRecord> initialRecords = dataGen.generateInserts(firstCommitTime, numRecords);
+      client.commit(firstCommitTime, client.insert(jsc.parallelize(initialRecords, 1), firstCommitTime));
+      // add updates that go to log files
+      String secondCommitTime = client.startCommit();
+      List<HoodieRecord> updatedRecords = dataGen.generateUniqueUpdates(secondCommitTime, numRecords);
+      client.commit(secondCommitTime, client.upsert(jsc.parallelize(updatedRecords, 1), secondCommitTime));
+      client.savepoint(secondCommitTime, "user1", "Savepoint for commit that completed during compaction");
+
+      // add a third delta commit with log and new base files
+      String thirdCommitTime = client.startCommit();
+      List<HoodieRecord> upsertRecords = Stream.concat(dataGen.generateUniqueUpdates(thirdCommitTime, numRecords).stream(),
+            dataGen.generateInserts(thirdCommitTime, numRecords).stream()).collect(Collectors.toList());
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(upsertRecords, 1), thirdCommitTime).collect();
+      client.commit(thirdCommitTime, jsc.parallelize(writeStatuses, 1));
+
+      // delete one base file and one log file to validate both cases are handled gracefully
+      boolean deletedLogFile = false;
+      boolean deletedBaseFile = false;
+      for (WriteStatus writeStatus : writeStatuses) {
+        StoragePath path = FSUtils.constructAbsolutePath(basePath, writeStatus.getStat().getPath());
+        if (deletedLogFile && deletedBaseFile) {
+          break;
+        }
+        if (FSUtils.isLogFile(path)) {
+          deletedLogFile = true;
+          storage.deleteFile(path);
+        } else {
+          deletedBaseFile = true;
+          storage.deleteFile(path);
+        }
+      }
+      client.restoreToSavepoint(secondCommitTime);
+      validateFilesMetadata(hoodieWriteConfig);
+      assertEquals(Collections.singletonMap(secondCommitTime, numRecords), getRecordCountPerCommit());
     }
   }
 

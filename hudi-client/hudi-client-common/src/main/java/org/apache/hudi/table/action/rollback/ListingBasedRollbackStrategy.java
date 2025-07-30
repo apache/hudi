@@ -166,9 +166,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // For table version 8, the log files are not directly associated with the base file.
                 // The rollback will iterate in reverse order based on completion time so the log files completed
                 // after the compaction will already be queued for removal and therefore, only the files from the compaction commit must be deleted.
-                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, isTableVersionLessThanEight
-                    ? fetchFilesFromListFiles(instantToRollback, partitionPath, metaClient.getBasePath().toString(), baseFileExtension, metaClient.getStorage())
-                    : filesToDelete.get()));
+                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
               }
               break;
             case HoodieTimeline.DELTA_COMMIT_ACTION:
