@@ -61,9 +61,7 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
 
   @Override
   public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaOnWriteConfigs() {
-    SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs = new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
-    configs.addNewFieldSupport = true;
-    return configs;
+    return new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
   }
 
   @Override

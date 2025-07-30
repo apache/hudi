@@ -132,7 +132,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       HoodieTableMetaClient metaClient) {
     return new FlinkRowDataReaderContext(
         storageConf,
-        () -> InternalSchemaManager.DISABLED,
+        () -> InternalSchemaManager.get(storageConf, metaClient),
         Collections.emptyList(),
         metaClient.getTableConfig(),
         instantRangeOpt);
@@ -287,11 +287,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Override
   public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
     SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
-    configs.nestedSupport = false;
     configs.arraySupport = false;
-    configs.mapSupport = false;
     configs.anyArraySupport = false;
-    configs.addNewFieldSupport = false;
 
     configs.renameColumnSupport = false;
     configs.renameColumnAsPreviouslyRemovedSupport = false;

@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
@@ -477,6 +478,13 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)
     schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(schema, historySchemaStr))
     client.commit(instantTime, jsc.emptyRDD, HOption.of(extraMeta))
+
+    getStorageConf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, getBasePath)
+    val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator
+    val validCommits = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
+      .getInstants.iterator.asScala.map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
+    getStorageConf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+
   }
 
   override def getSchemaOnReadConfigs: SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs = {
