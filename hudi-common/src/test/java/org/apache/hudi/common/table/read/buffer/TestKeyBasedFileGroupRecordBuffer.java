@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.UpdateProcessor;
@@ -266,14 +267,15 @@ class TestKeyBasedFileGroupRecordBuffer {
                                                                                                  Option<Pair<String, String>> deleteMarkerKeyValue) {
 
     readerContext.setRecordMerger(Option.ofNullable(recordMerger));
-    FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
-    when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
-    when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     TypedProperties props = new TypedProperties();
     deleteMarkerKeyValue.ifPresent(markerKeyValue -> {
       props.setProperty(DELETE_KEY, markerKeyValue.getLeft());
       props.setProperty(DELETE_MARKER, markerKeyValue.getRight());
     });
+    FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
+    when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, SCHEMA));
     readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
