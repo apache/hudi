@@ -41,8 +41,22 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+/**
+ * Utils to generate schemas for schema on read evolution tests.
+ * Also to generate column name changes.
+ */
 public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase {
 
+  /**
+   * generate the schema for schema on read evolution testing
+   *
+   * @param configs        test configs to decide which evolution cases to run
+   * @param iteration      the current iteration of evolution
+   * @param maxIterations  the maximum number of iterations that this test should run.
+   *                       it is 0 indexed so if you evolve 3 times, maxIterations should be 2
+   *
+   * @return the generated schema
+   */
   public static InternalSchema generateExtendedSchema(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
     validateConfigs(configs);
 
@@ -60,7 +74,17 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
 
     return modificationSchema;
   }
-
+  
+  /**
+   * Generate map from old column name to new column name for a single iteration
+   *
+   * @param configs          test configs to decide which evolution cases to run
+   * @param iteration        the current iteration of evolution
+   * @param maxIterations    the maximum number of iterations that this test should run.
+   *                         it is 0 indexed so if you evolve 3 times, maxIterations should be 2
+   *
+   * @return map from old column name to new column name
+   */
   public static Map<String, String> generateColumnNameChanges(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
     if (!configs.renameColumnSupport || iteration == 0) {
       return Collections.emptyMap();
@@ -179,6 +203,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     }
   }
 
+  // Evolutions that add/remove/rename/reorder fields as opposed to changing their type
   private enum SchemaOnReadStructuralCase {
 
     REORDER_COLUMNS(c -> c.reorderColumnSupport,
@@ -225,13 +250,15 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     }
 
     public boolean enabled(SchemaOnReadConfigs configs) {
-      return Boolean.TRUE.equals(isEnabled.apply(configs)); // Avoid NPE
+      return isEnabled.apply(configs);
     }
 
+    // need to add fields that we can apply structural changes to
     public InternalSchema applyInitialization(InternalSchema schema, int maxIterations, SchemaModifier modifier) {
       return initializationFunction.apply(schema, maxIterations, modifier);
     }
 
+    // subsequent evolutions will modify the structural columns
     public InternalSchema applyUpdate(InternalSchema schema, SchemaModifier modifier, int iteration, int maxIterations) {
       return updateFunction.apply(schema, modifier, iteration, maxIterations);
     }
@@ -262,6 +289,8 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     }
   }
 
+  // base fields are used for type promotion. If we are doing n iterations, we want to have n sets of base fields so that we can
+  // promote one set on each iteration
   private static List<SchemaEvolutionField> buildBaseFieldsList(SchemaOnReadConfigs configs, int iteration, int maxIterations) {
     List<SchemaEvolutionField> baseFields = new ArrayList<>();
     for (int i = 0; i < maxIterations; i++) {
@@ -278,41 +307,41 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     return baseFields;
   }
 
+  // add fields that we can apply structural changes to
   private static InternalSchema addInitialFields(InternalSchema schema, SchemaOnReadConfigs configs, Integer maxIterations, SchemaModifier modifier) {
     InternalSchema result = schema;
-
     for (SchemaOnReadStructuralCase strategy : SchemaOnReadStructuralCase.values()) {
       if (strategy.enabled(configs)) {
         result = strategy.applyInitialization(result, maxIterations, modifier);
       }
     }
-
     return result;
   }
 
+  // initialize fields for REORDER_COLUMNS
   private static InternalSchema addInitialReorderFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
-    // Collects all FieldNameHolders into a list
     List<FieldNameHolder> fieldNamesList = new ArrayList<>();
     for (int i = 0; i <= maxIterations; i++) {
       fieldNamesList.add(FieldNames.reorderField(i));
     }
-    // Calls new modifier method that takes schema and List<FieldNameHolder>
     return modifier.addFields(schema, fieldNamesList);
   }
 
+  // initialize fields for ADD_FIELD_NOT_AT_END
   private static InternalSchema addInitialNonEndFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
     return modifier.addFields(schema, Collections.singletonList(FieldNames.addField(0)));
   }
 
+  // initialize fields for RENAME_COLUMN
   private static InternalSchema addInitialRenameFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
     List<FieldNameHolder> renameFields = new ArrayList<>(maxIterations);
     for (int i = 0; i < maxIterations; i++) {
       renameFields.add(FieldNames.renameField(i, 0));
     }
-
     return modifier.addFields(schema, renameFields);
   }
 
+  // initialize fields for REMOVE_COLUMN
   private static InternalSchema addInitialRemoveFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
     List<FieldNameHolder> removeFields = new ArrayList<>(maxIterations);
     for (int i = 0; i < maxIterations; i++) {
@@ -321,6 +350,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     return modifier.addFields(schema, removeFields);
   }
 
+  // initialize fields for RENAME_AS_REMOVED
   private static InternalSchema addInitialRenameAsRemovedFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
     List<FieldNameHolder> renameAsRemovedFields = new ArrayList<>(maxIterations);
     for (int i = 0; i < maxIterations; i++) {
@@ -330,10 +360,13 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     return modifier.addFields(schema, renameAsRemovedFields);
   }
 
+  // initialize fields for ADD_FIELD_AT_END
   private static InternalSchema addInitialEndFields(InternalSchema schema, Integer maxIterations, SchemaModifier modifier) {
     return modifier.addFields(schema, Collections.singletonList(FieldNames.addEndField(0)));
   }
 
+  // evolve the structural columns. We start with the initial structural columns and need to apply
+  // all the previous structural evolutions
   private static InternalSchema applyUpdates(InternalSchema schema, SchemaOnReadConfigs configs,
                                              SchemaModifier modifier, int iteration, int maxIterations) {
     InternalSchema result = schema;
@@ -343,21 +376,22 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     return result;
   }
 
+  // single round of evolution for structural columns
   private static InternalSchema applyUpdateIteration(InternalSchema schema, SchemaOnReadConfigs configs,
                                                      SchemaModifier modifier, int iteration, int maxIterations) {
     InternalSchema result = schema;
-
     for (SchemaOnReadStructuralCase strategy : SchemaOnReadStructuralCase.values()) {
       if (strategy.enabled(configs)) {
         result = strategy.applyUpdate(result, modifier, iteration, maxIterations);
       }
     }
-
     return result;
   }
 
+  // evolve the REORDER_COLUMNS fields
   private static InternalSchema applyReorderModifications(InternalSchema schema, SchemaModifier modifier,
                                                           int iteration, int maxIterations) {
+    // rotate the fields. So 0, 1, 2, 3, 4 becomes 4, 0, 1, 2, 3 becomes 3, 4, 0, 1, 2 etc
     int sourceIndex = maxIterations + 1 - iteration;
     int targetIndex = (maxIterations + 2 - iteration) % (maxIterations + 1);
 
@@ -368,20 +402,20 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
         TableChange.ColumnPositionChange.ColumnPositionType.BEFORE);
   }
 
+  // evolve the ADD_FIELD_NOT_AT_END fields
   private static InternalSchema applyNonEndFieldModifications(InternalSchema schema, SchemaModifier modifier,
                                                               int iteration, int maxIterations) {
     // Add new fields
     InternalSchema tempSchema = modifier.addFields(schema, Collections.singletonList(FieldNames.addField(iteration)));
-
-    // Position the new fields
+    // Position the new fields not at the end
     FieldNameHolder currentFields = FieldNames.addField(iteration);
     FieldNameHolder previousFields = FieldNames.addField(iteration - 1);
-
     return modifier.repositionFields(tempSchema,
         currentFields, previousFields,
         TableChange.ColumnPositionChange.ColumnPositionType.AFTER);
   }
 
+  // evolve the RENAME_COLUMN fields
   private static InternalSchema applyRenameModifications(InternalSchema schema, SchemaModifier modifier,
                                                          int iteration, int maxIterations) {
     InternalSchema result = schema;
@@ -397,6 +431,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     return result;
   }
 
+  // evolve the REMOVE_COLUMN fields
   private static InternalSchema applyRemoveModifications(InternalSchema schema, SchemaModifier modifier,
                                                          int iteration, int maxIterations) {
     int indexToRemove = iteration - 1;
@@ -404,6 +439,8 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     return modifier.deleteFields(schema, fieldsToRemove);
   }
 
+  // evolve the RENAME_AS_REMOVED fields
+  // we delete a field and then rename another field to the name of the deleted field
   private static InternalSchema applyRenameAsRemovedModifications(InternalSchema schema, SchemaModifier modifier,
                                                                   int iteration, int maxIterations) {
     int index = iteration - 1;
@@ -419,12 +456,15 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     return modifier.renameFields(tempSchema, oldFields, newFields);
   }
 
+  // evolve the ADD_FIELD_AT_END fields
   private static InternalSchema applyEndFieldModifications(InternalSchema schema, SchemaModifier modifier,
                                                            int iteration, int maxIterations) {
     FieldNameHolder endFields = FieldNames.addEndField(iteration);
     return modifier.addFields(schema, Collections.singletonList(endFields));
   }
 
+  // We do the same operations for base, nested, array, and map fields
+  // hold them all together and then we can apply operations on them all at once
   private static class FieldNameHolder {
     public final String baseFieldName;
     public final String nestedFieldName;
@@ -586,6 +626,9 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     }
   }
 
+  // For validation of the evolution, we need a map from new field name to old field name.
+  // Instead of modifying the schema, we capture the rename operations from the SchemaOnReadStructuralCase
+  // updates and store them in this map
   private static class RenameCapture extends SchemaModifier {
 
     private final Map<String, String> renameMap = new HashMap<>();

@@ -27,7 +27,44 @@ import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+/**
+ * Utils to generate schemas for schema on write evolution tests.
+ */
 public class SchemaOnWriteEvolutionTestUtils extends SchemaEvolutionTestUtilsBase {
+
+  /**
+   * generate the schema for schema on write evolution testing
+   *
+   * @param configs        test configs to decide which evolution cases to run
+   * @param iteration      the current iteration of evolution
+   * @param maxIterations  the maximum number of iterations that this test should run.
+   *                       it is 0 indexed so if you evolve 3 times, maxIterations should be 2
+   *
+   * @return the generated schema
+   */
+  public static Schema generateExtendedSchema(SchemaOnWriteConfigs configs, int iteration, int maxIterations) {
+    List<SchemaEvolutionField> baseFields = new ArrayList<>();
+    for (int i = 0; i < maxIterations; i++) {
+      for (SchemaOnWriteTypePromotionCase evolution : SchemaOnWriteTypePromotionCase.values()) {
+        if (evolution.isEnabled.test(configs)) {
+          if (i >= iteration) {
+            baseFields.add(new SchemaEvolutionField(evolution.getFormattedName(), evolution.before, null));
+          } else {
+            baseFields.add(new SchemaEvolutionField(evolution.getFormattedName(), evolution.after, null));
+          }
+        }
+      }
+    }
+
+    for (int i = 0; i < maxIterations; i++) {
+      // Add new field if we are testing adding new fields
+      if (configs.addNewFieldSupport && i < iteration) {
+        baseFields.add(new SchemaEvolutionField("BoolAddField" + i, Schema.Type.BOOLEAN, null));
+      }
+    }
+
+    return generateExtendedSchema(configs, baseFields);
+  }
 
   public static class SchemaOnWriteConfigs extends SchemaEvolutionTestUtilsBase.SchemaEvolutionConfigBase {
     public boolean addNewFieldSupport = true;
@@ -92,29 +129,5 @@ public class SchemaOnWriteEvolutionTestUtils extends SchemaEvolutionTestUtilsBas
       this.after = after;
       this.isEnabled = isEnabled;
     }
-  }
-
-  public static Schema generateExtendedSchema(SchemaOnWriteConfigs configs, int iteration, int maxIterations) {
-    List<SchemaEvolutionField> baseFields = new ArrayList<>();
-    for (int i = 0; i < maxIterations; i++) {
-      for (SchemaOnWriteTypePromotionCase evolution : SchemaOnWriteTypePromotionCase.values()) {
-        if (evolution.isEnabled.test(configs)) {
-          if (i >= iteration) {
-            baseFields.add(new SchemaEvolutionField(evolution.getFormattedName(), evolution.before, null));
-          } else {
-            baseFields.add(new SchemaEvolutionField(evolution.getFormattedName(), evolution.after, null));
-          }
-        }
-      }
-    }
-
-    for (int i = 0; i < maxIterations; i++) {
-      // Add new field if we are testing adding new fields
-      if (configs.addNewFieldSupport && i < iteration) {
-        baseFields.add(new SchemaEvolutionField("BoolAddField" + i, Schema.Type.BOOLEAN, null));
-      }
-    }
-
-    return generateExtendedSchema(configs, baseFields);
   }
 }

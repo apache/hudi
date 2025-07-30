@@ -229,45 +229,63 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @ParameterizedTest
   @EnumSource(value = SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.class)
   public void testSchemaOnRead(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) throws Exception {
-    try (SchemaOnReadTestExecutor executor = new SchemaOnReadTestExecutor(testType.getScenario().getMaxIterations())) {
-      executor.execute(testType.getScenario());
+    try (SchemaOnReadTestExecutor executor = new SchemaOnReadTestExecutor(testType)) {
+      executor.execute();
     }
   }
 
   @ParameterizedTest
   @EnumSource(value = SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.class)
   public void testSchemaOnWrite(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) throws Exception {
-    try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(testType.getScenario().getMaxIterations())) {
-      executor.execute(testType.getScenario());
+    try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(testType)) {
+      executor.execute();
     }
   }
 
+  // Base class for executing schema evolution tests
   public abstract class AbstractSchemaEvolutionTestExecutor implements SchemaEvolutionTestUtilsBase.SchemaEvolutionTestExecutor {
 
     protected final int maxIterations;
+    private final SchemaEvolutionTestUtilsBase.SchemaEvolutionScenario scenario;
     protected final Map<String, String> writeConfigs;
     private final HoodieTestDataGenerator dataGen;
     protected List<Pair<String, IndexedRecord>> allRecords = new ArrayList<>();
     protected Schema extendedSchema;
     private boolean first = true;
 
-    public AbstractSchemaEvolutionTestExecutor(int maxIterations) {
-      this.maxIterations = maxIterations;
+    public AbstractSchemaEvolutionTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) {
+      this.maxIterations = testType.getScenario().getMaxIterations();
+      this.scenario = testType.getScenario();
       this.dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF);
       this.writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING, true));
 
-      // Initialize the extended schema - implementation varies by subclass
+      // configs must be initialized before schema is initialized
       initSchemaGenConfigs();
       initializeSchema();
       dataGen.addExtendedSchema(extendedSchema);
     }
 
-    /**
-     * Initialize the schema for the specific implementation (Schema-on-Read vs Schema-on-Write)
-     */
+    // create schema for iteration 0
     protected abstract void initializeSchema();
 
+    // set the schema test configs
     protected abstract void initSchemaGenConfigs();
+
+    // evolve the schema
+    protected abstract void doEvolveSchema(int iteration);
+
+    // does `allRecords` schema matches the current table schema
+    protected abstract boolean areExpectedRecordsInFinalSchema();
+
+    private List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
+      return hoodieRecords.stream().map(r -> {
+        try {
+          return r.toIndexedRecord(schema, CollectionUtils.emptyProps());
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), r.getData())).collect(Collectors.toList());
+    }
 
     @Override
     public void writeData(SchemaEvolutionTestUtilsBase.WriteDataConfig dataConfig) throws Exception {
@@ -301,27 +319,26 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       allRecords.clear();
     }
 
-    protected abstract void doEvolveSchema(int iteration);
-
-    protected abstract boolean areExpectedRecordsInFinalSchema();
-
     // Abstract method for schema evolution - implementation varies by subclass
     @Override
     public void evolveSchema(int iteration) throws Exception {
       doEvolveSchema(iteration);
       dataGen.addExtendedSchema(extendedSchema);
     }
+
+    public void execute() throws Exception {
+      SchemaEvolutionTestUtilsBase.executeTest(this, scenario);
+    }
   }
 
-  // Schema-on-Read implementation
+  // single use class for testing schema on read
   private class SchemaOnReadTestExecutor extends AbstractSchemaEvolutionTestExecutor {
-
     private SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs config;
     private InternalSchema extendedInternalSchema;
     private String historySchema = "";
 
-    public SchemaOnReadTestExecutor(int maxIterations) {
-      super(maxIterations);
+    public SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) {
+      super(testType);
       writeConfigs.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
     }
 
@@ -340,11 +357,15 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       updateSchemas(iteration);
       commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
       Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(config, iteration, maxIterations);
-      allRecords = evolveRecords(allRecords, extendedSchema, renameCols);
+      allRecords = allRecords.stream()
+          .map(r -> Pair.of(r.getLeft(),
+              (IndexedRecord) HoodieAvroUtils.rewriteRecordWithNewSchema(r.getRight(), extendedSchema, renameCols, true)))
+          .collect(Collectors.toList());
     }
 
     @Override
     protected boolean areExpectedRecordsInFinalSchema() {
+      // in doEvolveSchema we update `allRecords` to match the table schema since we need to deal with name changes
       return true;
     }
 
@@ -356,14 +377,14 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
-  // Schema-on-Write implementation
+  // single use class for testing schema on write
   private class SchemaOnWriteTestExecutor extends AbstractSchemaEvolutionTestExecutor {
 
     private SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs config;
     private boolean hasEvolvedSchema = false;
 
-    public SchemaOnWriteTestExecutor(int maxIterations) {
-      super(maxIterations);
+    public SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) {
+      super(testType);
     }
 
     @Override
@@ -388,20 +409,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     protected boolean areExpectedRecordsInFinalSchema() {
       return !hasEvolvedSchema;
     }
-  }
-
-  private static List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
-    return hoodieRecords.stream().map(r -> {
-      try {
-        return r.toIndexedRecord(schema, CollectionUtils.emptyProps());
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), r.getData())).collect(Collectors.toList());
-  }
-
-  private static List<Pair<String, IndexedRecord>> evolveRecords(List<Pair<String, IndexedRecord>> records, Schema newSchema, Map<String, String> renameCols) {
-    return records.stream().map(r -> Pair.of(r.getLeft(), (IndexedRecord) HoodieAvroUtils.rewriteRecordWithNewSchema(r.getRight(), newSchema, renameCols, true))).collect(Collectors.toList());
   }
 
   @Test
@@ -491,15 +498,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return configMapping;
   }
 
-  private void validateOutputFromFileGroupReaderWithNativeRecords(StorageConfiguration<?> storageConf,
-                                                                    String tablePath,
-                                                                    boolean containsBaseFile,
-                                                                    int expectedLogFileNum,
-                                                                    RecordMergeMode recordMergeMode,
-                                                                    List<Pair<String, IndexedRecord>> expectedRecords) throws Exception {
-    validateOutputFromFileGroupReaderWithNativeRecords(storageConf, tablePath, containsBaseFile, expectedLogFileNum, recordMergeMode, expectedRecords, true);
-  }
-
+  // validate records involved in schema evolution
   private void validateOutputFromFileGroupReaderWithNativeRecords(StorageConfiguration<?> storageConf,
                                                                   String tablePath,
                                                                   boolean containsBaseFile,
