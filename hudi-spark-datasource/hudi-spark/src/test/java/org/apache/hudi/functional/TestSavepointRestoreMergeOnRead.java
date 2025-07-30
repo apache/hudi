@@ -297,8 +297,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
   public void testRestoreWithUpdatesToClusteredFileGroups(HoodieTableVersion tableVersion) throws IOException {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(
         HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).withInlineCompaction(false).compactionSmallFileSize(0).build(),
-        HoodieClusteringConfig.newBuilder().withAsyncClusteringMaxCommits(2).build()
-        , tableVersion);
+        HoodieClusteringConfig.newBuilder().withAsyncClusteringMaxCommits(2).build(), tableVersion);
     final int numRecords = 20;
     String secondCommit;
     String clusteringCommit;
@@ -724,9 +723,11 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     return getHoodieWriteConfigAndInitializeTable(compactionConfig, HoodieClusteringConfig.newBuilder().build(), tableVersion);
   }
 
-  private HoodieWriteConfig getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig compactionConfig, HoodieClusteringConfig clusteringConfig, HoodieTableVersion tableVersion) throws IOException {
+  private HoodieWriteConfig getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig compactionConfig, HoodieClusteringConfig clusteringConfig, HoodieTableVersion tableVersion)
+      throws IOException {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER) // eager cleaning
         .withCompactionConfig(compactionConfig)
+        .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(true)
         .withAutoUpgradeVersion(false)
         .withWriteTableVersion(tableVersion.versionCode())
