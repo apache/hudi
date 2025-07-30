@@ -132,7 +132,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     boolean isParquet = filePath.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension());
     Schema avroFileSchema = isParquet ? HoodieIOFactory.getIOFactory(storage)
         .getFileFormatUtils(filePath).readAvroSchema(storage, filePath) : dataSchema;
-    Schema actualRequiredSchema = isParquet ? AvroSchemaUtils.pruneDataSchemaResolveNullable(avroFileSchema, requiredSchema, Collections.emptySet()) : requiredSchema;
+    Schema actualRequiredSchema = isParquet ? AvroSchemaUtils.pruneDataSchema(avroFileSchema, requiredSchema, Collections.emptySet()) : requiredSchema;
     JobConf jobConfCopy = new JobConf(storage.getConf().unwrapAs(Configuration.class));
     if (getNeedsBootstrapMerge()) {
       // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;

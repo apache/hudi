@@ -611,7 +611,7 @@ public class TestAvroSchemaUtils {
     Schema dataSchema = parse(dataSchemaStr);
     Schema requiredSchema = parse(requiredSchemaStr);
 
-    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, Collections.emptySet());
+    Schema pruned = AvroSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, Collections.emptySet());
 
     assertEquals(1, pruned.getFields().size());
     assertEquals("name", pruned.getFields().get(0).name());
@@ -650,7 +650,7 @@ public class TestAvroSchemaUtils {
     Schema requiredSchema = parse(requiredFooStr);
 
     Schema fooFieldSchema = dataSchema.getField("foo").schema();
-    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(fooFieldSchema, requiredSchema, Collections.emptySet());
+    Schema pruned = AvroSchemaUtils.pruneDataSchema(fooFieldSchema, requiredSchema, Collections.emptySet());
 
     assertEquals(Schema.Type.UNION, pruned.getType());
 
@@ -674,7 +674,7 @@ public class TestAvroSchemaUtils {
     Schema dataSchema = parse(dataSchemaStr);
     Schema requiredSchema = parse(requiredSchemaStr);
 
-    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, Collections.emptySet());
+    Schema pruned = AvroSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, Collections.emptySet());
     Schema itemSchema = pruned.getElementType();
 
     assertEquals(1, itemSchema.getFields().size());
@@ -694,7 +694,7 @@ public class TestAvroSchemaUtils {
     Schema dataSchema = parse(dataSchemaStr);
     Schema requiredSchema = parse(requiredSchemaStr);
 
-    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, Collections.emptySet());
+    Schema pruned = AvroSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, Collections.emptySet());
     Schema valueSchema = pruned.getValueType();
 
     assertEquals(1, valueSchema.getFields().size());
@@ -717,7 +717,7 @@ public class TestAvroSchemaUtils {
 
     Set<String> excludeFields = Collections.singleton("missing");
 
-    Schema pruned = AvroSchemaUtils.pruneDataSchemaResolveNullable(dataSchema, requiredSchema, excludeFields);
+    Schema pruned = AvroSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, excludeFields);
 
     assertEquals(2, pruned.getFields().size());
     assertNotNull(pruned.getField("missing"));

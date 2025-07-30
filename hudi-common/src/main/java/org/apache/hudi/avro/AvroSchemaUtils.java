@@ -474,15 +474,15 @@ public class AvroSchemaUtils {
     return false;
   }
 
-  public static Schema pruneDataSchemaResolveNullable(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
-    Schema prunedDataSchema = pruneDataSchema(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), excludeFields);
+  public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
+    Schema prunedDataSchema = pruneDataSchemaInternal(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), excludeFields);
     if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
       return createNullableSchema(prunedDataSchema);
     }
     return prunedDataSchema;
   }
 
-  private static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
+  private static Schema pruneDataSchemaInternal(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
     switch (requiredSchema.getType()) {
       case RECORD:
         if (dataSchema.getType() != Schema.Type.RECORD) {
@@ -494,7 +494,7 @@ public class AvroSchemaUtils {
           if (dataSchemaField != null) {
             Schema.Field newField = new Schema.Field(
                 dataSchemaField.name(),
-                pruneDataSchemaResolveNullable(dataSchemaField.schema(), requiredSchemaField.schema(), excludeFields),
+                pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), excludeFields),
                 dataSchemaField.doc(),
                 dataSchemaField.defaultVal()
             );
@@ -516,13 +516,13 @@ public class AvroSchemaUtils {
         if (dataSchema.getType() != Schema.Type.ARRAY) {
           throw new IllegalArgumentException("Data schema is not an array");
         }
-        return Schema.createArray(pruneDataSchemaResolveNullable(dataSchema.getElementType(), requiredSchema.getElementType(), excludeFields));
+        return Schema.createArray(pruneDataSchema(dataSchema.getElementType(), requiredSchema.getElementType(), excludeFields));
 
       case MAP:
         if (dataSchema.getType() != Schema.Type.MAP) {
           throw new IllegalArgumentException("Data schema is not a map");
         }
-        return Schema.createMap(pruneDataSchemaResolveNullable(dataSchema.getValueType(), requiredSchema.getValueType(), excludeFields));
+        return Schema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), excludeFields));
 
       case UNION:
         throw new IllegalArgumentException("Data schema is a union");
