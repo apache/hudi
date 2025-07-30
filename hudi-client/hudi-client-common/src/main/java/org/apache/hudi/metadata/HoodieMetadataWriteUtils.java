@@ -169,7 +169,12 @@ public class HoodieMetadataWriteUtils {
             .logFileMaxSize(maxLogFileSizeBytes)
             // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
             // presence of keys
-            .logFileDataBlockMaxSize(maxLogFileSizeBytes).build())
+            .logFileDataBlockMaxSize(maxLogFileSizeBytes)
+                               .withBloomFilterType(writeConfig.getMetadataConfig().getBloomFilterType())
+                               .withBloomFilterNumEntries(writeConfig.getMetadataConfig().getBloomFilterNumEntries())
+                               .withBloomFilterFpp(writeConfig.getMetadataConfig().getBloomFilterFpp())
+                               .withBloomFilterDynamicMaxEntries(writeConfig.getMetadataConfig().getDynamicBloomFilterMaxNumEntries())
+                               .build())
         .withRollbackParallelism(MDT_DEFAULT_PARALLELISM)
         .withFinalizeWriteParallelism(MDT_DEFAULT_PARALLELISM)
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
