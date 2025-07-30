@@ -118,7 +118,6 @@ public enum KeyGeneratorType {
     if (StringUtils.isNullOrEmpty(className)) {
       throw new IllegalArgumentException("Invalid keyGenerator class: " + className);
     }
-
     List<KeyGeneratorType> typeWithBuiltinClass = Arrays.stream(KeyGeneratorType.values())
         .filter(t -> t != USER_PROVIDED)
         .collect(Collectors.toList());
