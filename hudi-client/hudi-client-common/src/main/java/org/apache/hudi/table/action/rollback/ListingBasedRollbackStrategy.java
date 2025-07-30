@@ -125,7 +125,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         Supplier<List<StoragePathInfo>> filesToDelete = () -> {
           try {
             return fetchFilesFromInstant(instantToRollback, partitionPath, metaClient.getBasePath().toString(), baseFileExtension,
-                metaClient.getStorage(), commitMetadataOptional, isCommitMetadataCompleted);
+                metaClient.getStorage(), commitMetadataOptional, isCommitMetadataCompleted, tableType, metaClient.getTableConfig().getTableVersion());
           } catch (IOException e) {
             throw new HoodieIOException("Fetching files to delete error", e);
           }
@@ -336,9 +336,12 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                       String partitionPath, String basePath,
                                                       String baseFileExtension, HoodieStorage storage,
                                                       Option<HoodieCommitMetadata> commitMetadataOptional,
-                                                      boolean isCommitMetadataCompleted) throws IOException {
-    // read from the commit metadata if it is completed, else read from the list files
-    if (isCommitMetadataCompleted) {
+                                                      boolean isCommitMetadataCompleted,
+                                                      HoodieTableType tableType,
+                                                      HoodieTableVersion tableVersion) throws IOException {
+    // for MOR tables with version < 8, listing is required to fetch the log files associated with base files added by this commit.
+    if (isCommitMetadataCompleted && (tableType == HoodieTableType.COPY_ON_WRITE || tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
+        || instantToRollback.getAction().equals(HoodieTimeline.CLUSTERING_ACTION))) {
       return fetchFilesFromCommitMetadata(instantToRollback, partitionPath, basePath, commitMetadataOptional.get(),
           baseFileExtension, storage);
     } else {

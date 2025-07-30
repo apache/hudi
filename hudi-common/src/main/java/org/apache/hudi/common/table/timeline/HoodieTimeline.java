@@ -555,11 +555,6 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   Option<HoodieInstant> lastInstant();
 
   /**
-   * @return last completed instant by completion time if available
-   */
-  Option<HoodieInstant> lastInstantByCompletionTime();
-
-  /**
    * Get hash of timeline.
    *
    * @return

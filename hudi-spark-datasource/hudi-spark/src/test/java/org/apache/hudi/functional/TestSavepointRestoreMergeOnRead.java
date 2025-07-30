@@ -99,7 +99,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
    * checking the row count by updating columns in (val4,val5,val6, val7).
    */
   @ParameterizedTest
-  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE"})
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   void testCleaningDeltaCommits(HoodieTableVersion tableVersion) throws Exception {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(4) // the 4th delta_commit triggers compaction
@@ -160,7 +160,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE"})
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   public void testRestoreToWithInflightDeltaCommit(HoodieTableVersion tableVersion) throws IOException {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(4)
@@ -196,7 +196,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE"})
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   public void testRestoreWithFileGroupCreatedWithDeltaCommits(HoodieTableVersion tableVersion) throws IOException {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(4)
@@ -295,7 +295,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
    * the latest file slice should be fully delete, for DC4 a rollback log append should be made.
    */
   @ParameterizedTest
-  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE"})
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   void testCleaningPendingCompaction(HoodieTableVersion tableVersion) throws Exception {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(4) // the 4th delta_commit triggers compaction
@@ -507,9 +507,15 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       client.restoreToSavepoint(inflightCommit);
       validateFilesMetadata(hoodieWriteConfig);
       assertEquals(Collections.singletonMap(inflightCommit, numRecords), getRecordCountPerCommit());
-      // ensure the compaction instant is not present because it was completed after the target of the restore
-      assertFalse(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
-          .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get())));
+      boolean compactionIsPresent = metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
+          .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get()));
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+        // ensure the compaction instant is not present because it was completed after the target of the restore
+        assertFalse(compactionIsPresent);
+      } else {
+        // for versions before 8, the compaction instant is not removed because the log files of the savepoint instant are associated with this compaction instant
+        assertTrue(compactionIsPresent);
+      }
       assertEquals(tableVersion, HoodieTableMetaClient.reload(metaClient).getTableConfig().getTableVersion());
     }
   }

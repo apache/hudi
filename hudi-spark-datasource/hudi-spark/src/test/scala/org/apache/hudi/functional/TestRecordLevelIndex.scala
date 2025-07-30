@@ -561,7 +561,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @EnumSource(classOf[HoodieTableType])
   def testRLIWithMDTCleaning(tableType: HoodieTableType): Unit = {
     var hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1")
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,

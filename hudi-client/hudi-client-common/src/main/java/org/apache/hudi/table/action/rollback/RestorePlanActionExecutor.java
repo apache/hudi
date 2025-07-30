@@ -22,7 +22,9 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -77,12 +79,19 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               .filter(instant -> GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp))
               .collect(Collectors.toList());
 
-      // Get all the commits on the timeline after the provided commit time
+      // Get all the commits on the timeline after the provided commit's completion time
       String completionTime = completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
           .orElseThrow(() -> new HoodieException("Unable to find completion time for instant: " + savepointToRestoreTimestamp));
       List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
               .getReverseOrderedInstantsByCompletionTime()
-              .filter(instant -> GREATER_THAN.test(instant.isCompleted() ? instant.getCompletionTime() : instant.requestedTime(), completionTime))
+              .filter(instant -> {
+                // For compaction on tables with version less than 8, if the compaction started before the target of the restore, it must not be removed since the log files will reference this commit
+                if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) && !metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+                    && metaClient.getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ) {
+                  return GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp);
+                }
+                return GREATER_THAN.test(instant.isCompleted() ? instant.getCompletionTime() : instant.requestedTime(), completionTime);
+              })
               .filter(instant -> !pendingClusteringInstantsToRollback.contains(instant))
               .collect(Collectors.toList());
 

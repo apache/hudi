@@ -435,12 +435,6 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Option<HoodieInstant> lastInstantByCompletionTime() {
-    return Option.fromJavaOptional(getInstantsAsStream()
-        .max(instantComparator.completionTimeOrderedComparator()));
-  }
-
-  @Override
   public Option<HoodieInstant> nthFromLastInstant(int n) {
     if (countInstants() < n + 1) {
       return Option.empty();
