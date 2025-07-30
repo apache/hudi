@@ -386,25 +386,17 @@ public class AvroSchemaUtils {
    * because the projection will be the identity.
    */
   public static boolean areSchemasProjectionEquivalent(Schema schema1, Schema schema2) {
-    return areSchemasProjectionEquivalent(schema1, schema2, false);
-  }
-
-  public static boolean areSchemasProjectionEquivalent(Schema schema1, Schema schema2, boolean validateNullable) {
     if (Objects.equals(schema1, schema2)) {
       return true;
     }
     if (schema1 == null || schema2 == null) {
       return false;
     }
-    if (validateNullable && isNullable(schema1) && !isNullable(schema2)) {
-      // nullable schema must be validated when projecting to non-nullable
-      return false;
-    }
-    return areSchemasProjectionEquivalentInternal(resolveNullableSchema(schema1), resolveNullableSchema(schema2), validateNullable);
+    return areSchemasProjectionEquivalentInternal(resolveNullableSchema(schema1), resolveNullableSchema(schema2));
   }
 
   @VisibleForTesting
-  static boolean areSchemasProjectionEquivalentInternal(Schema schema1, Schema schema2, boolean validateNullable) {
+  static boolean areSchemasProjectionEquivalentInternal(Schema schema1, Schema schema2) {
     if (Objects.equals(schema1, schema2)) {
       return true;
     }
@@ -422,7 +414,7 @@ public class AvroSchemaUtils {
           if (!fields1.get(i).name().toLowerCase(Locale.ROOT).equals(fields2.get(i).name().toLowerCase(Locale.ROOT))) {
             return false;
           }
-          if (!areSchemasProjectionEquivalent(fields1.get(i).schema(), fields2.get(i).schema(), validateNullable)) {
+          if (!areSchemasProjectionEquivalent(fields1.get(i).schema(), fields2.get(i).schema())) {
             return false;
           }
         }
@@ -432,13 +424,13 @@ public class AvroSchemaUtils {
         if (schema2.getType() != Schema.Type.ARRAY) {
           return false;
         }
-        return areSchemasProjectionEquivalent(schema1.getElementType(), schema2.getElementType(), validateNullable);
+        return areSchemasProjectionEquivalent(schema1.getElementType(), schema2.getElementType());
 
       case MAP:
         if (schema2.getType() != Schema.Type.MAP) {
           return false;
         }
-        return areSchemasProjectionEquivalent(schema1.getValueType(), schema2.getValueType(), validateNullable);
+        return areSchemasProjectionEquivalent(schema1.getValueType(), schema2.getValueType());
       case UNION:
         throw new IllegalArgumentException("Union schemas are not supported besides nullable");
       default:

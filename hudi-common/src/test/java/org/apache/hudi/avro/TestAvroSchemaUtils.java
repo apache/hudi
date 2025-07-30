@@ -505,7 +505,7 @@ public class TestAvroSchemaUtils {
     );
     IllegalArgumentException ex = assertThrows(
         IllegalArgumentException.class,
-        () -> AvroSchemaUtils.areSchemasProjectionEquivalentInternal(union, union2, false)
+        () -> AvroSchemaUtils.areSchemasProjectionEquivalentInternal(union, union2)
     );
     assertEquals("Union schemas are not supported besides nullable", ex.getMessage());
   }
