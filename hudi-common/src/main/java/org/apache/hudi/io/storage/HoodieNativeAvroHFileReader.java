@@ -79,14 +79,19 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   // In-memory cache for meta info
   private final Map<String, byte[]> metaInfoMap;
   private final Lazy<Schema> schema;
+  private final boolean useBloomFilter;
   private boolean isMetaInfoLoaded = false;
   private long numKeyValueEntries = -1L;
 
-  public HoodieNativeAvroHFileReader(HFileReaderFactory readerFactory, StoragePath path, Option<Schema> schemaOption) {
+  private HoodieNativeAvroHFileReader(HFileReaderFactory readerFactory,
+                                      StoragePath path,
+                                      Option<Schema> schemaOption,
+                                      boolean useBloomFilter) {
     this.readerFactory = readerFactory;
     this.path = path;
     this.metaInfoMap = new HashMap<>();
     this.schema = schemaOption.map(Lazy::eagerly).orElseGet(() -> Lazy.lazily(this::fetchSchema));
+    this.useBloomFilter = useBloomFilter;
   }
 
   @Override
@@ -116,9 +121,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   @Override
   public BloomFilter readBloomFilter() {
     try (HFileReader reader = readerFactory.createHFileReader()) {
-      ByteBuffer byteBuffer = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).get();
-      return BloomFilterFactory.fromByteBuffer(byteBuffer,
-          fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)).get()));
+      return readBloomFilter(reader);
     } catch (IOException e) {
       throw new HoodieException("Could not read bloom filter from " + path, e);
     }
@@ -207,7 +210,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       List<String> sortedKeys, Schema schema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
     ClosableIterator<IndexedRecord> iterator =
-        new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema);
+        new RecordByKeyIterator(reader, sortedKeys, getSchema(), schema, useBloomFilter);
     return new CloseableMappingIterator<>(
         iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
   }
@@ -313,7 +316,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   public ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> sortedKeys,
                                                                          Schema readerSchema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
-    return new RecordByKeyIterator(reader, sortedKeys, getSchema(), readerSchema);
+    return new RecordByKeyIterator(reader, sortedKeys, getSchema(), readerSchema, useBloomFilter);
   }
 
   @Override
@@ -321,6 +324,16 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
                                                                               Schema readerSchema) throws IOException {
     HFileReader reader = readerFactory.createHFileReader();
     return new RecordByKeyPrefixIterator(reader, sortedKeyPrefixes, getSchema(), readerSchema);
+  }
+
+  private static BloomFilter readBloomFilter(HFileReader reader) throws HoodieException {
+    try {
+      ByteBuffer byteBuffer = reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).get();
+      return BloomFilterFactory.fromByteBuffer(byteBuffer,
+          fromUTF8Bytes(reader.getMetaInfo(new UTF8StringKey(KEY_BLOOM_FILTER_TYPE_CODE)).get()));
+    } catch (IOException e) {
+      throw new HoodieException("Could not read bloom filter from HFile", e);
+    }
   }
 
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
@@ -393,17 +406,27 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     private final Schema readerSchema;
     private final Schema writerSchema;
+    private final Option<BloomFilter> bloomFilterOption;
 
     private IndexedRecord next = null;
 
     RecordByKeyIterator(HFileReader reader, List<String> sortedKeys, Schema writerSchema,
-                        Schema readerSchema) throws IOException {
+                        Schema readerSchema, boolean useBloomFilter) throws IOException {
       this.sortedKeyIterator = sortedKeys.iterator();
       this.reader = reader;
       this.reader.seekTo(); // position at the beginning of the file
 
       this.writerSchema = writerSchema;
       this.readerSchema = readerSchema;
+      BloomFilter bloomFilter = null;
+      if (useBloomFilter) {
+        try {
+          bloomFilter = readBloomFilter(reader);
+        } catch (HoodieException e) {
+          LOG.warn("Unable to read bloom filter from HFile", e);
+        }
+      }
+      this.bloomFilterOption = Option.ofNullable(bloomFilter);
     }
 
     @Override
@@ -415,7 +438,13 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
         }
 
         while (sortedKeyIterator.hasNext()) {
-          UTF8StringKey key = new UTF8StringKey(sortedKeyIterator.next());
+          // First check if the key is present in the file using bloom filter;
+          // skip seekTo in HFile if the key is not present.
+          String rawKey = sortedKeyIterator.next();
+          if (bloomFilterOption.isPresent() && !bloomFilterOption.get().mightContain(rawKey)) {
+            continue;
+          }
+          UTF8StringKey key = new UTF8StringKey(rawKey);
           if (reader.seekTo(key) == HFileReader.SEEK_TO_FOUND) {
             // Key is found
             KeyValue keyValue = reader.getKeyValue().get();
@@ -596,6 +625,43 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
       }
 
       return new KeyPrefixIterator();
+    }
+  }
+
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public static class Builder {
+    private HFileReaderFactory readerFactory;
+    private StoragePath path;
+    private Option<Schema> schemaOption = Option.empty();
+    private boolean useBloomFilter;
+
+    public Builder readerFactory(HFileReaderFactory readerFactory) {
+      this.readerFactory = readerFactory;
+      return this;
+    }
+
+    public Builder path(StoragePath path) {
+      this.path = path;
+      return this;
+    }
+
+    public Builder schema(Option<Schema> schemaOption) {
+      this.schemaOption = schemaOption;
+      return this;
+    }
+
+    public Builder useBloomFilter(boolean useBloomFilter) {
+      this.useBloomFilter = useBloomFilter;
+      return this;
+    }
+
+    public HoodieNativeAvroHFileReader build() {
+      ValidationUtils.checkArgument(readerFactory != null, "ReaderFactory cannot be null");
+      ValidationUtils.checkArgument(path != null, "Path cannot be null");
+      return new HoodieNativeAvroHFileReader(readerFactory, path, schemaOption, useBloomFilter);
     }
   }
 }
