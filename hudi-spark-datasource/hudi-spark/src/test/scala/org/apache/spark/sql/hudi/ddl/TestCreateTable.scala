@@ -970,8 +970,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |create table $tableName using hudi
              |location '$tablePath'
              |""".stripMargin)
-        checkAnswer(s"select id, name, value, ts, day, hh from $tableName")(
-          Seq(1, "a1", 10, 1000, day, 12)
+        checkAnswer(s"select _hoodie_record_key, id, name, value, ts, day, hh from $tableName")(
+          Seq("id:1", 1, "a1", 10, 1000, day, 12)
         )
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)
@@ -985,8 +985,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         // Test insert into
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '$day', 12)")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("1", s"$escapedPathPart/12", 1, "a1", 10, 1000, day, 12),
-          Seq("2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 10, 1000, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
         )
         // Test merge into
         spark.sql(
@@ -997,20 +997,99 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |when matched then update set *
              |""".stripMargin)
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
-          Seq("2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
         )
         // Test update
         spark.sql(s"update $tableName set value = value + 1 where id = 2")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
-          Seq("2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
+          Seq("id:1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
         )
         // Test delete
         spark.sql(s"delete from $tableName where id = 1")
         checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
-          Seq("2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
+          Seq("id:2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
         )
+      }
+    }
+  }
+
+  test("Test Create Table with Complex Key Generator and Key Encoding") {
+    withTempDir { tmp =>
+      Seq(false, true).foreach { encodeSingleKeyFieldName =>
+        withSparkSqlSessionConfig(
+          HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key
+            -> encodeSingleKeyFieldName.toString) {
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          import spark.implicits._
+          val keyPrefix = if (encodeSingleKeyFieldName) "id:" else ""
+          val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
+          // Write a table by spark dataframe.
+          df.write.format("hudi")
+            .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+            .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
+            .option(RECORDKEY_FIELD.key, "id")
+            .option(PRECOMBINE_FIELD.key, "ts")
+            .option(PARTITIONPATH_FIELD.key, "day,hh")
+            .option(URL_ENCODE_PARTITIONING.key, "true")
+            .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+            .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+            .option(
+              HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key,
+              encodeSingleKeyFieldName.toString)
+            .mode(SaveMode.Overwrite)
+            .save(tablePath)
+
+          // Create a table over the existing table.
+          spark.sql(
+            s"""
+               |create table $tableName using hudi
+               |location '$tablePath'
+               |""".stripMargin)
+          checkAnswer(s"select _hoodie_record_key, id, name, value, ts, day, hh from $tableName")(
+            Seq(keyPrefix + "1", 1, "a1", 10, 1000, "2025-07-29", 12)
+          )
+          // Check the missing properties for spark sql
+          val metaClient = createMetaClient(spark, tablePath)
+          val properties = metaClient.getTableConfig.getProps.asScala.toMap
+          assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+          assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
+          assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+
+          val escapedPathPart = escapePathName("2025-07-29")
+
+          // Test insert into
+          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, '2025-07-29', 12)")
+          checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
+            Seq(keyPrefix + "1", s"$escapedPathPart/12", 1, "a1", 10, 1000, "2025-07-29", 12),
+            Seq(keyPrefix + "2", s"$escapedPathPart/12", 2, "a2", 10, 1000, "2025-07-29", 12)
+          )
+          // Test merge into
+          spark.sql(
+            s"""
+               |merge into $tableName h0
+               |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh) s0
+               |on h0.id = s0.id
+               |when matched then update set *
+               |""".stripMargin)
+          checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
+            Seq(keyPrefix + "1", s"$escapedPathPart/12", 1, "a1", 11, 1001, "2025-07-29", 12),
+            Seq(keyPrefix + "2", s"$escapedPathPart/12", 2, "a2", 10, 1000, "2025-07-29", 12)
+          )
+          // Test update
+          spark.sql(s"update $tableName set value = value + 1 where id = 2")
+          checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
+            Seq(keyPrefix + "1", s"$escapedPathPart/12", 1, "a1", 11, 1001, "2025-07-29", 12),
+            Seq(keyPrefix + "2", s"$escapedPathPart/12", 2, "a2", 11, 1000, "2025-07-29", 12)
+          )
+          // Test delete
+          spark.sql(s"delete from $tableName where id = 1")
+          checkAnswer(s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id")(
+            Seq(keyPrefix + "2", s"$escapedPathPart/12", 2, "a2", 11, 1000, "2025-07-29", 12)
+          )
+        }
       }
     }
   }

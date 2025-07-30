@@ -258,6 +258,20 @@ public class HoodieWriteConfig extends HoodieConfig {
           "**Note** This is being actively worked on. Please use "
               + "`hoodie.datasource.write.keygenerator.class` instead.");
 
+  public static final ConfigProperty<Boolean> COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME = ConfigProperty
+      .key("hoodie.write.complex.keygen.encode.single.record.key.field.name")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("0.14.2,0.15.1,1.0.3,1.1.0")
+      .withDocumentation("If set to true, the record key field name is encoded and prepended "
+          + "in the case where a single record key field is used in the complex key generator, "
+          + "i.e., record keys stored in _hoodie_record_key meta field is in the format of "
+          + "`<record_key_field_name>:<record_key_field_value>`, which conforms to the behavior "
+          + "in 0.14.0 release and older. If set to false, the record key field name is not "
+          + "encoded under the same case in the complex key generator, i.e., record keys stored "
+          + "in _hoodie_record_key meta field is in the format of `<record_key_field_value>`, "
+          + "which conforms to the behavior in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases.");
+
   public static final ConfigProperty<String> ROLLBACK_USING_MARKERS_ENABLE = ConfigProperty
       .key("hoodie.rollback.using.markers")
       .defaultValue("true")
