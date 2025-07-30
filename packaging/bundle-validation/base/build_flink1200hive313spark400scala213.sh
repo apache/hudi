@@ -24,5 +24,6 @@ docker build \
  --build-arg SPARK_HADOOP_VERSION=3 \
  --build-arg HADOOP_VERSION=3.4.0 \
  --build-arg SCALA_VERSION=2.13 \
+ --build-arg DERBY_VERSION=10.16.1.1 \
  -t hudi-ci-bundle-validation-base:flink1200hive313spark400scala213 .
 docker image tag hudi-ci-bundle-validation-base:flink1200hive313spark400scala213 apachehudi/hudi-ci-bundle-validation-base:flink1200hive313spark400scala213
