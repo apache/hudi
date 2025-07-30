@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.StringUtils;
 
 import javax.annotation.Nullable;
 
@@ -30,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
@@ -97,9 +99,12 @@ public enum KeyGeneratorType {
   SPARK_SQL_MERGE_INTO("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator"),
 
   @EnumFieldDescription("A test KeyGenerator for deltastreamer tests.")
-  STREAMER_TEST("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator");
+  STREAMER_TEST("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator"),
 
-  private final String className;
+  @EnumFieldDescription("A KeyGenerator specified from the configuration.")
+  USER_PROVIDED("USER_PROVIDED_CLASS");
+
+  private String className;
 
   KeyGeneratorType(String className) {
     this.className = className;
@@ -110,12 +115,19 @@ public enum KeyGeneratorType {
   }
 
   public static KeyGeneratorType fromClassName(String className) {
-    for (KeyGeneratorType type : KeyGeneratorType.values()) {
+    if (StringUtils.isNullOrEmpty(className)) {
+      throw new IllegalArgumentException("Invalid keyGenerator class: " + className);
+    }
+
+    List<KeyGeneratorType> typeWithBuiltinClass = Arrays.stream(KeyGeneratorType.values())
+        .filter(t -> t != USER_PROVIDED)
+        .collect(Collectors.toList());
+    for (KeyGeneratorType type : typeWithBuiltinClass) {
       if (type.getClassName().equals(className)) {
         return type;
       }
     }
-    throw new IllegalArgumentException("No KeyGeneratorType found for class name: " + className);
+    return USER_PROVIDED;
   }
 
   public static List<String> getNames() {
@@ -136,7 +148,11 @@ public enum KeyGeneratorType {
       return ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_CLASS_NAME);
     }
     if (ConfigUtils.containsConfigProperty(props, KEY_GENERATOR_TYPE)) {
-      return KeyGeneratorType.valueOf(ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_TYPE)).getClassName();
+      KeyGeneratorType type = KeyGeneratorType.valueOf(ConfigUtils.getStringWithAltKeys(props, KEY_GENERATOR_TYPE));
+      if (USER_PROVIDED == type) {
+        return null;
+      }
+      return type.getClassName();
     }
     return null;
   }
@@ -146,7 +162,11 @@ public enum KeyGeneratorType {
     if (config.containsKey(KEY_GENERATOR_CLASS_NAME.key())) {
       return config.get(KEY_GENERATOR_CLASS_NAME.key());
     } else if (config.containsKey(KEY_GENERATOR_TYPE.key())) {
-      return KeyGeneratorType.valueOf(config.get(KEY_GENERATOR_TYPE.key())).getClassName();
+      KeyGeneratorType type = KeyGeneratorType.valueOf(config.get(KEY_GENERATOR_TYPE.key()));
+      if (type == USER_PROVIDED) {
+        return null;
+      }
+      return type.getClassName();
     }
     return null;
   }
