@@ -43,9 +43,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Helper class to assist in upgrading/downgrading Hoodie when there is a version change.
@@ -54,6 +57,17 @@ public class UpgradeDowngrade {
 
   private static final Logger LOG = LoggerFactory.getLogger(UpgradeDowngrade.class);
   public static final String HOODIE_UPDATED_PROPERTY_FILE = "hoodie.properties.updated";
+
+  private static final Set<Pair<Integer, Integer>> UPGRADE_HANDLERS_REQUIRING_ROLLBACK_AND_COMPACT = new HashSet<>(Arrays.asList(
+      Pair.of(7, 8), // SevenToEightUpgradeHandler
+      Pair.of(8, 9)  // EightToNineUpgradeHandler
+  ));
+
+  private static final Set<Pair<Integer, Integer>> DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_AND_COMPACT = new HashSet<>(Arrays.asList(
+      Pair.of(8, 7), // EightToSevenDowngradeHandler
+      Pair.of(9, 8), // NineToEightDowngradeHandler
+      Pair.of(6, 5)  // SixToFiveDowngradeHadler
+  ));
 
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
   private HoodieTableMetaClient metaClient;
@@ -155,7 +169,7 @@ public class UpgradeDowngrade {
         }
       } catch (Exception e) {
         throw new HoodieUpgradeDowngradeException("Upgrade/downgrade for the Hudi metadata table failed. "
-            + "Please try again. If the failure repeats for metadata table, it is recommended to delete "
+            + "Please try again. If the failure repeats for metadata table, it is recommended to disable "
             + "the metadata table so that the upgrade and downgrade can continue for the data table.", e);
       }
     }
@@ -282,54 +296,6 @@ public class UpgradeDowngrade {
     }
   }
 
-  protected UpgradeHandler getUpgradeHandlerInstance(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
-    if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
-      return new ZeroToOneUpgradeHandler();
-    } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
-      return new OneToTwoUpgradeHandler();
-    } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.THREE) {
-      return new TwoToThreeUpgradeHandler();
-    } else if (fromVersion == HoodieTableVersion.THREE && toVersion == HoodieTableVersion.FOUR) {
-      return new ThreeToFourUpgradeHandler();
-    } else if (fromVersion == HoodieTableVersion.FOUR && toVersion == HoodieTableVersion.FIVE) {
-      return new FourToFiveUpgradeHandler();
-    } else if (fromVersion == HoodieTableVersion.FIVE && toVersion == HoodieTableVersion.SIX) {
-      return new FiveToSixUpgradeHandler();
-    } else if (fromVersion == HoodieTableVersion.SIX && toVersion == HoodieTableVersion.SEVEN) {
-      return new SixToSevenUpgradeHandler();
-    } else if (fromVersion == HoodieTableVersion.SEVEN && toVersion == HoodieTableVersion.EIGHT) {
-      return new SevenToEightUpgradeHandler();
-    } else if (fromVersion == HoodieTableVersion.EIGHT && toVersion == HoodieTableVersion.NINE) {
-      return new EightToNineUpgradeHandler();
-    } else {
-      throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
-    }
-  }
-
-  protected DowngradeHandler getDowngradeHandlerInstance(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
-    if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.ZERO) {
-      return new OneToZeroDowngradeHandler();
-    } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {
-      return new TwoToOneDowngradeHandler();
-    } else if (fromVersion == HoodieTableVersion.THREE && toVersion == HoodieTableVersion.TWO) {
-      return new ThreeToTwoDowngradeHandler();
-    } else if (fromVersion == HoodieTableVersion.FOUR && toVersion == HoodieTableVersion.THREE) {
-      return new FourToThreeDowngradeHandler();
-    } else if (fromVersion == HoodieTableVersion.FIVE && toVersion == HoodieTableVersion.FOUR) {
-      return new FiveToFourDowngradeHandler();
-    } else if (fromVersion == HoodieTableVersion.SIX && toVersion == HoodieTableVersion.FIVE) {
-      return new SixToFiveDowngradeHandler();
-    } else if (fromVersion == HoodieTableVersion.SEVEN && toVersion == HoodieTableVersion.SIX) {
-      return new SevenToSixDowngradeHandler();
-    } else if (fromVersion == HoodieTableVersion.EIGHT && toVersion == HoodieTableVersion.SEVEN) {
-      return new EightToSevenDowngradeHandler();
-    } else if (fromVersion == HoodieTableVersion.NINE && toVersion == HoodieTableVersion.EIGHT) {
-      return new NineToEightDowngradeHandler();
-    } else {
-      throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
-    }
-  }
-
   /**
    * Checks if any handlers in the upgrade/downgrade path need rollback and compaction and performs it once before starting.
    * This ensures rollback and compaction happens only when needed and only once at the very beginning of the process.
@@ -345,8 +311,7 @@ public class UpgradeDowngrade {
       HoodieTableVersion checkVersion = fromVersion;
       while (checkVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(checkVersion.versionCode() + 1);
-        UpgradeHandler handler = getUpgradeHandlerInstance(checkVersion, nextVersion);
-        if (handler.needsRollbackPendingCommitAndCompact()) {
+        if (UPGRADE_HANDLERS_REQUIRING_ROLLBACK_AND_COMPACT.contains(Pair.of(checkVersion.versionCode(), nextVersion.versionCode()))) {
           needsRollbackAndCompact = true;
           break;
         }
@@ -357,8 +322,7 @@ public class UpgradeDowngrade {
       HoodieTableVersion checkVersion = fromVersion;
       while (checkVersion.versionCode() > toVersion.versionCode()) {
         HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(checkVersion.versionCode() - 1);
-        DowngradeHandler handler = getDowngradeHandlerInstance(checkVersion, prevVersion);
-        if (handler.needsRollbackPendingCommitAndCompact()) {
+        if (DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_AND_COMPACT.contains(Pair.of(checkVersion.versionCode(), prevVersion.versionCode()))) {
           needsRollbackAndCompact = true;
           break;
         }

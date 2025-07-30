@@ -32,11 +32,6 @@ import java.util.Map;
 public class NineToEightDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public boolean needsRollbackPendingCommitAndCompact() {
-    return true;
-  }
-
-  @Override
   public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config,
                                                                            HoodieEngineContext context,
                                                                            String instantTime,

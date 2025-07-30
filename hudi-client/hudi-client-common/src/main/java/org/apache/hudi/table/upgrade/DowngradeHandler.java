@@ -45,13 +45,4 @@ public interface DowngradeHandler {
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper);
 
-  /**
-   * Indicates whether this downgrade handler needs rollback of pending commits and compaction
-   * to be executed before the downgrade logic runs.
-   *
-   * @return true if rollback and compaction should be performed before downgrade, false otherwise.
-   */
-  default boolean needsRollbackPendingCommitAndCompact() {
-    return false;
-  }
 }

@@ -83,11 +83,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
   private static final Logger LOG = LoggerFactory.getLogger(SevenToEightUpgradeHandler.class);
 
   @Override
-  public boolean needsRollbackPendingCommitAndCompact() {
-    return true;
-  }
-
-  @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
                                              String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();

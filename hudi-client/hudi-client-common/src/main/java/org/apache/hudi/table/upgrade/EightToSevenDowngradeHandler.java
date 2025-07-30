@@ -95,10 +95,6 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
 
-  @Override
-  public boolean needsRollbackPendingCommitAndCompact() {
-    return true;
-  }
 
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 

@@ -48,11 +48,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PART
 public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public boolean needsRollbackPendingCommitAndCompact() {
-    return true;
-  }
-
-  @Override
   public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 

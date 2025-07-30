@@ -34,11 +34,6 @@ import java.util.Map;
 public class EightToNineUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public boolean needsRollbackPendingCommitAndCompact() {
-    return true;
-  }
-
-  @Override
   public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config,
                                              HoodieEngineContext context,
                                              String instantTime,

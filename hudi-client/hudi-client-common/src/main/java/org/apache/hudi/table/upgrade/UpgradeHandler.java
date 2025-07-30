@@ -42,13 +42,4 @@ public interface UpgradeHandler {
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper);
 
-  /**
-   * Indicates whether this upgrade handler needs rollback of pending commits and compaction
-   * to be executed before the upgrade logic runs.
-   *
-   * @return true if rollback and compaction should be performed before upgrade, false otherwise.
-   */
-  default boolean needsRollbackPendingCommitAndCompact() {
-    return false;
-  }
 }
