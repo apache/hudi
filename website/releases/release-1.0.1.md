@@ -31,6 +31,14 @@ import TabItem from '@theme/TabItem';
 * Flink engine
 * Unit, functional, integration tests and CI
 
+## Known Regressions
+If you use ComplexKeyGenerator with a single field, there is a known regression with key encoding format change that could introduce duplicates. Please refrain from migrating. and raise a GH issue to work through fixes. Note, if you have multiple fields as a part of complex key generator, there there are no issues. You can safely proceed.
+
+:::tip
+Avoid upgrading any existing table to 1.0.1 if you are using ComplexKeyGenerator with single record key
+configured.
+:::
+
 ## Raw Release Notes
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12355195)
