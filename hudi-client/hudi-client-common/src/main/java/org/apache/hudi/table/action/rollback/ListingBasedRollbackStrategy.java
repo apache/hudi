@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -148,14 +149,26 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
               break;
             case HoodieTimeline.COMPACTION_ACTION:
-              if (instantToRollback.isCompleted()) {
-                // If the compaction is completed, use the commit metadata to get the files to delete
-                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
-              } else {
-                // Otherwise, we need to find any base files that were created by the compaction and delete those.
-                // Any log files matching this requested instant time should not be deleted.
+              // Depending on whether we are rolling back compaction as part of restore or a regular rollback, logic differs/
+              // as part of regular rollback(on re-attempting a failed compaction), we might have to delete/rollback only the base file that could have
+              // potentially been created. Even if there are log files added to the file slice of interest, we should not touch them.
+              // but if its part of a restore operation, rolling back a compaction should rollback entire file slice, i.e base file and all log files.
+              if (!isRestore) {
+                // Rollback of a compaction action if not for restore means that the compaction is scheduled
+                // and has not yet finished. In this scenario we should delete only the newly created base files
+                // and not corresponding base commit log files created with this as baseCommit since updates would
+                // have been written to the log files.
                 hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
                     listBaseFilesToBeDeleted(instantToRollback.requestedTime(), baseFileExtension, partitionPath, metaClient.getStorage())));
+              } else {
+                // if this is part of a restore operation, we should rollback/delete entire file slice.
+                // For table version 6, the files can be directly fetched from the instant to rollback
+                // For table version 8, the log files are not directly associated with the base file.
+                // The rollback will iterate in reverse order based on completion time so the log files completed
+                // after the compaction will already be queued for removal and therefore, only the files from the compaction commit must be deleted.
+                hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, isTableVersionLessThanEight
+                    ? fetchFilesFromListFiles(instantToRollback, partitionPath, metaClient.getBasePath().toString(), baseFileExtension, metaClient.getStorage())
+                    : filesToDelete.get()));
               }
               break;
             case HoodieTimeline.DELTA_COMMIT_ACTION:
@@ -265,6 +278,27 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
           Collections.emptyList(), logFilesWithBlocksToRollback));
     }
     return hoodieRollbackRequests;
+  }
+
+  private List<StoragePathInfo> listAllFilesSinceCommit(String commit,
+                                                        String baseFileExtension,
+                                                        String partitionPath,
+                                                        HoodieTableMetaClient metaClient) throws IOException {
+    LOG.info("Collecting files to be cleaned/rolledback up for path " + partitionPath + " and commit " + commit);
+    CompletionTimeQueryView completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+    StoragePathFilter filter = (path) -> {
+      if (path.toString().contains(baseFileExtension)) {
+        String fileCommitTime = FSUtils.getCommitTime(path.getName());
+        return compareTimestamps(commit, LESSER_THAN_OR_EQUALS,
+            fileCommitTime);
+      } else if (FSUtils.isLogFile(path)) {
+        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(path);
+        return completionTimeQueryView.isSlicedAfterOrOn(commit, fileCommitTime);
+      }
+      return false;
+    };
+    return metaClient.getStorage()
+        .listDirectEntries(FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath), filter);
   }
 
   @NotNull
