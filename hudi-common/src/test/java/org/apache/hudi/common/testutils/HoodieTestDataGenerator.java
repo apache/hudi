@@ -402,7 +402,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   private RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
         true, false);
-    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true, 0L);
+    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true, 0);
   }
 
   /**

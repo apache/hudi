@@ -37,8 +37,6 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.avro.generic.IndexedRecord;
-
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -186,7 +184,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public ReaderContextFactory<IndexedRecord> getReaderContextFactory(HoodieTableMetaClient metaClient) {
-    return new AvroReaderContextFactory(metaClient);
+  public ReaderContextFactory<byte[]> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+    return new AvroBinaryReaderContextFactory(metaClient);
   }
 }

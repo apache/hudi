@@ -126,6 +126,12 @@ public class HoodieTableConfig extends HoodieConfig {
   // and produces a map of key value pairs (Key1->Value1, Key2->Value2, ...) to use.
   public static final String MERGE_PROPERTIES_PREFIX = "hoodie.table.merge.properties.";
 
+  public static final Set<String> AVRO_BINARY_PAYLOADS = new HashSet<>();
+  static {
+    AVRO_BINARY_PAYLOADS.add(OverwriteWithLatestAvroPayload.class.getName());
+    AVRO_BINARY_PAYLOADS.add(DefaultHoodieRecordPayload.class.getName());
+  }
+
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
       .noDefaultValue()

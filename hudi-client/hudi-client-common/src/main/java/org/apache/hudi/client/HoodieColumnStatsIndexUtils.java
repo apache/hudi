@@ -61,7 +61,7 @@ public class HoodieColumnStatsIndexUtils {
       try {
         // update data table's table config for list of columns indexed.
         List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(commitMetadata, dataTable.getMetaClient(), config.getMetadataConfig(),
-            Option.of(config.getRecordMerger().getRecordType())).keySet());
+            Option.of(config.getRecordMerger(dataTable.getMetaClient().getTableConfig().getPayloadClass()).getRecordType())).keySet());
         // if col stats is getting updated, lets also update list of columns indexed if changed.
         updateColStatsFunc.apply(dataTable.getMetaClient(), columnsToIndex);
       } catch (Exception e) {

@@ -49,6 +49,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
   @Override
   public HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
+      case AVRO_BINARY:
       case AVRO:
         return new HoodieAvroFileReaderFactory(storage);
       case SPARK:
@@ -77,6 +78,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
   @Override
   public HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
     switch (recordType) {
+      case AVRO_BINARY:
       case AVRO:
         return new HoodieAvroFileWriterFactory(storage);
       case SPARK:

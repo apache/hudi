@@ -18,8 +18,10 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroBinaryRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -80,7 +82,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   KeyGeneratorInterface keyGenerator,
                                   String partitionPath,
                                   Schema schema) throws Exception {
-    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
+    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger(table.getMetaClient().getTableConfig().getPayloadClass()).getRecordType();
 
     HoodieFileReader reader = getHoodieSparkIOFactory(table.getStorage()).getReaderFactory(recordType)
         .getFileReader(table.getConfig(), sourceFilePath);
@@ -122,6 +124,10 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         avroRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
         BootstrapRecordPayload payload = new BootstrapRecordPayload(avroRecord);
         return new HoodieAvroRecord<>(hoodieKey, payload);
+      case AVRO_BINARY:
+        GenericRecord genRecord = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA);
+        genRecord.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
+        return new HoodieAvroBinaryRecord(hoodieKey, HoodieAvroUtils.avroToBytes(genRecord));
 
       case SPARK:
         StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(METADATA_BOOTSTRAP_RECORD_SCHEMA);

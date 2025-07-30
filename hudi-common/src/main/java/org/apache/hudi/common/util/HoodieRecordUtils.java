@@ -19,12 +19,14 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieAvroBinaryRecordMerger;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -75,12 +77,17 @@ public class HoodieRecordUtils {
    * Instantiate a given class with a record merge.
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
-                                                      List<String> mergerClassList, String recordMergerStrategy) {
-    if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
+                                                      List<String> mergerClassList, String recordMergerStrategy,
+                                                      String payloadClass) {
+    HoodieRecordMerger defaultAvroRecordMerger = (StringUtils.isNullOrEmpty(payloadClass) || HoodieTableConfig.AVRO_BINARY_PAYLOADS.contains(payloadClass))
+        ? HoodieAvroBinaryRecordMerger.INSTANCE : HoodieAvroRecordMerger.INSTANCE;
+    if (HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
+    } else if (mergerClassList.isEmpty()) {
+      return defaultAvroRecordMerger;
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
-          .orElse(HoodieAvroRecordMerger.INSTANCE);
+          .orElse(defaultAvroRecordMerger);
     }
   }
 

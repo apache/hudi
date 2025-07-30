@@ -66,7 +66,7 @@ public class SortUtils {
             prependPartitionPathAndSuffixRecordKey(record.getPartitionPath(), record.getRecordKey(), columnValues));
       }
       return FlatLists.ofComparableArray(prependPartitionPath(record.getPartitionPath(), columnValues));
-    } else if (record.getRecordType() == HoodieRecord.HoodieRecordType.AVRO) {
+    } else if (record.getRecordType() == HoodieRecord.HoodieRecordType.AVRO || record.getRecordType() == HoodieRecord.HoodieRecordType.AVRO_BINARY) {
       return FlatLists.ofComparableArray(
           HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(
               record, sortColumnNames, schema, suffixRecordKey, consistentLogicalTimestampEnabled

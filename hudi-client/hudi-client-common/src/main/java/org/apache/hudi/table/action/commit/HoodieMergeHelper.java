@@ -78,7 +78,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieWriteConfig writeConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
-    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
+    HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger(table.getMetaClient().getTableConfig().getPayloadClass()).getRecordType();
     HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(
             table.getStorage().newInstance(mergeHandle.getOldFilePath(), table.getStorageConf().newInstance()))
         .getReaderFactory(recordType)

@@ -585,7 +585,7 @@ public class StreamSync implements Serializable, Closeable {
 
   private Pair<InputBatch, Boolean> fetchFromSourceAndPrepareRecords(Option<Checkpoint> resumeCheckpoint, HoodieTableMetaClient metaClient) {
     hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Fetching next batch: " + cfg.targetTableName);
-    HoodieRecordType recordType = createRecordMerger(props).getRecordType();
+    HoodieRecordType recordType = createRecordMerger(props, cfg.payloadClassName).getRecordType();
     if (recordType == HoodieRecordType.SPARK && HoodieTableType.valueOf(cfg.tableType) == HoodieTableType.MERGE_ON_READ
         && !cfg.operation.equals(WriteOperationType.BULK_INSERT)
         && HoodieLogBlock.HoodieLogBlockType.fromId(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro"))
@@ -912,7 +912,7 @@ public class StreamSync implements Serializable, Closeable {
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
     } else {
-      HoodieRecordType recordType = createRecordMerger(props).getRecordType();
+      HoodieRecordType recordType = createRecordMerger(props, cfg.payloadClassName).getRecordType();
       Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
           recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
       JavaRDD<HoodieRecord> records = recordsOption.orElseGet(() -> hoodieSparkContext.emptyRDD());

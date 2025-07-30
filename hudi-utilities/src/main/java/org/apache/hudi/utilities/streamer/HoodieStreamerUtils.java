@@ -25,12 +25,14 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroBinaryRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -93,11 +95,14 @@ public class HoodieStreamerUtils {
     String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName)
         ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode, cfg.payloadClassName)
         : cfg.payloadClassName;
+    HoodieRecord.HoodieRecordType deducedRecordType = recordType == HoodieRecord.HoodieRecordType.SPARK ? HoodieRecord.HoodieRecordType.SPARK
+        : (StringUtils.isNullOrEmpty(payloadClassName) || HoodieTableConfig.AVRO_BINARY_PAYLOADS.contains(payloadClassName)
+        ? HoodieRecord.HoodieRecordType.AVRO_BINARY : HoodieRecord.HoodieRecordType.AVRO);
     return avroRDDOptional.map(avroRDD -> {
       SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
       SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns(props) ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
       JavaRDD<Either<HoodieRecord,String>> records;
-      if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
+      if (deducedRecordType == HoodieRecord.HoodieRecordType.AVRO) {
         records = avroRDD.mapPartitions(
             (FlatMapFunction<Iterator<GenericRecord>, Either<HoodieRecord,String>>) genericRecordIterator -> {
               TaskContext taskContext = TaskContext.get();
@@ -126,7 +131,35 @@ public class HoodieStreamerUtils {
               });
             });
 
-      } else if (recordType == HoodieRecord.HoodieRecordType.SPARK) {
+      } else if (deducedRecordType == HoodieRecord.HoodieRecordType.AVRO_BINARY) {
+        records = avroRDD.mapPartitions(
+            (FlatMapFunction<Iterator<GenericRecord>, Either<HoodieRecord,String>>) genericRecordIterator -> {
+              TaskContext taskContext = TaskContext.get();
+              LOG.info("Creating HoodieRecords with stageId : {}, stage attempt no: {}, taskId : {}, task attempt no : {}, task attempt id : {} ",
+                  taskContext.stageId(), taskContext.stageAttemptNumber(), taskContext.partitionId(), taskContext.attemptNumber(),
+                  taskContext.taskAttemptId());
+              if (autoGenerateRecordKeys) {
+                props.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()));
+                props.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime);
+              }
+              BuiltinKeyGenerator builtinKeyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+              return new CloseableMappingIterator<>(ClosableIterator.wrap(genericRecordIterator), genRec -> {
+                try {
+                  HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
+                  GenericRecord gr = isDropPartitionColumns(props) ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
+                  Comparable orderingValue = shouldUseOrderingField
+                      ? OrderingValues.create(cfg.sourceOrderingFields.split(","), field -> (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, field, false, useConsistentLogicalTimestamp))
+                      : null;
+                  //HoodieRecordPayload payload = shouldUseOrderingField ? HoodieRecordUtils.loadPayload(payloadClassName, gr, orderingValue)
+                  //  : DataSourceUtils.createPayload(payloadClassName, gr);
+                  return Either.left(orderingValue == null ? new HoodieAvroBinaryRecord(hoodieKey, HoodieAvroUtils.avroToBytes(gr))
+                      : new HoodieAvroBinaryRecord(hoodieKey, HoodieAvroUtils.avroToBytes(gr), orderingValue));
+                } catch (Exception e) {
+                  return generateErrorRecordOrThrowException(genRec, e, shouldErrorTable);
+                }
+              });
+            });
+      } else if (deducedRecordType == HoodieRecord.HoodieRecordType.SPARK) {
         // TODO we should remove it if we can read InternalRow from source.
 
         records = avroRDD.mapPartitions(itr -> {

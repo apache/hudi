@@ -585,7 +585,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       Lazy<Option<Schema>> tableSchemaOpt) {
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext, lazyLatestMergedPartitionFileSliceList.get(), dataWriteConfig.getMetadataConfig(),
-        dataMetaClient, tableSchemaOpt, Option.of(dataWriteConfig.getRecordMerger().getRecordType()));
+        dataMetaClient, tableSchemaOpt, Option.of(dataWriteConfig.getRecordMerger(dataMetaClient.getTableConfig().getPayloadClass()).getRecordType()));
     final int fileGroupCount = dataWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
     return Pair.of(fileGroupCount, records);
   }
@@ -599,7 +599,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // Find the columns to index
     final List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(dataMetaClient.getTableConfig(),
         dataWriteConfig.getMetadataConfig(), tableSchema, true,
-        Option.of(dataWriteConfig.getRecordMerger().getRecordType())).keySet());
+        Option.of(dataWriteConfig.getRecordMerger(dataMetaClient.getTableConfig().getPayloadClass()).getRecordType())).keySet());
 
     if (columnsToIndex.isEmpty()) {
       // this can only happen if meta fields are disabled and cols to index is not explicitly overridden.
@@ -1318,7 +1318,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
               dataWriteConfig.getMetadataConfig(),
               partitionsToUpdate, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType(),
-              Option.of(dataWriteConfig.getRecordMerger().getRecordType()), dataWriteConfig.enableOptimizedLogBlocksScan());
+              Option.of(dataWriteConfig.getRecordMerger(dataMetaClient.getTableConfig().getPayloadClass()).getRecordType()), dataWriteConfig.enableOptimizedLogBlocksScan());
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
@@ -1424,7 +1424,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     mayBeReinitMetadataReader();
     processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
         cleanMetadata, instantTime, dataMetaClient, dataWriteConfig.getMetadataConfig(), enabledPartitionTypes,
-        dataWriteConfig.getBloomIndexParallelism(), Option.of(dataWriteConfig.getRecordMerger().getRecordType())));
+        dataWriteConfig.getBloomIndexParallelism(), Option.of(dataWriteConfig.getRecordMerger(dataMetaClient.getTableConfig().getPayloadClass()).getRecordType())));
     closeInternal();
   }
 

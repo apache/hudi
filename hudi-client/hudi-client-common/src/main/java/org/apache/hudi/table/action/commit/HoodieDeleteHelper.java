@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroBinaryRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -92,7 +94,7 @@ public class HoodieDeleteHelper<T, R> extends
         dedupedKeys = keys.repartition(targetParallelism);
       }
 
-      HoodieData dedupedRecords = createDeleteRecords(config, dedupedKeys);
+      HoodieData dedupedRecords = createDeleteRecords(config, dedupedKeys, table.getMetaClient().getTableConfig().getPayloadClass());
 
       Instant beginTag = Instant.now();
       // perform index loop up to get existing location of records
@@ -121,19 +123,23 @@ public class HoodieDeleteHelper<T, R> extends
     }
   }
 
-  public static HoodieData createDeleteRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys) {
-    HoodieRecordType recordType = config.getRecordMerger().getRecordType();
+  public static HoodieData createDeleteRecords(HoodieWriteConfig config, HoodieData<HoodieKey> keys, String payloadClass) {
+    HoodieRecordType recordType = config.getRecordMerger(payloadClass).getRecordType();
     if (recordType == HoodieRecordType.AVRO) {
       return keys.map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload()));
+    } else if (recordType == HoodieRecordType.AVRO_BINARY) {
+      return keys.map(key -> new HoodieAvroBinaryRecord(key, null, OrderingValues.getDefault()));
     } else {
       return keys.map(key -> new HoodieEmptyRecord<>(key, recordType));
     }
   }
 
-  public static <T> HoodieRecord<T> createDeleteRecord(HoodieWriteConfig config, HoodieKey key) {
-    HoodieRecordType recordType = config.getRecordMerger().getRecordType();
+  public static <T> HoodieRecord<T> createDeleteRecord(HoodieWriteConfig config, HoodieKey key, String payloadClass) {
+    HoodieRecordType recordType = config.getRecordMerger(payloadClass).getRecordType();
     if (recordType == HoodieRecordType.AVRO) {
       return new HoodieAvroRecord(key, new EmptyHoodieRecordPayload());
+    } else if (recordType == HoodieRecordType.AVRO_BINARY) {
+      return (HoodieRecord<T>) new HoodieAvroBinaryRecord(key, null, OrderingValues.getDefault());
     } else {
       return new HoodieEmptyRecord<>(key, recordType);
     }

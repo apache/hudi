@@ -73,7 +73,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
     this.writeConfig = writeConfig;
     this.hoodieTable = table;
     this.engineContext = engineContext;
-    this.recordType = table.getConfig().getRecordMerger().getRecordType();
+    this.recordType = table.getConfig().getRecordMerger(hoodieTable.getMetaClient().getTableConfig().getPayloadClass()).getRecordType();
     this.readerSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getSchema()));
   }
 
