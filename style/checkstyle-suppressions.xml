@@ -33,4 +33,6 @@
   <suppress checks="IllegalTokenText" files="PartitionPathEncodeUtils.java"/>
   <!-- SQL is longer than 200 characters -->
   <suppress checks="LineLength" files="sql-transformer.properties"/>
+  <!-- Ignore hudi-trino-plugin as this module has its own checkstyle rules -->
+  <suppress checks=".*" files="hudi-trino-plugin[\\/].*"/>
 </suppressions>
