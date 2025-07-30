@@ -1605,7 +1605,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         String syncCommitTime = createRestoreTimestamp(metadataTableCommit);
         processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
             partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
-        return null;
+        // empty result
+        return Option.empty();
       });
       closeInternal();
     } catch (IOException e) {
