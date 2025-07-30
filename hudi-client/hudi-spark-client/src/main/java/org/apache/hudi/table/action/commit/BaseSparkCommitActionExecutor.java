@@ -167,9 +167,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords, Option<HoodieTimer> sourceReadAndIndexTimer) {
-    int writeStatusParallelism = config.getMetadataConfig().getWriteStatusRepartitionParallelism();
-    if (table.isMetadataTable() && writeStatusParallelism > 0) {
-      inputRecords = inputRecords.repartition(writeStatusParallelism);
+    int coalesceParallelism = config.getMetadataConfig().getWriteStatusCoalesceParallelism();
+    if (table.isMetadataTable() && coalesceParallelism > 0 && inputRecords.getNumPartitions() > coalesceParallelism) {
+      inputRecords = inputRecords.repartition(coalesceParallelism);
     }
 
     // Cache the tagged records, so we don't end up computing both

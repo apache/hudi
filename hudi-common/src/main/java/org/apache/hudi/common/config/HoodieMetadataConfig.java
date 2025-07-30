@@ -576,12 +576,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "bloom filter row for the files in the metadata table. Only applies if the filter "
           + "type (" + BLOOM_FILTER_TYPE.key() + " ) is BloomFilterTypeCode.DYNAMIC_V0.");
 
-  public static final ConfigProperty<Integer> WRITE_STATUS_REPARTITION_PARALLELISM = ConfigProperty
-      .key(METADATA_PREFIX + ".write.status.repartition.parallelism")
+  public static final ConfigProperty<Integer> WRITE_STATUS_COALESCE_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".write.status.coalesce.parallelism")
       .defaultValue(0)
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("Number of partitions of write status RDD during write.");
+      .withDocumentation("When set to a positive number, this config reduces the number of "
+          + "write status partitions to the set number when the current number of partitions is higher.");
 
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
@@ -852,8 +853,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(METADATA_FILE_CACHE_MAX_SIZE_MB);
   }
 
-  public int getWriteStatusRepartitionParallelism() {
-    return getIntOrDefault(WRITE_STATUS_REPARTITION_PARALLELISM);
+  public int getWriteStatusCoalesceParallelism() {
+    return getIntOrDefault(WRITE_STATUS_COALESCE_PARALLELISM);
   }
 
   /**

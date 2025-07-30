@@ -33,30 +33,30 @@ class TestHoodieMetadataConfig {
   void testGetWriteStatusRepartitionParallelism() {
     // Test default value
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
-    assertEquals(0, config.getWriteStatusRepartitionParallelism());
+    assertEquals(0, config.getWriteStatusCoalesceParallelism());
 
     // Test custom value
     Properties props = new Properties();
-    props.put(HoodieMetadataConfig.WRITE_STATUS_REPARTITION_PARALLELISM.key(), "100");
+    props.put(HoodieMetadataConfig.WRITE_STATUS_COALESCE_PARALLELISM.key(), "100");
     HoodieMetadataConfig configWithCustomValue = HoodieMetadataConfig.newBuilder()
         .fromProperties(props)
         .build();
-    assertEquals(100, configWithCustomValue.getWriteStatusRepartitionParallelism());
+    assertEquals(100, configWithCustomValue.getWriteStatusCoalesceParallelism());
 
     // Test zero value
     Properties propsZero = new Properties();
-    propsZero.put(HoodieMetadataConfig.WRITE_STATUS_REPARTITION_PARALLELISM.key(), "0");
+    propsZero.put(HoodieMetadataConfig.WRITE_STATUS_COALESCE_PARALLELISM.key(), "0");
     HoodieMetadataConfig configWithZeroValue = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsZero)
         .build();
-    assertEquals(0, configWithZeroValue.getWriteStatusRepartitionParallelism());
+    assertEquals(0, configWithZeroValue.getWriteStatusCoalesceParallelism());
 
     // Test negative value
     Properties propsNegative = new Properties();
-    propsNegative.put(HoodieMetadataConfig.WRITE_STATUS_REPARTITION_PARALLELISM.key(), "-50");
+    propsNegative.put(HoodieMetadataConfig.WRITE_STATUS_COALESCE_PARALLELISM.key(), "-50");
     HoodieMetadataConfig configWithNegativeValue = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsNegative)
         .build();
-    assertEquals(-50, configWithNegativeValue.getWriteStatusRepartitionParallelism());
+    assertEquals(-50, configWithNegativeValue.getWriteStatusCoalesceParallelism());
   }
 }
