@@ -2412,6 +2412,54 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
+  @Test
+  def testUserProvidedKeyGeneratorClass(): Unit = {
+    val recordType = HoodieRecordType.AVRO
+    val customKeyGeneratorClass = "org.apache.hudi.keygen.UserProvidedKeyGenerator"
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType,
+      CommonOptionUtils.commonOpts ++ Map(
+        "hoodie.datasource.write.keygenerator.class" -> customKeyGeneratorClass,
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition"
+      ))
+
+    // Insert.
+    val records = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    writeToHudi(writeOpts, inputDF)
+    var actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    val inputKeyDF = inputDF.select("_row_key").sort("_row_key")
+    var actualKeyDF = actualDF.select("_row_key").sort("_row_key")
+    assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
+
+    // First update.
+    val firstUpdate = recordsToStrings(dataGen.generateUpdatesForAllRecords("001")).asScala.toList
+    val firstUpdateDF = spark.read.json(spark.sparkContext.parallelize(firstUpdate, 2))
+    writeToHudi(writeOpts, firstUpdateDF)
+    actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    actualKeyDF = actualDF.select("_row_key").sort("_row_key")
+    assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
+
+    // Second update.
+    // Change keyGenerator class name.
+    val opt = writeOpts ++ Map(
+      "hoodie.datasource.write.keygenerator.class"
+        -> "org.apache.hudi.keygen.ComplexKeyGenerator")
+    val secondRecord = recordsToStrings(dataGen.generateInserts("002", 10)).asScala.toList
+    val secondUpdateDF = spark.read.json(spark.sparkContext.parallelize(secondRecord, 2))
+    // NOTE: Only key generator type is stored in table config for custom key generator class.
+    //       Therefore, it does not complain when the class is changed between writes.
+    //       This may cause data inconsistency for users.
+    assertDoesNotThrow(
+      new Executable {
+        override def execute(): Unit =
+        writeToHudi(opt, secondUpdateDF)
+        spark.read.format("hudi").options(readOpts).load(basePath).count()
+      }
+    )
+    actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    actualKeyDF = actualDF.select("_row_key").sort("_row_key")
+    assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).count() > 0)
+  }
 }
 
 object TestCOWDataSource {
