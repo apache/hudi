@@ -316,10 +316,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                   HoodieTableType tableType,
                                                   HoodieTableVersion tableVersion) throws IOException {
     // for MOR tables with version < 8, listing is required to fetch the log files associated with base files added by this commit.
-    if (isCommitMetadataCompleted && (tableType == HoodieTableType.COPY_ON_WRITE || tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-        || instantToRollback.getAction().equals(HoodieTimeline.CLUSTERING_ACTION))) {
-      return fetchFilesFromCommitMetadata(instantToRollback, partitionPath, basePath, commitMetadataOptional.get(),
-          baseFileExtension);
+    if (isCommitMetadataCompleted && (tableType == HoodieTableType.COPY_ON_WRITE || tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT))) {
+      return fetchFilesFromCommitMetadata(instantToRollback, partitionPath, basePath, commitMetadataOptional.get(), baseFileExtension);
     } else {
       return fetchFilesFromListFiles(instantToRollback, partitionPath, basePath, baseFileExtension, storage);
     }

@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -106,7 +107,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
   void testCleaningDeltaCommits(HoodieTableVersion tableVersion) throws Exception {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(4) // the 4th delta_commit triggers compaction
-        .withInlineCompaction(false), tableVersion);
+        .withInlineCompaction(false).build(), tableVersion);
     Map<String, Integer> commitToRowCount = new HashMap<>();
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       String savepointCommit = null;
@@ -168,7 +169,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(4)
         .withInlineCompaction(false)
-        .compactionSmallFileSize(0), tableVersion);
+        .compactionSmallFileSize(0).build(), tableVersion);
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       // establish base files
       String firstCommitTime = client.startCommit();
@@ -204,7 +205,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
   public void testRestoreWithFileGroupCreatedWithDeltaCommits(HoodieTableVersion tableVersion) throws IOException {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(4)
-        .withInlineCompaction(true), tableVersion);
+        .withInlineCompaction(true).build(), tableVersion);
     final int numRecords = 100;
     String firstCommit;
     String secondCommit;
@@ -291,6 +292,69 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     assertEquals(Collections.singletonMap(firstCommit, numRecords), actualCommitToRowCount);
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  public void testRestoreWithUpdatesToClusteredFileGroups(HoodieTableVersion tableVersion) throws IOException {
+    HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(
+        HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).withInlineCompaction(false).compactionSmallFileSize(0).build(),
+        HoodieClusteringConfig.newBuilder().withAsyncClusteringMaxCommits(2).build()
+        , tableVersion);
+    final int numRecords = 20;
+    String secondCommit;
+    String clusteringCommit;
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      // 1st commit insert
+      String newCommitTime = client.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      client.commit(newCommitTime, client.insert(writeRecords, newCommitTime));
+
+      // 2nd commit with inserts and updates which will create new file slice due to small file handling.
+      newCommitTime = client.startCommit();
+      List<HoodieRecord> records2 = dataGen.generateUniqueUpdates(newCommitTime, numRecords);
+      JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
+      List<HoodieRecord> records3 = dataGen.generateInserts(newCommitTime, 30);
+      JavaRDD<HoodieRecord> writeRecords3 = jsc.parallelize(records3, 1);
+
+      client.commit(newCommitTime, client.upsert(writeRecords2.union(writeRecords3), newCommitTime));
+      secondCommit = newCommitTime;
+      // add savepoint to 2nd commit
+      client.savepoint(secondCommit, "test user","test comment");
+
+      Option<String> clusteringInstant = client.scheduleClustering(Option.empty());
+      clusteringCommit = clusteringInstant.get();
+      client.cluster(clusteringCommit);
+
+      // add new log files on top of the clustered file group
+      newCommitTime = client.startCommit();
+      List<HoodieRecord> updatedRecords = dataGen.generateUniqueUpdates(newCommitTime, numRecords);
+      writeClient.commit(newCommitTime, writeClient.upsert(jsc.parallelize(updatedRecords, 1), newCommitTime));
+    }
+    assertRowNumberEqualsTo(50);
+    StoragePathFilter filter = path -> path.toString().contains(clusteringCommit);
+    for (String pPath : dataGen.getPartitionPaths()) {
+      // verify there is 1 base file and 1 log file created matching the clustering timestamp if table version is 6.
+      // For table version 8 and above, the log file will not reference the clustering commit.
+      assertEquals(tableVersion == HoodieTableVersion.SIX ? 2 : 1, storage.listDirectEntries(
+              FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath), filter)
+          .size());
+    }
+
+    // restore to 2nd commit and remove the clustering instant and delta commit that followed it
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      client.restoreToSavepoint(secondCommit);
+    }
+    // verify that entire file slice created w/ base instant time of clustering instant is completely rolled back.
+    for (String pPath : dataGen.getPartitionPaths()) {
+      assertEquals(0, storage.listDirectEntries(
+              FSUtils.constructAbsolutePath(hoodieWriteConfig.getBasePath(), pPath), filter)
+          .size());
+    }
+    validateFilesMetadata(hoodieWriteConfig);
+    Map<String, Integer> actualCommitToRowCount = getRecordCountPerCommit();
+    assertEquals(Collections.singletonMap(secondCommit, 50), actualCommitToRowCount);
+  }
+
   /**
    * <p>Actions: DC1, DC2, DC3, savepoint DC3, DC4, C5.pending, DC6, DC7, restore
    * should roll back until DC3.
@@ -305,7 +369,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
         .withMaxNumDeltaCommitsBeforeCompaction(4) // the 4th delta_commit triggers compaction
         .withInlineCompaction(false)
         .withScheduleInlineCompaction(false)
-        .compactionSmallFileSize(0), tableVersion);
+        .compactionSmallFileSize(0).build(), tableVersion);
     Map<String, Integer> commitToRowCount = new HashMap<>();
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       String savepointCommit = null;
@@ -359,7 +423,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(3) // the 3rd delta_commit triggers compaction
         .withInlineCompaction(false)
-        .withScheduleInlineCompaction(false), tableVersion);
+        .withScheduleInlineCompaction(false).build(), tableVersion);
     Map<String, Integer> commitToRowCount = new HashMap<>();
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       String savepointCommit = null;
@@ -530,7 +594,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     HoodieWriteConfig hoodieWriteConfig = getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.newBuilder()
         .withMaxNumDeltaCommitsBeforeCompaction(4)
         .withInlineCompaction(false)
-        .compactionSmallFileSize(0), tableVersion);
+        .compactionSmallFileSize(0).build(), tableVersion);
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       // establish base files
       String firstCommitTime = client.startCommit();
@@ -656,10 +720,13 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     return HoodieTableType.MERGE_ON_READ;
   }
 
-  private HoodieWriteConfig getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig.Builder withScheduleInlineCompaction, HoodieTableVersion tableVersion) throws IOException {
+  private HoodieWriteConfig getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig compactionConfig, HoodieTableVersion tableVersion) throws IOException {
+    return getHoodieWriteConfigAndInitializeTable(compactionConfig, HoodieClusteringConfig.newBuilder().build(), tableVersion);
+  }
+
+  private HoodieWriteConfig getHoodieWriteConfigAndInitializeTable(HoodieCompactionConfig compactionConfig, HoodieClusteringConfig clusteringConfig, HoodieTableVersion tableVersion) throws IOException {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER) // eager cleaning
-        .withCompactionConfig(withScheduleInlineCompaction
-            .build())
+        .withCompactionConfig(compactionConfig)
         .withRollbackUsingMarkers(true)
         .withAutoUpgradeVersion(false)
         .withWriteTableVersion(tableVersion.versionCode())
