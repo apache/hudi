@@ -38,14 +38,19 @@ import org.apache.hudi.util.RowProjection;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -143,6 +148,29 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   @Override
   protected RowData readRecordPayload(Kryo kryo, Input input) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    if (fieldValue == null) {
+      return null;
+    }
+    LogicalType logicalType = fieldSchema.getLogicalType();
+
+    if (logicalType == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());
+    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
+      TimestampData ts = (TimestampData) fieldValue;
+      return ts.getMillisecond();
+    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
+      TimestampData ts = (TimestampData) fieldValue;
+      return ts.getMillisecond() / 1000;
+    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      return ((DecimalData) fieldValue).toBigDecimal();
+    }
+    return fieldValue;
   }
 
   @Override

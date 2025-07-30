@@ -359,6 +359,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
       Object eventTime = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
       if (eventTime != null) {
         // Append event_time.
+        Schema.Field field = schema.getField(eventTimeFieldName);
+        eventTime = record.convertColumnValueForLogicalType(
+            field.schema(), eventTime, keepConsistentLogicalTimestamp);
         Map<String, String> metadata = recordMetadata.orElse(new HashMap<>());
         metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
         return Option.of(metadata);

@@ -279,4 +279,12 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   protected final T readRecordPayload(Kryo kryo, Input input) {
     return (T) kryo.readClassAndObject(input);
   }
+
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    return HoodieAvroUtils.convertValueForAvroLogicalTypes(
+        fieldSchema, fieldValue, keepConsistentLogicalTimestamp);
+  }
 }

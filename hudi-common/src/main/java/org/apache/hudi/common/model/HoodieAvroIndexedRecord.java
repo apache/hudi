@@ -262,6 +262,14 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     return kryo.readObjectOrNull(input, GenericRecord.class, avroSerializer);
   }
 
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    return HoodieAvroUtils.convertValueForAvroLogicalTypes(
+        fieldSchema, fieldValue, keepConsistentLogicalTimestamp);
+  }
+
   static void updateMetadataValuesInternal(GenericRecord avroRecord, MetadataValues metadataValues) {
     if (metadataValues.isEmpty()) {
       return; // no-op
