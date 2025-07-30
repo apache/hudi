@@ -1393,9 +1393,7 @@ public class HoodieAvroUtils {
       case RECORD:
         for (Schema.Field field : readerSchema.getFields()) {
           Schema.Field writerField = writerSchema.getField(field.name());
-          if (writerField == null) {
-            return true;
-          } else if (recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
+          if (writerField != null && recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
             return true;
           }
         }
