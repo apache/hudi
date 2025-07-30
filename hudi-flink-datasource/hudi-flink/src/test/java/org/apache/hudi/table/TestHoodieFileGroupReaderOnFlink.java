@@ -62,6 +62,7 @@ import org.apache.hudi.table.format.FlinkRowDataReaderContext;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.utils.TestData;
 
@@ -194,6 +195,9 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     finalWriteConfigs.put(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
         HoodieFailedWritesCleaningPolicy.NEVER.name());
     finalWriteConfigs.put(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "false");
+    finalWriteConfigs.forEach((key, value) -> conf.setString(key, value));
+    WriteOperationType operationType = WriteOperationType.ALTER_SCHEMA;
+    conf.set(FlinkOptions.OPERATION, operationType.value());
 
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         new FlinkTaskContextSupplier(null));
@@ -202,14 +206,15 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .withSchema(avroSchema.toString())
         .withProps(finalWriteConfigs)
         .build();
-    try (HoodieFlinkWriteClient client = new HoodieFlinkWriteClient<>(context, config)) {
+    try (HoodieFlinkWriteClient<?> client = FlinkWriteClients.createWriteClient(conf)) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
           .setConf(storageConf)
           .setBasePath(basePath)
           .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
           .build();
 
-      WriteOperationType operationType = WriteOperationType.ALTER_SCHEMA;
+
+
       String commitActionType = CommitUtils.getCommitActionType(operationType, metaClient.getTableType());
 
       String instantTime = client.startCommit(commitActionType);
@@ -237,6 +242,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
           SerDeHelper.inheritSchemas(schema, historySchemaStr));
 
       assertTrue(client.commit(instantTime, new ArrayList<>(), Option.of(extraMeta)));
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -284,16 +291,41 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     configs.mapSupport = false;
     configs.anyArraySupport = false;
     configs.addNewFieldSupport = false;
+
+    configs.renameColumnSupport = false;
+    configs.renameColumnAsPreviouslyRemovedSupport = false;
+    configs.removeColumnSupport = false;
+
     configs.intToLongSupport = false;
     configs.intToFloatSupport = false;
     configs.intToDoubleSupport = false;
     configs.intToStringSupport = false;
+    configs.intToDecimalFixedSupport = false;
+    configs.intToDecimalBytesSupport = false;
+
     configs.longToFloatSupport = false;
     configs.longToDoubleSupport = false;
     configs.longToStringSupport = false;
+    configs.longToDecimalFixedSupport = false;
+    configs.longToDecimalBytesSupport = false;
+
     configs.floatToDoubleSupport = false;
     configs.floatToStringSupport = false;
+    configs.floatToDecimalFixedSupport = false;
+    configs.floatToDecimalBytesSupport = false;
+
     configs.doubleToStringSupport = false;
+    configs.doubleToDecimalFixedSupport = false;
+    configs.doubleToDecimalBytesSupport = false;
+
+    configs.stringToDecimalFixedSupport = false;
+    configs.stringToDecimalBytesSupport = false;
+    configs.stringToDateSupport = false;
+
+    configs.decimalFixedToStringSupport = false;
+    configs.decimalBytesToStringSupport = false;
+
+    configs.dateToStringSupport = false;
     return configs;
   }
 
