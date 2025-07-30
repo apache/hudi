@@ -43,6 +43,7 @@ import org.apache.hudi.storage.StoragePath;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.avro.Conversions;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -1309,88 +1310,106 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
   private void generateCustomValues(GenericRecord rec, String customPrefix) {
     for (Schema.Field field : rec.getSchema().getFields()) {
-      if (field.name().startsWith(customPrefix)) {
-        Schema nonNullableSchema = AvroSchemaUtils.resolveNullableSchema(field.schema());
-        switch (nonNullableSchema.getType()) {
-          case INT:
-            if (nonNullableSchema.getLogicalType() != null) {
-              long randomMillis = genRandomTimeMillis(rand);
-              Instant instant = Instant.ofEpochMilli(randomMillis);
-              rec.put(field.name(), makeDatesAmbiguous ? -1000000 :
-                  (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
-            } else if (field.name().contains("Decimal")) {
-              rec.put(field.name(), rand.nextInt(1000));
-            } else {
-              rec.put(field.name(), rand.nextInt());
-            }
-            break;
-          case LONG:
-            if (field.name().contains("Decimal")) {
-              rec.put(field.name(), rand.nextLong() % 1000);
-            } else {
-              rec.put(field.name(), rand.nextLong());
-            }
-            break;
-          case FLOAT:
-            if (field.name().contains("Decimal")) {
-              rec.put(field.name(), Float.valueOf(String.format(Locale.ENGLISH, "%.3f", rand.nextFloat())));
-            } else {
-              rec.put(field.name(), rand.nextFloat());
-            }
-            break;
-          case DOUBLE:
-            if (field.name().contains("Decimal")) {
-              rec.put(field.name(), Double.valueOf(String.format(Locale.ENGLISH, "%.3f", rand.nextFloat())));
-            } else {
-              rec.put(field.name(), rand.nextDouble());
-            }
-            break;
-          case STRING:
-            if (field.name().contains("Decimal")) {
-              rec.put(field.name(), String.format(Locale.ENGLISH, "%.3f", rand.nextFloat()));
-            } else if (field.name().contains("Date")) {
-              long randomMillis = genRandomTimeMillis(rand);
-              Instant instant = Instant.ofEpochMilli(randomMillis);
-              rec.put(field.name(), HoodieAvroUtils.toJavaDate(makeDatesAmbiguous ? -1000000 :
-                  (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay()).toString());
-            } else {
-              rec.put(field.name(), genPseudoRandomUUID(rand).toString());
-            }
-            break;
-          case BYTES:
-            if (nonNullableSchema.getLogicalType() != null) {
-              LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) nonNullableSchema.getLogicalType();
-              String formatString = String.format("%%.%df", decimalType.getScale());
-              BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, formatString, rand.nextFloat()));
-              Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-              GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, nonNullableSchema, decimalType);
-              rec.put(field.name(), ByteBuffer.wrap(genericFixed.bytes()));
-            } else {
-              rec.put(field.name(), ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString())));
-            }
-            break;
-          case FIXED:
-            LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) nonNullableSchema.getLogicalType();
-            String formatString = String.format("%%.%df", decimalType.getScale());
-            BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, formatString, rand.nextFloat()));
-            Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-            GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, nonNullableSchema, decimalType);
-            rec.put(field.name(), genericFixed);
-            break;
-          case BOOLEAN:
-            rec.put(field.name(), rand.nextBoolean());
-            break;
-          case MAP:
-            rec.put(field.name(), genMap(field.schema(), field.name()));
-            break;
-          case ARRAY:
-            rec.put(field.name(), genArray(field.schema(), field.name()));
-            break;
-          default:
-            throw new UnsupportedOperationException("Unsupported type: " + field.schema().getType());
-        }
+      if (!field.name().startsWith(customPrefix)) {
+        continue;
+      }
+
+      Schema nonNullableSchema = AvroSchemaUtils.resolveNullableSchema(field.schema());
+      Schema.Type type = nonNullableSchema.getType();
+      LogicalType logicalType = nonNullableSchema.getLogicalType();
+      String fieldName = field.name();
+
+      switch (type) {
+        case INT:
+          rec.put(fieldName, generateIntValue(fieldName, logicalType));
+          break;
+        case LONG:
+          rec.put(fieldName, isEvolutionFromOrToDecimal(fieldName) ? rand.nextLong() % 1000 : rand.nextLong());
+          break;
+        case FLOAT:
+          rec.put(fieldName, isEvolutionFromOrToDecimal(fieldName) ? Float.parseFloat(formatDecimalString(rand.nextFloat())) : rand.nextFloat());
+          break;
+        case DOUBLE:
+          rec.put(fieldName, isEvolutionFromOrToDecimal(fieldName) ? Double.parseDouble(formatDecimalString(rand.nextFloat())) : rand.nextDouble());
+          break;
+        case STRING:
+          rec.put(fieldName, generateStringValue(fieldName));
+          break;
+        case BYTES:
+          rec.put(fieldName, generateBytesValue(nonNullableSchema, logicalType));
+          break;
+        case FIXED:
+          rec.put(fieldName, generateFixedDecimal(nonNullableSchema, logicalType));
+          break;
+        case BOOLEAN:
+          rec.put(fieldName, rand.nextBoolean());
+          break;
+        case MAP:
+          rec.put(fieldName, genMap(field.schema(), fieldName));
+          break;
+        case ARRAY:
+          rec.put(fieldName, genArray(field.schema(), fieldName));
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported type: " + type);
       }
     }
+  }
+
+  private boolean isEvolutionFromOrToDecimal(String fieldName) {
+    return fieldName.contains("Decimal");
+  }
+
+  private Object generateIntValue(String fieldName, LogicalType logicalType) {
+    if (logicalType != null) {
+      return generateEpochDay();
+    } else if (isEvolutionFromOrToDecimal(fieldName)) {
+      return rand.nextInt(1000);
+    } else {
+      return rand.nextInt();
+    }
+  }
+
+  private String generateStringValue(String fieldName) {
+    if (isEvolutionFromOrToDecimal(fieldName)) {
+      return formatDecimalString(rand.nextFloat());
+    } else if (fieldName.contains("Date")) {
+      return HoodieAvroUtils.toJavaDate(generateEpochDay()).toString();
+    } else {
+      return genPseudoRandomUUID(rand).toString();
+    }
+  }
+
+  private int generateEpochDay() {
+    long randomMillis = genRandomTimeMillis(rand);
+    Instant instant = Instant.ofEpochMilli(randomMillis);
+    int epochDay = (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay();
+    return makeDatesAmbiguous ? -1000000 : epochDay;
+  }
+
+  private String formatDecimalString(float value) {
+    return String.format(Locale.ENGLISH, "%.3f", value);
+  }
+
+  private ByteBuffer generateBytesValue(Schema schema, LogicalType logicalType) {
+    if (logicalType instanceof LogicalTypes.Decimal) {
+      GenericFixed fixed = generateFixedDecimal(schema, logicalType);
+      return ByteBuffer.wrap(fixed.bytes());
+    } else {
+      return ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString()));
+    }
+  }
+
+  private GenericFixed generateFixedDecimal(Schema schema, LogicalType logicalType) {
+    if (!(logicalType instanceof LogicalTypes.Decimal)) {
+      throw new IllegalArgumentException("Expected Decimal logical type for FIXED/BYTES");
+    }
+
+    LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) logicalType;
+    String formatString = String.format("%%.%df", decimalType.getScale());
+    BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, formatString, rand.nextFloat()));
+    Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
+    return decimalConversions.toFixed(bigDecimal, schema, decimalType);
   }
 
   private GenericArray<GenericRecord> genArray(Schema arraySchema, String customPrefix) {
