@@ -45,7 +45,6 @@ import org.apache.orc.TypeDescription;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -497,41 +496,13 @@ public class AvroOrcUtils {
       case SHORT:
         return (short) ((LongColumnVector) colVector).vector[vectorPos];
       case INT:
+        return (int) ((LongColumnVector) colVector).vector[vectorPos];
       case LONG:
-        long longValue = ((LongColumnVector) colVector).vector[vectorPos];
-        switch (avroSchema.getType()) {
-          case INT:
-            return (int) longValue;
-          case DOUBLE:
-            return Long.valueOf(longValue).doubleValue();
-          case FLOAT:
-            return Long.valueOf(longValue).floatValue();
-          case STRING:
-            return Long.toString(longValue);
-          default:
-            return longValue;
-        }
+        return ((LongColumnVector) colVector).vector[vectorPos];
       case FLOAT:
-        float floatValue = (float) ((DoubleColumnVector) colVector).vector[vectorPos];
-        switch (avroSchema.getType()) {
-          case DOUBLE:
-            // java float cannot convert to double directly, deal with float precision change
-            return Double.valueOf(floatValue + "");
-          case STRING:
-            return Double.toString(floatValue);
-          default:
-            return floatValue;
-        }
+        return (float) ((DoubleColumnVector) colVector).vector[vectorPos];
       case DOUBLE:
-        double doubleValue = ((DoubleColumnVector) colVector).vector[vectorPos];
-        switch (avroSchema.getType()) {
-          case FLOAT:
-            return (float) doubleValue;
-          case STRING:
-            return Double.toString(doubleValue);
-          default:
-            return doubleValue;
-        }
+        return ((DoubleColumnVector) colVector).vector[vectorPos];
       case VARCHAR:
       case CHAR:
         int maxLength = type.getMaxLength();
@@ -558,8 +529,6 @@ public class AvroOrcUtils {
           if (!enumValue.isEmpty()) {
             return new GenericData.EnumSymbol(avroSchema, enumValue);
           }
-        } else if (avroSchema.getType() == Schema.Type.BYTES || avroSchema.getType() == Schema.Type.FIXED) {
-          return ByteBuffer.wrap(parsedValue.toString().getBytes(StandardCharsets.UTF_8));
         }
         return parsedValue;
       case DATE:
@@ -582,9 +551,6 @@ public class AvroOrcUtils {
         byte[] binaryBytes = new byte[binaryLength];
         System.arraycopy(((BytesColumnVector) colVector).vector[vectorPos], binaryOffset, binaryBytes, 0, binaryLength);
         // return a ByteBuffer to be consistent with AvroRecordConverter
-        if (avroSchema.getType() == Schema.Type.STRING) {
-          return new String(binaryBytes, StandardCharsets.UTF_8);
-        }
         return ByteBuffer.wrap(binaryBytes);
       case DECIMAL:
         // HiveDecimal always ignores trailing zeros, thus modifies the scale implicitly,

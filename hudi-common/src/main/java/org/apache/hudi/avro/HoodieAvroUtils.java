@@ -80,7 +80,6 @@ import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -1249,10 +1248,7 @@ public class HoodieAvroUtils {
           return String.valueOf(oldValue);
         }
         if (oldSchema.getType() == Schema.Type.BYTES) {
-          if (oldValue instanceof ByteBuffer) {
-            oldValue = ((ByteBuffer) oldValue).array();
-          }
-          return new String((byte[]) oldValue, StandardCharsets.UTF_8);
+          return StringUtils.fromUTF8Bytes(((ByteBuffer) oldValue).array());
         }
         if (oldSchema.getLogicalType() == LogicalTypes.date()) {
           return toJavaDate((Integer) oldValue).toString();
