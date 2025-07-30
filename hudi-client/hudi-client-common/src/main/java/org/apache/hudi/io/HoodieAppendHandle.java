@@ -285,8 +285,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void bufferRecord(HoodieRecord<T> hoodieRecord) {
-    Option<Map<String, String>> recordMetadata = hoodieRecord.getMetadata();
     Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
+    Option<Map<String, String>> recordMetadata = getRecordMetadata(hoodieRecord, schema, recordProperties);
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
       // Whether it is an update or insert record.

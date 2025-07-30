@@ -188,4 +188,11 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
     // NOTE: [[EmptyRecord]]'s payload is always null
     return null;
   }
+
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    return null;
+  }
 }
