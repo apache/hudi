@@ -19,7 +19,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -36,7 +35,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.io.ArrayWritable;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -62,6 +60,7 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  * Subclasses need to implement {@link #getFileRecordIterator} with the reader logic.
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
+
 
   protected BaseSparkInternalRowReaderContext(StorageConfiguration<?> storageConfig,
                                               HoodieTableConfig tableConfig) {
@@ -184,6 +183,9 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       // To foster value comparison, if the value is of String type, e.g., from
       // the delete record, we convert it to UTF8String type.
       return UTF8String.fromString((String) value);
+      // [SPARK-46832] UTF8String doesn't support compareTo anymore
+    } else if (value instanceof UTF8String) {
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory().wrapUTF8String((UTF8String) value);
     }
     return value;
   }
@@ -193,6 +195,13 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     if (record != null) {
       return record;
     }
-    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
+    UTF8String[] metaFields = new UTF8String[] {
+        null,
+        null,
+        UTF8String.fromString(recordKey),
+        UTF8String.fromString(partitionPath),
+        null
+    };
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, null, false);
   }
 }

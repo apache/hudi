@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.fs.FSUtils;
@@ -175,17 +176,18 @@ public class HoodieRowCreateHandle implements Serializable {
       //          and [[String]])
       //          - Repeated computations (for ex, converting file-path to [[UTF8String]] over and
       //          over again)
+      UTF8String[] metaFields = new UTF8String[5];
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
-      UTF8String partitionPath = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
+      metaFields[3] = row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD);
       // This is the only meta-field that is generated dynamically, hence conversion b/w
       // [[String]] and [[UTF8String]] is unavoidable if preserveHoodieMetadata is false
-      UTF8String seqId = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
+      metaFields[1] = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
           : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement()));
-      UTF8String writeCommitTime = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
+      metaFields[0] = shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)
           : commitTime;
-
-      InternalRow updatedRow = new HoodieInternalRow(writeCommitTime, seqId, recordKey,
-          partitionPath, fileName, row, true);
+      metaFields[2] = recordKey;
+      metaFields[4] = fileName;
+      InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, row, true);
       try {
         fileWriter.writeRow(recordKey, updatedRow);
         // NOTE: To avoid conversion on the hot-path we only convert [[UTF8String]] into [[String]]

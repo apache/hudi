@@ -260,7 +260,7 @@ object AlterTableCommand extends Logging {
       table.identifier.table,
       HoodieWriterUtils.parametersWithWriteDefaults(
         HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties ++ table.properties) ++
-        sparkSession.sqlContext.conf.getAllConfs ++ Map(
+        sparkSession.sessionState.conf.getAllConfs ++ Map(
         HoodieCleanConfig.AUTO_CLEAN.key -> "false",
         HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.NEVER.name,
         HoodieArchivalConfig.AUTO_ARCHIVE.key -> "false"
