@@ -69,7 +69,7 @@ class TestHiveHoodieReaderContext {
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
-    assertEquals("value1", avroReaderContext.getRecordKey(row, getBaseSchema()));
+    assertEquals("value1", avroReaderContext.getRecordContext().getRecordKey(row, getBaseSchema()));
   }
 
   @Test
@@ -84,7 +84,7 @@ class TestHiveHoodieReaderContext {
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
-    assertEquals("field_1:value1,field_3.nested_field:value3", avroReaderContext.getRecordKey(row, getBaseSchema()));
+    assertEquals("field_1:value1,field_3.nested_field:value3", avroReaderContext.getRecordContext().getRecordKey(row, getBaseSchema()));
   }
 
   @Test
@@ -98,7 +98,7 @@ class TestHiveHoodieReaderContext {
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
-    assertEquals("value3", avroReaderContext.getValue(row, getBaseSchema(), "field_3.nested_field").toString());
+    assertEquals("value3", avroReaderContext.getRecordContext().getValue(row, getBaseSchema(), "field_3.nested_field").toString());
   }
 
   @Test
@@ -117,7 +117,7 @@ class TestHiveHoodieReaderContext {
     BufferedRecord<ArrayWritable> buffered = new BufferedRecord<>("anyKey", 1, base, 1, false);
 
     Map<Integer, Object> updates = new HashMap<>();
-    ArrayWritable result = avroReaderContext.constructEngineRecord(SCHEMA, updates, buffered);
+    ArrayWritable result = avroReaderContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, buffered);
     Writable[] values = result.get();
 
     assertEquals(1, ((IntWritable) values[0]).get());
@@ -143,7 +143,7 @@ class TestHiveHoodieReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(0, new IntWritable(2));
     updates.put(1, new Text("Bob"));
-    ArrayWritable result = avroReaderContext.constructEngineRecord(SCHEMA, updates, buffered);
+    ArrayWritable result = avroReaderContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, buffered);
     Writable[] values = result.get();
 
     assertEquals(2, ((IntWritable) values[0]).get());

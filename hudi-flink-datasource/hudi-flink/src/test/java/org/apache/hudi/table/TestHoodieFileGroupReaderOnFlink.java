@@ -45,6 +45,7 @@ import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -88,7 +89,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -162,6 +162,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Override
   public void commitToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
+    conf.set(FlinkOptions.PRECOMBINE_FIELD, writeConfigs.get("hoodie.datasource.write.precombine.field"));
     conf.set(FlinkOptions.OPERATION, operation);
     Schema localSchema = getRecordAvroSchema(schemaStr);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());
@@ -343,8 +344,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .optionalLong("ts")
         .endRecord();
     GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
-    assertEquals(1000L, readerContext.getOrderingValue(rowData, schema, Option.of("ts")));
-    assertEquals(DEFAULT_ORDERING_VALUE, readerContext.getOrderingValue(rowData, schema, Option.of("non_existent_col")));
+    assertEquals(1000L, readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("ts")));
+    assertEquals(OrderingValues.getDefault(), readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("non_existent_col")));
   }
 
   @Test
@@ -361,7 +362,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .endRecord();
     String key = "my_key";
     GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("field2_val"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @Test
@@ -379,7 +380,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .endRecord();
     String key = "key";
     GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("other"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @Test
@@ -399,7 +400,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .endRecord();
     String key = "field1:va1,field2:__empty__";
     GenericRowData rowData = GenericRowData.of(StringData.fromString("va1"), StringData.fromString(""), StringData.fromString("other"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @ParameterizedTest

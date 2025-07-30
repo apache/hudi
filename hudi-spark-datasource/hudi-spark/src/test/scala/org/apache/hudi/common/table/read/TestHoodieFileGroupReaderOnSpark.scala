@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark.getFil
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.testutils.{HoodieTestUtils, SchemaOnReadEvolutionTestUtils}
 import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs
-import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, Option => HOption}
+import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, Option => HOption, OrderingValues}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
@@ -62,6 +62,7 @@ import org.mockito.Mockito
 import org.mockito.Mockito.when
 
 import java.util
+import java.util.Collections
 
 import scala.collection.JavaConverters._
 
@@ -196,7 +197,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "col3", UTF8String.fromString("blue"))
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "non_existent_col", HoodieRecord.DEFAULT_ORDERING_VALUE)
+      sparkReaderContext, row, avroSchema, "non_existent_col", OrderingValues.getDefault)
   }
 
   val expectedEventTimeBased: Seq[(Int, String, String, String, Double, String)] = Seq(
@@ -309,8 +310,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
                                    avroSchema: Schema,
                                    orderingColumn: String,
                                    expectedOrderingValue: Comparable[_]): Unit = {
-    assertEquals(expectedOrderingValue, sparkReaderContext.getOrderingValue(
-      row, avroSchema, HOption.of(orderingColumn)))
+    assertEquals(expectedOrderingValue, sparkReaderContext.getRecordContext.getOrderingValue(row, avroSchema, Collections.singletonList(orderingColumn)))
   }
 
   @Test
@@ -328,7 +328,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .endRecord()
     val key = "my_key"
     val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, schema))
   }
 
   @Test
@@ -350,7 +350,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       .endRecord()
     val key = "key"
     val row = InternalRow.fromSeq(Seq(UTF8String.fromString(key), UTF8String.fromString("other")))
-    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext().getRecordKey(row, schema))
   }
 
   @Test
@@ -365,7 +365,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val key = "outer1.field1:compound,outer1.field2:__empty__,outer1.field3:__null__"
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("compound"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals(key, sparkReaderContext.getRecordKey(row, schema))
+    assertEquals(key, sparkReaderContext.getRecordContext.getRecordKey(row, schema))
   }
 
   @Test
@@ -378,7 +378,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val schema: Schema = buildMultiLevelSchema
     val innerRow = InternalRow.fromSeq(Seq(UTF8String.fromString("nested_value"), UTF8String.fromString(""), null))
     val row = InternalRow.fromSeq(Seq(innerRow, UTF8String.fromString("value2")))
-    assertEquals("nested_value", sparkReaderContext.getValue(row, schema, "outer1.field1").toString)
+    assertEquals("nested_value", sparkReaderContext.getRecordContext().getValue(row, schema, "outer1.field1").toString)
   }
 
   private def buildMultiLevelSchema = {

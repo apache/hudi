@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieFileGroupId, HoodieLogFile}
@@ -26,6 +25,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
 
 import org.apache.commons.lang.math.RandomUtils.nextInt
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources.FilePartition
 import org.junit.jupiter.params.ParameterizedTest
@@ -79,10 +79,9 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val expectedTaskCount = 100
     val maxSplitSize = totalSize / expectedTaskCount
     val partitionValues = Seq("2025-01-01")
-    val partitionOpt = Some(new PartitionPath(partitionPath, partitionValues.toArray))
 
     val partitionedFiles = slices.flatMap(slice => {
-      val dir = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(partitionOpt, slice, options)
+      val dir = PartitionDirectoryConverter.convertFileSliceToPartitionDirectory(InternalRow.fromSeq(partitionValues), slice, options)
       dir.files.flatMap(file => {
         // getPath() is very expensive so we only want to call it once in this block:
         val filePath = file.getPath

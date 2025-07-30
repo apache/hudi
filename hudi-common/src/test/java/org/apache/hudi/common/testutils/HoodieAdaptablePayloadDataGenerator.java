@@ -68,7 +68,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     props.put("hoodie.datasource.write.precombine.field", orderingField);
     props.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
     props.put(HoodieTableConfig.PARTITION_FIELDS.key(), "pt");
-    props.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
+    props.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), orderingField);
     return props;
   }
 

@@ -20,9 +20,11 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
+import org.apache.hudi.hadoop.HiveRecordContext;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -46,6 +48,8 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieArrayWritableAvroUtils {
 
@@ -96,20 +100,22 @@ public class TestHoodieArrayWritableAvroUtils {
 
   @Test
   public void testCastOrderingField() {
-    HiveHoodieReaderContext readerContext = Mockito.mock(HiveHoodieReaderContext.class, Mockito.CALLS_REAL_METHODS);
-    assertEquals(new Text("ASDF"), readerContext.convertValueToEngineType(new Text("ASDF")));
-    assertEquals(new Text("ASDF"), readerContext.convertValueToEngineType("ASDF"));
-    assertEquals(new IntWritable(8), readerContext.convertValueToEngineType(new IntWritable(8)));
-    assertEquals(new IntWritable(8), readerContext.convertValueToEngineType(8));
-    assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.convertValueToEngineType(new LongWritable(Long.MAX_VALUE / 2L)));
-    assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.convertValueToEngineType(Long.MAX_VALUE / 2L));
-    assertEquals(new FloatWritable(20.24f), readerContext.convertValueToEngineType(new FloatWritable(20.24f)));
-    assertEquals(new FloatWritable(20.24f), readerContext.convertValueToEngineType(20.24f));
-    assertEquals(new DoubleWritable(21.12d), readerContext.convertValueToEngineType(new DoubleWritable(21.12d)));
-    assertEquals(new DoubleWritable(21.12d), readerContext.convertValueToEngineType(21.12d));
+    HiveHoodieReaderContext readerContext = mock(HiveHoodieReaderContext.class, Mockito.CALLS_REAL_METHODS);
+    RecordContext recordContext = mock(HiveRecordContext.class, Mockito.CALLS_REAL_METHODS);
+    when(readerContext.getRecordContext()).thenReturn(recordContext);
+    assertEquals(new Text("ASDF"), readerContext.getRecordContext().convertValueToEngineType(new Text("ASDF")));
+    assertEquals(new Text("ASDF"), readerContext.getRecordContext().convertValueToEngineType("ASDF"));
+    assertEquals(new IntWritable(8), readerContext.getRecordContext().convertValueToEngineType(new IntWritable(8)));
+    assertEquals(new IntWritable(8), readerContext.getRecordContext().convertValueToEngineType(8));
+    assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.getRecordContext().convertValueToEngineType(new LongWritable(Long.MAX_VALUE / 2L)));
+    assertEquals(new LongWritable(Long.MAX_VALUE / 2L), readerContext.getRecordContext().convertValueToEngineType(Long.MAX_VALUE / 2L));
+    assertEquals(new FloatWritable(20.24f), readerContext.getRecordContext().convertValueToEngineType(new FloatWritable(20.24f)));
+    assertEquals(new FloatWritable(20.24f), readerContext.getRecordContext().convertValueToEngineType(20.24f));
+    assertEquals(new DoubleWritable(21.12d), readerContext.getRecordContext().convertValueToEngineType(new DoubleWritable(21.12d)));
+    assertEquals(new DoubleWritable(21.12d), readerContext.getRecordContext().convertValueToEngineType(21.12d));
 
     // make sure that if input is a writeable, then it still works
     WritableComparable reflexive = new IntWritable(8675309);
-    assertEquals(reflexive, readerContext.convertValueToEngineType(reflexive));
+    assertEquals(reflexive, readerContext.getRecordContext().convertValueToEngineType(reflexive));
   }
 }

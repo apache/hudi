@@ -76,7 +76,7 @@ public class CompactionUtil {
   public static void setAvroSchema(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchema(false);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, tableAvroSchema.toString());
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, tableAvroSchema.toString());
   }
 
   /**
@@ -101,9 +101,9 @@ public class CompactionUtil {
    * @param conf The configuration
    */
   public static void setPreCombineField(Configuration conf, HoodieTableMetaClient metaClient) {
-    String preCombineField = metaClient.getTableConfig().getPreCombineField();
+    String preCombineField = metaClient.getTableConfig().getPreCombineFieldsStr().orElse(null);
     if (preCombineField != null) {
-      conf.setString(FlinkOptions.PRECOMBINE_FIELD, preCombineField);
+      conf.set(FlinkOptions.PRECOMBINE_FIELD, preCombineField);
     }
   }
 
@@ -133,7 +133,7 @@ public class CompactionUtil {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchemaFromDataFile();
     if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD) != null) {
-      conf.setBoolean(FlinkOptions.CHANGELOG_ENABLED, true);
+      conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
     }
   }
 
@@ -146,9 +146,9 @@ public class CompactionUtil {
    * @param metaClient The meta client
    */
   public static void inferMetadataConf(Configuration conf, HoodieTableMetaClient metaClient) {
-    String path = HoodieTableMetadata.getMetadataTableBasePath(conf.getString(FlinkOptions.PATH));
+    String path = HoodieTableMetadata.getMetadataTableBasePath(conf.get(FlinkOptions.PATH));
     if (!StreamerUtil.tableExists(path, (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap())) {
-      conf.setBoolean(FlinkOptions.METADATA_ENABLED, false);
+      conf.set(FlinkOptions.METADATA_ENABLED, false);
     }
   }
 
@@ -193,7 +193,7 @@ public class CompactionUtil {
     if (earliestInflight.isPresent()) {
       HoodieInstant instant = earliestInflight.get();
       String currentTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
-      int timeout = conf.getInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
+      int timeout = conf.get(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
         try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {

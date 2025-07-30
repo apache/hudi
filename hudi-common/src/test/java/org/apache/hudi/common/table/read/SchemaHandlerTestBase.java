@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -248,9 +250,11 @@ public abstract class SchemaHandlerTestBase {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     if (hasPrecombine) {
-      when(hoodieTableConfig.getPreCombineField()).thenReturn("timestamp");
+      when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.of("timestamp"));
+      when(hoodieTableConfig.getPreCombineFields()).thenReturn(Collections.singletonList("timestamp"));
     } else {
-      when(hoodieTableConfig.getPreCombineField()).thenReturn(null);
+      when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
+      when(hoodieTableConfig.getPreCombineFields()).thenReturn(Collections.emptyList());
     }
     if (mergeMode == CUSTOM) {
       when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn("asdf");
@@ -299,16 +303,49 @@ public abstract class SchemaHandlerTestBase {
   }
 
   static class StubbedReaderContext extends HoodieReaderContext<String> {
-    private final boolean supportsParquetRowIndex;
 
     protected StubbedReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex) {
-      super(null, hoodieTableConfig, Option.empty(), Option.empty());
-      this.supportsParquetRowIndex = supportsParquetRowIndex;
-    }
+      super(null, hoodieTableConfig, Option.empty(), Option.empty(), new RecordContext<String>(hoodieTableConfig) {
+        @Override
+        public boolean supportsParquetRowIndex() {
+          return supportsParquetRowIndex;
+        }
 
-    @Override
-    public boolean supportsParquetRowIndex() {
-      return this.supportsParquetRowIndex;
+        @Override
+        public String convertAvroRecord(IndexedRecord avroRecord) {
+          return "";
+        }
+
+        @Override
+        public GenericRecord convertToAvroRecord(String record, Schema schema) {
+          return null;
+        }
+
+        @Override
+        public String getDeleteRow(String record, String recordKey) {
+          return "";
+        }
+
+        @Override
+        public Object getValue(String record, Schema schema, String fieldName) {
+          return null;
+        }
+
+        @Override
+        public String getMetaFieldValue(String record, int pos) {
+          return "";
+        }
+
+        @Override
+        public HoodieRecord<String> constructHoodieRecord(BufferedRecord<String> bufferedRecord) {
+          return null;
+        }
+
+        @Override
+        public String mergeWithEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
+          return "";
+        }
+      });
     }
 
     @Override
@@ -317,43 +354,8 @@ public abstract class SchemaHandlerTestBase {
     }
 
     @Override
-    public String convertAvroRecord(IndexedRecord avroRecord) {
-      return "";
-    }
-
-    @Override
-    public GenericRecord convertToAvroRecord(String record, Schema schema) {
-      return null;
-    }
-
-    @Override
-    public String getDeleteRow(String record, String recordKey) {
-      return "";
-    }
-
-    @Override
     public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
       return null;
-    }
-
-    @Override
-    public Object getValue(String record, Schema schema, String fieldName) {
-      return null;
-    }
-
-    @Override
-    public String getMetaFieldValue(String record, int pos) {
-      return "";
-    }
-
-    @Override
-    public HoodieRecord<String> constructHoodieRecord(BufferedRecord<String> bufferedRecord) {
-      return null;
-    }
-
-    @Override
-    public String constructEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
-      return "";
     }
 
     @Override

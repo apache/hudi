@@ -45,8 +45,6 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.streaming.kafka010.KafkaUtils;
-import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,10 +92,7 @@ public class JsonKafkaSource extends KafkaSource<JavaRDD<String>> {
   @Override
   protected JavaRDD<String> toBatch(OffsetRange[] offsetRanges) {
     String deserializerClass = props.getString(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP);
-    JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD = KafkaUtils.createRDD(sparkContext,
-            offsetGen.getKafkaParams(),
-            offsetRanges,
-            LocationStrategies.PreferConsistent())
+    JavaRDD<ConsumerRecord<Object, Object>> kafkaRDD = createKafkaRDD(this.props, sparkContext, offsetGen, offsetRanges)
         .filter(x -> filterForNullValues(x.value(), deserializerClass));
     return postProcess(maybeAppendKafkaOffsets(kafkaRDD, deserializerClass));
   }

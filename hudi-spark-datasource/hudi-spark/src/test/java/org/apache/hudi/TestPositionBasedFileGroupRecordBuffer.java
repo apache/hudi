@@ -38,7 +38,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
-import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -158,7 +158,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         metaClient.getTableConfig().getPartialUpdateMode(),
         baseFileInstantTime,
         props,
-        Option.of("timestamp"),
+        Collections.singletonList("timestamp"),
         updateProcessor);
   }
 

@@ -22,58 +22,88 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR_CHAR;
 
 public class SecondaryIndexKeyUtils {
 
-  /**
-   * Use this function if you want to get both record key and secondary key.
-   *
-   * @returns pair of secondary key, record key.
-   * */
-  public static Pair<String, String> getSecondaryKeyRecordKeyPair(String key) {
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return Pair.of(unescapeSpecialChars(key.substring(0, delimiterIndex)), unescapeSpecialChars(key.substring(delimiterIndex + 1)));
+  // Null character (ASCII 0) used to represent null strings
+  public static final char NULL_CHAR = '\0';
+  // Escape character
+  public static final char ESCAPE_CHAR = '\\';
+
+  // Give "<encoded secondaryKey>$<encoded primaryKey>"
+  // Extract Pair<<secondaryKey>,<primaryKey>>
+  public static Pair<String, String> getSecondaryKeyRecordKeyPair(String secIdxRecKey) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return Pair.of(unescapeSpecialChars(secIdxRecKey.substring(0, delimiterIndex)), unescapeSpecialChars(secIdxRecKey.substring(delimiterIndex + 1)));
+  }
+
+  // Give "<encoded secondaryKey>$<encoded primaryKey>"
+  // Extract Pair<<primaryKey>,<secondaryKey>>
+  public static Pair<String, String> getRecordKeySecondaryKeyPair(String secIdxRecKey) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return Pair.of(unescapeSpecialChars(secIdxRecKey.substring(delimiterIndex + 1)), unescapeSpecialChars(secIdxRecKey.substring(0, delimiterIndex)));
+  }
+
+  // Give "<encoded secondaryKey>$<encoded primaryKey>"
+  // Extract <primaryKey>
+  public static String getRecordKeyFromSecondaryIndexKey(String secIdxRecKey) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return unescapeSpecialChars(secIdxRecKey.substring(delimiterIndex + 1));
+  }
+
+  // Give "<encoded secondaryKey>$<encoded primaryKey>"
+  // Extract <secondaryKey>
+  public static String getSecondaryKeyFromSecondaryIndexKey(String secIdxRecKey) {
+    return unescapeSpecialChars(getUnescapedSecondaryKeyFromSecondaryIndexKey(secIdxRecKey));
+  }
+
+  // Give "<encoded secondaryKey>$<encoded primaryKey>"
+  // Extract "<encoded secondaryKey>$"
+  public static String getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey(String secIdxRecKey) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return secIdxRecKey.substring(0, delimiterIndex + 1);
+  }
+
+  // Give <secondaryKey>
+  // Extract "<encoded secondaryKey>$"
+  public static String getEscapedSecondaryKeyPrefixFromSecondaryKey(String secKey) {
+    return String.format("%s%s", escapeSpecialChars(secKey), SECONDARY_INDEX_RECORD_KEY_SEPARATOR_CHAR);
+  }
+
+  // Give "<encoded secondaryKey>$<encoded primaryKey>"
+  // Extract "<encoded secondaryKey>"
+  public static String getUnescapedSecondaryKeyFromSecondaryIndexKey(String secIdxRecKey) {
+    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
+    return secIdxRecKey.substring(0, delimiterIndex);
+  }
+
+  // give <secondaryKey> and <primaryKey>
+  // construct "<encoded secondaryKey>$<encoded primaryKey>"
+  public static String constructSecondaryIndexKey(String unescapedSecKey, String unescapedRecordKey) {
+    return escapeSpecialChars(unescapedSecKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(unescapedRecordKey);
   }
 
   /**
-   * Use this function if you want to get both record key and secondary key.
-   *
-   * @returns pair of secondary key, record key.
-   * */
-  public static Pair<String, String> getRecordKeySecondaryKeyPair(String key) {
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return Pair.of(unescapeSpecialChars(key.substring(delimiterIndex + 1)), unescapeSpecialChars(key.substring(0, delimiterIndex)));
-  }
-
-  public static String getRecordKeyFromSecondaryIndexKey(String key) {
-    // the payload key is in the format of "secondaryKey$primaryKey"
-    // we need to extract the primary key from the payload key
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return unescapeSpecialChars(key.substring(delimiterIndex + 1));
-  }
-
-  public static String getSecondaryKeyFromSecondaryIndexKey(String key) {
-    // the payload key is in the format of "secondaryKey$primaryKey"
-    // we need to extract the secondary key from the payload key
-    int delimiterIndex = getSecondaryIndexKeySeparatorPosition(key);
-    return unescapeSpecialChars(key.substring(0, delimiterIndex));
-  }
-
-  public static String constructSecondaryIndexKey(String secondaryKey, String recordKey) {
-    return escapeSpecialChars(secondaryKey) + SECONDARY_INDEX_RECORD_KEY_SEPARATOR + escapeSpecialChars(recordKey);
-  }
-
+   * Escapes special characters in a string. If the input is null, returns a string containing only the null character.
+   * For non-null strings, escapes backslash, dollar sign, and null character.
+   */
   public static String escapeSpecialChars(String str) {
+    if (str == null) {
+      return String.valueOf(NULL_CHAR);
+    }
+
     StringBuilder escaped = new StringBuilder();
     for (char c : str.toCharArray()) {
-      if (c == '\\' || c == '$') {
-        escaped.append('\\');  // Add escape character
+      if (c == ESCAPE_CHAR || c == SECONDARY_INDEX_RECORD_KEY_SEPARATOR_CHAR || c == NULL_CHAR) {
+        escaped.append(ESCAPE_CHAR);  // Add escape character
       }
       escaped.append(c);  // Add the actual character
     }
     return escaped.toString();
   }
 
+  // Find the position of the first unescaped '$' char in the string.
   private static int getSecondaryIndexKeySeparatorPosition(String key) {
     int delimiterIndex = -1;
     boolean isEscape = false;
@@ -81,9 +111,9 @@ public class SecondaryIndexKeyUtils {
     // Find the delimiter index while skipping escaped $
     for (int i = 0; i < key.length(); i++) {
       char c = key.charAt(i);
-      if (c == '\\' && !isEscape) {
+      if (c == ESCAPE_CHAR && !isEscape) {
         isEscape = true;
-      } else if (c == '$' && !isEscape) {
+      } else if (c == SECONDARY_INDEX_RECORD_KEY_SEPARATOR_CHAR && !isEscape) {
         delimiterIndex = i;
         break;
       } else {
@@ -94,14 +124,23 @@ public class SecondaryIndexKeyUtils {
     return delimiterIndex;
   }
 
-  static String unescapeSpecialChars(String str) {
+  /**
+   * Unescapes special characters in a string. If the input is a single null character, returns null.
+   * For other strings, unescapes backslash, dollar sign, and null character.
+   */
+  public static String unescapeSpecialChars(String str) {
+
+    if (str.equals(String.valueOf(NULL_CHAR))) {
+      return null;
+    }
+
     StringBuilder unescaped = new StringBuilder();
     boolean isEscape = false;
     for (char c : str.toCharArray()) {
       if (isEscape) {
         unescaped.append(c);
         isEscape = false;
-      } else if (c == '\\') {
+      } else if (c == ESCAPE_CHAR) {
         isEscape = true;  // Set escape flag to skip next character
       } else {
         unescaped.append(c);

@@ -45,7 +45,7 @@ public class PrimaryKeyPruners {
   private static final Logger LOG = LoggerFactory.getLogger(PrimaryKeyPruners.class);
 
   public static Function<Integer, Integer> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
-    List<String> pkFields = Arrays.asList(conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+    List<String> pkFields = Arrays.asList(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
     List<String> values = hashKeyFilters.stream()

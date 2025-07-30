@@ -53,7 +53,7 @@ public class TestViewStorageProperties {
         .withRemoteServerHost("host1")
         .withRemoteServerPort(1234).build();
     Configuration flinkConfig = new Configuration();
-    flinkConfig.setString(FlinkOptions.WRITE_CLIENT_ID, uniqueId);
+    flinkConfig.set(FlinkOptions.WRITE_CLIENT_ID, uniqueId);
     ViewStorageProperties.createProperties(basePath, config, flinkConfig);
     ViewStorageProperties.createProperties(basePath, config, flinkConfig);
     ViewStorageProperties.createProperties(basePath, config, flinkConfig);
@@ -68,7 +68,7 @@ public class TestViewStorageProperties {
   void testDumpRemoteViewStorageConfig() throws IOException {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     try (HoodieFlinkWriteClient<?> writeClient = FlinkWriteClients.createWriteClient(conf)) {
-      FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.getString(FlinkOptions.PATH), new Configuration());
+      FileSystemViewStorageConfig storageConfig = ViewStorageProperties.loadFromProperties(conf.get(FlinkOptions.PATH), new Configuration());
       assertThat(storageConfig.getStorageType(), is(FileSystemViewStorageType.REMOTE_FIRST));
     }
   }

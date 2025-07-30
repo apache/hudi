@@ -33,8 +33,10 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -52,6 +54,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
@@ -82,6 +85,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -185,6 +189,48 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
       // Three commits; reading one file group containing a base file and two log files
       List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 100);
+      List<HoodieRecord> finalRecords = mergeRecordLists(updates2, allRecords);
+      commitToTable(updates2, UPSERT.value(), false, writeConfigs);
+      validateOutputFromFileGroupReader(
+          getStorageConf(), getBasePath(), true, 2, recordMergeMode,
+          finalRecords, CollectionUtils.combine(unmergedRecords, updates2));
+    }
+  }
+
+  @Test
+  public void testReadFileGroupWithMultipleOrderingFields() throws Exception {
+    RecordMergeMode recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, true));
+    writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro");
+    writeConfigs.put("hoodie.datasource.write.table.type", HoodieTableType.MERGE_ON_READ.name());
+    // Use two precombine values - combination of timestamp and rider
+    String orderingValues = "timestamp,rider";
+    writeConfigs.put("hoodie.datasource.write.precombine.field", orderingValues);
+    writeConfigs.put("hoodie.payload.ordering.field", orderingValues);
+
+    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
+      // Initial commit. rider column gets value of rider-002
+      List<HoodieRecord> initialRecords = dataGen.generateInserts("002", 100);
+      commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
+      validateOutputFromFileGroupReader(
+          getStorageConf(), getBasePath(), true, 0, recordMergeMode,
+          initialRecords, initialRecords);
+
+      // The updates have rider values as rider-001 and the existing records have rider values as rider-002
+      // timestamp is 0 for all records so will not be considered
+      // All updates in this batch will be ignored as rider values are smaller and timestamp value is same
+      List<HoodieRecord> updates = dataGen.generateUniqueUpdates("001", 5);
+      List<HoodieRecord> allRecords = initialRecords;
+      List<HoodieRecord> unmergedRecords = CollectionUtils.combine(updates, allRecords);
+      commitToTable(updates, UPSERT.value(), false, writeConfigs);
+      validateOutputFromFileGroupReader(
+          getStorageConf(), getBasePath(), true, 1, recordMergeMode,
+          allRecords, unmergedRecords);
+
+      // The updates have rider values as rider-003 and the existing records have rider values as rider-002
+      // timestamp is 0 for all records so will not be considered
+      // All updates in this batch will reflect in the final records
+      List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 10);
       List<HoodieRecord> finalRecords = mergeRecordLists(updates2, allRecords);
       commitToTable(updates2, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
@@ -423,6 +469,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     List<HoodieTestDataGenerator.RecordIdentifier> expectedUnMergedRecords = new ArrayList<>();
     objectMapper.reader().forType(HoodieTestDataGenerator.RecordIdentifier.class).<HoodieTestDataGenerator.RecordIdentifier>readValues(basePath.resolve("unmerged_records.json").toFile())
         .forEachRemaining(expectedUnMergedRecords::add);
+    expectedRecords = expectedRecords.stream()
+        .map(recordIdentifier -> HoodieTestDataGenerator.RecordIdentifier.clone(recordIdentifier, recordIdentifier.getOrderingVal()))
+        .collect(Collectors.toList());
+    expectedUnMergedRecords = expectedUnMergedRecords.stream()
+        .map(recordIdentifier -> HoodieTestDataGenerator.RecordIdentifier.clone(recordIdentifier, recordIdentifier.getOrderingVal()))
+        .collect(Collectors.toList());
     validateOutputFromFileGroupReaderWithExistingRecords(getStorageConf(), basePath.toString(), true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
         expectedRecords, expectedUnMergedRecords);
   }
@@ -446,9 +498,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                      new HoodieRecordSizeEstimator(avroSchema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, getClass().getSimpleName())) {
           Long position = 0L;
           for (T record : records) {
-            String recordKey = readerContext.getRecordKey(record, avroSchema);
+            String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
             //test key based
-            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext, Option.of("timestamp"), false);
+            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
             spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
 
             //test position based
@@ -459,7 +511,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           //Validate that everything is correct
           position = 0L;
           for (T record : records) {
-            String recordKey = readerContext.getRecordKey(record, avroSchema);
+            String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
             BufferedRecord<T> keyBased = spillableMap.get(recordKey);
             assertNotNull(keyBased);
             BufferedRecord<T> positionBased = spillableMap.get(position++);
@@ -468,9 +520,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             assertRecordsEqual(avroSchema, record, positionBased.getRecord());
             assertEquals(keyBased.getRecordKey(), recordKey);
             assertEquals(positionBased.getRecordKey(), recordKey);
-            assertEquals(avroSchema, readerContext.getSchemaFromBufferRecord(keyBased));
+            assertEquals(avroSchema, readerContext.getRecordContext().getSchemaFromBufferRecord(keyBased));
             // generate field value is hardcoded as 0 for ordering field: timestamp, see HoodieTestDataGenerator#generateRandomValue
-            assertEquals(readerContext.convertValueToEngineType(0L), positionBased.getOrderingValue());
+            assertEquals(readerContext.getRecordContext().convertValueToEngineType(0L), positionBased.getOrderingValue());
           }
         }
       }
@@ -519,7 +571,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false, sortOutput);
     assertEquals(expectedRecords.size(), actualRecordList.size());
     actualRecordList.forEach(r -> assertRecordMatchesSchema(avroSchema, r));
-    Set<GenericRecord> actualRecordSet = actualRecordList.stream().map(r ->  readerContext.convertToAvroRecord(r, avroSchema))
+    Set<GenericRecord> actualRecordSet = actualRecordList.stream().map(r ->  readerContext.getRecordContext().convertToAvroRecord(r, avroSchema))
         .map(r -> HoodieAvroUtils.removeFields(r, metaCols))
         .collect(Collectors.toSet());
     Set<GenericRecord> expectedRecordSet = expectedRecords.stream()
@@ -560,11 +612,28 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                  List<HoodieRecord> expectedHoodieUnmergedRecords) throws Exception {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
     Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    expectedHoodieRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieRecords, metaClient, avroSchema);
+    expectedHoodieUnmergedRecords = getExpectedHoodieRecordsWithOrderingValue(expectedHoodieUnmergedRecords, metaClient, avroSchema);
     List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = convertHoodieRecords(expectedHoodieRecords, avroSchema);
     List<HoodieTestDataGenerator.RecordIdentifier> expectedUnmergedRecords = convertHoodieRecords(expectedHoodieUnmergedRecords, avroSchema);
     validateOutputFromFileGroupReaderWithExistingRecords(
         storageConf, tablePath, containsBaseFile, expectedLogFileNum, recordMergeMode,
         expectedRecords, expectedUnmergedRecords);
+  }
+
+  private static List<HoodieRecord> getExpectedHoodieRecordsWithOrderingValue(List<HoodieRecord> expectedHoodieRecords, HoodieTableMetaClient metaClient, Schema avroSchema) {
+    return expectedHoodieRecords.stream().map(rec -> {
+      RawTripTestPayload oldPayload = (RawTripTestPayload) rec.getData();
+      try {
+        List<String> orderingFields = metaClient.getTableConfig().getPreCombineFields();
+        HoodieAvroRecord avroRecord = ((HoodieAvroRecord) rec);
+        Comparable orderingValue = OrderingValues.create(orderingFields, field -> (Comparable) avroRecord.getColumnValueAsJava(avroSchema, field, new TypedProperties()));
+        RawTripTestPayload newPayload = new RawTripTestPayload(Option.ofNullable(oldPayload.getJsonData()), oldPayload.getRowKey(), oldPayload.getPartitionPath(), null, false, orderingValue);
+        return new HoodieAvroRecord<>(rec.getKey(), newPayload);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }).collect(Collectors.toList());
   }
 
   private void validateOutputFromFileGroupReaderWithExistingRecords(StorageConfiguration<?> storageConf,
@@ -582,20 +651,20 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     boolean sortOutput = !containsBaseFile;
     List<HoodieTestDataGenerator.RecordIdentifier> actualRecordList = convertEngineRecords(
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false, sortOutput),
-        avroSchema, readerContext);
+        avroSchema, readerContext, metaClient.getTableConfig().getPreCombineFields());
     // validate size is equivalent to ensure no duplicates are returned
     assertEquals(expectedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
     // validate records can be read from file group as HoodieRecords
     actualRecordList = convertHoodieRecords(
         readHoodieRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode),
-        avroSchema, readerContext);
+        avroSchema, readerContext, metaClient.getTableConfig().getPreCombineFields());
     assertEquals(expectedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
     // validate unmerged records
     actualRecordList = convertEngineRecords(
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, true, false),
-        avroSchema, readerContext);
+        avroSchema, readerContext, metaClient.getTableConfig().getPreCombineFields());
     assertEquals(expectedUnmergedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedUnmergedRecords), new HashSet<>(actualRecordList));
   }
@@ -698,7 +767,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       while (fileGroupReaderIterator.hasNext()) {
         T next = fileGroupReaderIterator.next();
         if (sortOutput) {
-          String currentKey = readerContext.getRecordKey(next, avroSchema);
+          String currentKey = readerContext.getRecordContext().getRecordKey(next, avroSchema);
           assertTrue(lastKey == null || lastKey.compareTo(currentKey) < 0, "Record keys should be sorted within the file group");
           lastKey = currentKey;
         }
@@ -731,8 +800,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private TypedProperties buildProperties(HoodieTableMetaClient metaClient, RecordMergeMode recordMergeMode) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.datasource.write.precombine.field", PRECOMBINE_FIELD_NAME);
-    props.setProperty("hoodie.payload.ordering.field", PRECOMBINE_FIELD_NAME);
+    props.setProperty("hoodie.datasource.write.precombine.field", metaClient.getTableConfig().getPreCombineFieldsStr().orElse(""));
+    props.setProperty("hoodie.payload.ordering.field", metaClient.getTableConfig().getPreCombineFieldsStr().orElse(""));
     props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
     if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
       props.setProperty(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
@@ -779,23 +848,28 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }).collect(Collectors.toList());
   }
 
-  private List<HoodieTestDataGenerator.RecordIdentifier> convertEngineRecords(List<T> records, Schema schema, HoodieReaderContext<T> readerContext) {
+  private List<HoodieTestDataGenerator.RecordIdentifier> convertEngineRecords(List<T> records, Schema schema, HoodieReaderContext<T> readerContext, List<String> preCombineFields) {
     return records.stream()
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
-            readerContext.getValue(record, schema, KEY_FIELD_NAME).toString(),
-            readerContext.getValue(record, schema, PARTITION_FIELD_NAME).toString(),
-            readerContext.getValue(record, schema, PRECOMBINE_FIELD_NAME).toString(),
-            readerContext.getValue(record, schema, RIDER_FIELD_NAME).toString()))
+            readerContext.getRecordContext().getValue(record, schema, KEY_FIELD_NAME).toString(),
+            readerContext.getRecordContext().getValue(record, schema, PARTITION_FIELD_NAME).toString(),
+            OrderingValues.create(preCombineFields,
+                    field -> (Comparable) readerContext.getRecordContext().getValue(record, schema, field))
+                .toString(),
+            readerContext.getRecordContext().getValue(record, schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }
 
-  private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord<T>> records, Schema schema, HoodieReaderContext<T> readerContext) {
+  private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord<T>> records, Schema schema, HoodieReaderContext<T> readerContext,
+                                                                              List<String> preCombineFields) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.datasource.write.precombine.field", String.join(",", preCombineFields));
     return records.stream()
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
             record.getRecordKey(),
             removeHiveStylePartition(record.getPartitionPath()),
-            record.getOrderingValue(schema, new TypedProperties()).toString(),
-            readerContext.getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
+            record.getOrderingValue(schema, props).toString(),
+            readerContext.getRecordContext().getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }
 

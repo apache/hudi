@@ -372,7 +372,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     cfg.transformerClassNames = transformerClassNames;
     cfg.operation = op;
     cfg.enableHiveSync = false;
-    cfg.sourceOrderingField = "timestamp";
+    cfg.sourceOrderingFields = "timestamp";
     cfg.propsFilePath = propsFilePath;
     cfg.sourceLimit = 1000;
     cfg.schemaProviderClassName = defaultSchemaProviderClassName;
