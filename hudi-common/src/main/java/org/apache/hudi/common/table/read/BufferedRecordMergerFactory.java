@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -66,7 +65,7 @@ public class BufferedRecordMergerFactory {
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
           readerContext, recordMergeMode, false, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
-      return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, readerSchema, props);
+      return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, orderingFieldNames, readerSchema, props);
     }
 
     switch (recordMergeMode) {
@@ -85,7 +84,7 @@ public class BufferedRecordMergerFactory {
           return new CustomPayloadRecordMerger<>(
               readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClass.get(), readerSchema, props);
         } else {
-          return new CustomRecordMerger<>(readerContext.getRecordContext(), recordMerger, readerSchema, props);
+          return new CustomRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, readerSchema, props);
         }
     }
   }
@@ -266,6 +265,7 @@ public class BufferedRecordMergerFactory {
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         BufferedRecordMerger<T> deleteRecordMerger,
+        List<String> orderingFieldNames,
         Schema readerSchema,
         TypedProperties props) {
       this.recordContext = recordContext;
@@ -273,7 +273,7 @@ public class BufferedRecordMergerFactory {
       this.deleteRecordMerger = deleteRecordMerger;
       this.readerSchema = readerSchema;
       this.props = props;
-      this.orderingFields = ConfigUtils.getOrderingFields(props);
+      this.orderingFields = orderingFieldNames.toArray(new String[0]);
     }
 
     @Override
@@ -341,10 +341,11 @@ public class BufferedRecordMergerFactory {
     public CustomRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
+        List<String> orderingFieldNames,
         Schema readerSchema,
         TypedProperties props) {
       super(recordContext, recordMerger, readerSchema, props);
-      this.orderingFields = ConfigUtils.getOrderingFields(props);
+      this.orderingFields = orderingFieldNames.toArray(new String[0]);
     }
 
     @Override
