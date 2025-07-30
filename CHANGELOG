@@ -909,3 +909,8 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-07-25 16:04:15] [release-v1.154.0] ---
 [ENG-30281][INTERNAL] Fix the config desc for kafka prefix configs (#1458)
 [AUDIT-1071]: Changelog for release-v1.153.0 (#1459)
+
+--- [2025-07-30 16:04:30] [release-v1.155.0] ---
+[ENG-30732][HUDI-9666] Fix the record key encoding with a single record key field for complex key generator (#1466)
+[ENG-30713][INTERNAL] revise LP metrics definition (#1463)
+[AUDIT-1071]: Changelog for release-v1.154.0 (#1462)
