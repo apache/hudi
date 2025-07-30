@@ -145,8 +145,8 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
-        boolean isDelete = isBuiltInDeleteRecord(evolvedNextRecord) || isCustomDeleteRecord(evolvedNextRecord) || isDeleteHoodieOperation(evolvedNextRecord);
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext, orderingFieldNames, isDelete);
+        boolean isDelete = readerContext.getRecordContext().isDeleteRecord(evolvedNextRecord, deleteContext);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(evolvedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
     }
@@ -223,7 +223,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public boolean containsLogRecord(String recordKey) {
     return records.values().stream()
         .filter(r -> !r.isDelete())
-        .map(r -> readerContext.getRecordKey(r.getRecord(), readerSchema)).anyMatch(recordKey::equals);
+        .map(r -> readerContext.getRecordContext().getRecordKey(r.getRecord(), readerSchema)).anyMatch(recordKey::equals);
   }
 
   @Override
@@ -232,7 +232,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       return doHasNextFallbackBaseRecord(baseRecord);
     }
 
-    nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
+    nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, readerSchema,
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
     return super.hasNextBaseRecord(baseRecord, logRecordInfo);
@@ -241,13 +241,13 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   private boolean doHasNextFallbackBaseRecord(T baseRecord) throws IOException {
     if (needToDoHybridStrategy) {
       //see if there is a delete block with record positions
-      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
+      nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, readerSchema,
           ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
       BufferedRecord<T> logRecordInfo  = records.remove(nextRecordPosition++);
       if (logRecordInfo != null) {
         //we have a delete that was not to be able to be converted. Since it is the newest version, the record is deleted
         //remove a key based record if it exists
-        records.remove(readerContext.getRecordKey(baseRecord, readerSchema));
+        records.remove(readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema));
         return false;
       }
     }
@@ -265,7 +265,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       return false;
     }
 
-    String recordKey = readerContext.getRecordKey(record, writerSchema);
+    String recordKey = readerContext.getRecordContext().getRecordKey(record, writerSchema);
     // Can not extract the record key, throw.
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("Can not extract the key for a record");

@@ -23,6 +23,7 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -90,11 +91,12 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     Schema schema = AvroSchemaCache.intern(recordsIteratorSchemaPair.getRight());
 
+    RecordContext<T> recordContext = readerContext.getRecordContext();
     try (ClosableIterator<T> recordIterator = recordsIteratorSchemaPair.getLeft()) {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
-        boolean isDelete = isBuiltInDeleteRecord(nextRecord) || isCustomDeleteRecord(nextRecord) || isDeleteHoodieOperation(nextRecord);
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext, orderingFieldNames, isDelete);
+        boolean isDelete = recordContext.isDeleteRecord(nextRecord, deleteContext);
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
     }
@@ -134,7 +136,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
-    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    String recordKey = readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema);
     BufferedRecord<T> logRecordInfo = records.remove(recordKey);
     return hasNextBaseRecord(baseRecord, logRecordInfo);
   }

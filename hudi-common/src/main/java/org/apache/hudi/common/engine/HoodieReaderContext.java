@@ -31,20 +31,14 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
-import org.apache.hudi.common.util.JavaTypeConverter;
-import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -52,21 +46,15 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-
-import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -81,12 +69,10 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  */
 public abstract class HoodieReaderContext<T> {
   private final StorageConfiguration<?> storageConfiguration;
-  private final BiFunction<T, Schema, String> recordKeyExtractor;
   protected final HoodieFileFormat baseFileFormat;
   // For general predicate pushdown.
   protected final Option<Predicate> keyFilterOpt;
   protected final HoodieTableConfig tableConfig;
-  private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
   private Option<HoodieRecordMerger> recordMerger = null;
@@ -96,26 +82,22 @@ public abstract class HoodieReaderContext<T> {
 
   // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
-  protected String partitionPath;
   protected Option<InstantRange> instantRangeOpt = Option.empty();
   private RecordMergeMode mergeMode;
-  protected JavaTypeConverter typeConverter;
-
-  // for encoding and decoding schemas to the spillable map
-  private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
+  protected RecordContext<T> recordContext;
+  private FileGroupReaderSchemaHandler<T> schemaHandler = null;
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig,
                                 Option<InstantRange> instantRangeOpt,
-                                Option<Predicate> keyFilterOpt) {
+                                Option<Predicate> keyFilterOpt,
+                                RecordContext<T> recordContext) {
     this.tableConfig = tableConfig;
     this.storageConfiguration = storageConfiguration;
-    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
-        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
     this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
-    this.typeConverter = new DefaultJavaTypeConverter();
+    this.recordContext = recordContext;
   }
 
   // Getter and Setter for schemaHandler
@@ -163,10 +145,6 @@ public abstract class HoodieReaderContext<T> {
     this.hasLogFiles = hasLogFiles;
   }
 
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
-  }
-
   // Getter and Setter for hasBootstrapBaseFile
   public boolean getHasBootstrapBaseFile() {
     return hasBootstrapBaseFile;
@@ -203,15 +181,15 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
-    return new HoodieRecordSizeEstimator<>(schemaHandler.getRequiredSchema());
+    return new HoodieRecordSizeEstimator<>(getSchemaHandler().getRequiredSchema());
   }
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
     return new DefaultSerializer<>();
   }
 
-  public JavaTypeConverter getTypeConverter() {
-    return typeConverter;
+  public RecordContext<T> getRecordContext() {
+    return recordContext;
   }
 
   /**
@@ -249,33 +227,6 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
-   * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
-   *
-   * @param avroRecord The Avro record.
-   * @return An engine-specific record in Type {@link T}.
-   */
-  public abstract T convertAvroRecord(IndexedRecord avroRecord);
-
-  public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
-
-  /**
-   * There are two cases to handle:
-   * 1). Return the delete record if it's not null;
-   * 2). otherwise fills an empty row with record key fields and returns.
-   *
-   * <p>For case2, when `emitDelete` is true for FileGroup reader and payload for DELETE record is empty,
-   * a record key row is emitted to downstream to delete data from storage by record key with the best effort.
-   * Returns null if the primary key semantics been lost: the requested schema does not include all the record key fields.
-   *
-   * @param record    delete record
-   * @param recordKey record key
-   *
-   * @return Engine specific row which contains record key fields.
-   */
-  @Nullable
-  public abstract T getDeleteRow(T record, String recordKey);
-  
-  /**
    * @param mergeMode        record merge mode
    * @param mergeStrategyId  record merge strategy ID
    * @param mergeImplClasses custom implementation classes for record merging
@@ -309,26 +260,6 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
-   * Gets the field value.
-   *
-   * @param record    The record in engine-specific type.
-   * @param schema    The Avro schema of the record.
-   * @param fieldName The field name. A dot separated string if a nested field.
-   * @return The field value.
-   */
-  public abstract Object getValue(T record, Schema schema, String fieldName);
-
-  /**
-   * Get value of metadata field in a more efficient way than #getValue.
-   *
-   * @param record The record in engine-specific type.
-   * @param pos    The position of the metadata field.
-   *
-   * @return The value for the target metadata field.
-   */
-  public abstract String getMetaFieldValue(T record, int pos);
-
-  /**
    * Get the {@link InstantRange} filter.
    */
   public Option<InstantRange> getInstantRange() {
@@ -348,79 +279,12 @@ public abstract class HoodieReaderContext<T> {
       return fileRecordIterator;
     }
     InstantRange instantRange = getInstantRange().get();
-    final Schema.Field commitTimeField = schemaHandler.getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    final Schema.Field commitTimeField = getSchemaHandler().getRequiredSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     final int commitTimePos = commitTimeField.pos();
     java.util.function.Predicate<T> instantFilter =
-        row -> instantRange.isInRange(getMetaFieldValue(row, commitTimePos));
+        row -> instantRange.isInRange(recordContext.getMetaFieldValue(row, commitTimePos));
     return new CloseableFilterIterator<>(fileRecordIterator, instantFilter);
   }
-
-  /**
-   * Gets the record key in String.
-   *
-   * @param record The record in engine-specific type.
-   * @param schema The Avro schema of the record.
-   * @return The record key in String.
-   */
-  public String getRecordKey(T record, Schema schema) {
-    return recordKeyExtractor.apply(record, schema);
-  }
-
-  private BiFunction<T, Schema, String> metadataKeyExtractor() {
-    return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
-  }
-
-  private BiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
-    return (record, schema) -> {
-      BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
-        Object result = getValue(record, schema, recordKeyField);
-        return result != null ? result.toString() : null;
-      };
-      return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
-    };
-  }
-
-  /**
-   * Gets the ordering value in particular type.
-   *
-   * @param record             An option of record.
-   * @param schema             The Avro schema of the record.
-   * @param orderingFieldNames name of the ordering field
-   * @return The ordering value.
-   */
-  public Comparable getOrderingValue(T record,
-                                     Schema schema,
-                                     List<String> orderingFieldNames) {
-    if (orderingFieldNames.isEmpty()) {
-      return OrderingValues.getDefault();
-    }
-
-    return OrderingValues.create(orderingFieldNames, field -> {
-      Object value = getValue(record, schema, field);
-      // API getDefaultOrderingValue is only used inside Comparables constructor
-      return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
-    });
-  }
-
-  /**
-   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
-   *
-   * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
-   * @return A new instance of {@link HoodieRecord}.
-   */
-  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
-
-  /**
-   * Constructs a new Engine based record based on a given schema, base record and update values.
-   *
-   * @param schema           The schema of the new record.
-   * @param updateValues     The map recording field index and its corresponding update value.
-   * @param baseRecord       The record based on which the engine record is built.
-   * @return A new instance of engine record type {@link T}.
-   */
-  public abstract T mergeWithEngineRecord(Schema schema,
-                                          Map<Integer, Object> updateValues,
-                                          BufferedRecord<T> baseRecord);
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
@@ -439,17 +303,6 @@ public abstract class HoodieReaderContext<T> {
    * @return row in binary format
    */
   public abstract T toBinaryRow(Schema avroSchema, T record);
-
-  /**
-   * Gets the schema encoded in the buffered record {@code BufferedRecord}.
-   *
-   * @param record {@link BufferedRecord} object with engine-specific type
-   *
-   * @return The avro schema if it is encoded in the metadata map, else null
-   */
-  public Schema getSchemaFromBufferRecord(BufferedRecord<T> record) {
-    return decodeAvroSchema(record.getSchemaId());
-  }
 
   /**
    * Merge the skeleton file and data file iterators into a single iterator that will produce rows that contain all columns from the
@@ -482,66 +335,5 @@ public abstract class HoodieReaderContext<T> {
 
   public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
     return projectRecord(from, to, Collections.emptyMap());
-  }
-
-  /**
-   * Converts the ordering value to the specific engine type.
-   */
-  public final Comparable convertOrderingValueToEngineType(Comparable value) {
-    return value instanceof ArrayComparable
-        ? ((ArrayComparable) value).apply(comparable -> convertValueToEngineType(comparable))
-        : convertValueToEngineType(value);
-  }
-
-  /**
-   * Returns the value to a type representation in a specific engine.
-   * <p>
-   * This can be overridden by the reader context implementation on a specific engine to handle
-   * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
-   * {@link String} field values, so we need to convert the values to {@code UTF8String} type
-   * in Spark for proper value comparison.
-   *
-   * @param value {@link Comparable} value to be converted.
-   *
-   * @return the converted value in a type representation in a specific engine.
-   */
-  public Comparable convertValueToEngineType(Comparable value) {
-    return value;
-  }
-
-  /**
-   * Extracts the record position value from the record itself.
-   *
-   * @return the record position in the base file.
-   */
-  public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
-    if (supportsParquetRowIndex()) {
-      Object position = getValue(record, schema, fieldName);
-      if (position != null) {
-        return (long) position;
-      } else {
-        throw new IllegalStateException("Record position extraction failed");
-      }
-    }
-    return providedPositionIfNeeded;
-  }
-
-  public boolean supportsParquetRowIndex() {
-    return false;
-  }
-
-  /**
-   * Encodes the given avro schema for efficient serialization.
-   */
-  public Integer encodeAvroSchema(Schema schema) {
-    return this.localAvroSchemaCache.cacheSchema(schema);
-  }
-
-  /**
-   * Decodes the avro schema with given version ID.
-   */
-  @Nullable
-  protected Schema decodeAvroSchema(Object versionId) {
-    return this.localAvroSchemaCache.getSchema((Integer) versionId).orElse(null);
   }
 }

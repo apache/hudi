@@ -173,7 +173,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return HiveHoodieReaderContext.getFieldValueFromArrayWritable(data, schema, column, objectInspectorCache);
+    return HiveRecordContext.getFieldValueFromArrayWritable(data, schema, column, objectInspectorCache);
   }
 
   @Override

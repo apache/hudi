@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -128,7 +128,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     try {
       Option<IndexedRecord> indexedRecordOpt = getData().getInsertValue(recordSchema, props);
       if (indexedRecordOpt.isPresent()) {
-        return HoodieAvroReaderContext.getFieldValueFromIndexedRecord(indexedRecordOpt.get(), column);
+        return AvroRecordContext.getFieldValueFromIndexedRecord(indexedRecordOpt.get(), column);
       } else {
         return null;
       }
