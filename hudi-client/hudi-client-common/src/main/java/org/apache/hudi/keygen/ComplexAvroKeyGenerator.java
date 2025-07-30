@@ -18,6 +18,8 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
@@ -25,11 +27,14 @@ import org.apache.avro.generic.GenericRecord;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME;
+
 /**
  * Avro complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
 public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
   public static final String DEFAULT_RECORD_KEY_SEPARATOR = ":";
+  private final SerializableFunctionUnchecked<GenericRecord, String> recordKeyFunction;
 
   public ComplexAvroKeyGenerator(TypedProperties props) {
     super(props);
@@ -38,18 +43,25 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .collect(Collectors.toList());
+    this.recordKeyFunction = ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME)
+        ? record -> KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled())
+        : this::getRecordKeyWithoutKeyFieldNameOnSingleKeyField;
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    if (getRecordKeyFieldNames().size() == 1) {
-      return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
-    }
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
+    return recordKeyFunction.apply(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
     return KeyGenUtils.getRecordPartitionPath(record, getPartitionPathFields(), hiveStylePartitioning, encodePartitionPath, isConsistentLogicalTimestampEnabled());
+  }
+
+  private String getRecordKeyWithoutKeyFieldNameOnSingleKeyField(GenericRecord record) {
+    if (getRecordKeyFieldNames().size() == 1) {
+      return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames().get(0), isConsistentLogicalTimestampEnabled());
+    }
+    return KeyGenUtils.getRecordKey(record, getRecordKeyFieldNames(), isConsistentLogicalTimestampEnabled());
   }
 }

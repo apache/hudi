@@ -22,6 +22,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
@@ -32,6 +33,8 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static junit.framework.TestCase.assertEquals;
 
@@ -106,20 +109,31 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     Assertions.assertEquals(UTF8String.fromString("timestamp=4357686/ts_ms=2020-03-21"), keyGenerator.getPartitionPath(internalRow, row.schema()));
   }
 
-  @Test
-  public void testSingleValueKeyGenerator() {
+  @ParameterizedTest
+  @CsvSource(value = {"false,true", "true,false", "true,true"})
+  void testSingleValueKeyGenerator(boolean setEncodeSingleKeyFieldNameConfig,
+                                   boolean encodeSingleKeyFieldName) {
+    String recordKeyFieldName = "_row_key";
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFieldName);
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
+    if (setEncodeSingleKeyFieldNameConfig) {
+      properties.setProperty(
+          HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(),
+          String.valueOf(encodeSingleKeyFieldName));
+    }
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 1);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 1);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
-    String rowKey = record.get("_row_key").toString();
+    String rowKey = record.get(recordKeyFieldName).toString();
     String partitionPath = record.get("timestamp").toString();
     HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
-    assertEquals(rowKey, hoodieKey.getRecordKey());
+    assertEquals(
+        !setEncodeSingleKeyFieldNameConfig || encodeSingleKeyFieldName
+            ? recordKeyFieldName + ":" + rowKey : rowKey,
+        hoodieKey.getRecordKey());
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
 
     Row row = KeyGeneratorTestUtilities.getRow(record, HoodieTestDataGenerator.AVRO_SCHEMA,

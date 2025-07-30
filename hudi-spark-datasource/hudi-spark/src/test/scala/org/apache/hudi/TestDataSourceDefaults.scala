@@ -23,7 +23,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.testutils.{OrderingFieldsTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
-import org.apache.hudi.config.HoodiePayloadConfig
+import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities
@@ -413,9 +413,68 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     }
 
     {
-      val keyGen = new ComplexKeyGenerator(getKeyConfig("field1,", "field1,", "false"))
+      val config = getKeyConfig("field1, name", "field1, name", "false")
+      // This config should not affect record key encoding for multiple record key fields
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key, "false")
+      val keyGen = new ComplexKeyGenerator(config)
 
-      val expectedKey = new HoodieKey("field1", "field1")
+      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
+      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+
+      val expectedKey = new HoodieKey("field1:field1,name:name1", "field1/name1")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
+    }
+
+    {
+      baseRecord.put("name", "value1")
+      baseRecord.put("field1", "value2")
+      // Default: encode record key field name if there is a single record key field
+      val keyGen = new ComplexKeyGenerator(getKeyConfig("name,", "field1,", "false"))
+
+      val expectedKey = new HoodieKey("name:value1", "value2")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+
+      baseRow = KeyGeneratorTestUtilities.getRow(baseRecord, schema, structType)
+      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow)
+
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
+    }
+
+    {
+      // Turning on the encoding of record key field name if there is a single record key field
+      val config = getKeyConfig("name,", "field1,", "false")
+      // This config should not affect record key encoding for multiple record key fields
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key, "true")
+      val keyGen = new ComplexKeyGenerator(config)
+
+      val expectedKey = new HoodieKey("name:value1", "value2")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(expectedKey.getPartitionPath, keyGen.getPartitionPath(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+      assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
+    }
+
+    {
+      // Turning off the encoding of record key field name if there is a single record key field
+      val config = getKeyConfig("name,", "field1,", "false")
+      // This config should not affect record key encoding for multiple record key fields
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key, "false")
+      val keyGen = new ComplexKeyGenerator(config)
+
+      val expectedKey = new HoodieKey("value1", "value2")
 
       assertEquals(expectedKey, keyGen.getKey(baseRecord))
 
