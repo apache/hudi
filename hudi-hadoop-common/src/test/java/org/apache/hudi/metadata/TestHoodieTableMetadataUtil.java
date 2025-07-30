@@ -758,29 +758,29 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         // Test case 2: Secondary index record key with version >= 2
         Arguments.of(
             "Secondary index record key with version >= 2",
-            "primary_key$secondary_key",
+            "secondary_key$primary_key",
             10,
             "secondary_index_idx_ts",
             V2,
-            6  // Uses secondary key portion for hashing
+            8  // Uses secondary key portion for hashing
         ),
         // Test case 3: Secondary index record key but version < 2
         Arguments.of(
             "Secondary index record key but version < 2",
-            "primary_key$secondary_key",
+            "secondary_key$primary_key",
             10,
             "secondary_index_idx_ts",
             HoodieIndexVersion.V1,
-            4  // Uses full key for hashing
+            0  // Uses full key for hashing
         ),
         // Test case 4: Secondary index record key but not in secondary index partition
         Arguments.of(
             "Secondary index record key but not in secondary index partition",
-            "primary_key$secondary_key",
+            "secondary_key$primary_key",
             10,
             "files",
             HoodieIndexVersion.V1,
-            4  // Uses full key for hashing since not in secondary index partition
+            0  // Uses full key for hashing since not in secondary index partition
         ),
         // Test case 7: Single file group
         Arguments.of(

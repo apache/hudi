@@ -23,38 +23,31 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.constructSecondaryIndexKey;
-import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.escapeSpecialChars;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class TestHoodieTableMetadataUtil {
 
   @Test
   public void testGetRecordKeyToFileGroupIndexFunction() {
-    // Test with secondary key format
-    String compositeKey = "secondaryKey$recordKey";
+    int numFileGroups = 10;
+    String recordKey = "recordKey$";
+    String secondaryKey = "secondaryKey$";
+    // Raw key used for read path
+    SecondaryIndexPrefixRawKey rawKey1 = new SecondaryIndexPrefixRawKey(secondaryKey);
+    // Composite key used for write path
+    String compositeKey = constructSecondaryIndexKey(secondaryKey, recordKey);
 
     SerializableBiFunction<String, Integer, Integer> hashOnSecKeyOnly =
         HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(true);
     SerializableBiFunction<String, Integer, Integer> hashOnFullKey =
         HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(false);
 
-    int result1 = hashOnSecKeyOnly.apply(compositeKey, 10);
-    int result2 = hashOnSecKeyOnly.apply("anotherSecondaryKey$anotherRecordKey", 10);
+    // On write path we use hashOnSecKeyOnly
+    int result1 = hashOnSecKeyOnly.apply(compositeKey, numFileGroups);
+    // On read path, we use hashOnFullKey
+    int result2 = hashOnFullKey.apply(rawKey1.encode(), numFileGroups);
 
-    // Both should hash the secondary key portion
-    assertNotEquals(result1, result2);
-
-    // Test with regular key format
-    int result3 = hashOnFullKey.apply("simpleKey", 10);
-    int result4 = hashOnFullKey.apply("anotherSimpleKey", 10);
-
-    // Both should hash the full key
-    assertNotEquals(result3, result4);
-
-    // Hash on Sec key only <=> Hash full key if key equals to UNESCAPED sec key
-    assertEquals(hashOnSecKeyOnly.apply("secKey$recKey", 10), hashOnFullKey.apply("secKey", 10));
-    assertEquals(hashOnSecKeyOnly.apply(constructSecondaryIndexKey("seckey", "reckey"), 10), hashOnFullKey.apply("seckey", 10));
-    assertEquals(hashOnSecKeyOnly.apply(constructSecondaryIndexKey("$", "reckey"), 10), hashOnFullKey.apply(escapeSpecialChars("$"), 10));
+    // Both should hash the secondary key portion so read and write paths are consistent.
+    assertEquals(result1, result2);
   }
 }
