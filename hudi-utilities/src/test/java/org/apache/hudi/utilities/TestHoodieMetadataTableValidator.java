@@ -1073,9 +1073,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       config.validateLatestFileSlices = true;
       config.validateAllFileGroups = true;
       MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
-    int listSize = oversizeList ? 500 : 50;
-    String partition = "partition10";
-    String label = "metadata item";
+      int listSize = oversizeList ? 500 : 50;
+      String partition = "partition10";
+      String label = "metadata item";
 
       // Base file list
       Pair<List<FileSlice>, List<FileSlice>> filelistPair =
