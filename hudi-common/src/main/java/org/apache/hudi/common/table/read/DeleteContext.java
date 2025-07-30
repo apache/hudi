@@ -40,14 +40,13 @@ public class DeleteContext implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final Option<Pair<String, String>> customDeleteMarkerKeyValue;
-  private final boolean hasBuiltInDelete;
-  private final int hoodieOperationPos;
+  private final boolean hasBuiltInDeleteField;
+  private int hoodieOperationPos;
   private Schema readerSchema;
 
   public DeleteContext(TypedProperties props, Schema tableSchema) {
-    this.customDeleteMarkerKeyValue = updateCustomDeleteMarkerKevValue(props);
-    this.hasBuiltInDelete = updateHasBuiltInDeleteField(tableSchema);
-    this.hoodieOperationPos = updateHoodieOperationPos(tableSchema);
+    this.customDeleteMarkerKeyValue = getCustomDeleteMarkerKevValue(props);
+    this.hasBuiltInDeleteField = hasBuiltInDeleteField(tableSchema);
   }
 
   /**
@@ -55,7 +54,7 @@ public class DeleteContext implements Serializable {
    * the field which contains the corresponding delete-marker if a record is deleted. If no delete key and marker
    * are configured, the function returns an empty option.
    */
-  private static Option<Pair<String, String>> updateCustomDeleteMarkerKevValue(TypedProperties props) {
+  private static Option<Pair<String, String>> getCustomDeleteMarkerKevValue(TypedProperties props) {
     String deleteKey = props.getProperty(DELETE_KEY);
     String deleteMarker = props.getProperty(DELETE_MARKER);
     boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);
@@ -82,14 +81,14 @@ public class DeleteContext implements Serializable {
    * @param schema table schema to check
    * @return whether built-in delete field is included in the table schema
    */
-  private static boolean updateHasBuiltInDeleteField(Schema schema) {
+  private static boolean hasBuiltInDeleteField(Schema schema) {
     return schema.getField(HOODIE_IS_DELETED_FIELD) != null;
   }
 
   /**
    * Returns position of hoodie operation meta field in the schema
    */
-  private static Integer updateHoodieOperationPos(Schema schema) {
+  private static Integer getHoodieOperationPos(Schema schema) {
     return Option.ofNullable(schema.getField(HoodieRecord.OPERATION_METADATA_FIELD)).map(Schema.Field::pos).orElse(-1);
   }
 
@@ -97,8 +96,8 @@ public class DeleteContext implements Serializable {
     return customDeleteMarkerKeyValue;
   }
 
-  public boolean hasBuiltInDelete() {
-    return hasBuiltInDelete;
+  public boolean hasBuiltInDeleteField() {
+    return hasBuiltInDeleteField;
   }
 
   public int getHoodieOperationPos() {
@@ -107,6 +106,7 @@ public class DeleteContext implements Serializable {
 
   public DeleteContext withReaderSchema(Schema readerSchema) {
     this.readerSchema = readerSchema;
+    this.hoodieOperationPos = getHoodieOperationPos(readerSchema);
     return this;
   }
 

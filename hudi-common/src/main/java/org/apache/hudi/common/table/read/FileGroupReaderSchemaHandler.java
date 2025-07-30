@@ -166,7 +166,7 @@ public class FileGroupReaderSchemaHandler<T> {
     List<Schema.Field> addedFields = new ArrayList<>();
     for (String field : getMandatoryFieldsForMerging(
         hoodieTableConfig, this.properties, this.tableSchema, readerContext.getRecordMerger(),
-        deleteContext.hasBuiltInDelete(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange)) {
+        deleteContext.hasBuiltInDeleteField(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         addedFields.add(getField(this.tableSchema, field));
       }

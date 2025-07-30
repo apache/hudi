@@ -230,7 +230,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     when(recordMerger.getMandatoryFieldsForMerging(dataSchema, tableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
     DeleteContext deleteContext = new DeleteContext(props, dataSchema);
-    assertEquals(addHoodieIsDeleted, deleteContext.hasBuiltInDelete());
+    assertEquals(addHoodieIsDeleted, deleteContext.hasBuiltInDeleteField());
     assertEquals(addCustomDeleteMarker
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
         deleteContext.getCustomDeleteMarkerKeyValue());
