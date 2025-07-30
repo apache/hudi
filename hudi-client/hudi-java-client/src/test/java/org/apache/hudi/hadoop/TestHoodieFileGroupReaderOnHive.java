@@ -113,24 +113,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
 
   @Override
   public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
-    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
-    configs.nestedSupport = false;
-    configs.arraySupport = false;
-    configs.mapSupport = false;
-    configs.addNewFieldSupport = false;
-    configs.intToLongSupport = false;
-    configs.intToFloatSupport = false;
-    configs.intToDoubleSupport = false;
-    configs.intToStringSupport = false;
-    configs.longToFloatSupport = false;
-    configs.longToDoubleSupport = false;
-    configs.longToStringSupport = false;
-    configs.floatToDoubleSupport = false;
-    configs.floatToStringSupport = false;
-    configs.doubleToStringSupport = false;
-    configs.stringToBytesSupport = false;
-    configs.bytesToStringSupport = false;
-    return configs;
+    return new HoodieTestDataGenerator.SchemaEvolutionConfigs();
   }
 
   private void setupJobconf(JobConf jobConf, Schema schema) {

@@ -227,9 +227,15 @@ public class ArrayWritableTestUtil {
       case UNION:
         if (schema.getTypes().size() == 2
             && schema.getTypes().get(0).getType() == Schema.Type.NULL) {
+          if (writable == null || writable instanceof NullWritable) {
+            return;
+          }
           assertArrayWritableMatchesSchema(schema.getTypes().get(1), writable);
         } else if (schema.getTypes().size() == 2
             && schema.getTypes().get(1).getType() == Schema.Type.NULL) {
+          if (writable == null || writable instanceof NullWritable) {
+            return;
+          }
           assertArrayWritableMatchesSchema(schema.getTypes().get(0), writable);
         } else if (schema.getTypes().size() == 1) {
           assertArrayWritableMatchesSchema(schema.getTypes().get(0), writable);

@@ -34,7 +34,6 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -58,6 +57,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -216,7 +216,7 @@ public class HoodieRealtimeRecordReaderUtils {
       case ENUM:
         return new BytesWritable(value.toString().getBytes());
       case ARRAY:
-        GenericArray arrayValue = (GenericArray) value;
+        Collection arrayValue = (Collection) value;
         Writable[] arrayValues = new Writable[arrayValue.size()];
         int arrayValueIndex = 0;
         for (Object obj : arrayValue) {
