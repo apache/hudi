@@ -47,8 +47,8 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
     if (deleteHandlingResult != null) {
       return deleteHandlingResult;
     }
-    if (SparkAdapterSupport$.MODULE$.sparkAdapter().compareValues(
-        older.getOrderingValue(oldSchema, props), newer.getOrderingValue(newSchema, props), o -> (Comparable)o) > 0) {
+
+    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
       return Option.of(Pair.of(older, oldSchema));
     } else {
       return Option.of(Pair.of(newer, newSchema));
@@ -62,8 +62,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
       return deleteHandlingResult;
     }
 
-    if (SparkAdapterSupport$.MODULE$.sparkAdapter().compareValues(
-        older.getOrderingValue(oldSchema, props), newer.getOrderingValue(newSchema, props), o -> (Comparable)o) > 0) {
+    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
       return Option.of(SparkRecordMergingUtils.mergePartialRecords(
           (HoodieSparkRecord) newer, newSchema, (HoodieSparkRecord) older, oldSchema, readerSchema, props));
     } else {

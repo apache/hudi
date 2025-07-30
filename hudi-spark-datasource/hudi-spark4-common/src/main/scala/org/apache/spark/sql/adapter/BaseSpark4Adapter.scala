@@ -161,21 +161,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     new ParseException(command, start, stop, exception.getErrorClass, exception.getMessageParameters.asScala.toMap)
   }
 
-  override def compareValues[T <% Comparable[T]](a: T, b: T): Int = {
-    if (a == null) {
-      -1
-    } else if (b == null) {
-      1
-    } else {
-      // [SPARK-46832] UTF8String doesn't support compareTo anymore
-      if (a.isInstanceOf[UTF8String] && b.isInstanceOf[UTF8String]) {
-        a.asInstanceOf[UTF8String].binaryCompare(b.asInstanceOf[UTF8String])
-      } else {
-        a.compareTo(b)
-      }
-    }
-  }
-
   override def splitFiles(sparkSession: SparkSession,
                           partitionDirectory: PartitionDirectory,
                           isSplitable: Boolean,

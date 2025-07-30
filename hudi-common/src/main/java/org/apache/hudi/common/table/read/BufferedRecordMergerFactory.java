@@ -75,7 +75,7 @@ public class BufferedRecordMergerFactory {
         return new CommitTimePartialRecordMerger<>(readerContext, partialUpdateMode, props);
       case EVENT_TIME_ORDERING:
         if (partialUpdateMode == PartialUpdateMode.NONE) {
-          return new EventTimeRecordMerger<>(readerContext);
+          return new EventTimeRecordMerger<>();
         }
         return new EventTimePartiaRecordMerger<>(readerContext, partialUpdateMode, props);
       default:
@@ -157,15 +157,9 @@ public class BufferedRecordMergerFactory {
    * based on {@code EVENT_TIME_ORDERING} merge mode.
    */
   private static class EventTimeRecordMerger<T> implements BufferedRecordMerger<T> {
-    protected final HoodieReaderContext<T> readerContext;
-
-    public EventTimeRecordMerger(HoodieReaderContext<T> readerContext) {
-      this.readerContext = readerContext;
-    }
-
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
-      if (existingRecord == null || shouldKeepNewerRecord(readerContext, existingRecord, newRecord)) {
+      if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
         return Option.of(newRecord);
       }
       return Option.empty();
@@ -173,12 +167,12 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
-      return deltaMergeDeleteRecord(readerContext, deleteRecord, existingRecord);
+      return deltaMergeDeleteRecord(deleteRecord, existingRecord);
     }
 
     @Override
     public MergeResult<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
-      if (shouldKeepNewerRecord(readerContext, olderRecord, newerRecord)) {
+      if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
         return new MergeResult<>(newerRecord.isDelete(), newerRecord.getRecord());
       }
       return new MergeResult<>(olderRecord.isDelete(), olderRecord.getRecord());
@@ -191,19 +185,20 @@ public class BufferedRecordMergerFactory {
    */
   private static class EventTimePartiaRecordMerger<T> extends EventTimeRecordMerger<T> {
     private final PartialUpdateStrategy<T> partialUpdateStrategy;
+    private final HoodieReaderContext<T> readerContext;
 
     public EventTimePartiaRecordMerger(HoodieReaderContext<T> readerContext,
                                        PartialUpdateMode partialUpdateMode,
                                        TypedProperties props) {
-      super(readerContext);
       this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
+      this.readerContext = readerContext;
     }
 
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null) {
         return Option.of(newRecord);
-      } else if (shouldKeepNewerRecord(readerContext, existingRecord, newRecord)) {
+      } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
         newRecord = partialUpdateStrategy.partialMerge(
             newRecord,
             existingRecord,
@@ -232,7 +227,7 @@ public class BufferedRecordMergerFactory {
       Comparable newOrderingValue = newerRecord.getOrderingValue();
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
       if (!olderRecord.isCommitTimeOrderingDelete()
-          && readerContext.compareValues(oldOrderingValue, newOrderingValue) > 0) {
+          && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         // Use old record as the base record since old record has higher ordering value.
         olderRecord = partialUpdateStrategy.partialMerge(
             olderRecord,
@@ -494,7 +489,7 @@ public class BufferedRecordMergerFactory {
         return Option.of(newRecord);
       }
       if (existingRecord.isDelete() || newRecord.isDelete()) {
-        if (shouldKeepNewerRecord(readerContext, existingRecord, newRecord)) {
+        if (shouldKeepNewerRecord(existingRecord, newRecord)) {
           // IMPORTANT:
           // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
           // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
@@ -510,13 +505,13 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
-      return deltaMergeDeleteRecord(readerContext, deleteRecord, existingRecord);
+      return deltaMergeDeleteRecord(deleteRecord, existingRecord);
     }
 
     @Override
     public MergeResult<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
       if (olderRecord.isDelete() || newerRecord.isDelete()) {
-        if (shouldKeepNewerRecord(readerContext, olderRecord, newerRecord)) {
+        if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
           // IMPORTANT:
           // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
           // return Option.empty when the new payload data is empty(a delete) and ignores its ordering value directly.
@@ -535,7 +530,7 @@ public class BufferedRecordMergerFactory {
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private static <T> Option<DeleteRecord> deltaMergeDeleteRecord(HoodieReaderContext<T> readerContext, DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
+  private static <T> Option<DeleteRecord> deltaMergeDeleteRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
     if (existingRecord == null) {
       return Option.of(deleteRecord);
     }
@@ -548,7 +543,7 @@ public class BufferedRecordMergerFactory {
     // because we use 0 as the default value which means natural order
     boolean chooseExisting = !OrderingValues.isDefault(deleteOrderingVal)
         && OrderingValues.isSameClass(existingOrderingVal, deleteOrderingVal)
-        && readerContext.compareValues(existingOrderingVal, deleteOrderingVal) > 0;
+        && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
     if (chooseExisting) {
       // The DELETE message is obsolete if the old message has greater orderingVal.
       return Option.empty();
@@ -556,12 +551,12 @@ public class BufferedRecordMergerFactory {
     return Option.of(deleteRecord);
   }
 
-  private static <T> boolean shouldKeepNewerRecord(HoodieReaderContext<T> readerContext, BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
+  private static <T> boolean shouldKeepNewerRecord(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
     if (newRecord.isCommitTimeOrderingDelete() || oldRecord.isCommitTimeOrderingDelete()) {
       // handle records coming from DELETE statements
       // The orderingVal is constant 0 (int) and not guaranteed to match the type of the old or new record's ordering value.
       return true;
     }
-    return readerContext.compareValues(newRecord.getOrderingValue(), oldRecord.getOrderingValue()) >= 0;
+    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
   }
 }

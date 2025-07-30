@@ -26,4 +26,11 @@ abstract class HoodieUTF8String(utf8String: UTF8String) extends Comparable[Hoodi
   def getUtf8String: UTF8String = utf8String
 
   override def toString: String = utf8String.toString
+
+  override def hashCode(): Int = getUtf8String.hashCode()
+
+  override def equals(obj: Any): Boolean = obj match {
+    case hoodieUtf8String: HoodieUTF8String => getUtf8String.equals(hoodieUtf8String.getUtf8String)
+    case _ => false
+  }
 }
