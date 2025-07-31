@@ -140,7 +140,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
           String key = rliRecord.getRecordKey();
-          String partition = ((HoodieMetadataPayload) rliRecord.getData()).getRecordGlobalLocation().getPartitionPath();
+          String partition = ((HoodieMetadataPayload) rliRecord.getData()).getDataPartition();
           recordKeyToPartitionMapping1.put(key, partition);
         }
       });
@@ -246,7 +246,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
           String key = rliRecord.getRecordKey();
-          String partition = ((HoodieMetadataPayload) rliRecord.getData()).getRecordGlobalLocation().getPartitionPath();
+          String partition = ((HoodieMetadataPayload) rliRecord.getData()).getDataPartition();
           recordKeyToPartitionMapping1.put(key, partition);
         }
       });
