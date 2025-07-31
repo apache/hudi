@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -215,7 +216,7 @@ class TestStreamingSource extends StreamTest {
   test("Test mor streaming source with clustering") {
     Array("true", "false").foreach(skipCluster => {
       withTempDir { inputDir =>
-        val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream_cluster"
+        val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream_cluster_$skipCluster"
         val metaClient = HoodieTableMetaClient.newTableBuilder()
           .setTableType(MERGE_ON_READ)
           .setTableName(getTableName(tablePath))
@@ -242,12 +243,20 @@ class TestStreamingSource extends StreamTest {
 
         testStream(df)(
           AssertOnQuery { q => q.processAllAvailable(); true },
-          // Start after the first commit
-          CheckAnswerRows(Seq(
-            Row("2", "a1", "11", "001"),
-            Row("3", "a1", "12", "002"),
-            Row("4", "a1", "13", "003"),
-            Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false)
+          if (skipCluster.toBoolean) {
+            // Start after the first commit
+            CheckAnswerRows(Seq(Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false)
+          } else {
+            // Start after the first commit
+            CheckAnswerRows(Seq(
+              Row("2", "a1", "11", "001"),
+              Row("3", "a1", "12", "002"),
+              Row("4", "a1", "13", "003"),
+              Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false)
+          }
+
+
+
         )
         assertTrue(metaClient.reloadActiveTimeline
           .filter(JavaConversions.getPredicate(
@@ -297,61 +306,120 @@ class TestStreamingSource extends StreamTest {
     })
   }
 
-  test("Test checkpoint translation") {
+  private def testCheckpointTranslation(tableName: String,
+                                        tableType: HoodieTableType,
+                                        writeTableVersion: HoodieTableVersion,
+                                        streamingReadVersions: List[Int]): Unit = {
     withTempDir { inputDir =>
-      val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream_ckpt"
+      val tablePath = s"${inputDir.getCanonicalPath}/$tableName"
       val metaClient = HoodieTableMetaClient.newTableBuilder()
-        .setTableType(COPY_ON_WRITE)
+        .setTableType(tableType)
         .setTableName(getTableName(tablePath))
+        .setTableVersion(writeTableVersion)
         .setRecordKeyFields("id")
         .setPreCombineFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
-      addData(tablePath, Seq(("1", "a1", "10", "000")))
-      addData(tablePath, Seq(("2", "a1", "11", "001")))
-      addData(tablePath, Seq(("3", "a1", "12", "002")))
+      // Add initial data
+      addData(tablePath, Seq(("1", "a1", "10", "000")), tableVersion = writeTableVersion)
+      addData(tablePath, Seq(("2", "a1", "11", "001")), tableVersion = writeTableVersion)
+      addData(tablePath, Seq(("3", "a1", "12", "002")), tableVersion = writeTableVersion)
+
+      // Add update for MOR tests
+      if (tableType == MERGE_ON_READ) {
+        addData(tablePath, Seq(("2", "a2_updated", "16", "003")), tableVersion = writeTableVersion)
+      }
 
       val instants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.getInstants
-      assertEquals(3, instants.size())
+      val expectedInstantCount = if (tableType == MERGE_ON_READ) 4 else 3
+      assertEquals(expectedInstantCount, instants.size())
 
-      // If the request time is used, i.e., V1, then the second record is included in the output.
-      // Otherwise, only third record in the output.
-      val startTimestamp = instants.get(1).requestedTime
-      for (streamingReadTableVersion <- List(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.EIGHT.versionCode())) {
+      val startTimestampIndex = if (tableType == MERGE_ON_READ) 2 else 1
+      val startTimestamp = instants.get(startTimestampIndex).requestedTime
+
+      for (streamingReadTableVersion <- streamingReadVersions) {
         val df = spark.readStream
           .format("org.apache.hudi")
           .option(START_OFFSET.key, startTimestamp)
-          .option(WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString)
+          .option(WRITE_TABLE_VERSION.key, writeTableVersion.versionCode().toString)
           .option(STREAMING_READ_TABLE_VERSION.key, streamingReadTableVersion.toString)
           .load(tablePath)
           .select("id", "name", "price", "ts")
-        val expectedRows = if (streamingReadTableVersion == HoodieTableVersion.EIGHT.versionCode()) {
-          Seq(Row("2", "a1", "11", "001"), Row("3", "a1", "12", "002"))
+
+        val expectedRows = if (tableType == MERGE_ON_READ) {
+          if (streamingReadTableVersion == HoodieTableVersion.current().versionCode()) {
+            Seq(Row("3", "a1", "12", "002"), Row("2", "a2_updated", "16", "003"))
+          } else {
+            Seq(Row("2", "a2_updated", "16", "003"))
+          }
         } else {
-          Seq(Row("3", "a1", "12", "002"))
+          if (streamingReadTableVersion == HoodieTableVersion.current().versionCode()) {
+            Seq(Row("2", "a1", "11", "001"), Row("3", "a1", "12", "002"))
+          } else {
+            Seq(Row("3", "a1", "12", "002"))
+          }
         }
+
         testStream(df)(
           AssertOnQuery { q => q.processAllAvailable(); true },
-          // Start after the first commit
           CheckAnswerRows(expectedRows, lastOnly = true, isSorted = false)
         )
       }
     }
   }
 
+  test("Test checkpoint translation on COW table") {
+    testCheckpointTranslation(
+      "test_cow_stream_ckpt",
+      COPY_ON_WRITE,
+      HoodieTableVersion.current(),
+      List(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.current().versionCode())
+    )
+  }
+
+  test("Test checkpoint translation on MOR table") {
+    testCheckpointTranslation(
+      "test_mor_stream_ckpt",
+      MERGE_ON_READ,
+      HoodieTableVersion.current(),
+      List(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.current().versionCode())
+    )
+  }
+
+  test("Test checkpoint translation on COW table with table version 6") {
+    testCheckpointTranslation(
+      "test_cow_stream_ckpt_v6",
+      COPY_ON_WRITE,
+      HoodieTableVersion.SIX,
+      List(HoodieTableVersion.SIX.versionCode())
+    )
+  }
+
+  test("Test checkpoint translation on MOR table with table version 6") {
+    testCheckpointTranslation(
+      "test_mor_stream_ckpt_v6",
+      MERGE_ON_READ,
+      HoodieTableVersion.SIX,
+      List(HoodieTableVersion.SIX.versionCode())
+    )
+  }
+
   private def addData(inputPath: String,
                       rows: Seq[(String, String, String, String)],
                       enableInlineCompaction: Boolean = false,
-                      enableInlineCluster: Boolean = false) : Unit = {
+                      enableInlineCluster: Boolean = false,
+                      tableVersion: HoodieTableVersion = HoodieTableVersion.current) : Unit = {
     rows.toDF(columns: _*)
       .write
       .format("org.apache.hudi")
       .options(commonOptions)
       .option(TBL_NAME.key, getTableName(inputPath))
+      .option(WRITE_TABLE_VERSION.key, tableVersion.versionCode().toString)
       .option(HoodieCompactionConfig.INLINE_COMPACT.key(), enableInlineCompaction.toString)
       .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "2")
       .option(HoodieClusteringConfig.INLINE_CLUSTERING.key(), enableInlineCluster.toString)
       .option(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key(), "2")
+      .option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key, "0")
       .mode(SaveMode.Append)
       .save(inputPath)
   }
