@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.apache.avro.Schema;
@@ -71,20 +72,22 @@ public abstract class RecordContext<T> implements Serializable {
     updateRecordKeyExtractor(tableConfig, tableConfig.populateMetaFields());
   }
 
-  public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, String partitionPath) {
-    HoodieRecordPayload recordPayload;
-    if (bufferedRecord.getRecord() instanceof HoodieRecordPayload) {
-      recordPayload = (HoodieRecordPayload) bufferedRecord.getRecord();
-    } else {
-      GenericRecord record = null;
-      if (!bufferedRecord.isDelete()) {
-        Schema recordSchema = getSchemaFromBufferRecord(bufferedRecord);
-        record = convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
-      }
-      recordPayload = HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue());
-    }
-    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    return new HoodieAvroRecord<>(hoodieKey, recordPayload, null);
+  public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, BaseKeyGenerator keyGenerator) {
+    return constructHoodieAvroRecord(bufferedRecord, payloadClass, keyGenerator, null, null);
+  }
+
+  public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, String partitionPath, HoodieOperation operation) {
+    return constructHoodieAvroRecord(bufferedRecord, payloadClass, null, partitionPath, operation);
+  }
+
+  private HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, BaseKeyGenerator keyGenerator, String partitionPath, HoodieOperation operation) {
+    Schema recordSchema = getSchemaFromBufferRecord(bufferedRecord);
+    GenericRecord record = convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
+    String recordPartitionPath = partitionPath == null ? keyGenerator.getPartitionPath(record) : partitionPath;
+
+    HoodieRecordPayload recordPayload = HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue());
+    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), recordPartitionPath);
+    return new HoodieAvroRecord<>(hoodieKey, recordPayload, operation);
   }
 
   public void updateRecordKeyExtractor(HoodieTableConfig tableConfig, boolean shouldUseMetadataFields) {

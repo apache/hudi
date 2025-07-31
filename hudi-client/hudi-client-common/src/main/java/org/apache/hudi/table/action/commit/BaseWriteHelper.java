@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -154,13 +153,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     // Construct new buffered record.
     HoodieRecord<T> finalNewRecord = newRecord;
     HoodieRecord<T> finalOldRecord = oldRecord;
-//    if (recordContext instanceof AvroRecordContext) {
-////      if (newRecord.getData() instanceof ExpressionPayload) {
-////
-////      }
-//      finalNewRecord = (HoodieRecord<T>) newRecord.toIndexedRecord(newSchema, properties).get();
-//      finalOldRecord = (HoodieRecord<T>) oldRecord.toIndexedRecord(oldSchema, properties).get();
-//    }
+    // TODO: let's clean this up?
     boolean isDelete1 = recordContext.isDeleteRecord(finalNewRecord.getData(), newDeleteContext);
     BufferedRecord<T> bufferedRec1 = BufferedRecord.forRecordWithContext(
         finalNewRecord.getData(), newSchema, recordContext, orderingFieldNames, isDelete1,
