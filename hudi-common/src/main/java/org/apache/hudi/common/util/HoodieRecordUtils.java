@@ -32,7 +32,6 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,33 +41,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * A utility class for HoodieRecord.
  */
 public class HoodieRecordUtils {
-  private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
   private static final Map<String, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
-
-  static {
-    INSTANCE_CACHE.put(HoodieAvroRecordMerger.class.getName(), HoodieAvroRecordMerger.INSTANCE);
-  }
 
   /**
    * Instantiate a given class with a record merge.
    */
   public static HoodieRecordMerger loadRecordMerger(String mergerClass) {
-    try {
-      HoodieRecordMerger recordMerger = (HoodieRecordMerger) INSTANCE_CACHE.get(mergerClass);
-      if (null == recordMerger) {
-        synchronized (HoodieRecordMerger.class) {
-          recordMerger = (HoodieRecordMerger) INSTANCE_CACHE.get(mergerClass);
-          if (null == recordMerger) {
-            recordMerger = (HoodieRecordMerger) ReflectionUtils.loadClass(mergerClass,
-                new Object[] {});
-            INSTANCE_CACHE.put(mergerClass, recordMerger);
-          }
-        }
-      }
-      return recordMerger;
-    } catch (HoodieException e) {
-      throw new HoodieException("Unable to instantiate hoodie merge class ", e);
-    }
+    return (HoodieRecordMerger) ReflectionUtils.loadClass(mergerClass, new Object[] {});
   }
 
   /**

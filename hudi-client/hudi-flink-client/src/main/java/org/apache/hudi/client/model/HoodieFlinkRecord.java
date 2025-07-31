@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -101,8 +100,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String[] orderingFields = ConfigUtils.getOrderingFields(props);
+  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
     if (orderingFields == null) {
       return OrderingValues.getDefault();
     } else {

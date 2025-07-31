@@ -904,7 +904,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
             record.getRecordKey(),
             removeHiveStylePartition(record.getPartitionPath()),
-            record.getOrderingValue(schema, props).toString(),
+            record.getOrderingValue(schema, props, preCombineFields.toArray(new String[0])).toString(),
             readerContext.getRecordContext().getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }
