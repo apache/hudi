@@ -78,6 +78,38 @@ public class TestRowDataKeyGen {
     assertThat(keyGen2.getPartitionPath(rowData3), is(String.format("partition=%s", DEFAULT_PARTITION_PATH)));
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testSingleKeyMultiplePartitionFields(boolean encodesKeyWithFieldName) {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
+    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(), String.valueOf(encodesKeyWithFieldName));
+    RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
+    RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    String expectedKey = encodesKeyWithFieldName ? "uuid:id1" : "id1";
+    assertThat(keyGen1.getRecordKey(rowData1), is(expectedKey));
+    assertThat(keyGen1.getPartitionPath(rowData1), is("par1/1970-01-01T00:00:00.001"));
+
+    // null record key and partition path
+    final RowData rowData2 = insertRow(TestConfigurations.ROW_TYPE, null, null, 23, null, null);
+    assertThrows(HoodieKeyException.class, () -> keyGen1.getRecordKey(rowData2));
+    assertThat(keyGen1.getPartitionPath(rowData2), is(String.format("%s/%s", DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)));
+    // empty record key and partition path
+    final RowData rowData3 = insertRow(StringData.fromString(""), StringData.fromString(""), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString(""));
+    assertThrows(HoodieKeyException.class, () -> keyGen1.getRecordKey(rowData3));
+    assertThat(keyGen1.getPartitionPath(rowData3), is(String.format("%s/1970-01-01T00:00:00.001", DEFAULT_PARTITION_PATH)));
+
+    // hive style partitioning
+    conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, true);
+    final RowDataKeyGen keyGen2 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+    assertThat(keyGen2.getPartitionPath(rowData1), is(String.format("partition=%s/ts=%s", "par1", "1970-01-01T00:00:00.001")));
+    assertThat(keyGen2.getPartitionPath(rowData2), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)));
+    assertThat(keyGen2.getPartitionPath(rowData3), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, "1970-01-01T00:00:00.001")));
+  }
+
   @Test
   void testComplexKeyAndPartition() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
@@ -226,5 +258,4 @@ public class TestRowDataKeyGen {
     assertThat(keyGen2.getRecordKey(rowData1), is("uuid:id1,ts:1675841687000"));
 
   }
-
 }
