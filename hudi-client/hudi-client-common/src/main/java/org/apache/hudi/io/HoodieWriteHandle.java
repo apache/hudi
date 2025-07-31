@@ -145,7 +145,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   private void initSecondaryIndexStats(boolean preserveMetadata) {
     // Secondary index should not be updated for clustering and compaction
     // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
-    if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
+    if (!preserveMetadata) {
       secondaryIndexDefns = hoodieTable.getMetaClient().getIndexMetadata()
           .map(indexMetadata -> indexMetadata.getIndexDefinitions().values())
           .orElse(Collections.emptyList())
