@@ -1391,13 +1391,10 @@ public class HoodieAvroUtils {
     }
     switch (readerSchema.getType()) {
       case RECORD:
-        Map<String, Schema.Field> writerFields = new HashMap<>();
-        for (Schema.Field field : writerSchema.getFields()) {
-          writerFields.put(field.name(), field);
-        }
         for (Schema.Field field : readerSchema.getFields()) {
-          if (writerFields.containsKey(field.name())) {
-            if (recordNeedsRewriteForExtendedAvroTypePromotion(writerFields.get(field.name()).schema(), field.schema())) {
+          Schema.Field writerField = writerSchema.getField(field.name());
+          if (writerField != null) {
+            if (recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
               return true;
             }
           }
