@@ -230,7 +230,7 @@ public abstract class RecordContext<T> implements Serializable {
       return false;
     }
     String hoodieOperation = getMetaFieldValue(record, hoodieOperationPos);
-    return hoodieOperation != null && HoodieOperation.isDeleteRecord(hoodieOperation);
+    return hoodieOperation != null && (HoodieOperation.isDeleteRecord(hoodieOperation) || HoodieOperation.isUpdateBefore(hoodieOperation));
   }
 
   /**
