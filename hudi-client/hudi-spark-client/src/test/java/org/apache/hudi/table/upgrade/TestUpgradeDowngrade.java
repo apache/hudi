@@ -460,6 +460,50 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
         "Main table version should remain unchanged when metadata table upgrade fails");
   }
 
+  @Test
+  public void testAutoUpgradeDisabledDuringUpgrade() throws Exception {
+    // Follow same setup of testUpgradeFourToFiveInternal
+    String tableName = metaClient.getTableConfig().getTableName();
+    cleanUp();
+    initSparkContexts();
+    initPath();
+    initTestDataGenerator();
+
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params, tableName);
+    Properties properties = new Properties();
+    params.forEach((k, v) -> properties.setProperty(k, v));
+
+    initMetaClient(getTableType(), properties);
+    // Create config with auto-upgrade disabled
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withRollbackUsingMarkers(false)
+        .withWriteTableVersion(6)
+        .withAutoUpgradeVersion(false)  // Disable auto-upgrade
+        .withProps(params)
+        .build();
+    
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    // Write inserts to establish table
+    doInsert(client);
+    
+    // Downgrade to version 4 first
+    downgradeTableConfigsFromFiveToFour(cfg);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTableVersion originalVersion = metaClient.getTableConfig().getTableVersion();
+    assertEquals(HoodieTableVersion.FOUR, originalVersion, "Table should be at version 4 before test");
+    
+    // Attempt upgrade from version 4 to 5 with auto-upgrade disabled
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.FIVE, null);
+    
+    // Verify that upgrade was skipped and table version remains unchanged
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(HoodieTableVersion.FOUR, metaClient.getTableConfig().getTableVersion(),
+        "Table version should remain at 4 when auto-upgrade is disabled");
+  }
+
   private void testUpgradeFourToFiveInternal(boolean assertDefaultPartition, boolean skipDefaultPartitionValidation, boolean isHiveStyle) throws Exception {
     String tableName = metaClient.getTableConfig().getTableName();
     // clean up and re instantiate meta client w/ right table props

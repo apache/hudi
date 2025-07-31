@@ -41,5 +41,4 @@ public interface UpgradeHandler {
   Map<ConfigProperty, String> upgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper);
-
 }

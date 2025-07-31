@@ -94,8 +94,6 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.convertComplet
 public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
-
-
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
   @Override

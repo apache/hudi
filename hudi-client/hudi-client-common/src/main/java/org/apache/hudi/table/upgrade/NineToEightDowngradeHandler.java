@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 
 public class NineToEightDowngradeHandler implements DowngradeHandler {
-
   @Override
   public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config,
                                                                            HoodieEngineContext context,

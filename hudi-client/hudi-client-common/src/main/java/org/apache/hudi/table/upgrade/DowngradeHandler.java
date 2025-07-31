@@ -44,5 +44,4 @@ public interface DowngradeHandler {
   Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper);
-
 }

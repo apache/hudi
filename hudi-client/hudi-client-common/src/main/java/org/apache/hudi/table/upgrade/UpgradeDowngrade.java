@@ -63,10 +63,10 @@ public class UpgradeDowngrade {
       Pair.of(8, 9)  // EightToNineUpgradeHandler
   ));
 
-  private static final Set<Pair<Integer, Integer>> DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_AND_COMPACT = new HashSet<>(Arrays.asList(
+  private static final Set<Pair<Integer, Integer>> DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_ANDCOMPACT = new HashSet<>(Arrays.asList(
       Pair.of(8, 7), // EightToSevenDowngradeHandler
       Pair.of(9, 8), // NineToEightDowngradeHandler
-      Pair.of(6, 5)  // SixToFiveDowngradeHadler
+      Pair.of(6, 5)  // SixToFiveDowngradeHandler
   ));
 
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
@@ -147,12 +147,22 @@ public class UpgradeDowngrade {
   public void run(HoodieTableVersion toVersion, String instantTime) {
     // Fetch version from property file and current version
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
+    // Determine if we are upgrading or downgrading
+    boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
+    if (isUpgrade && !config.autoUpgrade()) {
+      // if we are attempting to upgrade and auto-upgrade is disabled
+      // we set the write config table version to bounded by the current hudi table version
+      // and then exit out the upgrade process
+      LOG.warn("AUTO_UPGRADE_VERSION was explicitly disabled, skipping table version upgrade process");
+      return;
+    }
+
     if (!needsUpgradeOrDowngrade(toVersion)) {
       return;
     }
 
-    // Perform rollback and compaction if any handlers need it - this must happen at the very beginning
-    rollbackAndCompactIfNeeded(fromVersion, toVersion);
+    // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
+    performRollbackAndCompactionIfRequired(fromVersion, toVersion, isUpgrade);
 
     // Change metadata table version automatically
     if (toVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {
@@ -179,8 +189,7 @@ public class UpgradeDowngrade {
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
-    boolean isDowngrade = false;
-    if (fromVersion.versionCode() < toVersion.versionCode()) {
+    if (isUpgrade) {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
@@ -189,7 +198,6 @@ public class UpgradeDowngrade {
       }
     } else {
       // downgrade
-      isDowngrade = true;
       while (fromVersion.versionCode() > toVersion.versionCode()) {
         HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() - 1);
         Pair<Map<ConfigProperty, String>, List<ConfigProperty>> tablePropsToAddAndRemove = downgrade(fromVersion, prevVersion, instantTime);
@@ -222,7 +230,7 @@ public class UpgradeDowngrade {
     HoodieTableConfig.update(metaClient.getStorage(),
         metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
 
-    if (metaClient.getTableConfig().isMetadataTableAvailable() && toVersion.equals(HoodieTableVersion.SIX) && isDowngrade) {
+    if (metaClient.getTableConfig().isMetadataTableAvailable() && toVersion.equals(HoodieTableVersion.SIX) && !isUpgrade) {
       // NOTE: Add empty deltacommit to metadata table. The compaction instant format has changed in version 8.
       //       It no longer has a suffix of "001" for the compaction instant. Due to that, the timeline instant
       //       comparison logic in metadata table will fail after LSM timeline downgrade.
@@ -297,22 +305,20 @@ public class UpgradeDowngrade {
   }
 
   /**
-   * Checks if any handlers in the upgrade/downgrade path need rollback and compaction and performs it once before starting.
-   * This ensures rollback and compaction happens only when needed and only once at the very beginning of the process.
+   * Checks if any handlers in the upgrade/downgrade path require running rollback and compaction before starting process.
    *
    * @param fromVersion the current table version
    * @param toVersion   the target table version
    */
-  private void rollbackAndCompactIfNeeded(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
-    // Check if any handlers in the upgrade/downgrade path need rollback and compaction
-    boolean needsRollbackAndCompact = false;
-    if (fromVersion.versionCode() < toVersion.versionCode()) {
+  private void performRollbackAndCompactionIfRequired(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, boolean isUpgrade) {
+    boolean requireRollbackAndCompaction = false;
+    if (isUpgrade) {
       // Check upgrade handlers
       HoodieTableVersion checkVersion = fromVersion;
       while (checkVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(checkVersion.versionCode() + 1);
         if (UPGRADE_HANDLERS_REQUIRING_ROLLBACK_AND_COMPACT.contains(Pair.of(checkVersion.versionCode(), nextVersion.versionCode()))) {
-          needsRollbackAndCompact = true;
+          requireRollbackAndCompaction = true;
           break;
         }
         checkVersion = nextVersion;
@@ -322,21 +328,17 @@ public class UpgradeDowngrade {
       HoodieTableVersion checkVersion = fromVersion;
       while (checkVersion.versionCode() > toVersion.versionCode()) {
         HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(checkVersion.versionCode() - 1);
-        if (DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_AND_COMPACT.contains(Pair.of(checkVersion.versionCode(), prevVersion.versionCode()))) {
-          needsRollbackAndCompact = true;
+        if (DOWNGRADE_HANDLERS_REQUIRING_ROLLBACK_ANDCOMPACT.contains(Pair.of(checkVersion.versionCode(), prevVersion.versionCode()))) {
+          requireRollbackAndCompaction = true;
           break;
         }
         checkVersion = prevVersion;
       }
     }
-    
-    // Perform rollback and compaction once if any handler needs it
-    if (needsRollbackAndCompact) {
-      LOG.info("Performing rollback and compaction before upgrade/downgrade operations");
-      HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-      UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, 
-          HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()), 
-          metaClient.getTableConfig().getTableVersion());
+    if (requireRollbackAndCompaction) {
+      LOG.info("Rolling back failed writes and compacting table before upgrade/downgrade");
+      UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(upgradeDowngradeHelper.getTable(config, context),
+              context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()), metaClient.getTableConfig().getTableVersion());
     }
   }
 }
