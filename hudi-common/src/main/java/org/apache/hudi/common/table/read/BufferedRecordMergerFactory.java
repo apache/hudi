@@ -65,7 +65,7 @@ public class BufferedRecordMergerFactory {
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
           readerContext, recordMergeMode, false, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
-      return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, readerSchema, props);
+      return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, orderingFieldNames, readerSchema, props);
     }
 
     switch (recordMergeMode) {
@@ -84,7 +84,7 @@ public class BufferedRecordMergerFactory {
           return new CustomPayloadRecordMerger<>(
               readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClass.get(), readerSchema, props);
         } else {
-          return new CustomRecordMerger<>(readerContext.getRecordContext(), recordMerger, readerSchema, props);
+          return new CustomRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, readerSchema, props);
         }
     }
   }
@@ -259,11 +259,13 @@ public class BufferedRecordMergerFactory {
     private final BufferedRecordMerger<T> deleteRecordMerger;
     private final Schema readerSchema;
     private final TypedProperties props;
+    private final String[] orderingFields;
 
     public PartialUpdateBufferedRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         BufferedRecordMerger<T> deleteRecordMerger,
+        List<String> orderingFieldNames,
         Schema readerSchema,
         TypedProperties props) {
       this.recordContext = recordContext;
@@ -271,6 +273,7 @@ public class BufferedRecordMergerFactory {
       this.deleteRecordMerger = deleteRecordMerger;
       this.readerSchema = readerSchema;
       this.props = props;
+      this.orderingFields = orderingFieldNames.toArray(new String[0]);
     }
 
     @Override
@@ -296,7 +299,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props));
+        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
@@ -333,12 +336,16 @@ public class BufferedRecordMergerFactory {
    * based on {@code CUSTOM} merge mode.
    */
   private static class CustomRecordMerger<T> extends BaseCustomMerger<T> {
+    private final String[] orderingFields;
+
     public CustomRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
+        List<String> orderingFieldNames,
         Schema readerSchema,
         TypedProperties props) {
       super(recordContext, recordMerger, readerSchema, props);
+      this.orderingFields = orderingFieldNames.toArray(new String[0]);
     }
 
     @Override
@@ -360,7 +367,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props));
+        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
