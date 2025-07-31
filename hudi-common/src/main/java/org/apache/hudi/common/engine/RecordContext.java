@@ -222,7 +222,7 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
-   * Check if a record is a DELETE marked by the '_hoodie_operation' field.
+   * Check if a record is a DELETE/UPDATE_BEFORE marked by the '_hoodie_operation' field.
    */
   private boolean isDeleteHoodieOperation(T record, DeleteContext deleteContext) {
     int hoodieOperationPos = deleteContext.getHoodieOperationPos();
