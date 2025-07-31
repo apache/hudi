@@ -82,7 +82,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            requiredFilters: Seq[Filter],
                                            isMultipleBaseFileFormatsEnabled: Boolean,
                                            hoodieFileFormat: HoodieFileFormat)
-  extends FileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
+  extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
+
+  override def shortName(): String = "HudiFileGroup"
+
+  override def toString: String = "HoodieFileGroupReaderBasedFileFormat"
 
   def getRequiredFilters: Seq[Filter] = requiredFilters
 
