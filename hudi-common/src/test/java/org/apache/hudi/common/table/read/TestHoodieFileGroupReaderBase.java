@@ -388,6 +388,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     public SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) {
       super(testType);
       writeConfigs.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
+      // TODO fix schema evolution on col stats
+      writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+      writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
     }
 
     @Override

@@ -436,13 +436,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     assertArrayMatchesSchema(schema.valueType, map.valueArray())
   }
 
-  override def getSchemaOnWriteConfigs: SchemaOnWriteConfigs = {
-    val configs = new SchemaOnWriteConfigs()
-    configs.floatToDoubleSupport = false
-    configs
-  }
-
-
   override def commitSchemaToTable(schema: InternalSchema, writeConfigs: util.Map[String, String], historySchemaStr: String): Unit = {
     val tableName = writeConfigs.get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
     val avroSchema = AvroInternalSchemaConverter.convert(schema, getAvroRecordQualifiedName(tableName))
@@ -483,8 +476,16 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     client.commit(instantTime, jsc.emptyRDD, HOption.of(extraMeta))
   }
 
+  override def getSchemaOnWriteConfigs: SchemaOnWriteConfigs = {
+    val configs = new SchemaOnWriteConfigs()
+    // TODO: [HUDI-9668]
+    configs.floatToDoubleSupport = false
+    configs
+  }
+
   override def getSchemaOnReadConfigs: SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs = {
     val configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs()
+    // TODO: [HUDI-9668]
     configs.floatToDoubleSupport = false
     configs.intToDecimalBytesSupport = false
     configs.intToDecimalFixedSupport = false
@@ -494,12 +495,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     configs.floatToDecimalFixedSupport = false
     configs.doubleToDecimalBytesSupport = false
     configs.doubleToDecimalFixedSupport = false
-    configs.stringToDecimalBytesSupport = false
-    configs.stringToDecimalFixedSupport = false
-    configs.stringToDateSupport = false
-
-    //this still needs to be fixed for avro
-    configs.renameColumnAsPreviouslyRemovedSupport = false
     configs
   }
 }

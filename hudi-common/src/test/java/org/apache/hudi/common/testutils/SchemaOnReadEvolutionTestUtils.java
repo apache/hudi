@@ -102,7 +102,7 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     public boolean renameColumnSupport = true;
     public boolean removeColumnSupport = true;
 
-    // this needs to be fixed for avro. The validation currently is broken
+    // TODO: [HUDI-9676] broken in avro so validation is wrong
     public boolean renameColumnAsPreviouslyRemovedSupport = false;
 
     // Int
