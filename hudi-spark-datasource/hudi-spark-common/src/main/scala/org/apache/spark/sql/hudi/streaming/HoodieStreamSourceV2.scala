@@ -133,10 +133,10 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
         if (enableFileGroupReader) {
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
             new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, None, isBootstrappedTable, rangeType).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, Option(schema), isBootstrappedTable, rangeType).build()
           } else {
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-              sqlContext, metaClient, parameters ++ cdcOptions, None, isBootstrappedTable, rangeType).build()
+              sqlContext, metaClient, parameters ++ cdcOptions, Option(schema), isBootstrappedTable, rangeType).build()
           }
           FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         } else {
