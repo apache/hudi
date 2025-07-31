@@ -120,16 +120,16 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
     }
   }
 
-  protected def isDeleteOperation(r: InternalRow): Boolean = if (hasOperationField) {
-    val operation = r.getString(operationFieldPos)
-    HoodieOperation.fromName(operation) == HoodieOperation.DELETE
+  protected def shouldSkip(r: InternalRow): Boolean = if (hasOperationField) {
+    val operation = HoodieOperation.fromName(r.getString(operationFieldPos))
+    HoodieOperation.isDelete(operation) || HoodieOperation.isUpdateBefore(operation)
   } else {
     false
   }
 
-  protected def isDeleteOperation(r: GenericRecord): Boolean = if (hasOperationField) {
-    val operation = r.get(operationFieldPos).toString
-    HoodieOperation.fromName(operation) == HoodieOperation.DELETE
+  protected def shouldSkip(r: GenericRecord): Boolean = if (hasOperationField) {
+    val operation = HoodieOperation.fromName(r.get(operationFieldPos).toString)
+    HoodieOperation.isDelete(operation) || HoodieOperation.isUpdateBefore(operation)
   } else {
     false
   }
@@ -161,7 +161,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
       logRecordsIterator.next() match {
         case Some(r: HoodieAvroIndexedRecord) =>
           val data = r.getData.asInstanceOf[GenericRecord]
-          if (isDeleteOperation(data)) {
+          if (shouldSkip(data)) {
             this.hasNextInternal
           } else {
             val projectedAvroRecord = requiredSchemaAvroProjection(data)
@@ -170,7 +170,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
           }
         case Some(r: HoodieSparkRecord) =>
           val data = r.getData
-          if (isDeleteOperation(data)) {
+          if (shouldSkip(data)) {
             this.hasNextInternal
           } else {
             nextRecord = requiredSchemaRowProjection(data)
@@ -310,7 +310,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         toScalaOption(result)
           .flatMap { r =>
             val data = r.getLeft.getData.asInstanceOf[InternalRow]
-            if (isDeleteOperation(data)) {
+            if (shouldSkip(data)) {
               None
             } else {
               val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
@@ -324,7 +324,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         toScalaOption(result)
           .flatMap { r =>
             val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
-            if (isDeleteOperation(avroRecord)) {
+            if (shouldSkip(avroRecord)) {
               None
             } else {
               Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
