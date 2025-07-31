@@ -1038,7 +1038,7 @@ public class HoodieAvroUtils {
    * @param oldRecord     oldRecord to be rewritten
    * @param oldAvroSchema old avro schema.
    * @param newSchema     newSchema used to rewrite oldRecord
-   * @param renameCols    a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
+   * @param renameCols    a map store all rename cols, (k, v)-> (full.path.to.field.colNameFromNewSchema, colNameFromOldSchema)
    * @param fieldNames    track the full name of visited field when we travel new schema.
    * @return newRecord for new Schema
    */
@@ -1066,41 +1066,37 @@ public class HoodieAvroUtils {
     switch (newSchema.getType()) {
       case RECORD:
         if (!(oldRecord instanceof IndexedRecord)) {
-          throw new SchemaCompatibilityException("cannot rewrite record with different type");
+          throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as a record", oldRecord.getClass().getName()));
         }
         IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
-        List<Schema.Field> fields = newSchema.getFields();
         GenericData.Record newRecord = new GenericData.Record(newSchema);
-        for (int i = 0; i < fields.size(); i++) {
-          Schema.Field field = fields.get(i);
-          String fieldName = field.name();
-          if (!skipMetadataFields || !isMetadataField(fieldName)) {
-            fieldNames.push(fieldName);
-            Schema.Field oldField = oldSchema.getField(field.name());
-            if (oldField != null && !renameCols.containsKey(field.name())) {
-              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), field.schema(), renameCols, fieldNames, false));
-            } else {
-              String fieldFullName = createFullName(fieldNames);
-              String fieldNameFromOldSchema = renameCols.get(fieldFullName);
-              // deal with rename
-              Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
-              if (oldFieldRenamed != null) {
-                // find rename
-                newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), field.schema(), renameCols, fieldNames, false));
-              } else {
-                // deal with default value
-                if (field.defaultVal() instanceof JsonProperties.Null) {
-                  newRecord.put(i, null);
-                } else {
-                  if (!isNullable(field.schema()) && field.defaultVal() == null) {
-                    throw new SchemaCompatibilityException("Field " + fieldFullName + " has no default value and is non-nullable");
-                  }
-                  newRecord.put(i, field.defaultVal());
-                }
-              }
-            }
-            fieldNames.pop();
+        // if renameCols is empty, we can skip building the full name string
+        boolean skipRenameCheck = renameCols.isEmpty();
+        String fullFieldNamePrefix = createFullNamePrefix(skipRenameCheck, fieldNames);
+        for (int i = 0; i < newSchema.getFields().size(); i++) {
+          Schema.Field newSchemaField = newSchema.getFields().get(i);
+          String newSchemaFieldName = newSchemaField.name();
+          if (skipMetadataFields && isMetadataField(newSchemaFieldName)) {
+            continue;
           }
+          fieldNames.push(newSchemaFieldName);
+          String fullFieldName = skipRenameCheck ? null : fullFieldNamePrefix + newSchemaFieldName;
+          String oldSchemaFieldName = newSchemaFieldName;
+          if (!skipRenameCheck && renameCols.containsKey(fullFieldName)) {
+            oldSchemaFieldName = renameCols.get(fullFieldName);
+          }
+          Schema.Field oldSchemaField = oldSchema.getField(oldSchemaFieldName);
+          if (oldSchemaField != null) {
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldSchemaField.pos()), oldSchemaField.schema(), newSchemaField.schema(), renameCols, fieldNames, false));
+          } else if (newSchemaField.defaultVal() instanceof JsonProperties.Null) {
+            newRecord.put(i, null);
+          } else if (!isNullable(newSchemaField.schema()) && newSchemaField.defaultVal() == null) {
+            fullFieldName = skipRenameCheck ? createFullName(fieldNames) : fullFieldName;
+            throw new SchemaCompatibilityException("Field " + fullFieldName + " has no default value and is non-nullable");
+          } else {
+            newRecord.put(i, newSchemaField.defaultVal());
+          }
+          fieldNames.pop();
         }
         return newRecord;
       case ENUM:
@@ -1142,12 +1138,26 @@ public class HoodieAvroUtils {
     }
   }
 
+  static String createFullNamePrefix(boolean skipRenameCheck, Deque<String> fieldNames) {
+    if (skipRenameCheck || fieldNames.isEmpty()) {
+      return "";
+    }
+    return createFullName(fieldNames, true);
+  }
+
   public static String createFullName(Deque<String> fieldNames) {
+    return createFullName(fieldNames, false);
+  }
+
+  static String createFullName(Deque<String> fieldNames, boolean isPrefix) {
     String result = "";
     if (!fieldNames.isEmpty()) {
       Iterator<String> iter = fieldNames.descendingIterator();
       result = iter.next();
       if (!iter.hasNext()) {
+        if (isPrefix) {
+          return result + ".";
+        }
         return result;
       }
 
@@ -1156,6 +1166,9 @@ public class HoodieAvroUtils {
       while (iter.hasNext()) {
         sb.append(".");
         sb.append(iter.next());
+      }
+      if (isPrefix) {
+        sb.append(".");
       }
       result = sb.toString();
     }
