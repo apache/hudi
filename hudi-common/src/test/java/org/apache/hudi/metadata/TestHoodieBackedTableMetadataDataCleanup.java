@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -99,10 +100,12 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     
     // Setup mock behavior
     when(mockMetadata.readIndexRecordsWithKeys(any(), any())).thenReturn(mockPairData);
+    when(mockMetadata.readIndexRecordsWithKeys(any(), any(), any())).thenReturn(mockPairData);
     when(mockPairData.mapToPair(any())).thenReturn(mockResult);
     
     // Call real method on the mock
     when(mockMetadata.readRecordIndexLocationsWithKeys(recordKeys)).thenCallRealMethod();
+    when(mockMetadata.readRecordIndexLocationsWithKeys(recordKeys, Option.empty())).thenCallRealMethod();
     
     // Execute the method
     HoodiePairData result = mockMetadata.readRecordIndexLocationsWithKeys(recordKeys);
@@ -124,7 +127,7 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     
     // Setup mock behavior for readIndexRecords
     HoodieData mockIndexRecords = mock(HoodieData.class);
-    when(mockMetadata.readIndexRecords(any(), anyString())).thenReturn(mockIndexRecords);
+    when(mockMetadata.readIndexRecords(any(), anyString(), any())).thenReturn(mockIndexRecords);
     when(mockIndexRecords.map(any())).thenReturn(mockHoodieData);
     
     // Call real method on the mock
@@ -222,6 +225,7 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     
     // Call real method on the mock
     when(mockMetadata.readRecordIndexLocationsWithKeys(any())).thenCallRealMethod();
+    when(mockMetadata.readRecordIndexLocationsWithKeys(any(), any())).thenCallRealMethod();
     
     // Execute and verify exception is propagated
     HoodieData<String> recordKeys = HoodieListData.eager(Arrays.asList("key1"));

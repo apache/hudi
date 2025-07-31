@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -232,6 +233,18 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys);
 
   /**
+   * Returns pairs of (record key, location of record key) which are found in the record index.
+   * Records that are not found are ignored and wont be part of map object that is returned.
+   * @param recordKeys list of recordkeys to look up in the index
+   * @param dataTablePartition option of the data table partition to look up from. This is only applicable to partitioned rli
+   *                           record keys are not globally unique so the record key alone does not sufficiently identify an
+   *                           individual record.
+   * @return map from recordkey to the location of the record that was read from the index
+   *
+   */
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition);
+
+  /**
    * Returns the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
@@ -286,6 +299,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Returns the number of shards in a metadata table partition.
    */
   int getNumFileGroupsForPartition(MetadataPartitionType partition);
+
+  /**
+   * Get file groups in the record index partition grouped by bucket
+   * @param partition the metadata table partition type
+   * @return map from data table partition to list of filegroups that index that partition
+   */
+  Map<String, List<FileSlice>> getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType partition);
 
   /**
    * @param partitionPathList A list of pairs of the relative and absolute paths of the partitions.
