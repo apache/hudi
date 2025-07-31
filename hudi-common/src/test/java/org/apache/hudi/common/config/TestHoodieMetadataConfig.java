@@ -30,33 +30,33 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class TestHoodieMetadataConfig {
   @Test
-  void testGetWriteStatusRepartitionParallelism() {
+  void testGetRecordPreparationParallelism() {
     // Test default value
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
-    assertEquals(0, config.getWriteStatusCoalesceParallelism());
+    assertEquals(0, config.getRecordPreparationParallelism());
 
     // Test custom value
     Properties props = new Properties();
-    props.put(HoodieMetadataConfig.WRITE_STATUS_COALESCE_PARALLELISM.key(), "100");
+    props.put(HoodieMetadataConfig.RECORD_PREPARATION_PARALLELISM.key(), "100");
     HoodieMetadataConfig configWithCustomValue = HoodieMetadataConfig.newBuilder()
         .fromProperties(props)
         .build();
-    assertEquals(100, configWithCustomValue.getWriteStatusCoalesceParallelism());
+    assertEquals(100, configWithCustomValue.getRecordPreparationParallelism());
 
     // Test zero value
     Properties propsZero = new Properties();
-    propsZero.put(HoodieMetadataConfig.WRITE_STATUS_COALESCE_PARALLELISM.key(), "0");
+    propsZero.put(HoodieMetadataConfig.RECORD_PREPARATION_PARALLELISM.key(), "0");
     HoodieMetadataConfig configWithZeroValue = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsZero)
         .build();
-    assertEquals(0, configWithZeroValue.getWriteStatusCoalesceParallelism());
+    assertEquals(0, configWithZeroValue.getRecordPreparationParallelism());
 
     // Test negative value
     Properties propsNegative = new Properties();
-    propsNegative.put(HoodieMetadataConfig.WRITE_STATUS_COALESCE_PARALLELISM.key(), "-50");
+    propsNegative.put(HoodieMetadataConfig.RECORD_PREPARATION_PARALLELISM.key(), "-50");
     HoodieMetadataConfig configWithNegativeValue = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsNegative)
         .build();
-    assertEquals(-50, configWithNegativeValue.getWriteStatusCoalesceParallelism());
+    assertEquals(-50, configWithNegativeValue.getRecordPreparationParallelism());
   }
 }
