@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaTestUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
@@ -611,7 +612,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     for (String key : actualMap.keySet()) {
       GenericRecord expectedRecord = expectedMap.get(key);
       GenericRecord actualRecord = actualMap.get(key);
-      HoodieAvroUtils.validateRecordsHaveSameData(expectedRecord, actualRecord);
+      AvroSchemaTestUtils.validateRecordsHaveSameData(expectedRecord, actualRecord);
     }
   }
 

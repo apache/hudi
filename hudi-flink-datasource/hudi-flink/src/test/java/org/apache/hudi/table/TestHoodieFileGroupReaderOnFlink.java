@@ -238,9 +238,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
 
       timeline.transitionRequestedToInflight(requested, Option.of(metadata));
 
-      Map<String, String> extraMeta = new HashMap<>();
       schema.setSchemaId(Long.parseLong(instantTime));
-      extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(schema));
+      Map<String, String> extraMeta = Collections.singletonMap(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(schema));
 
       FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
       schemaManager.persistHistorySchemaStr(instantTime,

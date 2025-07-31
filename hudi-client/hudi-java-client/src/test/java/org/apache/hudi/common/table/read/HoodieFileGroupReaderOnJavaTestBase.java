@@ -181,16 +181,15 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
 
       timeline.transitionRequestedToInflight(requested, Option.of(metadata));
 
-      Map<String, String> extraMeta = new HashMap<>();
       long schemaId = Long.parseLong(instantTime);
       InternalSchema withId = schema.setSchemaId(schemaId);
-      extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(withId));
+      Map<String, String> extraMeta  = Collections.singletonMap(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(withId));
 
       FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
       schemaManager.persistHistorySchemaStr(instantTime,
           SerDeHelper.inheritSchemas(schema, historySchemaStr));
 
-      assertTrue(client.commit(instantTime, new ArrayList<>(), Option.of(extraMeta)));
+      assertTrue(client.commit(instantTime, Collections.emptyList(), Option.of(extraMeta)));
     }
   }
 }
