@@ -74,7 +74,6 @@ class TestSavepointActionExecutor {
     assertEquals(expectedInstant, executor.getLastCommitRetained());
   }
 
-
   @Test
   void testLastCommitRetained_requestedClean() throws IOException {
     String expectedInstant = "20240101101012345";
@@ -91,7 +90,8 @@ class TestSavepointActionExecutor {
     when(mockTable.getCleanTimeline().lastInstant()).thenReturn(Option.of(cleanInstant));
 
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan();
-    HoodieActionInstant lastInstantToRetain = HoodieActionInstant.newBuilder().setAction(HoodieTimeline.COMMIT_ACTION).setState(HoodieInstant.State.COMPLETED.name()).setTimestamp(expectedInstant).build();
+    HoodieActionInstant lastInstantToRetain = HoodieActionInstant.newBuilder().setAction(HoodieTimeline.COMMIT_ACTION)
+        .setState(HoodieInstant.State.COMPLETED.name()).setTimestamp(expectedInstant).build();
     cleanerPlan.setEarliestInstantToRetain(lastInstantToRetain);
     when(mockTable.getActiveTimeline().readCleanerPlan(cleanInstant)).thenReturn(cleanerPlan);
 
