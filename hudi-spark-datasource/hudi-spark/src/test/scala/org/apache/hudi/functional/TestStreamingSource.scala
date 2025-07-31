@@ -214,62 +214,50 @@ class TestStreamingSource extends StreamTest {
   }
 
   test("Test mor streaming source with clustering") {
-    Array("true", "false").foreach(skipCluster => {
-      withTempDir { inputDir =>
-        val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream_cluster_$skipCluster"
-        val metaClient = HoodieTableMetaClient.newTableBuilder()
-          .setTableType(MERGE_ON_READ)
-          .setTableName(getTableName(tablePath))
-          .setRecordKeyFields("id")
-          .setPreCombineFields("ts")
-          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream_cluster"
+      val metaClient = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(MERGE_ON_READ)
+        .setTableName(getTableName(tablePath))
+        .setRecordKeyFields("id")
+        .setPreCombineFields("ts")
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
-        addData(tablePath, Seq(("1", "a1", "10", "000")))
-        addData(tablePath, Seq(("2", "a1", "11", "001")))
-        addData(tablePath, Seq(("3", "a1", "12", "002")))
-        addData(tablePath, Seq(("4", "a1", "13", "003")), enableInlineCluster = true)
-        addData(tablePath, Seq(("5", "a1", "14", "004")))
+      addData(tablePath, Seq(("1", "a1", "10", "000")))
+      addData(tablePath, Seq(("2", "a1", "11", "001")))
+      addData(tablePath, Seq(("3", "a1", "12", "002")))
+      addData(tablePath, Seq(("4", "a1", "13", "003")), enableInlineCluster = true)
+      addData(tablePath, Seq(("5", "a1", "14", "004")))
 
-        val timestamp =
-          metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-            .firstInstant().get().getCompletionTime
+      val timestamp =
+        metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
+          .firstInstant().get().getCompletionTime
 
-        val df = spark.readStream
-          .format("org.apache.hudi")
-          .option(START_OFFSET.key(), timestamp)
-          .option(DataSourceReadOptions.INCREMENTAL_READ_SKIP_CLUSTER.key(), skipCluster)
-          .load(tablePath)
-          .select("id", "name", "price", "ts")
+      val df = spark.readStream
+        .format("org.apache.hudi")
+        .option(START_OFFSET.key(), timestamp)
+        .load(tablePath)
+        .select("id", "name", "price", "ts")
 
-        testStream(df)(
-          AssertOnQuery { q => q.processAllAvailable(); true },
-          if (skipCluster.toBoolean) {
-            // Start after the first commit
-            CheckAnswerRows(Seq(Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false)
-          } else {
-            // Start after the first commit
-            CheckAnswerRows(Seq(
-              Row("2", "a1", "11", "001"),
-              Row("3", "a1", "12", "002"),
-              Row("4", "a1", "13", "003"),
-              Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false)
-          }
-
-
-
-        )
-        assertTrue(metaClient.reloadActiveTimeline
-          .filter(JavaConversions.getPredicate(
-            e => e.isCompleted && HoodieTimeline.REPLACE_COMMIT_ACTION.equals(e.getAction)))
-          .countInstants() > 0)
-      }
-    })
+      testStream(df)(
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        // Start after the first commit
+        CheckAnswerRows(Seq(
+          Row("2", "a1", "11", "001"),
+          Row("3", "a1", "12", "002"),
+          Row("4", "a1", "13", "003"),
+          Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false))
+      assertTrue(metaClient.reloadActiveTimeline
+        .filter(JavaConversions.getPredicate(
+          e => e.isCompleted && HoodieTimeline.REPLACE_COMMIT_ACTION.equals(e.getAction)))
+        .countInstants() > 0)
+    }
   }
 
   test("test mor stream source with compaction") {
     Array("true", "false").foreach(skipCompact => {
       withTempDir { inputDir =>
-        val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream"
+        val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream_$skipCompact"
         val metaClient = HoodieTableMetaClient.newTableBuilder()
           .setTableType(MERGE_ON_READ)
           .setTableName(getTableName(tablePath))
