@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Either;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -119,9 +120,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.orderingFieldNames = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
-        ? Collections.emptyList()
-        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElse(hoodieTableMetaClient.getTableConfig().getPreCombineFields());
+    this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), props, hoodieTableMetaClient);
     this.readStats = new HoodieReadStats();
   }
 

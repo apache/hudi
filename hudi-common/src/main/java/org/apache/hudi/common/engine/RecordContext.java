@@ -20,12 +20,16 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.JavaTypeConverter;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
@@ -47,6 +51,10 @@ import java.util.function.BiFunction;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
+/**
+ * Record context provides the APIs
+ * @param <T>
+ */
 public abstract class RecordContext<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
@@ -61,6 +69,22 @@ public abstract class RecordContext<T> implements Serializable {
   public RecordContext(HoodieTableConfig tableConfig) {
     this.typeConverter = new DefaultJavaTypeConverter();
     updateRecordKeyExtractor(tableConfig, tableConfig.populateMetaFields());
+  }
+
+  public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, String partitionPath) {
+    HoodieRecordPayload recordPayload;
+    if (bufferedRecord.getRecord() instanceof HoodieRecordPayload) {
+      recordPayload = (HoodieRecordPayload) bufferedRecord.getRecord();
+    } else {
+      GenericRecord record = null;
+      if (!bufferedRecord.isDelete()) {
+        Schema recordSchema = getSchemaFromBufferRecord(bufferedRecord);
+        record = convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
+      }
+      recordPayload = HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue());
+    }
+    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
+    return new HoodieAvroRecord<>(hoodieKey, recordPayload, null);
   }
 
   public void updateRecordKeyExtractor(HoodieTableConfig tableConfig, boolean shouldUseMetadataFields) {
@@ -105,6 +129,15 @@ public abstract class RecordContext<T> implements Serializable {
    * @return A new instance of {@link HoodieRecord}.
    */
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+
+  /**
+   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord} using
+   * the provided partition path.
+   *
+   * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
+   * @return A new instance of {@link HoodieRecord}.
+   */
+  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord, String partitionPath);
 
   /**
    * Constructs a new Engine based record based on a given schema, base record and update values.

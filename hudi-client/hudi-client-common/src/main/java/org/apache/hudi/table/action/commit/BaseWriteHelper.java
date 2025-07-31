@@ -18,18 +18,35 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.avro.AvroRecordContext;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import org.apache.avro.Schema;
+
+import java.io.IOException;
+import java.util.List;
 
 public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
 
@@ -85,9 +102,75 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    * @return Collection of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
+    HoodieReaderContext<T> readerContext =
+        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryDuringWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType())
+            .getContext();
+    readerContext.getRecordContext().updateRecordKeyExtractor(table.getMetaClient().getTableConfig(), false);
+    readerContext.initRecordMerger(table.getConfig().getProps());
+    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getConfig().getProps(), table.getMetaClient());
     HoodieRecordMerger recordMerger = HoodieRecordUtils.mergerToPreCombineMode(table.getConfig().getRecordMerger());
-    return deduplicateRecords(records, table.getIndex(), parallelism, table.getConfig().getSchema(), table.getConfig().getProps(), recordMerger);
+    BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
+        readerContext,
+        readerContext.getMergeMode(),
+        false,
+        Option.ofNullable(recordMerger),
+        orderingFieldNames,
+        Option.ofNullable(table.getConfig().getPayloadClass()),
+        new SerializableSchema(table.getConfig().getSchema()).get(),
+        table.getConfig().getProps(),
+        table.getMetaClient().getTableConfig().getPartialUpdateMode());
+    KeyGenerator keyGenerator = HoodieIndexUtils.getKeyGenerator(table.getConfig(), table.getContext());
+    return deduplicateRecords(
+        records,
+        table.getIndex(),
+        parallelism,
+        table.getConfig().getSchema(),
+        table.getConfig().getProps(),
+        bufferedRecordMerger,
+        readerContext,
+        orderingFieldNames,
+        (BaseKeyGenerator) keyGenerator);
   }
 
-  public abstract I deduplicateRecords(I records, HoodieIndex<?, ?> index, int parallelism, String schema, TypedProperties props, HoodieRecordMerger merger);
+  public abstract I deduplicateRecords(I records,
+                                       HoodieIndex<?, ?> index,
+                                       int parallelism,
+                                       String schema,
+                                       TypedProperties props,
+                                       BufferedRecordMerger<T> merger,
+                                       HoodieReaderContext<T> readerContext,
+                                       List<String> orderingFieldNames, BaseKeyGenerator keyGenerator);
+
+  public static <T> Option<BufferedRecord<T>> merge(HoodieRecord<T> newRecord,
+                                                    HoodieRecord<T> oldRecord,
+                                                    Schema newSchema,
+                                                    Schema oldSchema,
+                                                    RecordContext<T> recordContext,
+                                                    List<String> orderingFieldNames,
+                                                    BufferedRecordMerger<T> recordMerger,
+                                                    DeleteContext newDeleteContext,
+                                                    DeleteContext existingDeleteContext,
+                                                    TypedProperties properties) throws IOException {
+    // Construct new buffered record.
+    HoodieRecord<T> finalNewRecord = newRecord;
+    HoodieRecord<T> finalOldRecord = oldRecord;
+//    if (recordContext instanceof AvroRecordContext) {
+////      if (newRecord.getData() instanceof ExpressionPayload) {
+////
+////      }
+//      finalNewRecord = (HoodieRecord<T>) newRecord.toIndexedRecord(newSchema, properties).get();
+//      finalOldRecord = (HoodieRecord<T>) oldRecord.toIndexedRecord(oldSchema, properties).get();
+//    }
+    boolean isDelete1 = recordContext.isDeleteRecord(finalNewRecord.getData(), newDeleteContext);
+    BufferedRecord<T> bufferedRec1 = BufferedRecord.forRecordWithContext(
+        finalNewRecord.getData(), newSchema, recordContext, orderingFieldNames, isDelete1,
+        Option.of(finalNewRecord.getKey()), Option.of(finalNewRecord.getOrderingValue(newSchema, properties)));
+    // Construct old buffered record.
+    boolean isDelete2 = recordContext.isDeleteRecord(finalOldRecord.getData(), existingDeleteContext);
+    BufferedRecord<T> bufferedRec2 = BufferedRecord.forRecordWithContext(
+        finalOldRecord.getData(), oldSchema, recordContext, orderingFieldNames, isDelete2,
+        Option.of(finalOldRecord.getKey()), Option.of(finalOldRecord.getOrderingValue(oldSchema, properties)));
+    // Run merge.
+    return recordMerger.deltaMerge(bufferedRec1, bufferedRec2);
+  }
 }

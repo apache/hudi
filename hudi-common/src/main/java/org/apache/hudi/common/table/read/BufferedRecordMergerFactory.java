@@ -23,18 +23,14 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -68,6 +64,13 @@ public class BufferedRecordMergerFactory {
       return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, orderingFieldNames, readerSchema, props);
     }
 
+//    if (payloadClass.map(payloadCls -> payloadCls.equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")).orElse(false)) {
+//      return new CustomPayloadRecordMerger<>(
+//          readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClass.get(), readerSchema, props);
+//    }
+
+    // If record merge mode is CUSTOM and payload is defined, use precombine record merger
+    // If record merge mode is CUSTOM and payload is not defined, use custom record merger
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         if (partialUpdateMode == PartialUpdateMode.NONE) {
@@ -163,7 +166,10 @@ public class BufferedRecordMergerFactory {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
         return Option.of(newRecord);
       }
-      return Option.empty();
+      // Note that:
+      // for regular route, returning Option.empty or Option.of(existingRecord) is the same.
+      // for dedup route, returning Option.of(existingRecord) is needed.
+      return Option.of(existingRecord);
     }
 
     @Override
@@ -443,23 +449,12 @@ public class BufferedRecordMergerFactory {
     }
 
     private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(recordContext, olderRecord);
-      HoodieRecord newHoodieRecord = constructHoodieAvroRecord(recordContext, newerRecord);
+      HoodieRecord oldHoodieRecord = recordContext.constructHoodieAvroRecord(olderRecord, payloadClass, null);
+      HoodieRecord newHoodieRecord = recordContext.constructHoodieAvroRecord(newerRecord, payloadClass, null);
       Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.merge(
           oldHoodieRecord, getSchemaForAvroPayloadMerge(oldHoodieRecord, olderRecord),
           newHoodieRecord, getSchemaForAvroPayloadMerge(newHoodieRecord, newerRecord), props);
       return mergedRecord;
-    }
-
-    private HoodieRecord constructHoodieAvroRecord(RecordContext<T> recordContext, BufferedRecord<T> bufferedRecord) {
-      GenericRecord record = null;
-      if (!bufferedRecord.isDelete()) {
-        Schema recordSchema = recordContext.getSchemaFromBufferRecord(bufferedRecord);
-        record = recordContext.convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
-      }
-      HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), null);
-      return new HoodieAvroRecord<>(hoodieKey,
-          HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue()), null);
     }
 
     private Schema getSchemaForAvroPayloadMerge(HoodieRecord record, BufferedRecord<T> bufferedRecord) throws IOException {

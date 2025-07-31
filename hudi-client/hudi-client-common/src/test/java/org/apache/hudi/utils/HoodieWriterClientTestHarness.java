@@ -27,10 +27,12 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -39,7 +41,6 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -50,6 +51,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -80,7 +83,9 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
@@ -130,6 +135,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
 import static org.apache.hudi.config.HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING;
+import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
 import static org.apache.hudi.testutils.Assertions.assertNoDupesWithinPartition;
 import static org.apache.hudi.testutils.Assertions.assertNoDuplicatesInPartition;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -544,8 +550,34 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(isGlobal);
     int dedupParallelism = records.getNumPartitions() + additionalParallelism;
-    HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd = (HoodieData<HoodieRecord<RawTripTestPayload>>) HoodieWriteHelper.newInstance()
-            .deduplicateRecords(records, index, dedupParallelism, writeConfig.getSchema(), writeConfig.getProps(), HoodiePreCombineAvroRecordMerger.INSTANCE);
+    BaseHoodieWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    HoodieReaderContext<HoodieRecord> readerContext = writeClient.getEngineContext()
+        .<HoodieRecord>getReaderContextFactory(metaClient).getContext();
+    List<String> orderingFieldNames = getOrderingFieldNames(
+        readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+    BufferedRecordMerger<HoodieRecord> recordMerger = BufferedRecordMergerFactory.create(
+        readerContext,
+        writeClient.getConfig().getRecordMergeMode(),
+        false,
+        Option.ofNullable(writeClient.getConfig().getRecordMerger()),
+        orderingFieldNames,
+        Option.ofNullable(writeClient.getConfig().getPayloadClass()),
+        new SerializableSchema(writeClient.getConfig().getSchema()).get(),
+        writeClient.getConfig().getProps(),
+        metaClient.getTableConfig().getPartialUpdateMode());
+    KeyGenerator keyGenerator = HoodieIndexUtils.getKeyGenerator(writeConfig, getEngineContext());
+    HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd =
+        (HoodieData<HoodieRecord<RawTripTestPayload>>) HoodieWriteHelper.newInstance()
+            .deduplicateRecords(
+                records,
+                index,
+                dedupParallelism,
+                writeConfig.getSchema(),
+                writeConfig.getProps(),
+                recordMerger,
+                readerContext,
+                orderingFieldNames,
+                (BaseKeyGenerator) keyGenerator);
     assertEquals(expectedNumPartitions, dedupedRecsRdd.getNumPartitions());
     List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupedRecsRdd.collectAsList();
     assertEquals(isGlobal ? 1 : 2, dedupedRecs.size());

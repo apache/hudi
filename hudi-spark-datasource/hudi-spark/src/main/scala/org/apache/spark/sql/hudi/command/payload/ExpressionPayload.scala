@@ -318,7 +318,13 @@ class ExpressionPayload(@transient record: GenericRecord,
     for (i <- 0 until joinSchema.getFields.size()) {
       val value = if (i < leftSchema.getFields.size()) {
         sourceRecord.get(i)
-      } else { // skip meta field
+      } else {
+//        if (HoodieRecord.HOODIE_META_COLUMNS.contains(targetRecord.getSchema.getFields.get(i - leftSchema.getFields.size()).name())) {
+//          // skip meta field
+//          targetRecord.get(i - leftSchema.getFields.size() + HoodieRecord.HOODIE_META_COLUMNS.size())
+//        } else {
+//          targetRecord.get(i - leftSchema.getFields.size())
+//        }
         targetRecord.get(i - leftSchema.getFields.size() + HoodieRecord.HOODIE_META_COLUMNS.size())
       }
       values(i) = value
