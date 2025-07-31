@@ -139,15 +139,23 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
     configs.mapSupport = false;
 
+    configs.addNewFieldSupport = false;
+    configs.addNewFieldNotAtEndSupport = false;
+    configs.reorderColumnSupport = false;
     configs.renameColumnSupport = false;
+    configs.removeColumnSupport = false;
+
     configs.renameColumnAsPreviouslyRemovedSupport = false;
 
-
+    configs.intToLongSupport = false;
+    configs.intToFloatSupport = false;
     configs.intToDoubleSupport = false;
     configs.intToStringSupport = false;
     configs.intToDecimalFixedSupport = false;
     configs.intToDecimalBytesSupport = false;
 
+    configs.longToFloatSupport = false;
+    configs.longToDoubleSupport = false;
     configs.longToStringSupport = false;
     configs.longToDecimalFixedSupport = false;
     configs.longToDecimalBytesSupport = false;
