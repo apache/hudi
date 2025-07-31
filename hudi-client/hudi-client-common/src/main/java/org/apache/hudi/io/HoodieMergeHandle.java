@@ -269,7 +269,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (combineRecordOpt.isPresent()) {
       if (oldRecord.getData() != combineRecordOpt.get().getData()) {
         // the incoming record is chosen
-        isDelete = HoodieOperation.isDelete(newRecord.getOperation());
+        isDelete = isDeleteRecord(newRecord);
       } else {
         // the incoming record is dropped
         return false;
@@ -290,13 +290,21 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
       throws IOException {
-    if (writeRecord(newRecord, Option.of(newRecord), schema, prop, HoodieOperation.isDelete(newRecord.getOperation()))) {
+    if (writeRecord(newRecord, Option.of(newRecord), schema, prop, isDeleteRecord(newRecord))) {
       insertRecordsWritten++;
     }
   }
 
   protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop) throws IOException {
     return writeRecord(newRecord, combineRecord, schema, prop, false);
+  }
+
+  /**
+   * Check if a record is a DELETE/UPDATE_BEFORE marked by the '_hoodie_operation' field.
+   */
+  private boolean isDeleteRecord(HoodieRecord<T> record) {
+    HoodieOperation operation = record.getOperation();
+    return HoodieOperation.isDelete(operation) || HoodieOperation.isUpdateBefore(operation);
   }
 
   private boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop, boolean isDelete) throws IOException {

@@ -48,7 +48,7 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 import java.util.Properties;
@@ -89,8 +89,8 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void test(boolean isUpdateBefore) throws Exception {
+  @EnumSource(value = HoodieOperation.class, names = {"UPDATE_BEFORE", "DELETE"})
+  public void test(HoodieOperation hoodieOperation) throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
 
@@ -100,10 +100,9 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     List<WriteStatus> writeStatuses1 = writeData(client, insertTime1, dataset1);
     client.commit(insertTime1, jsc().parallelize(writeStatuses1));
 
-    String hoodieOperation = isUpdateBefore ? "-U" : "D";
     String[] dataset2 = new String[] {
         "I,id1,Danny,30,2,par1",
-        hoodieOperation + ",id2,Tony,20,2,par1",
+        hoodieOperation.getName() + ",id2,Tony,20,2,par1",
         "I,id3,Julian,40,2,par1",
         "D,id4,Stephan,35,2,par1"};
     String insertTime2 = HoodieActiveTimeline.createNewInstantTime();
