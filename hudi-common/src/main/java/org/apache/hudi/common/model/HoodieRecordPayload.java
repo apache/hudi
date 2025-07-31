@@ -112,6 +112,10 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   Option<IndexedRecord> getInsertValue(Schema schema) throws IOException;
 
+  default Option<IndexedRecord> getData(Schema schema, Properties properties) throws IOException {
+    return getInsertValue(schema, properties);
+  }
+
   /**
    * Generates an avro record out of the given HoodieRecordPayload, to be written out to storage. Called when writing a new value for the given
    * HoodieKey, wherein there is no existing record in storage to be combined against. (i.e insert) Return EMPTY to skip writing this record.
