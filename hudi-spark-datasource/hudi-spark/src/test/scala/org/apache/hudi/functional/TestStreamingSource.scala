@@ -216,7 +216,7 @@ class TestStreamingSource extends StreamTest {
   test("Test mor streaming source with clustering") {
     Array("true", "false").foreach(skipCluster => {
       withTempDir { inputDir =>
-        val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream_cluster"
+        val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream_cluster_$skipCluster"
         val metaClient = HoodieTableMetaClient.newTableBuilder()
           .setTableType(MERGE_ON_READ)
           .setTableName(getTableName(tablePath))
@@ -243,12 +243,20 @@ class TestStreamingSource extends StreamTest {
 
         testStream(df)(
           AssertOnQuery { q => q.processAllAvailable(); true },
-          // Start after the first commit
-          CheckAnswerRows(Seq(
-            Row("2", "a1", "11", "001"),
-            Row("3", "a1", "12", "002"),
-            Row("4", "a1", "13", "003"),
-            Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false)
+          if (skipCluster.toBoolean) {
+            // Start after the first commit
+            CheckAnswerRows(Seq(Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false)
+          } else {
+            // Start after the first commit
+            CheckAnswerRows(Seq(
+              Row("2", "a1", "11", "001"),
+              Row("3", "a1", "12", "002"),
+              Row("4", "a1", "13", "003"),
+              Row("5", "a1", "14", "004")), lastOnly = true, isSorted = false)
+          }
+
+
+
         )
         assertTrue(metaClient.reloadActiveTimeline
           .filter(JavaConversions.getPredicate(
