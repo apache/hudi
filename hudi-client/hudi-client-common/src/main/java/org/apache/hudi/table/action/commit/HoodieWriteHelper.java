@@ -100,6 +100,9 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
         // NOTE: For merge mode based merging, it returns non-null.
         //       For mergers / payloads based merging, it may return null.
         boolean choosePrev = merged.isPresent();
+        if (!choosePrev) {
+          return rec1;
+        }
         HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
         HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
         return recordContext.constructHoodieAvroRecord(merged.get(), payloadClass, reducedKey.getPartitionPath(), operation);

@@ -240,6 +240,7 @@ public abstract class HoodieReaderContext<T> {
    * @param properties the properties for the reader.
    */
   public void initRecordMerger(TypedProperties properties) {
+    // todo: this sets recordMergeMode before we know its an expressions index
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
     if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
@@ -104,20 +106,23 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     HoodieReaderContext<T> readerContext =
         (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryDuringWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType())
             .getContext();
-    readerContext.getRecordContext().updateRecordKeyExtractor(table.getMetaClient().getTableConfig(), false);
+    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
+    readerContext.getRecordContext().updateRecordKeyExtractor(tableConfig, false);
     readerContext.initRecordMerger(table.getConfig().getProps());
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getConfig().getProps(), table.getMetaClient());
     HoodieRecordMerger recordMerger = HoodieRecordUtils.mergerToPreCombineMode(table.getConfig().getRecordMerger());
+    RecordMergeMode recordMergeMode = HoodieTableConfig.inferCorrectMergingBehavior(null, table.getConfig().getPayloadClass(), null,
+        String.join(",", orderingFieldNames), tableConfig.getTableVersion()).getLeft();
     BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext,
-        readerContext.getMergeMode(),
+        recordMergeMode,
         false,
         Option.ofNullable(recordMerger),
         orderingFieldNames,
         Option.ofNullable(table.getConfig().getPayloadClass()),
         new SerializableSchema(table.getConfig().getSchema()).get(),
         table.getConfig().getProps(),
-        table.getMetaClient().getTableConfig().getPartialUpdateMode());
+        tableConfig.getPartialUpdateMode());
     KeyGenerator keyGenerator = HoodieIndexUtils.getKeyGenerator(table.getConfig(), table.getContext());
     return deduplicateRecords(
         records,
@@ -153,16 +158,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     // Construct new buffered record.
     HoodieRecord<T> finalNewRecord = newRecord;
     HoodieRecord<T> finalOldRecord = oldRecord;
-    // TODO: let's clean this up?
-    boolean isDelete1 = recordContext.isDeleteRecord(finalNewRecord.getData(), newDeleteContext);
-    BufferedRecord<T> bufferedRec1 = BufferedRecord.forRecordWithContext(
-        finalNewRecord.getData(), newSchema, recordContext, orderingFieldNames, isDelete1,
-        Option.of(finalNewRecord.getKey()), Option.of(finalNewRecord.getOrderingValue(newSchema, properties)));
+    BufferedRecord<T> bufferedRec1 = BufferedRecord.forRecordWithContext(finalNewRecord, newSchema, recordContext, properties);
     // Construct old buffered record.
-    boolean isDelete2 = recordContext.isDeleteRecord(finalOldRecord.getData(), existingDeleteContext);
-    BufferedRecord<T> bufferedRec2 = BufferedRecord.forRecordWithContext(
-        finalOldRecord.getData(), oldSchema, recordContext, orderingFieldNames, isDelete2,
-        Option.of(finalOldRecord.getKey()), Option.of(finalOldRecord.getOrderingValue(oldSchema, properties)));
+    BufferedRecord<T> bufferedRec2 = BufferedRecord.forRecordWithContext(finalOldRecord, oldSchema, recordContext, properties);
     // Run merge.
     return recordMerger.deltaMerge(bufferedRec1, bufferedRec2);
   }

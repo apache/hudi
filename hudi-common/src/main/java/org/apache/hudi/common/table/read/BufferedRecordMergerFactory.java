@@ -68,11 +68,6 @@ public class BufferedRecordMergerFactory {
       return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, orderingFieldNames, readerSchema, props);
     }
 
-//    if (payloadClass.map(payloadCls -> payloadCls.equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")).orElse(false)) {
-//      return new CustomPayloadRecordMerger<>(
-//          readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClass.get(), readerSchema, props);
-//    }
-
     // If record merge mode is CUSTOM and payload is defined, use precombine record merger
     // If record merge mode is CUSTOM and payload is not defined, use custom record merger
     switch (recordMergeMode) {
@@ -420,7 +415,8 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMergeNonDeleteRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
       Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = getMergedRecord(existingRecord, newRecord);
       if (combinedRecordAndSchemaOpt.isPresent()) {
-        T combinedRecordData = recordContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchemaOpt.get().getLeft().getData());
+        Schema combinedSchema = combinedRecordAndSchemaOpt.get().getRight();
+        T combinedRecordData = recordContext.convertAvroRecord(combinedRecordAndSchemaOpt.get().getLeft().toIndexedRecord(combinedSchema, props).get().getData());
         // If pre-combine does not return existing record, update it
         if (combinedRecordData != existingRecord.getRecord()) {
           Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();

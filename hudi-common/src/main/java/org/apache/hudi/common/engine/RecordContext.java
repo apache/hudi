@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 
@@ -44,9 +45,11 @@ import org.apache.avro.generic.IndexedRecord;
 
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.function.BiFunction;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
@@ -97,6 +100,18 @@ public abstract class RecordContext<T> implements Serializable {
 
   public void setPartitionPath(String partitionPath) {
     this.partitionPath = partitionPath;
+  }
+
+  public T extractDataFromRecord(HoodieRecord record, Schema schema, Properties props) {
+    try {
+      if (record.getData() instanceof HoodieRecordPayload) {
+        HoodieRecordPayload payload = (HoodieRecordPayload) record.getData();
+        return (T) payload.getData(schema, props).map(value -> convertAvroRecord((IndexedRecord) value)).orElse(null);
+      }
+      return (T) record.getData();
+    } catch (IOException e) {
+      throw new HoodieException("Failed to extract data from record: " + record, e);
+    }
   }
 
   /**
