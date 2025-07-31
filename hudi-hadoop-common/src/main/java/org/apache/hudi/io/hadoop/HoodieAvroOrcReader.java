@@ -91,7 +91,10 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
     try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(hadoopConf))) {
       // Limit the ORC schema to requested fields only
       Schema fileSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
-      Schema prunedFileSchema = HoodieAvroUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList()));
+      Set<String> existingFields = fileSchema.getFields().stream()
+          .map(Schema.Field::name)
+          .collect(Collectors.toSet());
+      Schema prunedFileSchema = HoodieAvroUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(Schema.Field::name).filter(existingFields::contains).collect(Collectors.toList()));
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(prunedFileSchema);
       RecordReader recordReader = reader.rows(new Options(hadoopConf).schema(orcSchema));
       ClosableIterator<IndexedRecord> recordIterator = new OrcReaderIterator<>(recordReader, prunedFileSchema, orcSchema);
