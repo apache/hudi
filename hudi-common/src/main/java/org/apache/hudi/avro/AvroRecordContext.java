@@ -80,6 +80,11 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   @Override
   public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
+    return constructHoodieRecord(bufferedRecord, partitionPath);
+  }
+
+  @Override
+  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord, String partitionPath) {
     if (bufferedRecord.isDelete()) {
       return SpillableMapUtils.generateEmptyPayload(
           bufferedRecord.getRecordKey(),

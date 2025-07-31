@@ -22,15 +22,20 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -92,18 +97,29 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
   }
 
   @Override
-  public Iterator<HoodieRecord<T>> deduplicateRecords(Iterator<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, TypedProperties props, HoodieRecordMerger merger) {
+  public Iterator<HoodieRecord<T>> deduplicateRecords(Iterator<HoodieRecord<T>> records,
+                                                      HoodieIndex<?, ?> index,
+                                                      int parallelism,
+                                                      String schemaStr,
+                                                      TypedProperties props,
+                                                      BufferedRecordMerger<T> recordMerger,
+                                                      HoodieReaderContext<T> readerContext,
+                                                      List<String> orderingFieldNames, BaseKeyGenerator keyGenerator) {
     // If index used is global, then records are expected to differ in their partitionPath
     Map<Object, List<HoodieRecord<T>>> keyedRecords = CollectionUtils.toStream(records)
         .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
 
     // caution that the avro schema is not serializable
     final Schema schema = new Schema.Parser().parse(schemaStr);
+    DeleteContext deleteContext = new DeleteContext(props, schema).withReaderSchema(schema);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
       HoodieRecord<T> reducedRecord;
       try {
         // Precombine do not need schema and do not return null
-        reducedRecord =  merger.merge(rec1, schema, rec2, schema, props).get().getLeft();
+        Option<BufferedRecord<T>> merged = merge(
+            rec1, rec2, schema, schema, readerContext.getRecordContext(), orderingFieldNames, recordMerger,
+            deleteContext, deleteContext, props);
+        reducedRecord = readerContext.getRecordContext().constructHoodieRecord(merged.get());
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }

@@ -342,6 +342,11 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
+        public HoodieRecord<String> constructHoodieRecord(BufferedRecord<String> bufferedRecord, String partitionPath) {
+          return null;
+        }
+
+        @Override
         public String mergeWithEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
           return "";
         }

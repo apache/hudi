@@ -20,16 +20,22 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.buffer.RowDataBucket;
@@ -69,6 +75,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+
+import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -117,7 +125,9 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   protected transient WriteFunction writeFunction;
 
-  private transient HoodieRecordMerger recordMerger;
+  private transient BufferedRecordMerger<RowData> recordMerger;
+  private transient HoodieReaderContext<RowData> readerContext;
+  private transient List<String> orderingFieldNames;
 
   protected final RowType rowType;
 
@@ -226,7 +236,18 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   }
 
   private void initMergeClass() {
-    recordMerger = HoodieRecordUtils.mergerToPreCombineMode(writeClient.getConfig().getRecordMerger());
+    readerContext = writeClient.getEngineContext().<RowData>getReaderContextFactory(metaClient).getContext();
+    orderingFieldNames = getOrderingFieldNames(readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+    recordMerger = BufferedRecordMergerFactory.create(
+        readerContext,
+        writeClient.getConfig().getRecordMergeMode(),
+        false,
+        Option.ofNullable(writeClient.getConfig().getRecordMerger()),
+        orderingFieldNames,
+        Option.ofNullable(writeClient.getConfig().getPayloadClass()),
+        new SerializableSchema(writeClient.getConfig().getSchema()).get(),
+        writeClient.getConfig().getProps(),
+        metaClient.getTableConfig().getPartialUpdateMode());
     LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
   }
 
@@ -416,7 +437,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     Iterator<HoodieRecord> recordItr = new MappingIterator<>(
         rowItr, rowData -> recordConverter.convert(rowData, rowDataBucket.getBucketInfo()));
 
-    List<WriteStatus> statuses = writeFunction.write(deduplicateRecordsIfNeeded(recordItr), rowDataBucket.getBucketInfo(), instant);
+    List<WriteStatus> statuses = writeFunction.write(
+        deduplicateRecordsIfNeeded(recordItr), rowDataBucket.getBucketInfo(), instant);
     writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
@@ -424,8 +446,11 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records) {
     if (config.get(FlinkOptions.PRE_COMBINE)) {
+      KeyGenerator keyGenerator = HoodieIndexUtils.getKeyGenerator(writeClient.getConfig(), writeClient.getEngineContext());
       return FlinkWriteHelper.newInstance().deduplicateRecords(
-          records, null, -1, this.writeClient.getConfig().getSchema(), this.writeClient.getConfig().getProps(), recordMerger);
+          records, null, -1, this.writeClient.getConfig().getSchema(),
+          this.writeClient.getConfig().getProps(),
+          recordMerger, readerContext, orderingFieldNames, (BaseKeyGenerator) keyGenerator);
     } else {
       return records;
     }
