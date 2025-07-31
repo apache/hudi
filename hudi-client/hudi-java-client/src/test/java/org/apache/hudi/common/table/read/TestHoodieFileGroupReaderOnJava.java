@@ -67,8 +67,41 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
   @Override
   public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
     SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
+    configs.addNewFieldSupport = false;
+    configs.addNewFieldNotAtEndSupport = false;
     configs.renameColumnSupport = false;
     configs.renameColumnAsPreviouslyRemovedSupport = false;
+
+    configs.intToLongSupport = false;
+    configs.intToFloatSupport = false;
+    configs.intToDoubleSupport = false;
+    configs.intToStringSupport = false;
+    configs.intToDecimalFixedSupport = false;
+    configs.intToDecimalBytesSupport = false;
+
+    configs.longToFloatSupport = false;
+    configs.longToDoubleSupport = false;
+    configs.longToStringSupport = false;
+    configs.longToDecimalFixedSupport = false;
+    configs.longToDecimalBytesSupport = false;
+
+    configs.floatToDoubleSupport = false;
+    configs.floatToStringSupport = false;
+    configs.floatToDecimalFixedSupport = false;
+    configs.floatToDecimalBytesSupport = false;
+
+    configs.doubleToStringSupport = false;
+    configs.doubleToDecimalFixedSupport = false;
+    configs.doubleToDecimalBytesSupport = false;
+
+    configs.stringToDecimalFixedSupport = false;
+    configs.stringToDecimalBytesSupport = false;
+    configs.stringToDateSupport = false;
+
+    configs.decimalFixedToStringSupport = false;
+    configs.decimalBytesToStringSupport = false;
+
+    configs.dateToStringSupport = false;
     return configs;
   }
 }

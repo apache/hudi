@@ -1482,6 +1482,8 @@ public class HoodieAvroUtils {
             if (recordNeedsRewriteForExtendedAvroTypePromotion(writerFields.get(field.name()).schema(), field.schema())) {
               return true;
             }
+          } else {
+            return true;
           }
         }
         return false;
