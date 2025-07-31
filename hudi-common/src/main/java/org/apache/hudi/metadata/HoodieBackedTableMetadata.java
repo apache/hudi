@@ -332,11 +332,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   @Override
   public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys) {
-    return readRecordIndex(recordKeys, Option.empty());
+    return readRecordIndexLocationsWithKeys(recordKeys, Option.empty());
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndex(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
     // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
     // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
     // to existing records being inserted again causing duplicates.

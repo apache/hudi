@@ -233,7 +233,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys);
 
   /**
-   * Returns the location of record keys which are found in the record index.
+   * Returns pairs of (record key, location of record key) which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    * @param recordKeys list of recordkeys to look up in the index
    * @param dataTablePartition option of the data table partition to look up from. This is only applicable to partitioned rli
@@ -242,7 +242,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return map from recordkey to the location of the record that was read from the index
    *
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndex(HoodieData<String> recordKeys, Option<String> dataTablePartition);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition);
 
   /**
    * Returns the location of record keys which are found in the record index.
