@@ -299,9 +299,9 @@ class TestStreamingSource extends StreamTest {
   }
 
   private def testCheckpointTranslation(tableName: String,
-                                         tableType: HoodieTableType,
-                                         writeTableVersion: HoodieTableVersion,
-                                         streamingReadVersions: List[Int]): Unit = {
+                                        tableType: HoodieTableType,
+                                        writeTableVersion: HoodieTableVersion,
+                                        streamingReadVersions: List[Int]): Unit = {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/$tableName"
       val metaClient = HoodieTableMetaClient.newTableBuilder()
@@ -360,7 +360,7 @@ class TestStreamingSource extends StreamTest {
     }
   }
 
-  test("Test checkpoint translation") {
+  test("Test checkpoint translation on COW table") {
     testCheckpointTranslation(
       "test_cow_stream_ckpt",
       COPY_ON_WRITE,
@@ -369,7 +369,7 @@ class TestStreamingSource extends StreamTest {
     )
   }
 
-  test("Test checkpoint translation mor") {
+  test("Test checkpoint translation on MOR table") {
     testCheckpointTranslation(
       "test_mor_stream_ckpt",
       MERGE_ON_READ,
@@ -378,7 +378,7 @@ class TestStreamingSource extends StreamTest {
     )
   }
 
-  test("Test checkpoint translation v6 base") {
+  test("Test checkpoint translation on COW table with table version 6") {
     testCheckpointTranslation(
       "test_cow_stream_ckpt_v6",
       COPY_ON_WRITE,
@@ -387,7 +387,7 @@ class TestStreamingSource extends StreamTest {
     )
   }
 
-  test("Test checkpoint translation v6 base mor") {
+  test("Test checkpoint translation on MOR table with table version 6") {
     testCheckpointTranslation(
       "test_mor_stream_ckpt_v6",
       MERGE_ON_READ,
