@@ -121,37 +121,38 @@ object HoodieParquetFileFormatHelper {
       })
     }
 
-    def repairFloatDoubleConversion(expr: Expression, srcType: DataType, dstType: DataType): Expression = {
+    def recursivelyCastExpressions(expr: Expression, srcType: DataType, dstType: DataType): Expression = {
       lazy val needTimeZone = Cast.needsTimeZone(srcType, dstType)
-      if (srcType == FloatType && dstType == DoubleType) {
-        val toStr = Cast(expr, StringType, if (needTimeZone) timeZoneId else None)
-        Cast(toStr, dstType, if (needTimeZone) timeZoneId else None)
-      } else (srcType, dstType) match {
+      (srcType, dstType) match {
+        case (FloatType, DoubleType) =>
+          val toStr = Cast(expr, StringType, if (needTimeZone) timeZoneId else None)
+          Cast(toStr, dstType, if (needTimeZone) timeZoneId else None)
         case (s: StructType, d: StructType) if hasFloatToDouble(s, d) =>
           val structFields = s.fields.zip(d.fields).zipWithIndex.map {
             case ((srcField, dstField), i) =>
               val child = GetStructField(expr, i, Some(dstField.name))
-              repairFloatDoubleConversion(child, srcField.dataType, dstField.dataType)
+              recursivelyCastExpressions(child, srcField.dataType, dstField.dataType)
           }
           CreateNamedStruct(d.fields.zip(structFields).flatMap {
             case (f, c) => Seq(Literal(f.name), c)
           })
         case (ArrayType(sElementType, containsNull), ArrayType(dElementType, _)) if hasFloatToDouble(sElementType, dElementType) =>
-          val lambdaVar = NamedLambdaVariable("x", sElementType, containsNull)
-          val body = repairFloatDoubleConversion(lambdaVar, sElementType, dElementType)
+          val lambdaVar = NamedLambdaVariable("element", sElementType, containsNull)
+          val body = recursivelyCastExpressions(lambdaVar, sElementType, dElementType)
           val func = LambdaFunction(body, Seq(lambdaVar))
           ArrayTransform(expr, func)
         case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _)) if hasFloatToDouble(sKeyType, dKeyType) || hasFloatToDouble(sValType, dValType) =>
           val kv = NamedLambdaVariable("kv", new StructType()
             .add("key", sKeyType, nullable = false)
             .add("value", sValType, nullable = vnull), nullable = false)
-          val newKey = repairFloatDoubleConversion(GetStructField(kv, 0), sKeyType, dKeyType)
-          val newVal = repairFloatDoubleConversion(GetStructField(kv, 1), sValType, dValType)
+          val newKey = recursivelyCastExpressions(GetStructField(kv, 0), sKeyType, dKeyType)
+          val newVal = recursivelyCastExpressions(GetStructField(kv, 1), sValType, dValType)
           val entry = CreateStruct(Seq(newKey, newVal))
           val func = LambdaFunction(entry, Seq(kv))
           val transformed = ArrayTransform(MapEntries(expr), func)
           MapFromEntries(transformed)
         case _ =>
+          // most cases should be covered here we only need to do the recursive work for float to double
           Cast(expr, dstType, if (needTimeZone) timeZoneId else None)
       }
     }
@@ -170,7 +171,7 @@ object HoodieParquetFileFormatHelper {
         if (typeChangeInfos.containsKey(i)) {
           val srcType = typeChangeInfos.get(i).getRight
           val dstType = typeChangeInfos.get(i).getLeft
-          repairFloatDoubleConversion(attr, srcType, dstType)
+          recursivelyCastExpressions(attr, srcType, dstType)
         } else attr
       }
       GenerateUnsafeProjection.generate(castSchema, newFullSchema)
