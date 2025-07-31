@@ -220,6 +220,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // NOTE: It's important to set Spark's `Tests.IS_TESTING` so that our tests are recognized
     //       as such by Spark
     System.setProperty("spark.testing", "true");
+    sparkSession.sparkContext().persistentRdds().foreach(rdd -> rdd._2.persist());
   }
 
   /**

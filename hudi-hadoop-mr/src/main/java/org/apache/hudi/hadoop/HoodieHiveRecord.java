@@ -35,15 +35,21 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
+import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
@@ -136,6 +142,27 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    if (fieldValue == null) {
+      return null;
+    }
+    LogicalType logicalType = fieldSchema.getLogicalType();
+
+    if (logicalType == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(((IntWritable) fieldValue).get());
+    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
+      return ((LongWritable) fieldValue).get();
+    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
+      return ((LongWritable) fieldValue).get() / 1000;
+    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      return ((HiveDecimalWritable) fieldValue).getHiveDecimal().bigDecimalValue();
+    }
+    return fieldValue;
+  }
+
+  @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     Object[] objects = new Object[columns.length];
     for (int i = 0; i < objects.length; i++) {
@@ -146,7 +173,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return HiveHoodieReaderContext.getFieldValueFromArrayWritable(data, schema, column, objectInspectorCache);
+    return HiveRecordContext.getFieldValueFromArrayWritable(data, schema, column, objectInspectorCache);
   }
 
   @Override

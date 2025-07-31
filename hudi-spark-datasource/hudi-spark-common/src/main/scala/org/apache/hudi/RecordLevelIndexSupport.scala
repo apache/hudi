@@ -75,21 +75,27 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @return Sequence of file names which need to be queried
    */
   private def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
-    val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(metadataTable.readRecordIndex(
-        HoodieListData.eager(JavaConverters.seqAsJavaListConverter(recordKeys).asJava)))
-    val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
-    val candidateFiles: mutable.Set[String] = mutable.Set.empty
-    for (location <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
-      fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
-    }
-    for (file <- allFiles) {
-      val fileId = FSUtils.getFileIdFromFilePath(file)
-      val partitionOpt = fileIdToPartitionMap.get(fileId)
-      if (partitionOpt.isDefined) {
-        candidateFiles += file.getName
+    val recordIndexData = metadataTable.readRecordIndexLocationsWithKeys(
+        HoodieListData.eager(JavaConverters.seqAsJavaListConverter(recordKeys).asJava))
+    try {
+      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData)
+      val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
+      val candidateFiles: mutable.Set[String] = mutable.Set.empty
+      for (location <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
+        fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath)
       }
+      for (file <- allFiles) {
+        val fileId = FSUtils.getFileIdFromFilePath(file)
+        val partitionOpt = fileIdToPartitionMap.get(fileId)
+        if (partitionOpt.isDefined) {
+          candidateFiles += file.getName
+        }
+      }
+      candidateFiles.toSet
+    } finally {
+      // Clean up the RDD to avoid memory leaks
+      recordIndexData.unpersistWithDependencies()
     }
-    candidateFiles.toSet
   }
 
   /**

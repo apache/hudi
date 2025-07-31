@@ -49,7 +49,8 @@ class TestHoodieNativeAvroHFileReader {
     HFileReaderFactory readerFactory = HFileReaderFactory.builder()
         .withStorage(storage).withProps(DEFAULT_PROPS)
         .withPath(path).build();
-    reader = new HoodieNativeAvroHFileReader(readerFactory, path, Option.empty());
+    reader = HoodieNativeAvroHFileReader.builder()
+        .readerFactory(readerFactory).path(path).build();
   }
 
   @Test

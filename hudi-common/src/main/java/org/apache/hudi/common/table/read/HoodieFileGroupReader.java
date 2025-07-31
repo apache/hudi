@@ -99,7 +99,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readerParameters = readerParameters;
     this.inputSplit = inputSplit;
     readerContext.setHasLogFiles(!this.inputSplit.getLogFiles().isEmpty());
-    readerContext.setPartitionPath(inputSplit.getPartitionPath());
+    readerContext.getRecordContext().setPartitionPath(inputSplit.getPartitionPath());
     if (readerContext.getHasLogFiles() && inputSplit.getStart() != 0) {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
     }
@@ -113,7 +113,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     readerContext.setShouldMergeUseRecordPosition(readerParameters.useRecordPosition() && !isSkipMerge && readerContext.getHasLogFiles());
     readerContext.setHasBootstrapBaseFile(inputSplit.getBaseFileOption().flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
-    readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
+    readerContext.setSchemaHandler(readerContext.getRecordContext().supportsParquetRowIndex()
         ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
         : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
@@ -195,7 +195,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         for (int i = 0; i < partitionFields.length; i++) {
           String field = partitionFields[i];
           if (dataSchema.getField(field) != null) {
-            filterFieldsAndValues.add(Pair.of(field, readerContext.convertValueToEngineType((Comparable) partitionValues[i])));
+            filterFieldsAndValues.add(Pair.of(field, readerContext.getRecordContext().convertValueToEngineType((Comparable) partitionValues[i])));
           }
         }
         return filterFieldsAndValues;
@@ -288,8 +288,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> {
-      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(), readerContext, orderingFieldNames, false);
-      return readerContext.constructHoodieRecord(bufferedRecord);
+      BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, readerContext.getSchemaHandler().getRequestedSchema(),
+          readerContext.getRecordContext(), orderingFieldNames, false);
+      return readerContext.getRecordContext().constructHoodieRecord(bufferedRecord);
     });
   }
 
@@ -298,7 +299,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public ClosableIterator<String> getClosableKeyIterator() throws IOException {
     return new CloseableMappingIterator<>(getClosableIterator(),
-        nextRecord -> readerContext.getRecordKey(nextRecord, readerContext.getSchemaHandler().getRequestedSchema()));
+        nextRecord -> readerContext.getRecordContext().getRecordKey(nextRecord, readerContext.getSchemaHandler().getRequestedSchema()));
   }
 
   public ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException {

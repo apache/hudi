@@ -211,8 +211,8 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .optionalLong("ts")
         .endRecord();
     GenericRowData rowData = GenericRowData.of(StringData.fromString("f1"), StringData.fromString("f2"), 1000L);
-    assertEquals(1000L, readerContext.getOrderingValue(rowData, schema, Collections.singletonList("ts")));
-    assertEquals(OrderingValues.getDefault(), readerContext.getOrderingValue(rowData, schema, Collections.singletonList("non_existent_col")));
+    assertEquals(1000L, readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("ts")));
+    assertEquals(OrderingValues.getDefault(), readerContext.getRecordContext().getOrderingValue(rowData, schema, Collections.singletonList("non_existent_col")));
   }
 
   @Test
@@ -229,7 +229,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .endRecord();
     String key = "my_key";
     GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("field2_val"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @Test
@@ -247,7 +247,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .endRecord();
     String key = "key";
     GenericRowData rowData = GenericRowData.of(StringData.fromString(key), StringData.fromString("other"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @Test
@@ -267,7 +267,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
         .endRecord();
     String key = "field1:va1,field2:__empty__";
     GenericRowData rowData = GenericRowData.of(StringData.fromString("va1"), StringData.fromString(""), StringData.fromString("other"));
-    assertEquals(key, readerContext.getRecordKey(rowData, schema));
+    assertEquals(key, readerContext.getRecordContext().getRecordKey(rowData, schema));
   }
 
   @ParameterizedTest
