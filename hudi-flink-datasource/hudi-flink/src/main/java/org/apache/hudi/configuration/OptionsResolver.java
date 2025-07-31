@@ -512,6 +512,14 @@ public class OptionsResolver {
     }
   }
 
+  /**
+   * Returns whether complex keygen encodes single record key with field name.
+   */
+  public static boolean isComplexKeygenEncodeSingleRecordKeyFieldName(Configuration conf) {
+    return Boolean.parseBoolean(conf.getString(HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(),
+        HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.defaultValue().toString()));
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
