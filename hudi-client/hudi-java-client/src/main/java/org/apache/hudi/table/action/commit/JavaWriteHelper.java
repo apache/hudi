@@ -22,12 +22,17 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
@@ -59,8 +64,14 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
   }
 
   @Override
-  public List<HoodieRecord<T>> deduplicateRecords(
-      List<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, TypedProperties props, HoodieRecordMerger merger) {
+  public List<HoodieRecord<T>> deduplicateRecords(List<HoodieRecord<T>> records,
+                                                  HoodieIndex<?, ?> index,
+                                                  int parallelism,
+                                                  String schemaStr,
+                                                  TypedProperties props,
+                                                  BufferedRecordMerger<T> recordMerger,
+                                                  HoodieReaderContext<T> readerContext,
+                                                  List<String> orderingFieldNames, BaseKeyGenerator keyGenerator) {
     boolean isIndexingGlobal = index.isGlobal();
     Map<Object, List<Pair<Object, HoodieRecord<T>>>> keyedRecords = records.stream().map(record -> {
       HoodieKey hoodieKey = record.getKey();
@@ -70,10 +81,14 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
     final Schema schema = new Schema.Parser().parse(schemaStr);
+    DeleteContext deleteContext = new DeleteContext(props, schema).withReaderSchema(schema);
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
       HoodieRecord<T> reducedRecord;
       try {
-        reducedRecord =  merger.merge(rec1, schema, rec2, schema, props).get().getLeft();
+        Option<BufferedRecord<T>> merged = merge(
+            rec2, rec1, schema, schema, readerContext.getRecordContext(), orderingFieldNames, recordMerger,
+            deleteContext, deleteContext, props);
+        reducedRecord = readerContext.getRecordContext().constructHoodieRecord(merged.get());
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }

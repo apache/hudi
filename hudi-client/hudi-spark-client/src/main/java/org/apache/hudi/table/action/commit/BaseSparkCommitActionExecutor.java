@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.utils.SparkPartitionUtils;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
@@ -47,6 +48,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
