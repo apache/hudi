@@ -167,7 +167,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
     conf.set(FlinkOptions.PRECOMBINE_FIELD, writeConfigs.get("hoodie.datasource.write.precombine.field"));
     conf.set(FlinkOptions.OPERATION, operation);
-    if (Objects.equals(writeConfigs.get(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key()).toLowerCase(), "true")) {
+    if (Objects.equals(writeConfigs.get(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key()), "true")) {
       // TODO: This is needed, but not sure if it is supposed to be needed
       conf.setString(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key(), "true");
     }
