@@ -31,6 +31,10 @@ import java.util.Collections;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+/**
+ * This class is used for test purpose, and should never be used
+ * in other ways.
+ */
 public class UserProvidedKeyGenerator extends BuiltinKeyGenerator {
 
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;

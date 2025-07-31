@@ -34,14 +34,14 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, Tim
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FILE_NAME_GENERATOR, INSTANT_GENERATOR}
-import org.apache.hudi.common.util.{ClusteringUtils, Option}
+import org.apache.hudi.common.util.{ClusteringUtils, Option, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
 import org.apache.hudi.storage.{StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
@@ -2414,22 +2414,47 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @ParameterizedTest
   @MethodSource(Array("provideParamsForKeyGenTest"))
-  def testUserProvidedKeyGeneratorClass(keyGenClass: String): Unit = {
+  def testUserProvidedKeyGeneratorClass(keyGenClass: String,
+                                        keyGenType: String): Unit = {
     val recordType = HoodieRecordType.AVRO
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType,
       CommonOptionUtils.commonOpts ++ Map(
-        "hoodie.datasource.write.keygenerator.class" -> keyGenClass,
+        HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
+        HoodieWriteConfig.KEYGENERATOR_TYPE.key -> keyGenType,
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition"
       ))
+    val expectedKeyGenType = if (StringUtils.isNullOrEmpty(keyGenClass)) {
+      KeyGeneratorType.USER_PROVIDED.name
+    } else {
+      KeyGeneratorType.fromClassName(keyGenClass).name
+    }
 
     // Insert.
     val records = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    writeToHudi(writeOpts, inputDF)
+
+    // Make sure the initial configurations set properly for USER_PROVIDED type.
+    if (StringUtils.isNullOrEmpty(keyGenClass) && keyGenType.equals(KeyGeneratorType.USER_PROVIDED.name)) {
+      assertThrows(classOf[IllegalArgumentException])({
+        writeToHudi(writeOpts, inputDF)
+      })
+      // scalastyle:off return
+      return
+      // scalastyle:on return
+    } else { // Otherwise, the data is properly ingested.
+      writeToHudi(writeOpts, inputDF)
+    }
     var actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
     val inputKeyDF = inputDF.select("_row_key").sort("_row_key")
     var actualKeyDF = actualDF.select("_row_key").sort("_row_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
+    val metaClient = getHoodieMetaClient(storageConf, basePath)
+    val actualKeyGenType = metaClient.getTableConfig.getKeyGeneratorType
+    assertEquals(expectedKeyGenType, actualKeyGenType)
+    // For USER_PROVIDED type, the class should exist in table config.
+    if (KeyGeneratorType.USER_PROVIDED.name == actualKeyGenType) {
+      assertEquals(keyGenClass, metaClient.getTableConfig.getKeyGeneratorClassName)
+    }
 
     // First update.
     val firstUpdate = recordsToStrings(dataGen.generateUpdatesForAllRecords("001")).asScala.toList
@@ -2468,8 +2493,18 @@ object TestCOWDataSource {
 
   def provideParamsForKeyGenTest(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      Arguments.of("org.apache.hudi.keygen.UserProvidedKeyGenerator"),
-      Arguments.of("org.apache.hudi.keygen.SimpleKeyGenerator")
+      Arguments.of(
+        "org.apache.hudi.keygen.UserProvidedKeyGenerator",
+        KeyGeneratorType.USER_PROVIDED.name()),
+      Arguments.of(
+        "",
+        KeyGeneratorType.USER_PROVIDED.name()),
+      Arguments.of(
+        "org.apache.hudi.keygen.SimpleKeyGenerator",
+        KeyGeneratorType.SIMPLE.name()),
+      Arguments.of(
+        "org.apache.hudi.keygen.SimpleAvroKeyGenerator",
+        KeyGeneratorType.SIMPLE.name())
     )
   }
 }

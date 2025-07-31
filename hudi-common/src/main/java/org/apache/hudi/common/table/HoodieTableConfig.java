@@ -1166,6 +1166,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return KeyGeneratorType.getKeyGeneratorClassName(this);
   }
 
+  public String getKeyGeneratorType() {
+    return getStringOrDefault(KEY_GENERATOR_TYPE, null);
+  }
+
   public HoodieTimelineTimeZone getTimelineTimezone() {
     return HoodieTimelineTimeZone.valueOf(getStringOrDefault(TIMELINE_TIMEZONE));
   }

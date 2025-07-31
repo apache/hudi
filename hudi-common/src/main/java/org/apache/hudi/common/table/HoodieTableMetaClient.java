@@ -1570,7 +1570,9 @@ public class HoodieTableMetaClient implements Serializable {
         }
       } else if (null != keyGeneratorType) {
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, keyGeneratorType);
-        // For USER_PROVIDED type, key generator class should be set when it is configured.
+        checkArgument(!keyGeneratorType.equals(KeyGeneratorType.USER_PROVIDED.name()),
+            String.format("When key generator type is %s, the key generator class must be set properly",
+                KeyGeneratorType.USER_PROVIDED.name()));
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));
