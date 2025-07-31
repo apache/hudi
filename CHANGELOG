@@ -918,3 +918,8 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-07-30 21:19:13] [release-vrelease-v1.155.1] ---
 [ENG-30732][INTERNAL] Fix the record key encoding with a single record key field for complex key generator (#1468)
 [AUDIT-1071]: Changelog for release-v1.155.0 (#1467)
+
+--- [2025-07-31 16:04:34] [release-v1.156.0] ---
+[AUDIT-1071]: Changelog for release-vrelease-v1.155.1 (#1469)
+[ENG-30732][INTERNAL] Fix the record key encoding with a single record key field for complex key generator (#1468)
+[AUDIT-1071]: Changelog for release-v1.155.0 (#1467)
