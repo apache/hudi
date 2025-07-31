@@ -156,7 +156,7 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
           new EnumSymbol(avroType, data)
 
       case (StringType, STRING) =>
-        (getter, ordinal) => getter.getUTF8String(ordinal).toString
+        (getter, ordinal) => new Utf8(getter.getUTF8String(ordinal).getBytes)
 
       case (BinaryType, FIXED) =>
         val size = avroType.getFixedSize
