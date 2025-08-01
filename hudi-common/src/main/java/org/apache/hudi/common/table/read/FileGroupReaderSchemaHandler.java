@@ -93,10 +93,6 @@ public class FileGroupReaderSchemaHandler<T> {
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
   }
 
-  public static Integer getHoodieOperationPos(Schema schema) {
-    return Option.ofNullable(schema.getField(HoodieRecord.OPERATION_METADATA_FIELD)).map(Schema.Field::pos).orElse(-1);
-  }
-
   public Schema getTableSchema() {
     return this.tableSchema;
   }
