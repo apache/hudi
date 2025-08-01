@@ -1564,15 +1564,18 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
-        // For USER_PROVIDED type, key generator class is recorded as well.
-        if (type == KeyGeneratorType.USER_PROVIDED) {
-          tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
-        }
+        // An invalid class name may be provided when type is `USER_PROVIDED`.
+        // The runtime exception should be thrown when this class value is used, e.g., in class loading.
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
       } else if (null != keyGeneratorType) {
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, keyGeneratorType);
         checkArgument(!keyGeneratorType.equals(KeyGeneratorType.USER_PROVIDED.name()),
             String.format("When key generator type is %s, the key generator class must be set properly",
                 KeyGeneratorType.USER_PROVIDED.name()));
+        // When `keyGeneratorType` does not match any types, it throws; no extra check
+        // is needed for confirming the validity of `keyGeneratorType`.
+        KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
+        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, type.getClassName());
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));

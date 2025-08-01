@@ -35,20 +35,20 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * This class is used for test purpose, and should never be used
  * in other ways.
  */
-public class UserProvidedKeyGenerator extends BuiltinKeyGenerator {
+public class MockUserProvidedKeyGenerator extends BuiltinKeyGenerator {
 
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
-  public UserProvidedKeyGenerator(TypedProperties props) {
+  public MockUserProvidedKeyGenerator(TypedProperties props) {
     this(props, Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null)),
         props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
   }
 
-  public UserProvidedKeyGenerator(TypedProperties props, String partitionPathField) {
+  public MockUserProvidedKeyGenerator(TypedProperties props, String partitionPathField) {
     this(props, Option.empty(), partitionPathField);
   }
 
-  public UserProvidedKeyGenerator(TypedProperties props, Option<String> recordKeyField, String partitionPathField) {
+  public MockUserProvidedKeyGenerator(TypedProperties props, Option<String> recordKeyField, String partitionPathField) {
     super(props);
     // Make sure key-generator is configured properly
     validateRecordKey(recordKeyField);

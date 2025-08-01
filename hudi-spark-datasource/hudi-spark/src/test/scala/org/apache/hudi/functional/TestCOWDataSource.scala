@@ -2494,7 +2494,7 @@ object TestCOWDataSource {
   def provideParamsForKeyGenTest(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
       Arguments.of(
-        "org.apache.hudi.keygen.UserProvidedKeyGenerator",
+        "org.apache.hudi.keygen.MockUserProvidedKeyGenerator",
         KeyGeneratorType.USER_PROVIDED.name()),
       Arguments.of(
         "",
@@ -2504,7 +2504,10 @@ object TestCOWDataSource {
         KeyGeneratorType.SIMPLE.name()),
       Arguments.of(
         "org.apache.hudi.keygen.SimpleAvroKeyGenerator",
-        KeyGeneratorType.SIMPLE.name())
+        KeyGeneratorType.SIMPLE.name()),
+      Arguments.of(
+        "org.apache.hudi.keygen.SimpleAvroKeyGenerator",
+        "")
     )
   }
 }

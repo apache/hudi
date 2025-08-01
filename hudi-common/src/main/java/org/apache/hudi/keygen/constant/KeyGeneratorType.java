@@ -102,7 +102,7 @@ public enum KeyGeneratorType {
   STREAMER_TEST("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator"),
 
   @EnumFieldDescription("A KeyGenerator specified from the configuration.")
-  USER_PROVIDED("USER_PROVIDED_CLASS");
+  USER_PROVIDED("USER_PROVIDED");
 
   private String className;
 
