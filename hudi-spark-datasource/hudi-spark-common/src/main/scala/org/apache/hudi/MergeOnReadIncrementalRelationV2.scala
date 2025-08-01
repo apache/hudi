@@ -60,13 +60,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
     if (fullTableScan) {
       metaClient.getCommitsAndCompactionTimeline
     } else {
-      val completeTimeline =
-        metaClient.getCommitsTimeline.filterCompletedInstants()
-          .findInstantsInRangeByCompletionTime(startCompletionTime, endCompletionTime)
-
-      // Need to add pending compaction instants to avoid data missing, see HUDI-5990 for details.
-      val pendingCompactionTimeline = metaClient.getCommitsAndCompactionTimeline.filterPendingMajorOrMinorCompactionTimeline()
-      concatTimeline(completeTimeline, pendingCompactionTimeline, metaClient)
+      queryContext.getActiveTimeline
     }
   }
 
@@ -200,8 +194,10 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
       .metaClient(metaClient)
       .startCompletionTime(optParams(DataSourceReadOptions.START_COMMIT.key))
       .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMMIT.key, null))
-      .skipClustering(optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SKIP_CLUSTER.key(),
-        String.valueOf(DataSourceReadOptions.INCREMENTAL_READ_SKIP_CLUSTER.defaultValue)).toBoolean)
+      // do not support skip cluster for spark incremental query yet to avoid data duplication problem,
+      // see details in HUDI-9672.
+      // .skipClustering(optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SKIP_CLUSTER.key(),
+      //  String.valueOf(DataSourceReadOptions.INCREMENTAL_READ_SKIP_CLUSTER.defaultValue)).toBoolean)
       .skipCompaction(optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.key(),
         String.valueOf(DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.defaultValue)).toBoolean)
       .rangeType(rangeType)
