@@ -20,7 +20,6 @@ package org.apache.hudi.common.engine;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.IndexedRecord;
 
@@ -42,6 +41,6 @@ public class AvroReaderContextFactory implements ReaderContextFactory<IndexedRec
 
   @Override
   public HoodieReaderContext<IndexedRecord> getContext() {
-    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty());
+    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), payloadClassName);
   }
 }
