@@ -20,8 +20,6 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -29,14 +27,12 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.JavaTypeConverter;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.apache.avro.Schema;
@@ -68,34 +64,11 @@ public abstract class RecordContext<T> implements Serializable {
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   protected JavaTypeConverter typeConverter;
-  protected String partitionPath;
+  protected String partitionPath = null;
 
-  public RecordContext(HoodieTableConfig tableConfig) {
+  protected RecordContext(HoodieTableConfig tableConfig) {
     this.typeConverter = new DefaultJavaTypeConverter();
     updateRecordKeyExtractor(tableConfig, tableConfig.populateMetaFields());
-  }
-
-  // TODO can we move the payload into the class's instance variable and reuse the existing constructHoodieRecord?
-  public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass) {
-    Schema recordSchema = getSchemaFromBufferRecord(bufferedRecord);
-    GenericRecord record = convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
-
-    HoodieRecordPayload recordPayload = HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue());
-    return new HoodieAvroRecord<>(null, recordPayload);
-  }
-
-  public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, BaseKeyGenerator keyGenerator) {
-    return constructHoodieAvroRecord(bufferedRecord, payloadClass, keyGenerator, null);
-  }
-
-  private HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, BaseKeyGenerator keyGenerator, String partitionPath) {
-    Schema recordSchema = getSchemaFromBufferRecord(bufferedRecord);
-    GenericRecord record = convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
-    String recordPartitionPath = partitionPath == null ? keyGenerator.getPartitionPath(record) : partitionPath;
-
-    HoodieRecordPayload recordPayload = HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue());
-    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), recordPartitionPath);
-    return new HoodieAvroRecord<>(hoodieKey, recordPayload);
   }
 
   public void updateRecordKeyExtractor(HoodieTableConfig tableConfig, boolean shouldUseMetadataFields) {
