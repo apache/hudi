@@ -55,18 +55,20 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   /**
-   *
    * Handle a possible delete - check for "D" in Op column and return empty row if found.
-   * @param insertValue The new row that is being "inserted".
+   *
+   * @param insertValueOpt The new row that is being "inserted".
    */
-  private Option<IndexedRecord> handleDeleteOperation(IndexedRecord insertValue) throws IOException {
-    boolean delete = false;
-    if (insertValue instanceof GenericRecord) {
-      GenericRecord record = (GenericRecord) insertValue;
-      delete = isDMSDeleteRecord(record);
-    }
+  private Option<IndexedRecord> handleDeleteOperation(Option<IndexedRecord> insertValueOpt) throws IOException {
+    boolean delete = insertValueOpt.map(insertValue -> {
+      if (insertValue instanceof GenericRecord) {
+        GenericRecord record = (GenericRecord) insertValue;
+        return isDMSDeleteRecord(record);
+      }
+      return false;
+    }).orElse(false);
 
-    return delete ? Option.empty() : Option.of(insertValue);
+    return delete ? Option.empty() : insertValueOpt;
   }
 
   @Override
@@ -90,7 +92,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    IndexedRecord insertValue = super.getInsertValue(schema).get();
+    Option<IndexedRecord> insertValue = super.getInsertValue(schema);
     return handleDeleteOperation(insertValue);
   }
 
@@ -107,7 +109,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
     if (!insertValue.isPresent()) {
       return Option.empty();
     }
-    return handleDeleteOperation(insertValue.get());
+    return handleDeleteOperation(insertValue);
   }
 
   @Override
