@@ -27,6 +27,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
@@ -553,9 +554,11 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         .<HoodieRecord>getReaderContextFactory(metaClient).getContext();
     List<String> orderingFieldNames = getOrderingFieldNames(
         readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+    RecordMergeMode recordMergeMode = HoodieTableConfig.inferCorrectMergingBehavior(null, writeConfig.getPayloadClass(), null,
+        String.join(",", orderingFieldNames), metaClient.getTableConfig().getTableVersion()).getLeft();
     BufferedRecordMerger<HoodieRecord> recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
-        writeClient.getConfig().getRecordMergeMode(),
+        recordMergeMode,
         false,
         Option.ofNullable(writeClient.getConfig().getRecordMerger()),
         orderingFieldNames,
