@@ -57,7 +57,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
@@ -66,7 +65,6 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -410,50 +408,79 @@ public class HoodieIndexUtils {
   }
 
   /**
-   * Merge the incoming record with the matching existing record loaded via {@link HoodieFileGroupReader}. The existing record is the latest version in the table.
+   * Special merge handling for MIT
+   * We need to wait until after merging before we can add meta fields because
+   * ExpressionPayload does not allow rewriting
    */
-  private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(
+  private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecordWithExpressionPayload(
       HoodieRecord<R> incoming,
       HoodieRecord<R> existing,
       Schema writeSchema,
       Schema existingSchema,
+      Schema writeSchemaWithMetaFields,
       HoodieWriteConfig config,
       BufferedRecordMerger<R> recordMerger,
-      Option<BaseKeyGenerator> expressionPayloadKeygen,
+      BaseKeyGenerator keyGenerator,
       RecordContext<R> recordContext,
-      String[] orderingFieldNames,
-      BaseKeyGenerator keyGenerator) throws IOException {
-    Schema incomingSchema = expressionPayloadKeygen.isPresent()
-        ? HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()) : writeSchema;
+      String[] orderingFieldNames) throws IOException {
     Option<BufferedRecord<R>> mergeResult = merge(
-        incoming, existing, incomingSchema, existingSchema, recordContext, orderingFieldNames, recordMerger, config.getProps());
-    if (expressionPayloadKeygen.isPresent()) {
-      // the record was deleted
-      if (mergeResult.map(BufferedRecord::isDelete).orElse(false)) {
+        incoming, existing, writeSchemaWithMetaFields, existingSchema, recordContext, orderingFieldNames, recordMerger, config.getProps());
+    if (mergeResult.isPresent()) {
+      if (mergeResult.get().isDelete()) {
+        //the record was deleted
         return Option.empty();
       }
+
       HoodieRecord<R> result = recordContext.constructHoodieRecord(mergeResult.get());
       if (result.getData().equals(HoodieRecord.SENTINEL)) {
         //the record did not match and merge case and should not be modified
         return Option.of(result);
       }
 
-      // record is inserted or updated
-      String partitionPath = keyGenerator.getPartitionPath(recordContext.convertToAvroRecord(result.getData(), writeSchema));
-      HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, incomingSchema,
+      //record is inserted or updated
+      String partitionPath = keyGenerator.getPartitionPath(recordContext.convertToAvroRecord(result.getData(), writeSchemaWithMetaFields));
+      HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
           new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
-      return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(incomingSchema, config.getProps(), Option.empty(),
+      return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
           config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
     } else {
+      return Option.of(existing);
+    }
+
+  }
+
+  /**
+   * Merge the incoming record with the matching existing record loaded via {@link HoodieFileGroupReader}. The existing record is the latest version in the table.
+   */
+  private static <R> Option<HoodieRecord<R>> mergeIncomingWithExistingRecord(
+      HoodieRecord<R> incoming,
+      HoodieRecord<R> existing,
+      Schema writeSchema,
+      HoodieWriteConfig config,
+      BufferedRecordMerger<R> recordMerger,
+      Option<BaseKeyGenerator> expressionPayloadKeygen,
+      RecordContext<R> recordContext,
+      String[] orderingFieldNames) throws IOException {
+    Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
+    if (expressionPayloadKeygen.isPresent()) {
+      return mergeIncomingWithExistingRecordWithExpressionPayload(incoming, existing, writeSchema,
+          existingSchema, writeSchemaWithMetaFields, config, recordMerger, expressionPayloadKeygen.get(), recordContext, orderingFieldNames);
+    } else {
+      // prepend the hoodie meta fields as the incoming record does not have them
+      HoodieRecord incomingPrepended = incoming
+          .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
+      Option<BufferedRecord<R>> mergeResult = merge(
+          incomingPrepended, existing, writeSchemaWithMetaFields, existingSchema, recordContext, orderingFieldNames, recordMerger, config.getProps());
       if (mergeResult.isPresent()) {
         if (mergeResult.get().isDelete()) {
+          // the record was deleted
           return Option.empty();
         }
         // the merged record needs to be converted back to the original payload
-        TypedProperties recordCreationProps = TypedProperties.copy(config.getProps());
-        recordCreationProps.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
-
-        HoodieRecord<R> merged = recordContext.constructHoodieAvroRecord(mergeResult.get(), config.getPayloadClass(), keyGenerator);
+        HoodieRecord<R> merged = recordContext.constructHoodieRecord(mergeResult.get()).wrapIntoHoodieRecordPayloadWithParams(
+            writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema));
         return Option.of(merged);
       } else {
         return Option.of(existing);
@@ -486,7 +513,7 @@ public class HoodieIndexUtils {
         .distinct(updatedConfig.getGlobalIndexReconcileParallelism());
     // define the buffered record merger.
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) hoodieTable.getContext()
-        .<R>getReaderContextFactoryDuringWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType());
+        .<R>getReaderContextFactoryDuringWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     readerContext.initRecordMerger(config.getProps());
     // merged existing records with current locations being set
@@ -505,8 +532,6 @@ public class HoodieIndexUtils {
         hoodieTable.getConfig().getProps(),
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
     RecordContext recordContext = readerContext.getRecordContext();
-    Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
-    BaseKeyGenerator keyGenerator = (BaseKeyGenerator) getKeyGenerator(config, hoodieTable.getContext());
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
@@ -524,8 +549,8 @@ public class HoodieIndexUtils {
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
           }
           Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(
-              incoming, existing, writeSchema, existingSchema, updatedConfig, recordMerger, expressionPayloadKeygen,
-              recordContext, orderingFieldsArray, keyGenerator);
+              incoming, existing, writeSchema, updatedConfig, recordMerger, expressionPayloadKeygen,
+              recordContext, orderingFieldsArray);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
@@ -546,16 +571,6 @@ public class HoodieIndexUtils {
           }
         });
     return taggedUpdatingRecords.union(taggedNewRecords);
-  }
-
-  public static KeyGenerator getKeyGenerator(HoodieWriteConfig config, HoodieEngineContext engineContext) {
-    KeyGenerator keyGenerator;
-    try {
-      keyGenerator = engineContext.createKeyGenerator(config.getProps());
-    } catch (IOException e) {
-      throw new HoodieException("Could not create key generator", e);
-    }
-    return keyGenerator;
   }
 
   public static <R> HoodieData<HoodieRecord<R>> tagGlobalLocationBackToRecords(

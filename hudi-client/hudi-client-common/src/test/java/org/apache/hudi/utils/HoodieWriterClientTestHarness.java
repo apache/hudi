@@ -83,9 +83,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
@@ -134,8 +132,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
-import static org.apache.hudi.config.HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING;
 import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
+import static org.apache.hudi.config.HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING;
 import static org.apache.hudi.testutils.Assertions.assertNoDupesWithinPartition;
 import static org.apache.hudi.testutils.Assertions.assertNoDuplicatesInPartition;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -565,7 +563,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         new SerializableSchema(writeClient.getConfig().getSchema()).get(),
         writeClient.getConfig().getProps(),
         metaClient.getTableConfig().getPartialUpdateMode());
-    KeyGenerator keyGenerator = HoodieIndexUtils.getKeyGenerator(writeConfig, getEngineContext());
     HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd =
         (HoodieData<HoodieRecord<RawTripTestPayload>>) HoodieWriteHelper.newInstance()
             .deduplicateRecords(
@@ -576,8 +573,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                 writeConfig.getProps(),
                 recordMerger,
                 readerContext,
-                orderingFieldNames.toArray(new String[0]),
-                (BaseKeyGenerator) keyGenerator);
+                orderingFieldNames.toArray(new String[0]));
     assertEquals(expectedNumPartitions, dedupedRecsRdd.getNumPartitions());
     List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupedRecsRdd.collectAsList();
     assertEquals(isGlobal ? 1 : 2, dedupedRecs.size());
