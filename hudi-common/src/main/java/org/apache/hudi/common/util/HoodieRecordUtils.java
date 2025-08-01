@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
@@ -36,6 +35,8 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -120,31 +121,11 @@ public class HoodieRecordUtils {
     return null;
   }
 
-  /**
-   * Returns the preCombine value with given field name.
-   *
-   * @param rec The avro record
-   * @param preCombineFields The preCombine field names
-   * @return the preCombine field value or 0 if the field does not exist in the avro schema
-   */
-  public static Comparable getPreCombineVal(GenericRecord rec, @Nullable String[] preCombineFields) {
-    if (preCombineFields == null) {
-      return OrderingValues.getDefault();
-    }
-    // keep consistent with writer side, using Java type for ordering value, see `DefaultHoodieRecordPayload`.
-    return OrderingValues.create(
-        preCombineFields,
-        field -> {
-          Object orderingValue = HoodieAvroUtils.getNestedFieldVal(rec, field, true, false);
-          return orderingValue == null ? OrderingValues.getDefault() : (Comparable) orderingValue;
-        });
-  }
-
   public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,
                                                    TypedProperties props,
                                                    HoodieTableMetaClient metaClient) {
     return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
         ? Collections.emptyList()
-        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElse(metaClient.getTableConfig().getPreCombineFields());
+        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElseGet(() -> metaClient.getTableConfig().getPreCombineFields());
   }
 }

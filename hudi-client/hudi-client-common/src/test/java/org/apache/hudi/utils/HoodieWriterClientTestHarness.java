@@ -576,7 +576,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                 writeConfig.getProps(),
                 recordMerger,
                 readerContext,
-                orderingFieldNames,
+                orderingFieldNames.toArray(new String[0]),
                 (BaseKeyGenerator) keyGenerator);
     assertEquals(expectedNumPartitions, dedupedRecsRdd.getNumPartitions());
     List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupedRecsRdd.collectAsList();
