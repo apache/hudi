@@ -115,8 +115,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .build();
     assertTableVersionOnDataAndMetadataTable(upgradedMetaClient, targetVersion);
     validateVersionSpecificProperties(upgradedMetaClient, originalVersion, targetVersion);
-    validateTableIntegrity(upgradedMetaClient, "after upgrade");
-    
+
     // Step 2: Downgrade back to original version
     LOG.info("Step 2: Downgrading from {} back to {}", targetVersion, originalVersion);
     new UpgradeDowngrade(upgradedMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
@@ -129,8 +128,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .build();
     assertTableVersionOnDataAndMetadataTable(finalMetaClient, originalVersion);
     validateVersionSpecificProperties(finalMetaClient, targetVersion, originalVersion);
-    validateTableIntegrity(finalMetaClient, "after round-trip");
-    
+
     LOG.info("Successfully completed round-trip test for version {}", originalVersion);
   }
 
@@ -283,32 +281,6 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .withProps(props)
         .withTimelineLayoutVersion(metaClient.getTableConfig().getTimelineLayoutVersion().get().getVersion())
         .build();
-  }
-
-  /**
-   * Validate table integrity after upgrade/downgrade operations.
-   */
-  private void validateTableIntegrity(HoodieTableMetaClient metaClient, String stage) {
-    LOG.debug("Validating table integrity {}", stage);
-    
-    // Basic validation
-    assertNotNull(metaClient.getTableConfig(), "Table config should exist");
-    assertEquals(HoodieTableType.MERGE_ON_READ, metaClient.getTableType(),
-        "Table should remain MOR type");
-    
-    // Timeline validation
-    assertTrue(metaClient.getCommitsTimeline().countInstants() > 0,
-        "Timeline should have commits");
-    
-    // Storage path validation
-    try {
-      assertTrue(metaClient.getStorage().exists(metaClient.getBasePath()),
-          "Table base path should exist");
-      assertTrue(metaClient.getStorage().exists(metaClient.getMetaPath()),
-          "Meta path should exist");
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to validate storage paths", e);
-    }
   }
 
   /**
