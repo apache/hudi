@@ -41,11 +41,15 @@ import java.util.Map;
 public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   private final String payloadClass;
+  // This boolean indicates whether the caller requires payloads in the HoodieRecord conversion.
+  // This is temporarily required as we migrate away from payloads.
+  private final boolean requiresPayloadRecords;
 
-  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass) {
+  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords) {
     super(tableConfig);
     this.payloadClass = payloadClass;
     this.typeConverter = new AvroJavaTypeConverter();
+    this.requiresPayloadRecords = requiresPayloadRecords;
   }
 
   public static Object getFieldValueFromIndexedRecord(
@@ -100,7 +104,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
             HoodieRecord.HoodieRecordType.AVRO);
       }
     }
-    if (payloadClass != null) {
+    if (requiresPayloadRecords) {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, (GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue());
       return new HoodieAvroRecord<>(hoodieKey, payload);
     }
