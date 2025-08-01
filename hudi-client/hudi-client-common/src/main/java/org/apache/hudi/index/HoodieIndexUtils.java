@@ -20,6 +20,7 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -521,9 +522,11 @@ public class HoodieIndexUtils {
         getExistingRecords(globalLocations, keyGeneratorWriteConfigOpt.getLeft(), hoodieTable, readerContextFactory);
     List<String> orderingFieldNames = getOrderingFieldNames(
         readerContext.getMergeMode(), hoodieTable.getConfig().getProps(), hoodieTable.getMetaClient());
+    RecordMergeMode recordMergeMode = HoodieTableConfig.inferCorrectMergingBehavior(null, config.getPayloadClass(), null,
+        String.join(",", orderingFieldNames), hoodieTable.getMetaClient().getTableConfig().getTableVersion()).getLeft();
     BufferedRecordMerger<R> recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
-        hoodieTable.getConfig().getRecordMergeMode(),
+        recordMergeMode,
         false,
         Option.ofNullable(updatedConfig.getRecordMerger()),
         orderingFieldNames,
