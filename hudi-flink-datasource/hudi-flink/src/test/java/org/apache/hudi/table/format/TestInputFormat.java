@@ -1094,6 +1094,29 @@ public class TestInputFormat {
   }
 
   @Test
+  void testMergeRecordWithUpdateBefore() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    // write first batch with all insert data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    // write second batch with UPDATE_BEFORE record, send UPDATE_BEFORE for `id1`
+    TestData.writeData(TestData.DATA_SET_UPDATE_BEFORE, conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    final String baseResult = TestData.rowDataToString(readData(inputFormat));
+    String expected = "["
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]";
+    assertThat(baseResult, is(expected));
+  }
+
+  @Test
   void testReadArchivedCommitsIncrementally() throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
