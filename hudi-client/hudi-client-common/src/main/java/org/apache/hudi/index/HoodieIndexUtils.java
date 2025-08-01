@@ -426,28 +426,27 @@ public class HoodieIndexUtils {
       String[] orderingFieldNames) throws IOException {
     Option<BufferedRecord<R>> mergeResult = merge(
         incoming, existing, writeSchemaWithMetaFields, existingSchema, recordContext, orderingFieldNames, recordMerger, config.getProps());
+    HoodieRecord<R> result;
     if (mergeResult.isPresent()) {
       if (mergeResult.get().isDelete()) {
         //the record was deleted
         return Option.empty();
       }
-
-      HoodieRecord<R> result = recordContext.constructHoodieRecord(mergeResult.get());
-      if (result.getData().equals(HoodieRecord.SENTINEL)) {
-        //the record did not match and merge case and should not be modified
-        return Option.of(result);
-      }
-
-      //record is inserted or updated
-      String partitionPath = keyGenerator.getPartitionPath(recordContext.convertToAvroRecord(result.getData(), writeSchemaWithMetaFields));
-      HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
-          new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
-      return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
-          config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+      result = recordContext.constructHoodieRecord(mergeResult.get());
     } else {
-      return Option.of(existing);
+      result = existing;
+    }
+    if (result.getData().equals(HoodieRecord.SENTINEL)) {
+      //the record did not match and merge case and should not be modified
+      return Option.of(result);
     }
 
+    //record is inserted or updated
+    String partitionPath = keyGenerator.getPartitionPath(recordContext.convertToAvroRecord(result.getData(), writeSchemaWithMetaFields));
+    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
+        new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
+    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+        config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
   }
 
   /**
@@ -473,19 +472,19 @@ public class HoodieIndexUtils {
           .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
       Option<BufferedRecord<R>> mergeResult = merge(
           incomingPrepended, existing, writeSchemaWithMetaFields, existingSchema, recordContext, orderingFieldNames, recordMerger, config.getProps());
+      HoodieRecord<R> result;
       if (mergeResult.isPresent()) {
         if (mergeResult.get().isDelete()) {
           // the record was deleted
           return Option.empty();
         }
-        // the merged record needs to be converted back to the original payload
-        HoodieRecord<R> merged = recordContext.constructHoodieRecord(mergeResult.get()).wrapIntoHoodieRecordPayloadWithParams(
-            writeSchemaWithMetaFields, config.getProps(), Option.empty(),
-            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema));
-        return Option.of(merged);
+        result = recordContext.constructHoodieRecord(mergeResult.get());
       } else {
-        return Option.of(existing);
+        result = existing;
       }
+      // the merged record needs to be converted back to the original payload
+      return Option.of(result.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+          config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
     }
   }
 
