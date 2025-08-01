@@ -108,7 +108,7 @@ public class StreamReadMonitoringFunction
    */
   private int totalSplits = -1;
 
-  private transient List<MergeOnReadInputSplit> remainingSplits = new ArrayList<>();
+  private List<MergeOnReadInputSplit> remainingSplits = new ArrayList<>();
 
   private transient ListState<String> instantState;
 
@@ -147,6 +147,7 @@ public class StreamReadMonitoringFunction
 
   @Override
   public void initializeState(FunctionInitializationContext context) throws Exception {
+    this.remainingSplits = new ArrayList<>();
 
     ValidationUtils.checkState(this.instantState == null,
         "The " + getClass().getSimpleName() + " has already been initialized.");
