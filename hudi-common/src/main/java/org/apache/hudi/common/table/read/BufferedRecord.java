@@ -23,7 +23,6 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.exception.HoodieException;
 
@@ -70,14 +69,9 @@ public class BufferedRecord<T> implements Serializable {
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
-    return forRecordWithContext(record, schema, recordContext, orderingFieldNames, isDelete, Option.empty(), Option.empty());
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete,
-                                                           Option<HoodieKey> hoodieKeyOpt, Option<Comparable> orderingValueOpt) {
-    String recordKey = hoodieKeyOpt.map(HoodieKey::getRecordKey).orElseGet(() -> recordContext.getRecordKey(record, schema));
+    String recordKey = recordContext.getRecordKey(record, schema);
     Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = orderingValueOpt.orElseGet(() -> recordContext.getOrderingValue(record, schema, orderingFieldNames));
+    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
