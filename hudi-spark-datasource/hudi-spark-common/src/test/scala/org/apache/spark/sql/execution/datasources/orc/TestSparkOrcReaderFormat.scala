@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.spark.sql.execution.datasources.parquet
+package org.apache.spark.sql.execution.datasources.orc
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util
@@ -33,9 +33,9 @@ import org.apache.spark.util.SerializableConfiguration
 
 /**
  * Class used to test [[SparkColumnarFileReader]]
- * This class should have the same functionality as [[ParquetFileFormat]]
+ * This class should have the same functionality as [[OrcFileFormat]]
  */
-class TestSparkParquetReaderFormat extends ParquetFileFormat with SparkAdapterSupport {
+class TestSparkOrcReaderFormat extends OrcFileFormat with SparkAdapterSupport {
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
@@ -45,9 +45,9 @@ class TestSparkParquetReaderFormat extends ParquetFileFormat with SparkAdapterSu
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     //reader must be created outsize of the lambda. This happens on the driver
-    val reader = sparkAdapter.createParquetFileReader(supportBatch(sparkSession,
+    val reader = sparkAdapter.createOrcFileReader(supportBatch(sparkSession,
       StructType(partitionSchema.fields ++ requiredSchema.fields)),
-      sparkSession.sqlContext.conf, options, hadoopConf)
+      sparkSession.sqlContext.conf, options, hadoopConf, dataSchema)
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 

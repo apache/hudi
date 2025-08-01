@@ -31,19 +31,19 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("functional")
-public class TestSparkParquetReader extends TestBootstrapReadBase {
+public class TestSparkOrcReader extends TestBootstrapReadBase {
 
   @Test
   public void testReader() {
     dataGen = new HoodieTestDataGenerator(dashPartitionPaths);
     int n = 10;
     Dataset<Row> inserts = makeInsertDf("000", n);
-    inserts.write().format("parquet").save(bootstrapBasePath);
-    Dataset<Row> parquetReadRows = JavaConversions.createTestDataFrame(sparkSession, bootstrapBasePath, HoodieFileFormat.PARQUET);
-    Dataset<Row> datasourceReadRows = sparkSession.read().format("parquet").load(bootstrapBasePath);
+    inserts.write().format("orc").save(bootstrapBasePath);
+    Dataset<Row> orcReadRows = JavaConversions.createTestDataFrame(sparkSession, bootstrapBasePath, HoodieFileFormat.ORC);
+    Dataset<Row> datasourceReadRows = sparkSession.read().format("orc").load(bootstrapBasePath);
     assertEquals(datasourceReadRows.count(), n);
-    assertEquals(parquetReadRows.count(), n);
-    assertEquals(datasourceReadRows.except(parquetReadRows).count(), 0);
-    assertEquals(parquetReadRows.except(datasourceReadRows).count(), 0);
+    assertEquals(orcReadRows.count(), n);
+    assertEquals(datasourceReadRows.except(orcReadRows).count(), 0);
+    assertEquals(orcReadRows.except(datasourceReadRows).count(), 0);
   }
 }

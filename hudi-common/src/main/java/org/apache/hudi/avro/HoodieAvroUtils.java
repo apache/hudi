@@ -33,13 +33,13 @@ import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -1248,7 +1248,7 @@ public class HoodieAvroUtils {
           return String.valueOf(oldValue);
         }
         if (oldSchema.getType() == Schema.Type.BYTES) {
-          return String.valueOf(oldValue);
+          return StringUtils.fromUTF8Bytes(((ByteBuffer) oldValue).array());
         }
         if (oldSchema.getLogicalType() == LogicalTypes.date()) {
           return toJavaDate((Integer) oldValue).toString();
