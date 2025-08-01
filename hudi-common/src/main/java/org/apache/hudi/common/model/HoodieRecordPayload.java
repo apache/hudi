@@ -24,7 +24,6 @@ import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -116,12 +115,14 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   /**
    * Deserializes the HoodieRecordPayload into an {@link IndexedRecord}.
    * Unlike {@link #getInsertValue(Schema, Properties)}, this method is meant to solely perform deserialization.
-   * @param schema Schema to use for reading the record
+   *
+   * @param schema     Schema to use for reading the record
+   * @param properties Properties for the current context
    * @return the {@link IndexedRecord} if one is available, otherwise returns an empty Option.
    * @throws IOException thrown if there is an error during deserialization
    */
-  default Option<IndexedRecord> getIndexedRecord(Schema schema) throws IOException {
-    return getInsertValue(schema, CollectionUtils.emptyProps());
+  default Option<IndexedRecord> getIndexedRecord(Schema schema, Properties properties) throws IOException {
+    return getInsertValue(schema, properties);
   }
 
   /**
