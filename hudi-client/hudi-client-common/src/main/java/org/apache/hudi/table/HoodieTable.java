@@ -632,6 +632,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public abstract HoodieSavepointMetadata savepoint(HoodieEngineContext context,
                                                     String instantToSavepoint,
+                                                    String completionTime,
                                                     String user,
                                                     String comment);
 
