@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
-import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -39,10 +38,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.Schema;
-
 import java.io.IOException;
-import java.util.List;
 
 import static org.apache.hudi.config.HoodiePayloadConfig.PAYLOAD_CLASS_NAME;
 
@@ -75,13 +71,11 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
                                                         TypedProperties props,
                                                         BufferedRecordMerger<T> recordMerger,
                                                         HoodieReaderContext<T> readerContext,
-                                                        List<String> orderingFieldNames,
+                                                        String[] orderingFieldNames,
                                                         BaseKeyGenerator keyGenerator) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
     RecordContext recordContext = readerContext.getRecordContext();
-    Schema writerSchema = new Schema.Parser().parse(schemaStr);
-    DeleteContext deleteContext = new DeleteContext(props, writerSchema).withReaderSchema(writerSchema);
     String payloadClass = ConfigUtils.getStringWithAltKeys(props, PAYLOAD_CLASS_NAME);
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
@@ -92,23 +86,20 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       //       an instance of [[InternalRow]] pointing into shared, mutable buffer
       return Pair.of(key, record.copy());
     }).reduceByKey((rec1, rec2) -> {
+      HoodieRecord<T> reducedRecord;
       try {
         // NOTE: The order of rec1 and rec2 is uncertain within "reduceByKey".
-        Option<BufferedRecord<T>> merged = merge(
-            rec1, rec2, schema.get(), schema.get(), recordContext, orderingFieldNames,
-            recordMerger, deleteContext, deleteContext, props);
+        Option<BufferedRecord<T>> merged = merge(rec1, rec2, schema.get(), schema.get(), recordContext, orderingFieldNames, recordMerger, props);
         // NOTE: For merge mode based merging, it returns non-null.
         //       For mergers / payloads based merging, it may return null.
-        boolean choosePrev = merged.isPresent();
-        if (!choosePrev) {
-          return rec1;
-        }
-        HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
-        HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-        return recordContext.constructHoodieAvroRecord(merged.get(), payloadClass, reducedKey.getPartitionPath(), operation);
+        reducedRecord = merged.map(bufferedRecord -> recordContext.constructHoodieAvroRecord(bufferedRecord, payloadClass)).orElse(rec1);
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }
+      boolean choosePrev = rec1.getData().equals(reducedRecord.getData());
+      HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
+      HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
+      return reducedRecord.newInstance(reducedKey, operation);
     }, parallelism).map(Pair::getRight);
   }
 }

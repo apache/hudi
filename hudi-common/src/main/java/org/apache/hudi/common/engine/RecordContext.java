@@ -75,22 +75,27 @@ public abstract class RecordContext<T> implements Serializable {
     updateRecordKeyExtractor(tableConfig, tableConfig.populateMetaFields());
   }
 
+  // TODO can we move the payload into the class's instance variable and reuse the existing constructHoodieRecord?
+  public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass) {
+    Schema recordSchema = getSchemaFromBufferRecord(bufferedRecord);
+    GenericRecord record = convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
+
+    HoodieRecordPayload recordPayload = HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue());
+    return new HoodieAvroRecord<>(null, recordPayload);
+  }
+
   public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, BaseKeyGenerator keyGenerator) {
-    return constructHoodieAvroRecord(bufferedRecord, payloadClass, keyGenerator, null, null);
+    return constructHoodieAvroRecord(bufferedRecord, payloadClass, keyGenerator, null);
   }
 
-  public HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, String partitionPath, HoodieOperation operation) {
-    return constructHoodieAvroRecord(bufferedRecord, payloadClass, null, partitionPath, operation);
-  }
-
-  private HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, BaseKeyGenerator keyGenerator, String partitionPath, HoodieOperation operation) {
+  private HoodieRecord constructHoodieAvroRecord(BufferedRecord<T> bufferedRecord, String payloadClass, BaseKeyGenerator keyGenerator, String partitionPath) {
     Schema recordSchema = getSchemaFromBufferRecord(bufferedRecord);
     GenericRecord record = convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
     String recordPartitionPath = partitionPath == null ? keyGenerator.getPartitionPath(record) : partitionPath;
 
     HoodieRecordPayload recordPayload = HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue());
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), recordPartitionPath);
-    return new HoodieAvroRecord<>(hoodieKey, recordPayload, operation);
+    return new HoodieAvroRecord<>(hoodieKey, recordPayload);
   }
 
   public void updateRecordKeyExtractor(HoodieTableConfig tableConfig, boolean shouldUseMetadataFields) {

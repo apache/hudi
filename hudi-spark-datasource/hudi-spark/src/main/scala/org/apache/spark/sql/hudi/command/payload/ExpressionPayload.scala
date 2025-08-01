@@ -24,7 +24,7 @@ import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord, HoodieRecordPayload, OverwriteWithLatestAvroPayload}
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, OrderingValues, StringUtils, ValidationUtils, Option => HOption}
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, Option => HOption, OrderingValues, StringUtils, ValidationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException

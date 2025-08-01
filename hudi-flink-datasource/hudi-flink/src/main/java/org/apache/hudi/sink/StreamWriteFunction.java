@@ -450,7 +450,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
       return FlinkWriteHelper.newInstance().deduplicateRecords(
           records, null, -1, this.writeClient.getConfig().getSchema(),
           this.writeClient.getConfig().getProps(),
-          recordMerger, readerContext, orderingFieldNames, (BaseKeyGenerator) keyGenerator);
+          recordMerger, readerContext, orderingFieldNames.toArray(new String[0]), (BaseKeyGenerator) keyGenerator);
     } else {
       return records;
     }

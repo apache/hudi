@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -31,6 +32,8 @@ import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -136,7 +139,7 @@ public class SpillableMapUtils {
     final String partitionPath = (partitionName.isPresent() ? partitionName.get() :
         record.get(recordKeyPartitionPathFieldPair.getRight()).toString());
 
-    Comparable preCombineVal = HoodieRecordUtils.getPreCombineVal(record, preCombineFields);
+    Comparable preCombineVal = getPreCombineVal(record, preCombineFields);
     HoodieOperation operation = withOperationField
         ? HoodieOperation.fromName(getNullableValAsString(record, HoodieRecord.OPERATION_METADATA_FIELD)) : null;
 
@@ -153,6 +156,26 @@ public class SpillableMapUtils {
         HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
 
     return (HoodieRecord<R>) hoodieRecord;
+  }
+
+  /**
+   * Returns the preCombine value with given field name.
+   *
+   * @param rec The avro record
+   * @param preCombineFields The preCombine field names
+   * @return the preCombine field value or 0 if the field does not exist in the avro schema
+   */
+  private static Comparable getPreCombineVal(GenericRecord rec, @Nullable String[] preCombineFields) {
+    if (preCombineFields == null) {
+      return OrderingValues.getDefault();
+    }
+    // keep consistent with writer side, using Java type for ordering value, see `DefaultHoodieRecordPayload`.
+    return OrderingValues.create(
+        preCombineFields,
+        field -> {
+          Object orderingValue = HoodieAvroUtils.getNestedFieldVal(rec, field, true, false);
+          return orderingValue == null ? OrderingValues.getDefault() : (Comparable) orderingValue;
+        });
   }
 
   /**

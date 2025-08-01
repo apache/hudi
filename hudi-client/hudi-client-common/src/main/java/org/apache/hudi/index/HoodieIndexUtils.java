@@ -48,7 +48,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
-import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -422,16 +421,12 @@ public class HoodieIndexUtils {
       BufferedRecordMerger<R> recordMerger,
       Option<BaseKeyGenerator> expressionPayloadKeygen,
       RecordContext<R> recordContext,
-      List<String> orderingFieldNames,
-      DeleteContext newDeleteContext,
-      DeleteContext existingDeleteContext,
+      String[] orderingFieldNames,
       BaseKeyGenerator keyGenerator) throws IOException {
     Schema incomingSchema = expressionPayloadKeygen.isPresent()
         ? HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField()) : writeSchema;
     Option<BufferedRecord<R>> mergeResult = merge(
-        incoming, existing, incomingSchema, existingSchema,
-        recordContext, orderingFieldNames, recordMerger,
-        newDeleteContext, existingDeleteContext, config.getProps());
+        incoming, existing, incomingSchema, existingSchema, recordContext, orderingFieldNames, recordMerger, config.getProps());
     if (expressionPayloadKeygen.isPresent()) {
       // the record was deleted
       if (mergeResult.map(BufferedRecord::isDelete).orElse(false)) {
@@ -510,11 +505,9 @@ public class HoodieIndexUtils {
         hoodieTable.getConfig().getProps(),
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
     RecordContext recordContext = readerContext.getRecordContext();
-    Schema writerSchema = new Schema.Parser().parse(hoodieTable.getConfig().getSchema());
     Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
-    DeleteContext newDeleteContext = new DeleteContext(hoodieTable.getConfig().getProps(), writerSchema).withReaderSchema(writerSchema);
-    DeleteContext existingDeleteContext = new DeleteContext(hoodieTable.getConfig().getProps(), writerSchema).withReaderSchema(existingSchema);
     BaseKeyGenerator keyGenerator = (BaseKeyGenerator) getKeyGenerator(config, hoodieTable.getContext());
+    String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
@@ -532,7 +525,7 @@ public class HoodieIndexUtils {
           }
           Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(
               incoming, existing, writeSchema, existingSchema, updatedConfig, recordMerger, expressionPayloadKeygen,
-              recordContext, orderingFieldNames, newDeleteContext, existingDeleteContext, keyGenerator);
+              recordContext, orderingFieldsArray, keyGenerator);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
