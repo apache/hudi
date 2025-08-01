@@ -37,9 +37,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.HoodieIndexUtils;
-import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -103,7 +100,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    */
   public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
     HoodieReaderContext<T> readerContext =
-        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryDuringWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType())
+        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryDuringWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps())
             .getContext();
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
     readerContext.getRecordContext().updateRecordKeyExtractor(tableConfig, false);
@@ -122,7 +119,6 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         new SerializableSchema(table.getConfig().getSchema()).get(),
         table.getConfig().getProps(),
         tableConfig.getPartialUpdateMode());
-    KeyGenerator keyGenerator = HoodieIndexUtils.getKeyGenerator(table.getConfig(), table.getContext());
     return deduplicateRecords(
         records,
         table.getIndex(),
@@ -131,8 +127,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         table.getConfig().getProps(),
         bufferedRecordMerger,
         readerContext,
-        orderingFieldNames.toArray(new String[0]),
-        (BaseKeyGenerator) keyGenerator);
+        orderingFieldNames.toArray(new String[0]));
   }
 
   public abstract I deduplicateRecords(I records,
@@ -142,7 +137,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                        TypedProperties props,
                                        BufferedRecordMerger<T> merger,
                                        HoodieReaderContext<T> readerContext,
-                                       String[] orderingFieldNames, BaseKeyGenerator keyGenerator);
+                                       String[] orderingFieldNames);
 
   public static <T> Option<BufferedRecord<T>> merge(HoodieRecord<T> newRecord,
                                                     HoodieRecord<T> oldRecord,

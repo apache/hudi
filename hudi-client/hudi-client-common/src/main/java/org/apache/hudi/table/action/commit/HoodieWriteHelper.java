@@ -30,17 +30,13 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
-
-import static org.apache.hudi.config.HoodiePayloadConfig.PAYLOAD_CLASS_NAME;
 
 public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
@@ -71,12 +67,10 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
                                                         TypedProperties props,
                                                         BufferedRecordMerger<T> recordMerger,
                                                         HoodieReaderContext<T> readerContext,
-                                                        String[] orderingFieldNames,
-                                                        BaseKeyGenerator keyGenerator) {
+                                                        String[] orderingFieldNames) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
-    RecordContext recordContext = readerContext.getRecordContext();
-    String payloadClass = ConfigUtils.getStringWithAltKeys(props, PAYLOAD_CLASS_NAME);
+    RecordContext<T> recordContext = readerContext.getRecordContext();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
@@ -92,7 +86,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
         Option<BufferedRecord<T>> merged = merge(rec1, rec2, schema.get(), schema.get(), recordContext, orderingFieldNames, recordMerger, props);
         // NOTE: For merge mode based merging, it returns non-null.
         //       For mergers / payloads based merging, it may return null.
-        reducedRecord = merged.map(bufferedRecord -> recordContext.constructHoodieAvroRecord(bufferedRecord, payloadClass)).orElse(rec1);
+        reducedRecord = merged.map(bufferedRecord -> recordContext.constructHoodieRecord(bufferedRecord)).orElse(rec1);
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }
