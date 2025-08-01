@@ -531,7 +531,7 @@ public class HoodieIndexUtils {
         new SerializableSchema(hoodieTable.getConfig().getSchema()).get(),
         hoodieTable.getConfig().getProps(),
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
-    RecordContext recordContext = readerContext.getRecordContext();
+    RecordContext<R> recordContext = readerContext.getRecordContext();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))

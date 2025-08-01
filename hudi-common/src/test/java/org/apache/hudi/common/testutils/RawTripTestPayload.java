@@ -88,7 +88,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   }
 
   public RawTripTestPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
-    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false, 0L);
+    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false, 0);
   }
 
   public RawTripTestPayload(String jsonData) throws IOException {
