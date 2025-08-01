@@ -53,6 +53,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -72,6 +73,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -279,15 +281,23 @@ public class ParquetUtils extends FileFormatUtils {
                     .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
                     .map(columnChunkMetaData -> {
                       Statistics stats = columnChunkMetaData.getStatistics();
+                      Comparable<?> min = convertToNativeJavaType(
+                          columnChunkMetaData.getPrimitiveType(),
+                          stats.genericGetMin());
+                      Comparable<?> max = convertToNativeJavaType(
+                          columnChunkMetaData.getPrimitiveType(),
+                          stats.genericGetMax());
+                      if (columnChunkMetaData.getPrimitiveType().getLogicalTypeAnnotation() instanceof LogicalTypeAnnotation.TimestampLogicalTypeAnnotation
+                          && Objects.equals(((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) columnChunkMetaData.getPrimitiveType().getLogicalTypeAnnotation()).getUnit(),
+                          LogicalTypeAnnotation.TimeUnit.MILLIS)) {
+                        min = ((Long) min) * 1000;
+                        max = ((Long) max) * 1000;
+                      }
                       return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                           filePath,
                           columnChunkMetaData.getPath().toDotString(),
-                          convertToNativeJavaType(
-                              columnChunkMetaData.getPrimitiveType(),
-                              stats.genericGetMin()),
-                          convertToNativeJavaType(
-                              columnChunkMetaData.getPrimitiveType(),
-                              stats.genericGetMax()),
+                          min,
+                          max,
                           // NOTE: In case when column contains only nulls Parquet won't be creating
                           //       stats for it instead returning stubbed (empty) object. In that case
                           //       we have to equate number of nulls to the value count ourselves

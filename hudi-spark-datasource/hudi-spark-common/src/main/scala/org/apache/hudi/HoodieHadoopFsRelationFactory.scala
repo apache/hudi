@@ -285,7 +285,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
       new HoodieFileGroupReaderBasedParquetFileFormat(basePath.toString,
         HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
-        isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters)
+        isIncremental, tableAvroSchema, validCommits, shouldUseRecordPosition, getRequiredFilters)
     }
   }
 
