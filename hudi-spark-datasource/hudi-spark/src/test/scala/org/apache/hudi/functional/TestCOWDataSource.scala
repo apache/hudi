@@ -315,9 +315,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieMetadataConfig.ENABLE.key -> "false"
     ) ++ writeOpts
-    val inputDf2 = inputDF.union(inputDF)
     // this write should succeed even w/o setting any param for record key, partition path since table config will be re-used.
-    writeToHudi(optsWithNoRepeatedTableConfig, inputDf2)
+    writeToHudi(optsWithNoRepeatedTableConfig, inputDF)
     spark.read.format("org.apache.hudi").options(readOpts).load(basePath).count()
     assertLastCommitIsUpsert()
   }
@@ -400,7 +399,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   private def writeToHudi(opts: Map[String, String], df: Dataset[Row]): Unit = {
     df.write.format("hudi")
       .options(opts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
   }

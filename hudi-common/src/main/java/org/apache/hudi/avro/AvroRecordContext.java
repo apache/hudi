@@ -83,12 +83,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
-    return constructHoodieRecord(bufferedRecord, partitionPath);
-  }
-
-  @Override
-  public HoodieRecord constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord, String partitionPath) {
+  public HoodieRecord constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
     // HoodieKey is not required so do not generate it if partitionPath is null
     HoodieKey hoodieKey = partitionPath == null ? null : new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
 
