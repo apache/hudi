@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -41,6 +42,7 @@ import javax.annotation.Nonnull;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -255,6 +257,17 @@ public abstract class FileFormatUtils {
    */
   public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath);
 
+  protected Schema getKeyIteratorSchema(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
+    return keyGeneratorOpt
+        .map(keyGenerator -> {
+          List<String> fields = new ArrayList<>();
+          fields.addAll(keyGenerator.getRecordKeyFieldNames());
+          fields.addAll(keyGenerator.getPartitionPathFields());
+          return HoodieAvroUtils.projectSchema(readAvroSchema(storage, filePath), fields);
+        })
+        .orElse(partitionPath.isPresent() ? HoodieAvroUtils.getRecordKeySchema() : HoodieAvroUtils.getRecordKeyPartitionPathSchema());
+  }
+
   /**
    * Fetch {@link HoodieKey}s with positions from the given data file.
    *
@@ -367,7 +380,7 @@ public abstract class FileFormatUtils {
       if (keyGenerator.isPresent()) {
         this.func = retVal -> {
           String recordKey = keyGenerator.get().getRecordKey(retVal);
-          String partitionPath = keyGenerator.get().getPartitionPath(retVal);
+          String partitionPath = partitionPathOption.orElseGet(() -> keyGenerator.get().getPartitionPath(retVal));
           return new HoodieKey(recordKey, partitionPath);
         };
       } else {

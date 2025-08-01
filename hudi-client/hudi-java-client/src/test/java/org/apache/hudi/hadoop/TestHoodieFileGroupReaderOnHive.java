@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderOnJavaTestBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -47,6 +48,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -67,6 +69,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
 
   @BeforeAll
   public static void setUpClass() throws IOException {
+    supportedFileFormats = Collections.singletonList(HoodieFileFormat.PARQUET);
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     hdfsTestService = new HdfsTestService();
     fs = hdfsTestService.start(true).getFileSystem();

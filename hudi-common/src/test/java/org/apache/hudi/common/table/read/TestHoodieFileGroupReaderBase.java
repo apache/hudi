@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.serialization.DefaultSerializer;
@@ -62,6 +63,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -79,6 +81,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -109,6 +112,8 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  * Tests {@link HoodieFileGroupReader} with different engines
  */
 public abstract class TestHoodieFileGroupReaderBase<T> {
+  private static final List<HoodieFileFormat> DEFAULT_SUPPORTED_FILE_FORMATS = Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC);
+  protected static List<HoodieFileFormat> supportedFileFormats;
   private static final String KEY_FIELD_NAME = "_row_key";
   private static final String PRECOMBINE_FIELD_NAME = "timestamp";
   private static final String PARTITION_FIELD_NAME = "partition_path";
@@ -143,22 +148,34 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs();
 
+  private static Stream<Arguments> supportedBaseFileFormatArgs() {
+    return supportedFileFormats.stream()
+        .map(Arguments::of);
+  }
+
   private static Stream<Arguments> testArguments() {
+    boolean supportsORC = supportedFileFormats.contains(HoodieFileFormat.ORC);
     return Stream.of(
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", false),
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet", true),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro", true),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet", true),
-        arguments(RecordMergeMode.CUSTOM, "avro", false),
-        arguments(RecordMergeMode.CUSTOM, "parquet", true)
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, supportsORC ? HoodieFileFormat.ORC : HoodieFileFormat.PARQUET, "avro", false),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, supportsORC ? HoodieFileFormat.ORC : HoodieFileFormat.PARQUET, "avro", true),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true),
+        arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "avro", false),
+        arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "parquet", true)
     );
+  }
+
+  @BeforeAll
+  public static void setUpClass() throws IOException {
+    supportedFileFormats = new ArrayList<>(DEFAULT_SUPPORTED_FILE_FORMATS);
   }
 
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
+  public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode, HoodieFileFormat baseFileFormat, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, populateMetaFields));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
+    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
@@ -275,13 +292,19 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   /**
    * Write a base file with schema A, then write another base file with schema B.
    */
-  @Test
-  public void testSchemaEvolutionWhenBaseFilesWithDifferentSchema() throws Exception {
+  @ParameterizedTest
+  @MethodSource("supportedBaseFileFormatArgs")
+  public void testSchemaEvolutionWhenBaseFilesWithDifferentSchema(HoodieFileFormat fileFormat) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
+    HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
+    if (fileFormat == HoodieFileFormat.ORC) {
+      // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToStringSupport = false;
+    }
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      dataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
+      dataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
 
       // Write a base file with schema A
       List<HoodieRecord> firstRecords = dataGen.generateInsertsForPartition("001", 5, "any_partition");
@@ -293,7 +316,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           firstIndexedRecords);
 
       // Evolve schema
-      dataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
+      dataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
 
       // Write another base file with schema B
       List<HoodieRecord> secondRecords = dataGen.generateInsertsForPartition("002", 5, "new_partition");
@@ -310,13 +333,20 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   /**
    * Write a base file with schema A, then write a log file with schema A, then write another base file with schema B.
    */
-  @Test
-  public void testSchemaEvolutionWhenBaseFileHasDifferentSchemaThanLogFiles() throws Exception {
+  @ParameterizedTest
+  @MethodSource("supportedBaseFileFormatArgs")
+  public void testSchemaEvolutionWhenBaseFileHasDifferentSchemaThanLogFiles(HoodieFileFormat fileFormat) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
+    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
+    HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
+    if (fileFormat == HoodieFileFormat.ORC) {
+      // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToStringSupport = false;
+    }
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      dataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
+      dataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
 
       // Write a base file with schema A
       List<HoodieRecord> firstRecords = dataGen.generateInsertsForPartition("001", 10, "any_partition");
@@ -338,7 +368,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           mergedRecords);
 
       // Evolve schema
-      dataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
+      dataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
 
       // Write another base file with schema B
       List<HoodieRecord> thirdRecords = dataGen.generateInsertsForPartition("003", 5, "new_partition");
@@ -356,14 +386,21 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   /**
    * Write a base file with schema A, then write a log file with schema A, then write another log file with schema B.
    */
-  @Test
-  public void testSchemaEvolutionWhenLogFilesWithDifferentSchema() throws Exception {
+  @ParameterizedTest
+  @MethodSource("supportedBaseFileFormatArgs")
+  public void testSchemaEvolutionWhenLogFilesWithDifferentSchema(HoodieFileFormat fileFormat) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
+    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
+    HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
+    if (fileFormat == HoodieFileFormat.ORC) {
+      // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToStringSupport = false;
+    }
 
     try (HoodieTestDataGenerator baseFileDataGen =
              new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
+      baseFileDataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
 
       // Write base file with schema A
       List<HoodieRecord> firstRecords = baseFileDataGen.generateInserts("001", 100);
@@ -385,7 +422,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           mergedRecords);
 
       // Evolve schema
-      baseFileDataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
+      baseFileDataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
 
       // Write log file with schema B
       List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates("003", 50);

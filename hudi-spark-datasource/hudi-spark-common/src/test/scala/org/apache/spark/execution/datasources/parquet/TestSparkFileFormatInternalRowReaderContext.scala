@@ -28,7 +28,7 @@ import org.apache.hudi.keygen.CustomKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
 import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -80,7 +80,7 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
 
   @Test
   def testConvertValueToEngineType(): Unit = {
-    val reader = Mockito.mock(classOf[SparkParquetReader])
+    val reader = Mockito.mock(classOf[SparkColumnarFileReader])
     val stringValue = "string_value"
     val tableConfig = Mockito.mock(classOf[HoodieTableConfig])
     when(tableConfig.populateMetaFields()).thenReturn(true)
