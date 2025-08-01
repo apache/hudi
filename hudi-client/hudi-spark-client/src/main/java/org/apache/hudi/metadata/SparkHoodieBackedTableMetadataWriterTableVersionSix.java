@@ -141,6 +141,12 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs) {
+    // When specified, reduce the parallelism of input record RDD to improve write performance.
+    int parallelism = dataWriteConfig.getMetadataConfig().getRecordPreparationParallelism();
+    if (parallelism > 0 && preppedRecordInputs.getNumPartitions() > parallelism) {
+      preppedRecordInputs = preppedRecordInputs.coalesce(parallelism);
+    }
+
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
