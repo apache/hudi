@@ -96,7 +96,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
-    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass());
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, null);
   }
 
   /**
