@@ -84,7 +84,7 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
       try {
         Option<BufferedRecord<T>> merged = merge(
             rec2, rec1, schema, schema, readerContext.getRecordContext(), orderingFieldNames, recordMerger, props);
-        reducedRecord = readerContext.getRecordContext().constructHoodieRecord(merged.get());
+        reducedRecord = merged.map(bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord)).orElse(rec1);
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }

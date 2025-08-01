@@ -115,7 +115,7 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
         // Precombine do not need schema and do not return null
         Option<BufferedRecord<T>> merged = merge(
             rec1, rec2, schema, schema, readerContext.getRecordContext(), orderingFieldNames, recordMerger, props);
-        reducedRecord = readerContext.getRecordContext().constructHoodieRecord(merged.get());
+        reducedRecord = merged.map(bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord)).orElse(rec1);
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }
