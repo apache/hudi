@@ -1612,13 +1612,17 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // or a new timestamp which we use for MDT clean, compaction etc.
       String syncCommitTime = createRestoreInstantTime();
       // For Files partition.
-      processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
+      Map<String, HoodieData<HoodieRecord>> partitionRecords = new HashMap<>();
+      partitionRecords.putAll(HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
           partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
-      // For Column Stats partition.
-      processAndCommit(syncCommitTime, () -> convertToColumnStatsRecord(
-          partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient,
-          dataWriteConfig.getMetadataConfig(), Option.of(dataWriteConfig.getRecordMerger().getRecordType()),
-          dataWriteConfig.getMetadataConfig().getColumnStatsIndexParallelism()));
+      // For ColumnStats partition.
+      if (dataMetaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
+        partitionRecords.putAll(convertToColumnStatsRecord(
+            partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient,
+            dataWriteConfig.getMetadataConfig(), Option.of(dataWriteConfig.getRecordMerger().getRecordType()),
+            dataWriteConfig.getMetadataConfig().getColumnStatsIndexParallelism()));
+      }
+      processAndCommit(syncCommitTime, () -> partitionRecords);
       // Close.
       closeInternal();
     } catch (IOException e) {
