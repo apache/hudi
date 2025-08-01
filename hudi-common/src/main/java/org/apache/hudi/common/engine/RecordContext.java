@@ -127,15 +127,6 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
 
   /**
-   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord} using
-   * the provided partition path.
-   *
-   * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
-   * @return A new instance of {@link HoodieRecord}.
-   */
-  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord, String partitionPath);
-
-  /**
    * Constructs a new Engine based record based on a given schema, base record and update values.
    *
    * @param schema           The schema of the new record.
