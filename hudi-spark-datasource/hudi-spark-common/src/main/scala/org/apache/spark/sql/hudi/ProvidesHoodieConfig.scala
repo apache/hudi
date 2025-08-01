@@ -340,8 +340,11 @@ trait ProvidesHoodieConfig extends Logging {
                             catalogTable: HoodieCatalogTable,
                             partitionSpec: Map[String, Option[String]],
                             extraOptions: Map[String, String]): (SaveMode, Boolean, Boolean, Option[String]) = {
+    val overridingOpts = extraOptions ++ Map(
+      "path" -> catalogTable.tableLocation
+    )
     val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sqlContext.conf,
-      defaultOpts = Map.empty, overridingOpts = extraOptions)
+      defaultOpts = Map.empty, overridingOpts = overridingOpts)
     val operation = combinedOpts.getOrElse(OPERATION.key, null)
     val isOverwriteOperation = operation != null &&
       (operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL) || operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL))
