@@ -96,7 +96,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
-    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, null);
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), false);
   }
 
   /**
@@ -104,12 +104,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
    * @param storageConfiguration the storage configuration to use for reading files
    * @param tableConfig the configuration of the Hudi table being read
    * @param payloadClassName the payload class for the writer
+   * @param requiresPayloadRecords indicates whether the caller expects payloads as the data in any HoodieRecord returned by this context
    */
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
-      String payloadClassName) {
-    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName);
+      String payloadClassName,
+      boolean requiresPayloadRecords) {
+    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, requiresPayloadRecords);
   }
 
   private HoodieAvroReaderContext(
@@ -118,8 +120,9 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
-      String payloadClassName) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName));
+      String payloadClassName,
+      boolean requiresPayloadRecords) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName, requiresPayloadRecords));
     this.reusableFileReaders = reusableFileReaders;
   }
 
