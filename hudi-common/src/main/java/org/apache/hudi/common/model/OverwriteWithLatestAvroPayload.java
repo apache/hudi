@@ -29,6 +29,7 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Properties;
 
 /**
  * <ol>
@@ -83,5 +84,13 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   public byte[] getRecordBytes() {
     return recordBytes;
+  }
+
+  @Override
+  public Option<IndexedRecord> getIndexedRecord(Schema schema, Properties properties) throws IOException {
+    if (recordBytes.length == 0) {
+      return Option.empty();
+    }
+    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }

@@ -25,6 +25,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -35,6 +37,7 @@ import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -148,10 +151,28 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                                     BufferedRecordMerger<T> recordMerger,
                                                     TypedProperties properties) throws IOException {
     // Construct new buffered record.
-    BufferedRecord<T> bufferedRec1 = BufferedRecord.forRecordWithContext(newRecord, newSchema, recordContext, properties, orderingFieldNames);
+    BufferedRecord<T> newBufferedRecord = BufferedRecord.forRecordWithContext(newRecord, newSchema, recordContext, properties, orderingFieldNames);
     // Construct old buffered record.
-    BufferedRecord<T> bufferedRec2 = BufferedRecord.forRecordWithContext(oldRecord, oldSchema, recordContext, properties, orderingFieldNames);
+    BufferedRecord<T> oldBufferedRecord = BufferedRecord.forRecordWithContext(oldRecord, oldSchema, recordContext, properties, orderingFieldNames);
     // Run merge.
-    return recordMerger.deltaMerge(bufferedRec1, bufferedRec2);
+    return recordMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
+  }
+
+  protected static <T> HoodieRecord<T> reduceRecords(TypedProperties props, BufferedRecordMerger<T> recordMerger, String[] orderingFieldNames,
+                                                     HoodieRecord<T> previous, HoodieRecord<T> next, Schema schema, RecordContext<T> recordContext) {
+    try {
+      // NOTE: The order of previous and next is uncertain within a batch in "reduceByKey".
+      // If the return value is empty, it means the previous should be chosen.
+      Option<BufferedRecord<T>> merged = merge(next, previous, schema, schema, recordContext, orderingFieldNames, recordMerger, props);
+      // NOTE: For merge mode based merging, it returns non-null.
+      //       For mergers / payloads based merging, it may return null.
+      HoodieRecord<T> reducedRecord = merged.map(recordContext::constructHoodieRecord).orElse(previous);
+      boolean choosePrevious = merged.isEmpty();
+      HoodieKey reducedKey = choosePrevious ? previous.getKey() : next.getKey();
+      HoodieOperation operation = choosePrevious ? previous.getOperation() : next.getOperation();
+      return reducedRecord.newInstance(reducedKey, operation);
+    } catch (IOException e) {
+      throw new HoodieException(String.format("Error to merge two records, %s, %s", previous, next), e);
+    }
   }
 }
