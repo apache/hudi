@@ -56,7 +56,7 @@ public class BufferedRecord<T> implements Serializable {
 
   public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
     HoodieKey hoodieKey = record.getKey();
-    T data = recordContext.extractDataFromRecord(record, schema);
+    T data = recordContext.extractDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     boolean isDelete;
