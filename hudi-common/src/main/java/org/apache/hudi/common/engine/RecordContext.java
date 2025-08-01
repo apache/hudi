@@ -229,8 +229,12 @@ public abstract class RecordContext<T> implements Serializable {
     if (hoodieOperationPos < 0) {
       return false;
     }
-    String hoodieOperation = getMetaFieldValue(record, hoodieOperationPos);
-    return hoodieOperation != null && (HoodieOperation.isDeleteRecord(hoodieOperation) || HoodieOperation.isUpdateBefore(hoodieOperation));
+    String operationVal = getMetaFieldValue(record, hoodieOperationPos);
+    if (operationVal == null) {
+      return false;
+    }
+    HoodieOperation operation = HoodieOperation.fromName(operationVal);
+    return HoodieOperation.isDelete(operation) || HoodieOperation.isUpdateBefore(operation);
   }
 
   /**
