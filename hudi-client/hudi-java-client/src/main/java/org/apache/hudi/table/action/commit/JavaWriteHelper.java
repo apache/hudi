@@ -25,17 +25,13 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -79,19 +75,8 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
     final Schema schema = new Schema.Parser().parse(schemaStr);
-    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
-      HoodieRecord<T> reducedRecord;
-      try {
-        Option<BufferedRecord<T>> merged = merge(
-            rec2, rec1, schema, schema, readerContext.getRecordContext(), orderingFieldNames, recordMerger, props);
-        reducedRecord = merged.map(bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord)).orElse(rec1);
-      } catch (IOException e) {
-        throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
-      }
-      // we cannot allow the user to change the key or partitionPath, since that will affect
-      // everything
-      // so pick it from one of the records.
-      return reducedRecord.newInstance(rec1.getKey(), rec1.getOperation());
-    }).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
+    return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((previous, next) ->
+        reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext())
+    ).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
   }
 }

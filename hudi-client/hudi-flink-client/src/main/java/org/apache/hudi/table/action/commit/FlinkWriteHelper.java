@@ -24,14 +24,10 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -39,7 +35,6 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.Schema;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
@@ -109,26 +104,8 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
 
     // caution that the avro schema is not serializable
     final Schema schema = new Schema.Parser().parse(schemaStr);
-    return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
-      HoodieRecord<T> reducedRecord;
-      try {
-        // Precombine do not need schema and do not return null
-        Option<BufferedRecord<T>> merged = merge(
-            rec1, rec2, schema, schema, readerContext.getRecordContext(), orderingFieldNames, recordMerger, props);
-        reducedRecord = merged.map(bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord)).orElse(rec1);
-      } catch (IOException e) {
-        throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
-      }
-      // we cannot allow the user to change the key or partitionPath, since that will affect
-      // everything
-      // so pick it from one of the records.
-      boolean choosePrev = rec1.getData() == reducedRecord.getData();
-      HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
-      HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      HoodieRecord<T> hoodieRecord = reducedRecord.newInstance(reducedKey, operation);
-      // reuse the location from the first record.
-      hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
-      return hoodieRecord;
-    }).orElse(null)).filter(Objects::nonNull).iterator();
+    return keyedRecords.values().stream().map(x -> x.stream().reduce((previous, next) ->
+      reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext())
+    ).orElse(null)).filter(Objects::nonNull).iterator();
   }
 }
