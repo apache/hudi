@@ -152,7 +152,7 @@ object HoodieCreateRecordUtils {
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, recordLocation)
             } else {
-              DataSourceUtils.createHoodieRecord(processedRecord, OrderingValues.getDefault, hoodieKey,
+              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
                 config.getPayloadClass, recordLocation)
             }
             hoodieRecord
