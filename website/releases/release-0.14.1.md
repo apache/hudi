@@ -36,7 +36,7 @@ We discovered a regression in Hudi 0.14.1 release related to Complex Key gen whe
 It can silently ingest duplicates if table is upgraded from previous versions.
 
 :::tip
-Avoid upgrading any existing table to 0.14.1 if you are using ComplexKeyGenerator and number of fields in record key is 1.
+Avoid upgrading any existing table to 0.14.1 if you are using ComplexKeyGenerator with single field as record key and multiple partition fields.
 :::
 
 ## Raw Release Notes
