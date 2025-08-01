@@ -504,7 +504,7 @@ public class BufferedRecordMergerFactory {
           // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
           return Option.of(newRecord);
         } else {
-          return Option.empty();
+          return Option.of(existingRecord);
         }
       }
       return deltaMergeNonDeleteRecord(newRecord, existingRecord);
