@@ -516,6 +516,8 @@ public class HoodieIndexUtils {
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) hoodieTable.getContext()
         .<R>getReaderContextFactoryDuringWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+    RecordContext<R> recordContext = readerContext.getRecordContext();
+    recordContext.updateRecordKeyExtractor(hoodieTable.getMetaClient().getTableConfig(), false);
     readerContext.initRecordMerger(config.getProps());
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords =
@@ -534,7 +536,6 @@ public class HoodieIndexUtils {
         new SerializableSchema(hoodieTable.getConfig().getSchema()).get(),
         hoodieTable.getConfig().getProps(),
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
-    RecordContext<R> recordContext = readerContext.getRecordContext();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))

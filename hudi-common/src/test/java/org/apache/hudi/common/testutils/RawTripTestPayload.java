@@ -98,7 +98,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.rowKey = jsonRecordMap.get("_row_key").toString();
     this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
     this.isDeleted = false;
-    this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0L).toString());
+    this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0).toString());
   }
 
   public RawTripTestPayload(GenericRecord record, Comparable orderingVal) {
