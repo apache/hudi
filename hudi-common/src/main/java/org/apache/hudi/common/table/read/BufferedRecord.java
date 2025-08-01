@@ -30,6 +30,7 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -65,7 +66,7 @@ public class BufferedRecord<T> implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Failed to get isDelete from record.", e);
     }
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, recordContext.getOrderingValue(data, schema, Arrays.asList(orderingFields)), data, schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
