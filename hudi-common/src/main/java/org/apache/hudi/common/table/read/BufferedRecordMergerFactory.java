@@ -68,8 +68,6 @@ public class BufferedRecordMergerFactory {
       return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, orderingFieldNames, readerSchema, props);
     }
 
-    // If record merge mode is CUSTOM and payload is defined, use precombine record merger
-    // If record merge mode is CUSTOM and payload is not defined, use custom record merger
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         if (partialUpdateMode == PartialUpdateMode.NONE) {
