@@ -722,8 +722,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param comment     Comment for the savepoint
    */
   public void savepoint(String instantTime, String user, String comment) {
-    HoodieTable<T, I, K, O> table = createTable(config);
-    table.savepoint(context, instantTime, user, comment);
+    txnManager.executeStateChangeWithInstant(Option.of(instantTime),time -> {
+      HoodieTable<T, I, K, O> table = createTable(config);
+      return table.savepoint(context, time, txnManager.generateInstantTime(), user, comment);
+    });
   }
 
   /**

@@ -302,8 +302,8 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment) {
-    return new SavepointActionExecutor<>(context, config, this, instantToSavepoint, user, comment).execute();
+  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String completionTime, String user, String comment) {
+    return new SavepointActionExecutor<>(context, config, this, instantToSavepoint, completionTime, user, comment).execute();
   }
 
   @Override
