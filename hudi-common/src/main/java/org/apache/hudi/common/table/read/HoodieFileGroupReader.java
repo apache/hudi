@@ -20,7 +20,6 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.BaseFile;
@@ -52,7 +51,6 @@ import org.apache.avro.Schema;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.UnaryOperator;

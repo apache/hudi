@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
-import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -104,21 +103,19 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
                                                       TypedProperties props,
                                                       BufferedRecordMerger<T> recordMerger,
                                                       HoodieReaderContext<T> readerContext,
-                                                      List<String> orderingFieldNames, BaseKeyGenerator keyGenerator) {
+                                                      String[] orderingFieldNames, BaseKeyGenerator keyGenerator) {
     // If index used is global, then records are expected to differ in their partitionPath
     Map<Object, List<HoodieRecord<T>>> keyedRecords = CollectionUtils.toStream(records)
         .collect(Collectors.groupingBy(record -> record.getKey().getRecordKey()));
 
     // caution that the avro schema is not serializable
     final Schema schema = new Schema.Parser().parse(schemaStr);
-    DeleteContext deleteContext = new DeleteContext(props, schema).withReaderSchema(schema);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((rec1, rec2) -> {
       HoodieRecord<T> reducedRecord;
       try {
         // Precombine do not need schema and do not return null
         Option<BufferedRecord<T>> merged = merge(
-            rec1, rec2, schema, schema, readerContext.getRecordContext(), orderingFieldNames, recordMerger,
-            deleteContext, deleteContext, props);
+            rec1, rec2, schema, schema, readerContext.getRecordContext(), orderingFieldNames, recordMerger, props);
         reducedRecord = readerContext.getRecordContext().constructHoodieRecord(merged.get());
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);

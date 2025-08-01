@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
-import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -132,7 +131,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         table.getConfig().getProps(),
         bufferedRecordMerger,
         readerContext,
-        orderingFieldNames,
+        orderingFieldNames.toArray(new String[0]),
         (BaseKeyGenerator) keyGenerator);
   }
 
@@ -143,24 +142,20 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                        TypedProperties props,
                                        BufferedRecordMerger<T> merger,
                                        HoodieReaderContext<T> readerContext,
-                                       List<String> orderingFieldNames, BaseKeyGenerator keyGenerator);
+                                       String[] orderingFieldNames, BaseKeyGenerator keyGenerator);
 
   public static <T> Option<BufferedRecord<T>> merge(HoodieRecord<T> newRecord,
                                                     HoodieRecord<T> oldRecord,
                                                     Schema newSchema,
                                                     Schema oldSchema,
                                                     RecordContext<T> recordContext,
-                                                    List<String> orderingFieldNames,
+                                                    String[] orderingFieldNames,
                                                     BufferedRecordMerger<T> recordMerger,
-                                                    DeleteContext newDeleteContext,
-                                                    DeleteContext existingDeleteContext,
                                                     TypedProperties properties) throws IOException {
     // Construct new buffered record.
-    HoodieRecord<T> finalNewRecord = newRecord;
-    HoodieRecord<T> finalOldRecord = oldRecord;
-    BufferedRecord<T> bufferedRec1 = BufferedRecord.forRecordWithContext(finalNewRecord, newSchema, recordContext, properties);
+    BufferedRecord<T> bufferedRec1 = BufferedRecord.forRecordWithContext(newRecord, newSchema, recordContext, properties, orderingFieldNames);
     // Construct old buffered record.
-    BufferedRecord<T> bufferedRec2 = BufferedRecord.forRecordWithContext(finalOldRecord, oldSchema, recordContext, properties);
+    BufferedRecord<T> bufferedRec2 = BufferedRecord.forRecordWithContext(oldRecord, oldSchema, recordContext, properties, orderingFieldNames);
     // Run merge.
     return recordMerger.deltaMerge(bufferedRec1, bufferedRec2);
   }
