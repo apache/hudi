@@ -515,15 +515,14 @@ public class HoodieIndexUtils {
         .distinct(updatedConfig.getGlobalIndexReconcileParallelism());
     // define the buffered record merger.
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) hoodieTable.getContext()
-        .<R>getReaderContextFactoryDuringWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
+        .<R>getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps(), false);
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
-    incomingRecordContext.updateRecordKeyExtractor(hoodieTable.getMetaClient().getTableConfig(), false);
     readerContext.initRecordMerger(config.getProps());
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
     // can be using an expression payload so here we rely on the table's configured payload class if it is required.
     ReaderContextFactory<R> readerContextFactoryForExistingRecords = (ReaderContextFactory<R>) hoodieTable.getContext()
-        .<R>getReaderContextFactoryDuringWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), hoodieTable.getMetaClient().getTableConfig().getProps());
+        .<R>getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), hoodieTable.getMetaClient().getTableConfig().getProps());
     RecordContext<R> existingRecordContext = readerContextFactoryForExistingRecords.getContext().getRecordContext();
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords =

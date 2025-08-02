@@ -93,7 +93,7 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
     when(sparkAdapter.createParquetFileReader(eq(false), eq(context.getSqlContext().sessionState().conf()), eq(options), configurationArgumentCaptor.capture()))
         .thenReturn(sparkParquetReader);
 
-    SparkReaderContextFactory sparkHoodieReaderContextFactory = new SparkReaderContextFactory(context, metaClient, schemaResolver, sparkAdapter);
+    SparkReaderContextFactory sparkHoodieReaderContextFactory = new SparkReaderContextFactory(context, metaClient, schemaResolver, sparkAdapter, metaClient.getTableConfig().populateMetaFields());
     HoodieReaderContext<InternalRow> readerContext = sparkHoodieReaderContextFactory.getContext();
 
     Configuration createdConfig = readerContext.getStorageConfiguration().unwrapAs(Configuration.class);

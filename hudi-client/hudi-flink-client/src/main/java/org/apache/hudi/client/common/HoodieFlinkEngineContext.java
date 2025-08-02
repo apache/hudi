@@ -222,11 +222,11 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
     if (metaClient.isMetadataTable()) {
       return new AvroReaderContextFactory(metaClient);
     }
-    return getDefaultContextFactory(metaClient);
+    return getDefaultContextFactory(metaClient, metaClient.getTableConfig().populateMetaFields());
   }
 
-  public ReaderContextFactory<?> getDefaultContextFactory(HoodieTableMetaClient metaClient) {
-    return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);
+  public ReaderContextFactory<?> getDefaultContextFactory(HoodieTableMetaClient metaClient, boolean shouldUseMetaFields) {
+    return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient, shouldUseMetaFields);
   }
 
   /**

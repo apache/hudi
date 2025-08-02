@@ -136,20 +136,34 @@ public abstract class HoodieEngineContext {
 
   public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
 
-  public ReaderContextFactory<?> getReaderContextFactoryDuringWrite(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType,
-                                                                    TypedProperties properties) {
+  public ReaderContextFactory<?> getReaderContextFactoryForWrite(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType,
+                                                                 TypedProperties properties) {
+    return getReaderContextFactoryForWrite(metaClient, recordType, properties, metaClient.getTableConfig().populateMetaFields());
+  }
+
+  /**
+   * Returns reader context factory for write operations in the table.
+   * @param metaClient Table meta client
+   * @param recordType Record type
+   * @param properties Typed properties
+   * @param shouldUseMetaFields Whether meta fields are available in the records which need to be read
+   */
+  public ReaderContextFactory<?> getReaderContextFactoryForWrite(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType,
+                                                                 TypedProperties properties, boolean shouldUseMetaFields) {
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
       String payloadClass = ConfigUtils.getPayloadClass(properties);
-      return new AvroReaderContextFactory(metaClient, payloadClass, true);
+      return new AvroReaderContextFactory(metaClient, payloadClass, true, shouldUseMetaFields);
     }
-    return getDefaultContextFactory(metaClient);
+    return getDefaultContextFactory(metaClient, shouldUseMetaFields);
   }
 
   /**
    * Returns default reader context factory for the engine.
-   * @param metaClient Table metadata client
+   *
+   * @param metaClient          Table metadata client
+   * @param shouldUseMetaFields Whether meta fields can be used while reading the records
    */
-  public abstract ReaderContextFactory<?> getDefaultContextFactory(HoodieTableMetaClient metaClient);
+  public abstract ReaderContextFactory<?> getDefaultContextFactory(HoodieTableMetaClient metaClient, boolean shouldUseMetaFields);
 
   /**
    * Groups values by key and applies a processing function to each group.

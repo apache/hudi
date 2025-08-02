@@ -194,12 +194,12 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
 
   @Override
   public ReaderContextFactory<IndexedRecord> getReaderContextFactory(HoodieTableMetaClient metaClient) {
-    return getDefaultContextFactory(metaClient);
+    return getDefaultContextFactory(metaClient, metaClient.getTableConfig().populateMetaFields());
   }
 
   @Override
-  public ReaderContextFactory<IndexedRecord> getDefaultContextFactory(HoodieTableMetaClient metaClient) {
-    return new AvroReaderContextFactory(metaClient);
+  public ReaderContextFactory<IndexedRecord> getDefaultContextFactory(HoodieTableMetaClient metaClient, boolean shouldUseMetaFields) {
+    return new AvroReaderContextFactory(metaClient, shouldUseMetaFields);
   }
 
   @Override

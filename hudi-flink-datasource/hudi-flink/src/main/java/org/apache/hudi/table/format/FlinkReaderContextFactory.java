@@ -35,9 +35,11 @@ import java.util.function.Supplier;
 public class FlinkReaderContextFactory implements ReaderContextFactory<RowData> {
   private final HoodieTableMetaClient metaClient;
   private InternalSchemaManager internalSchemaManager;
+  private boolean shouldUseMetaFields;
 
-  public FlinkReaderContextFactory(HoodieTableMetaClient metaClient) {
+  public FlinkReaderContextFactory(HoodieTableMetaClient metaClient, boolean shouldUseMetaFields) {
     this.metaClient = metaClient;
+    this.shouldUseMetaFields = shouldUseMetaFields;
   }
 
   @Override
@@ -51,6 +53,6 @@ public class FlinkReaderContextFactory implements ReaderContextFactory<RowData> 
       return internalSchemaManager;
     };
     return new FlinkRowDataReaderContext(
-        metaClient.getStorageConf(), internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
+        metaClient.getStorageConf(), internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty(), shouldUseMetaFields);
   }
 }

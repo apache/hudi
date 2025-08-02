@@ -53,22 +53,23 @@ import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
- * Record context provides the APIs
- * @param <T>
+ * Record context provides the APIs for record related operations. Record context is associated with
+ * a corresponding {@link HoodieReaderContext} and is used for getting field values from a record,
+ * transforming a record etc.
  */
 public abstract class RecordContext<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private Option<SerializableBiFunction<T, Schema, String>> recordKeyExtractor;  // for encoding and decoding schemas to the spillable map
+  private final Option<SerializableBiFunction<T, Schema, String>> recordKeyExtractor;  // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   protected JavaTypeConverter typeConverter;
   protected String partitionPath = null;
 
-  protected RecordContext(HoodieTableConfig tableConfig) {
+  protected RecordContext(HoodieTableConfig tableConfig, boolean shouldUseMetaFields) {
     this.typeConverter = new DefaultJavaTypeConverter();
-    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields());
+    this.recordKeyExtractor = shouldUseMetaFields ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields());
   }
 
   public void setPartitionPath(String partitionPath) {
@@ -307,10 +308,6 @@ public abstract class RecordContext<T> implements Serializable {
 
   public boolean supportsParquetRowIndex() {
     return false;
-  }
-
-  public void updateRecordKeyExtractor(HoodieTableConfig tableConfig, boolean shouldUseMetadataFields) {
-    this.recordKeyExtractor = shouldUseMetadataFields ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields());
   }
 
   private Option<SerializableBiFunction<T, Schema, String>> metadataKeyExtractor() {

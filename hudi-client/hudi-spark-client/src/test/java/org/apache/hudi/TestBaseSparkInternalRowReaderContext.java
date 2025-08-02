@@ -133,7 +133,7 @@ class TestBaseSparkInternalRowReaderContext {
   static class DummySparkReaderContext extends BaseSparkInternalRowReaderContext {
     public DummySparkReaderContext(StorageConfiguration<?> config,
                                    HoodieTableConfig tableConfig) {
-      super(config, tableConfig, new BaseSparkInternalRecordContext(tableConfig) {
+      super(config, tableConfig, new BaseSparkInternalRecordContext(tableConfig, tableConfig.populateMetaFields()) {
         @Override
         public InternalRow convertAvroRecord(IndexedRecord avroRecord) {
           return null;
