@@ -49,6 +49,7 @@ import org.apache.hadoop.io.Writable;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.Deque;
 import java.util.LinkedList;
@@ -229,7 +230,7 @@ public class HoodieArrayWritableAvroUtils {
         break;
       case INT:
         if (newSchema.getLogicalType() == LogicalTypes.date() && oldSchema.getType() == Schema.Type.STRING) {
-          return new IntWritable(HoodieAvroUtils.fromJavaDate(java.sql.Date.valueOf(writable.toString())));
+          return HoodieHiveUtils.getDateWriteable((HoodieAvroUtils.fromJavaDate(java.sql.Date.valueOf(writable.toString()))));
         }
         break;
       case LONG:
@@ -291,6 +292,7 @@ public class HoodieArrayWritableAvroUtils {
               || oldSchema.getType() == Schema.Type.LONG
               || oldSchema.getType() == Schema.Type.FLOAT
               || oldSchema.getType() == Schema.Type.DOUBLE) {
+            // loses trailing zeros due to hive issue. Since we only read with hive, I think this is fine
             HiveDecimalWritable converted = new HiveDecimalWritable(HiveDecimal.create(new java.math.BigDecimal(writable.toString())));
             return HiveDecimalUtils.enforcePrecisionScale(converted, decimalTypeInfo);
           }
