@@ -882,21 +882,14 @@ public class TestHoodieAvroUtils {
     assertEquals("c.b.a", result);
     assertEquals("a", resultSingle);
     assertEquals("", resultEmpty);
-
-    String resultPrefix = HoodieAvroUtils.createFullName(new ArrayDeque<>(Arrays.asList("a", "b", "c")), true);
-    String resultSinglePrefix = HoodieAvroUtils.createFullName(new ArrayDeque<>(Collections.singletonList("a")), true);
-    String resultEmptyPrefix = HoodieAvroUtils.createFullName(new ArrayDeque<>(), true);
-    assertEquals("c.b.a.", resultPrefix);
-    assertEquals("a.", resultSinglePrefix);
-    assertEquals("", resultEmptyPrefix);
   }
 
   @Test
-  public void testCreateFullNamePrefix() {
-    assertEquals("", HoodieAvroUtils.createFullNamePrefix(true, new ArrayDeque<>(Collections.singletonList("field1"))));
-    assertEquals("field1.", HoodieAvroUtils.createFullNamePrefix(false, new ArrayDeque<>(Collections.singletonList("field1"))));
-    assertEquals("", HoodieAvroUtils.createFullNamePrefix(false, new ArrayDeque<>()));
-    assertEquals("parent.child.", HoodieAvroUtils.createFullNamePrefix(false, new ArrayDeque<>(Arrays.asList("child", "parent"))));
+  public void testCreateNamePrefix() {
+    assertNull(HoodieAvroUtils.createNamePredix(true, new ArrayDeque<>(Collections.singletonList("field1"))));
+    assertEquals("field1", HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>(Collections.singletonList("field1"))));
+    assertNull(HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>()));
+    assertEquals("parent.child", HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>(Arrays.asList("child", "parent"))));
   }
 
   @ParameterizedTest

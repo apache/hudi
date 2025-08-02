@@ -72,6 +72,8 @@ import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.avro.util.Utf8;
 
+import javax.annotation.Nullable;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -1043,7 +1045,12 @@ public class HoodieAvroUtils {
    * @return newRecord for new Schema
    */
 
-  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldAvroSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames, boolean validate) {
+  private static Object rewriteRecordWithNewSchema(Object oldRecord,
+                                                   Schema oldAvroSchema,
+                                                   Schema newSchema,
+                                                   Map<String, String> renameCols,
+                                                   Deque<String> fieldNames,
+                                                   boolean validate) {
     if (oldRecord == null) {
       return null;
     }
@@ -1062,7 +1069,12 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
-  private static Object rewriteRecordWithNewSchemaInternal(Object oldRecord, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames, boolean skipMetadataFields) {
+  private static Object rewriteRecordWithNewSchemaInternal(Object oldRecord,
+                                                           Schema oldSchema,
+                                                           Schema newSchema,
+                                                           Map<String, String> renameCols,
+                                                           Deque<String> fieldNames,
+                                                           boolean skipMetadataFields) {
     switch (newSchema.getType()) {
       case RECORD:
         if (!(oldRecord instanceof IndexedRecord)) {
@@ -1070,31 +1082,27 @@ public class HoodieAvroUtils {
         }
         IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
         GenericData.Record newRecord = new GenericData.Record(newSchema);
-        // if renameCols is empty, we can skip building the full name string
-        boolean skipRenameCheck = renameCols.isEmpty();
-        String fullFieldNamePrefix = createFullNamePrefix(skipRenameCheck, fieldNames);
+        // if no renaming, skip building the full name string.
+        boolean noFieldsRenaming = renameCols.isEmpty();
+        String namePrefix = createNamePredix(noFieldsRenaming, fieldNames);
         for (int i = 0; i < newSchema.getFields().size(); i++) {
-          Schema.Field newSchemaField = newSchema.getFields().get(i);
-          String newSchemaFieldName = newSchemaField.name();
-          if (skipMetadataFields && isMetadataField(newSchemaFieldName)) {
+          Schema.Field newField = newSchema.getFields().get(i);
+          String newFieldName = newField.name();
+          if (skipMetadataFields && isMetadataField(newFieldName)) {
             continue;
           }
-          fieldNames.push(newSchemaFieldName);
-          String fullFieldName = skipRenameCheck ? null : fullFieldNamePrefix + newSchemaFieldName;
-          String oldSchemaFieldName = newSchemaFieldName;
-          if (!skipRenameCheck && renameCols.containsKey(fullFieldName)) {
-            oldSchemaFieldName = renameCols.get(fullFieldName);
-          }
-          Schema.Field oldSchemaField = oldSchema.getField(oldSchemaFieldName);
-          if (oldSchemaField != null) {
-            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldSchemaField.pos()), oldSchemaField.schema(), newSchemaField.schema(), renameCols, fieldNames, false));
-          } else if (newSchemaField.defaultVal() instanceof JsonProperties.Null) {
+          fieldNames.push(newFieldName);
+          Schema.Field oldField = noFieldsRenaming
+              ? oldSchema.getField(newFieldName)
+              : oldSchema.getField(getOldFieldNameWithRenaming(namePrefix, newFieldName, renameCols));
+          if (oldField != null) {
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), newField.schema(), renameCols, fieldNames, false));
+          } else if (newField.defaultVal() instanceof JsonProperties.Null) {
             newRecord.put(i, null);
-          } else if (!isNullable(newSchemaField.schema()) && newSchemaField.defaultVal() == null) {
-            fullFieldName = skipRenameCheck ? createFullName(fieldNames) : fullFieldName;
-            throw new SchemaCompatibilityException("Field " + fullFieldName + " has no default value and is non-nullable");
+          } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
+            throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
           } else {
-            newRecord.put(i, newSchemaField.defaultVal());
+            newRecord.put(i, newField.defaultVal());
           }
           fieldNames.pop();
         }
@@ -1138,26 +1146,26 @@ public class HoodieAvroUtils {
     }
   }
 
-  static String createFullNamePrefix(boolean skipRenameCheck, Deque<String> fieldNames) {
-    if (skipRenameCheck || fieldNames.isEmpty()) {
-      return "";
-    }
-    return createFullName(fieldNames, true);
+  @VisibleForTesting
+  public static String createNamePredix(boolean noFieldsRenaming, Deque<String> fieldNames) {
+    return noFieldsRenaming ? null : fieldNames.isEmpty() ? null : createFullName(fieldNames);
+  }
+
+  private static String getOldFieldNameWithRenaming(String namePrefix, String newFieldName, Map<String, String> renameCols) {
+    String renamed = renameCols.get(compositeName(namePrefix, newFieldName));
+    return renamed == null ? newFieldName : renamed;
+  }
+
+  private static String compositeName(@Nullable String prefix, String name) {
+    return prefix == null ? name : prefix + "." + name;
   }
 
   public static String createFullName(Deque<String> fieldNames) {
-    return createFullName(fieldNames, false);
-  }
-
-  static String createFullName(Deque<String> fieldNames, boolean isPrefix) {
     String result = "";
     if (!fieldNames.isEmpty()) {
       Iterator<String> iter = fieldNames.descendingIterator();
       result = iter.next();
       if (!iter.hasNext()) {
-        if (isPrefix) {
-          return result + ".";
-        }
         return result;
       }
 
@@ -1166,9 +1174,6 @@ public class HoodieAvroUtils {
       while (iter.hasNext()) {
         sb.append(".");
         sb.append(iter.next());
-      }
-      if (isPrefix) {
-        sb.append(".");
       }
       result = sb.toString();
     }
