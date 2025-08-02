@@ -1411,7 +1411,7 @@ public class HoodieAvroUtils {
         for (Schema.Field field : readerSchema.getFields()) {
           Schema.Field writerField = writerSchema.getField(field.name());
           if (writerField == null || recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
-              return true;
+            return true;
           }
         }
         return false;
