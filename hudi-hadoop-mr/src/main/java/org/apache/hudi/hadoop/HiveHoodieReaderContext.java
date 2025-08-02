@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -78,7 +77,6 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL
  */
 public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> {
   protected final HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator;
-  protected final Map<String, TypeInfo> columnTypeMap;
   private RecordReader<NullWritable, ArrayWritable> firstRecordReader = null;
 
   private final List<String> partitionCols;
@@ -86,10 +84,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
                                     List<String> partitionCols,
-                                    ObjectInspectorCache objectInspectorCache,
                                     StorageConfiguration<?> storageConfiguration,
                                     HoodieTableConfig tableConfig) {
-    super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new HiveRecordContext(tableConfig, storageConfiguration, objectInspectorCache));
+    super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new HiveRecordContext(tableConfig));
     if (storageConfiguration.getString(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS).isEmpty()) {
       // Overriding default treatment of repeated groups in Parquet
       storageConfiguration.set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, "false");
@@ -97,7 +94,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
-    this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }
 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {

@@ -27,10 +27,8 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
@@ -41,8 +39,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestHoodieHiveRecord {
   private HoodieHiveRecord hoodieHiveRecord;
-  @Mock
-  private ObjectInspectorCache mockObjectInspectorCache;
 
   @BeforeEach
   void setUp() {
@@ -54,7 +50,7 @@ class TestHoodieHiveRecord {
     Schema schema = Schema.create(Schema.Type.STRING);
     
     // Create HoodieHiveRecord with mocked dependencies
-    hoodieHiveRecord = new HoodieHiveRecord(key, data, schema, mockObjectInspectorCache);
+    hoodieHiveRecord = new HoodieHiveRecord(key, data, schema);
   }
 
   @Test

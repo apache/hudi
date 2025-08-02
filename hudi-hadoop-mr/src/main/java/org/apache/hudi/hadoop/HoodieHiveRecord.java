@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -67,32 +66,28 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   private final ArrayWritableObjectInspector objectInspector;
 
-  private final ObjectInspectorCache objectInspectorCache;
-
   protected Schema schema;
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, ObjectInspectorCache objectInspectorCache) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema) {
     super(key, data);
-    this.objectInspector = objectInspectorCache.getObjectInspector(schema);
-    this.objectInspectorCache = objectInspectorCache;
+    this.objectInspector = HoodieArrayWritableAvroUtils.getObjectInspector(schema);
     this.schema = schema;
     this.copy = false;
     isDeleted = data == null;
   }
 
   private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
-                           ArrayWritableObjectInspector objectInspector, ObjectInspectorCache objectInspectorCache) {
+                          ArrayWritableObjectInspector objectInspector) {
     super(key, data, operation, Option.empty());
     this.schema = schema;
     this.copy = isCopy;
     isDeleted = data == null;
     this.objectInspector = objectInspector;
-    this.objectInspectorCache = objectInspectorCache;
   }
 
   @Override
   public HoodieRecord<ArrayWritable> newInstance() {
-    return new HoodieHiveRecord(this.key, this.data, this.schema, this.operation, this.copy, this.objectInspector, this.objectInspectorCache);
+    return new HoodieHiveRecord(this.key, this.data, this.schema, this.operation, this.copy, this.objectInspector);
   }
 
   @Override
@@ -171,7 +166,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return HiveRecordContext.getFieldValueFromArrayWritable(data, schema, column, objectInspectorCache);
+    return HiveRecordContext.getFieldValueFromArrayWritable(data, schema, column);
   }
 
   @Override

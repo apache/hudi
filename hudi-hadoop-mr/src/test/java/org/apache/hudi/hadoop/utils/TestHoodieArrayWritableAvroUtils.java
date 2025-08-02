@@ -22,7 +22,6 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 import org.apache.hudi.hadoop.HiveRecordContext;
@@ -31,9 +30,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
-import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
 import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
@@ -53,8 +50,6 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
-import org.apache.hadoop.mapred.JobConf;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -63,10 +58,9 @@ import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 
+import static org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils.getValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -78,17 +72,6 @@ public class TestHoodieArrayWritableAvroUtils {
 
   HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
   Schema tableSchema = HoodieTestDataGenerator.AVRO_SCHEMA;
-  ObjectInspectorCache objectInspectorCache;
-
-  @BeforeEach
-  public void setup() {
-    List<Schema.Field> fields = tableSchema.getFields();
-    Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
-    JobConf jobConf = new JobConf(conf);
-    jobConf.set(serdeConstants.LIST_COLUMNS, fields.stream().map(Schema.Field::name).collect(Collectors.joining(",")));
-    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES);
-    objectInspectorCache = new ObjectInspectorCache(HoodieTestDataGenerator.AVRO_SCHEMA, jobConf);
-  }
 
   @Test
   public void testProjection() {
@@ -99,22 +82,22 @@ public class TestHoodieArrayWritableAvroUtils {
 
     //We reuse the ArrayWritable, so we need to get the values before projecting
     ArrayWritable record = convertArrayWritable(dataGen.generateGenericRecord());
-    Object tripType = objectInspectorCache.getValue(record, from, "trip_type");
-    Object currentTs = objectInspectorCache.getValue(record, from, "current_ts");
-    Object weight = objectInspectorCache.getValue(record, from, "weight");
+    Object tripType = getValue(record, from, "trip_type");
+    Object currentTs = getValue(record, from, "current_ts");
+    Object weight = getValue(record, from, "weight");
 
     //Make sure the projected fields can be read
     ArrayWritable projectedRecord = projection.apply(record);
-    assertEquals(tripType, objectInspectorCache.getValue(projectedRecord, to, "trip_type"));
-    assertEquals(currentTs, objectInspectorCache.getValue(projectedRecord, to, "current_ts"));
-    assertEquals(weight, objectInspectorCache.getValue(projectedRecord, to, "weight"));
+    assertEquals(tripType, getValue(projectedRecord, to, "trip_type"));
+    assertEquals(currentTs, getValue(projectedRecord, to, "current_ts"));
+    assertEquals(weight, getValue(projectedRecord, to, "weight"));
 
     //Reverse projection, the fields are in the original spots, but only the fields we set can be read.
     //Therefore, we can only check the 3 fields that were in the projection
     ArrayWritable reverseProjected = reverseProjection.apply(projectedRecord);
-    assertEquals(tripType, objectInspectorCache.getValue(reverseProjected, from, "trip_type"));
-    assertEquals(currentTs, objectInspectorCache.getValue(reverseProjected, from, "current_ts"));
-    assertEquals(weight, objectInspectorCache.getValue(reverseProjected, from, "weight"));
+    assertEquals(tripType, getValue(reverseProjected, from, "trip_type"));
+    assertEquals(currentTs, getValue(reverseProjected, from, "current_ts"));
+    assertEquals(weight, getValue(reverseProjected, from, "weight"));
   }
 
   private static ArrayWritable convertArrayWritable(GenericRecord record) {
@@ -343,7 +326,7 @@ public class TestHoodieArrayWritableAvroUtils {
 
     Object javaInput = ObjectInspectorConverters.getConverter(writableOIOld, oldOI).convert(oldWritable);
     if (isDecimalSchema(oldSchema)) {
-        javaInput = HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(getDecimalValue(javaInput, oldSchema), oldSchema, oldSchema.getLogicalType());
+      javaInput = HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(getDecimalValue(javaInput, oldSchema), oldSchema, oldSchema.getLogicalType());
     } else if (javaInput instanceof byte[]) {
       javaInput = ByteBuffer.wrap((byte[]) javaInput);
     }
