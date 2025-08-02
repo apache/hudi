@@ -70,6 +70,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final HoodieTableMetaClient metaClient;
   private final InputSplit inputSplit;
+  private final boolean couldHaveLogFiles;
   private final Option<String[]> partitionPathFields;
   private final List<String> orderingFieldNames;
   private final HoodieStorage storage;
@@ -93,6 +94,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                 FileGroupRecordBufferLoader<T> recordBufferLoader) {
     this.readerContext = readerContext;
     this.recordBufferLoader = recordBufferLoader;
+    this.couldHaveLogFiles = recordBufferLoader.hasLogFiles();
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
@@ -128,7 +130,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
-    if (inputSplit.getLogFiles().isEmpty()) {
+    if (couldHaveLogFiles && inputSplit.getLogFiles().isEmpty()) {
       this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
     } else {
       this.baseFileIterator = iter;
@@ -491,7 +493,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(requestedSchema != null, "Requested schema is required");
       ValidationUtils.checkArgument(props != null, "Props is required");
       ValidationUtils.checkArgument(baseFileOption != null, "Base file option is required");
-      ValidationUtils.checkArgument(logFiles != null, "Log files stream is required");
       ValidationUtils.checkArgument(partitionPath != null, "Partition path is required");
       if (enableOptimizedLogBlockScan == null) {
         // check to see if props contains this key if not explicitly set
@@ -510,7 +511,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           .allowInflightInstants(allowInflightInstants)
           .enableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
           .build();
-      InputSplit inputSplit = new InputSplit(baseFileOption, logFiles, partitionPath, start, length);
+      InputSplit inputSplit = new InputSplit(baseFileOption, logFiles == null ? Stream.empty() : logFiles, partitionPath, start, length);
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
           props, readerParameters, inputSplit, fileGroupUpdateCallback, recordBufferLoader);
