@@ -33,6 +33,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -47,7 +48,8 @@ class TestHoodieHiveRecord {
     // Create a minimal HoodieHiveRecord instance with mocked dependencies
     HoodieKey key = new HoodieKey("test-key", "test-partition");
     ArrayWritable data = new ArrayWritable(Writable.class, new Writable[]{new Text("test")});
-    Schema schema = Schema.create(Schema.Type.STRING);
+    Schema schema = Schema.createRecord("TestRecord", null, null, false);
+    schema.setFields(Collections.singletonList(new Schema.Field("testField", Schema.create(Schema.Type.STRING), null, null)));
     
     // Create HoodieHiveRecord with mocked dependencies
     hoodieHiveRecord = new HoodieHiveRecord(key, data, schema);
