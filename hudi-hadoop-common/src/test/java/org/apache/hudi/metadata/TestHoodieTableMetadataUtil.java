@@ -488,11 +488,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
-        .withColumnStatsIndexForColumns("firstname,student.lastname,student")
+        .withColumnStatsIndexForColumns("firstname,student.lastnameNested,student")
         .build();
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     expected.add("firstname");
-    expected.add("student.lastname");
+    expected.add("student.lastnameNested");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), false).keySet()));
 
