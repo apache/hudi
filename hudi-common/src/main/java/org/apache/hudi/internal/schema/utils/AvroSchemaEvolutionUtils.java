@@ -140,7 +140,12 @@ public class AvroSchemaEvolutionUtils {
           });
     }
 
-    return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
+    InternalSchema evolvedSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
+    // If evolvedSchema is exactly the same as the oldSchema, except the version number, return the old schema
+    if (evolvedSchema.equalsIgnoringVersion(oldTableSchema)) {
+      return oldTableSchema;
+    }
+    return evolvedSchema;
   }
 
   public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
