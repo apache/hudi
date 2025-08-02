@@ -21,6 +21,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,7 +35,7 @@ import java.io.IOException;
  */
 public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
-  public static final EventTimeFlinkRecordMerger INSTANCE = new EventTimeFlinkRecordMerger();
+  private String[] orderingFields;
 
   @Override
   public String getMergingStrategy() {
@@ -52,7 +53,10 @@ public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
 
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+    }
+    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
       return Option.of(Pair.of(older, oldSchema));
     } else {
       return Option.of(Pair.of(newer, newSchema));

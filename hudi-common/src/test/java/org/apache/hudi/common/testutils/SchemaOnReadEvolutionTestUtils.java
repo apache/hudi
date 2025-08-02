@@ -101,33 +101,21 @@ public class SchemaOnReadEvolutionTestUtils extends SchemaEvolutionTestUtilsBase
     public boolean reorderColumnSupport = true;
     public boolean renameColumnSupport = true;
     public boolean removeColumnSupport = true;
-
-    // TODO: [HUDI-9676] broken in avro so validation is wrong
-    public boolean renameColumnAsPreviouslyRemovedSupport = false;
+    public boolean renameColumnAsPreviouslyRemovedSupport = true;
 
     // Int
-    public boolean intToLongSupport = true;
-    public boolean intToFloatSupport = true;
-    public boolean intToDoubleSupport = true;
-    public boolean intToStringSupport = true;
     public boolean intToDecimalFixedSupport = true;
     public boolean intToDecimalBytesSupport = true;
 
     // Long
-    public boolean longToFloatSupport = true;
-    public boolean longToDoubleSupport = true;
-    public boolean longToStringSupport = true;
     public boolean longToDecimalFixedSupport = true;
     public boolean longToDecimalBytesSupport = true;
 
     // Float
-    public boolean floatToDoubleSupport = true;
-    public boolean floatToStringSupport = true;
     public boolean floatToDecimalFixedSupport = true;
     public boolean floatToDecimalBytesSupport = true;
 
     // Double
-    public boolean doubleToStringSupport = true;
     public boolean doubleToDecimalFixedSupport = true;
     public boolean doubleToDecimalBytesSupport = true;
 

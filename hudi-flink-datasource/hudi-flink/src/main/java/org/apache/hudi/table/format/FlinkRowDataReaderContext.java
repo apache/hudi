@@ -115,9 +115,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
-        return Option.of(EventTimeFlinkRecordMerger.INSTANCE);
+        return Option.of(new EventTimeFlinkRecordMerger());
       case COMMIT_TIME_ORDERING:
-        return Option.of(CommitTimeFlinkRecordMerger.INSTANCE);
+        return Option.of(new CommitTimeFlinkRecordMerger());
       default:
         Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.FLINK, mergeImplClasses, mergeStrategyId);
         if (recordMerger.isEmpty()) {

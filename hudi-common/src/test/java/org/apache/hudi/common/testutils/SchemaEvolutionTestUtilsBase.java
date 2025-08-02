@@ -247,6 +247,24 @@ public class SchemaEvolutionTestUtilsBase {
     public boolean arraySupport = true;
     // TODO: [HUDI-9603] Flink 1.18 array values incorrect in fg reader test
     public boolean anyArraySupport = true;
+
+    // Int
+    public boolean intToLongSupport = true;
+    public boolean intToFloatSupport = true;
+    public boolean intToDoubleSupport = true;
+    public boolean intToStringSupport = true;
+
+    // Long
+    public boolean longToFloatSupport = true;
+    public boolean longToDoubleSupport = true;
+    public boolean longToStringSupport = true;
+
+    // Float
+    public boolean floatToDoubleSupport = true;
+    public boolean floatToStringSupport = true;
+
+    // Double
+    public boolean doubleToStringSupport = true;
   }
 
   // Utility method to extend configs.schema with fields specified in baseFields

@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.metadata.DefaultMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieMetadataBulkInsertPartitioner;
@@ -67,7 +68,7 @@ class TestSparkHoodieMetadataBulkInsertPartitioner extends SparkClientFunctional
     // repeated fileGroups
     initRecords.accept(MetadataPartitionType.FILES.getFileIdPrefix() + "002", 11);
 
-    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(5);
+    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(new DefaultMetadataTableFileGroupIndexParser(5));
     JavaRDD<HoodieRecord> partitionedRecords = partitioner.repartitionRecords(jsc().parallelize(records, records.size()), 0);
 
     // Only 5 partitions should be there corresponding to 5 unique fileGroups in MDT

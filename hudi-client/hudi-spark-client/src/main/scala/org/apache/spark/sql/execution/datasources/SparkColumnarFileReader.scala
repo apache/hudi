@@ -17,19 +17,17 @@
  * under the License.
  */
 
-package org.apache.spark.sql.execution.datasources.parquet
+package org.apache.spark.sql.execution.datasources
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
-
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-trait SparkParquetReader extends Serializable {
+trait SparkColumnarFileReader extends Serializable {
   /**
    * Read an individual parquet file
    *

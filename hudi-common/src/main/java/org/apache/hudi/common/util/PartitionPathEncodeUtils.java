@@ -18,6 +18,7 @@
 package org.apache.hudi.common.util;
 
 import java.util.BitSet;
+import java.util.function.Function;
 
 /**
  * Utils to encode/decode the partition path.
@@ -29,9 +30,11 @@ public class PartitionPathEncodeUtils {
   public static final String DEFAULT_PARTITION_PATH = "__HIVE_DEFAULT_PARTITION__";
 
   static BitSet charToEscape = new BitSet(128);
+  static BitSet charToEscapeFilename = new BitSet(128);
   static {
     for (char c = 0; c < ' '; c++) {
       charToEscape.set(c);
+      charToEscapeFilename.set(c);
     }
 
     /**
@@ -48,11 +51,19 @@ public class PartitionPathEncodeUtils {
 
     for (char c : clist) {
       charToEscape.set(c);
+      charToEscapeFilename.set(c);
     }
+
+    charToEscapeFilename.set('_');
+    charToEscapeFilename.set('-');
   }
 
   static boolean needsEscaping(char c) {
     return c >= 0 && c < charToEscape.size() && charToEscape.get(c);
+  }
+
+  static boolean needsEscapingFilename(char c) {
+    return c >= 0 && c < charToEscapeFilename.size() && charToEscapeFilename.get(c);
   }
 
   public static String escapePathName(String path) {
@@ -77,10 +88,14 @@ public class PartitionPathEncodeUtils {
       }
     }
 
+    return doEscape(path, PartitionPathEncodeUtils::needsEscaping);
+  }
+
+  private static String doEscape(String path, Function<Character,Boolean> needsEscapeMethod) {
     StringBuilder sb = new StringBuilder();
     for (int i = 0; i < path.length(); i++) {
       char c = path.charAt(i);
-      if (needsEscaping(c)) {
+      if (needsEscapeMethod.apply(c)) {
         sb.append('%');
         sb.append(String.format("%1$02X", (int) c));
       } else {
@@ -88,6 +103,13 @@ public class PartitionPathEncodeUtils {
       }
     }
     return sb.toString();
+  }
+
+  public static String escapeFileName(String filename) {
+    if (filename == null || filename.length() == 0) {
+      return filename;
+    }
+    return doEscape(filename, PartitionPathEncodeUtils::needsEscapingFilename);
   }
 
   public static String unescapePathName(String path) {

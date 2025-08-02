@@ -222,15 +222,19 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
-   * Check if a record is a DELETE marked by the '_hoodie_operation' field.
+   * Check if a record is a DELETE/UPDATE_BEFORE marked by the '_hoodie_operation' field.
    */
   private boolean isDeleteHoodieOperation(T record, DeleteContext deleteContext) {
     int hoodieOperationPos = deleteContext.getHoodieOperationPos();
     if (hoodieOperationPos < 0) {
       return false;
     }
-    String hoodieOperation = getMetaFieldValue(record, hoodieOperationPos);
-    return hoodieOperation != null && HoodieOperation.isDeleteRecord(hoodieOperation);
+    String operationVal = getMetaFieldValue(record, hoodieOperationPos);
+    if (operationVal == null) {
+      return false;
+    }
+    HoodieOperation operation = HoodieOperation.fromName(operationVal);
+    return HoodieOperation.isDelete(operation) || HoodieOperation.isUpdateBefore(operation);
   }
 
   /**

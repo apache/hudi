@@ -453,6 +453,18 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
           HoodieData<? extends RawKey> rawKeys, String partitionName);
 
   /**
+   * Retrieves a collection of pairs (key -> record) from the metadata table by its keys.
+   *
+   * @param rawKeys The raw keys to look up in the metadata table
+   * @param partitionName The partition name where the records are stored
+   * @param dataTablePartition The data table partition to look up from
+   * @return A collection of pairs (key -> record)
+   */
+  protected abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(HoodieData<? extends RawKey> rawKeys,
+                                                                                                          String partitionName,
+                                                                                                          Option<String> dataTablePartition);
+
+  /**
    * Returns a collection of pairs (secondary-key -> record-keys) for the provided secondary keys.
    *
    * @param keys The unescaped/decoded secondary keys to look up in the metadata table

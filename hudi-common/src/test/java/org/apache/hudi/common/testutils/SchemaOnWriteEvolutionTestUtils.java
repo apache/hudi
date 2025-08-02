@@ -69,24 +69,6 @@ public class SchemaOnWriteEvolutionTestUtils extends SchemaEvolutionTestUtilsBas
   public static class SchemaOnWriteConfigs extends SchemaEvolutionTestUtilsBase.SchemaEvolutionConfigBase {
     public boolean addNewFieldSupport = true;
 
-    // Int
-    public boolean intToLongSupport = true;
-    public boolean intToFloatSupport = true;
-    public boolean intToDoubleSupport = true;
-    public boolean intToStringSupport = true;
-
-    // Long
-    public boolean longToFloatSupport = true;
-    public boolean longToDoubleSupport = true;
-    public boolean longToStringSupport = true;
-
-    // Float
-    public boolean floatToDoubleSupport = true;
-    public boolean floatToStringSupport = true;
-
-    // Double
-    public boolean doubleToStringSupport = true;
-
     // String
     public boolean stringToBytesSupport = true;
 

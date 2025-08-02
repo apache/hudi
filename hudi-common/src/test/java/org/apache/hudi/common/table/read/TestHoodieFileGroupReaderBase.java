@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.serialization.DefaultSerializer;
@@ -70,6 +71,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -87,6 +89,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -117,6 +120,8 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  * Tests {@link HoodieFileGroupReader} with different engines
  */
 public abstract class TestHoodieFileGroupReaderBase<T> {
+  private static final List<HoodieFileFormat> DEFAULT_SUPPORTED_FILE_FORMATS = Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC);
+  protected static List<HoodieFileFormat> supportedFileFormats;
   private static final String KEY_FIELD_NAME = "_row_key";
   private static final String PRECOMBINE_FIELD_NAME = "timestamp";
   private static final String PARTITION_FIELD_NAME = "partition_path";
@@ -156,21 +161,28 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   public abstract SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs();
 
   private static Stream<Arguments> testArguments() {
+    boolean supportsORC = supportedFileFormats.contains(HoodieFileFormat.ORC);
     return Stream.of(
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "avro", false),
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, "parquet", true),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "avro", true),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, "parquet", true),
-        arguments(RecordMergeMode.CUSTOM, "avro", false),
-        arguments(RecordMergeMode.CUSTOM, "parquet", true)
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, supportsORC ? HoodieFileFormat.ORC : HoodieFileFormat.PARQUET, "avro", false),
+        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, supportsORC ? HoodieFileFormat.ORC : HoodieFileFormat.PARQUET, "avro", true),
+        arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true),
+        arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "avro", false),
+        arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "parquet", true)
     );
+  }
+
+  @BeforeAll
+  public static void setUpClass() throws IOException {
+    supportedFileFormats = new ArrayList<>(DEFAULT_SUPPORTED_FILE_FORMATS);
   }
 
   @ParameterizedTest
   @MethodSource("testArguments")
-  public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
+  public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode, HoodieFileFormat baseFileFormat, String logDataBlockFormat, boolean populateMetaFields) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode, populateMetaFields));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
+    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
@@ -277,7 +289,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @ParameterizedTest
   @EnumSource(value = SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.class)
   public void testSchemaOnRead(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) throws Exception {
-    try (SchemaOnReadTestExecutor executor = new SchemaOnReadTestExecutor(testType)) {
+    try (SchemaOnReadTestExecutor executor = new SchemaOnReadTestExecutor(testType,
+        getSchemaOnReadConfigs(),
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue())) {
       executor.execute();
     }
   }
@@ -285,39 +299,54 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @ParameterizedTest
   @EnumSource(value = SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.class)
   public void testSchemaOnWrite(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) throws Exception {
-    try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(testType)) {
+    try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(testType,
+        getSchemaOnWriteConfigs(),
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue())) {
       executor.execute();
     }
   }
 
+  @Test
+  public void testSchemaOnWriteOrc() throws Exception {
+    if (supportedFileFormats.contains(HoodieFileFormat.ORC)) {
+      try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.BASE_FILES_WITH_DIFFERENT_SCHEMA,
+          getSchemaOnWriteConfigs(),
+          HoodieFileFormat.ORC)) {
+        executor.execute();
+      }
+    }
+  }
+
   // Base class for executing schema evolution tests
-  public abstract class AbstractSchemaEvolutionTestExecutor implements SchemaEvolutionTestUtilsBase.SchemaEvolutionTestExecutor {
+  public abstract class AbstractSchemaEvolutionTestExecutor<C extends SchemaEvolutionTestUtilsBase.SchemaEvolutionConfigBase> implements SchemaEvolutionTestUtilsBase.SchemaEvolutionTestExecutor {
 
     protected final int maxIterations;
     private final SchemaEvolutionTestUtilsBase.SchemaEvolutionScenario scenario;
+    protected C evolutionConfigs;
     protected final Map<String, String> writeConfigs;
     private final HoodieTestDataGenerator dataGen;
     protected List<Pair<String, IndexedRecord>> allRecords = new ArrayList<>();
     protected Schema extendedSchema;
     private boolean first = true;
 
-    public AbstractSchemaEvolutionTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) {
+    public AbstractSchemaEvolutionTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                               C evolutionConfigs,
+                                               HoodieFileFormat baseFileFormat) {
       this.maxIterations = testType.getScenario().getMaxIterations();
       this.scenario = testType.getScenario();
       this.dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF);
+      this.evolutionConfigs = evolutionConfigs;
+      if (baseFileFormat.equals(HoodieFileFormat.ORC)) {
+        this.evolutionConfigs.floatToStringSupport = false;
+      }
       this.writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING, true));
-
-      // configs must be initialized before schema is initialized
-      initSchemaGenConfigs();
+      writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
       initializeSchema();
       dataGen.addExtendedSchema(extendedSchema);
     }
 
     // create schema for iteration 0
     protected abstract void initializeSchema();
-
-    // set the schema test configs
-    protected abstract void initSchemaGenConfigs();
 
     // evolve the schema
     protected abstract void doEvolveSchema(int iteration);
@@ -380,13 +409,14 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   }
 
   // single use class for testing schema on read
-  private class SchemaOnReadTestExecutor extends AbstractSchemaEvolutionTestExecutor {
-    private SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs config;
+  private class SchemaOnReadTestExecutor extends AbstractSchemaEvolutionTestExecutor<SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs> {
     private InternalSchema extendedInternalSchema;
     private String historySchema = "";
 
-    public SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) {
-      super(testType);
+    public SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs,
+                                    HoodieFileFormat baseFileFormat) {
+      super(testType, configs, baseFileFormat);
       writeConfigs.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
       // TODO fix schema evolution on col stats
       writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
@@ -399,15 +429,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
 
     @Override
-    protected void initSchemaGenConfigs() {
-      this.config = getSchemaOnReadConfigs();
-    }
-
-    @Override
     public void doEvolveSchema(int iteration) {
       updateSchemas(iteration);
       commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
-      Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(config, iteration, maxIterations);
+      Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(evolutionConfigs, iteration, maxIterations);
       allRecords = allRecords.stream()
           .map(r -> Pair.of(r.getLeft(),
               (IndexedRecord) HoodieAvroUtils.rewriteRecordWithNewSchema(r.getRight(), extendedSchema, renameCols, true)))
@@ -425,20 +450,21 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       if (extendedInternalSchema != null) {
         historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, historySchema);
       }
-      extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(config, iteration, maxIterations);
+      extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(evolutionConfigs, iteration, maxIterations);
       extendedSchema = HoodieAvroUtils.removeMetadataFields(
-          AvroInternalSchemaConverter.convert(extendedInternalSchema, config.schema.getName()));
+          AvroInternalSchemaConverter.convert(extendedInternalSchema, evolutionConfigs.schema.getName()));
     }
   }
 
   // single use class for testing schema on write
-  private class SchemaOnWriteTestExecutor extends AbstractSchemaEvolutionTestExecutor {
+  private class SchemaOnWriteTestExecutor extends AbstractSchemaEvolutionTestExecutor<SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs> {
 
-    private SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs config;
     private boolean hasEvolvedSchema = false;
 
-    public SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) {
-      super(testType);
+    public SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                     SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs,
+                                     HoodieFileFormat baseFileFormat) {
+      super(testType, configs, baseFileFormat);
     }
 
     @Override
@@ -447,16 +473,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
 
     @Override
-    protected void initSchemaGenConfigs() {
-      this.config = getSchemaOnWriteConfigs();
-    }
-
-    @Override
     public void doEvolveSchema(int iteration)  {
       if (iteration > 0) {
         hasEvolvedSchema = true;
       }
-      extendedSchema = SchemaOnWriteEvolutionTestUtils.generateExtendedSchema(config, iteration, maxIterations);
+      extendedSchema = SchemaOnWriteEvolutionTestUtils.generateExtendedSchema(evolutionConfigs, iteration, maxIterations);
     }
 
     @Override
@@ -907,7 +928,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
             record.getRecordKey(),
             removeHiveStylePartition(record.getPartitionPath()),
-            record.getOrderingValue(schema, props).toString(),
+            record.getOrderingValue(schema, props, preCombineFields.toArray(new String[0])).toString(),
             readerContext.getRecordContext().getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }
