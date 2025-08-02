@@ -45,7 +45,6 @@ public class DeleteContext implements Serializable {
   private Schema readerSchema;
 
   public DeleteContext(TypedProperties props, Schema tableSchema) {
-    // TODO: Probably we need only reader schema here or just schema of the record in question
     this.customDeleteMarkerKeyValue = getCustomDeleteMarkerKevValue(props);
     this.hasBuiltInDeleteField = hasBuiltInDeleteField(tableSchema);
   }

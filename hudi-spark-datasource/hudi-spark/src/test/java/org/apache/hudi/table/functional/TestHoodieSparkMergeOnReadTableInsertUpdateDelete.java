@@ -22,7 +22,6 @@ package org.apache.hudi.table.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -173,13 +172,11 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
     HoodieFileFormat fileFormat = HoodieFileFormat.PARQUET;
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.toString());
-    properties.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.COMMIT_TIME_ORDERING.name());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
     HoodieWriteConfig cfg = getConfigBuilder(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(2).withScheduleInlineCompaction(scheduleInlineCompaction).build())
-        .withRecordMergeMode(RecordMergeMode.COMMIT_TIME_ORDERING)
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
