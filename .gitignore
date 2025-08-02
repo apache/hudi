@@ -87,3 +87,6 @@ dependency-reduced-pom.xml
 hudi-integ-test/compose_env
 node_modules
 package-lock.json
+
+# Spark Binaries used for testing
+hudi-spark-datasource/hudi-spark/src/test/resources/upgrade-downgrade-fixtures/spark-versions/
