@@ -137,7 +137,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
       StructField("age", IntegerType)
     ))
 
-    // Rename mapping: old -> new
+    // Rename mapping: new -> old
     val renameMap: java.util.Map[String, String] = new java.util.HashMap()
     renameMap.put("name", "first_name")
     renameMap.put("age", "years_old")
@@ -167,7 +167,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
       StructField("first_name", IntegerType)
     ))
 
-    // Rename mapping: old -> new
+    // Rename mapping: new -> old
     val renameMap: java.util.Map[String, String] = new java.util.HashMap()
     renameMap.put("years_old", "first_name")
     renameMap.put("first_name", "years_old")
@@ -207,7 +207,7 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
         )
         ))))
 
-    // Rename mapping: old -> new
+    // Rename mapping: new -> old
     val renameMap: java.util.Map[String, String] = new java.util.HashMap()
     renameMap.put("years_old", "first_name")
     renameMap.put("first_name", "years_old")
