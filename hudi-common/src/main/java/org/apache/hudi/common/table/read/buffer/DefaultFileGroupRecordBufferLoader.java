@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
@@ -31,9 +32,14 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Default implementation of {@link FileGroupRecordBufferLoader} that initializes a buffer based on the reader parameters.
@@ -42,11 +48,29 @@ import java.util.List;
 class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoader implements FileGroupRecordBufferLoader<T> {
   private static final DefaultFileGroupRecordBufferLoader INSTANCE = new DefaultFileGroupRecordBufferLoader<>();
 
+  private Option<Map<Serializable, BufferedRecord<T>>> toBeMergedRecordsOpt = Option.empty();
+  private final boolean hasLogFilesToMerge;
+
   static <T> DefaultFileGroupRecordBufferLoader<T> getInstance() {
     return INSTANCE;
   }
 
+  static <T> DefaultFileGroupRecordBufferLoader<T> getInstance(Map<Serializable, BufferedRecord<T>> toBeMergedRecords) {
+    return new DefaultFileGroupRecordBufferLoader<>(toBeMergedRecords);
+  }
+
   private DefaultFileGroupRecordBufferLoader() {
+    this.hasLogFilesToMerge = true;
+  }
+
+  private DefaultFileGroupRecordBufferLoader(Map<Serializable, BufferedRecord<T>> toBeMergedRecords) {
+    this.toBeMergedRecordsOpt = Option.of(toBeMergedRecords);
+    this.hasLogFilesToMerge = false;
+  }
+
+  @Override
+  public boolean hasLogFiles() {
+    return hasLogFilesToMerge;
   }
 
   @Override
@@ -78,6 +102,19 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
-    return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, recordBuffer));
+
+    if (toBeMergedRecordsOpt.isEmpty()) {
+      return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, recordBuffer));
+    } else {
+      toBeMergedRecordsOpt.get().entrySet().forEach(kv -> {
+        try {
+          recordBuffer.processNextDataRecord(kv.getValue(), kv.getKey());
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to process next toBeMergedRecord ", e);
+        }
+      });
+
+      return Pair.of(recordBuffer, Collections.emptyList());
+    }
   }
 }
