@@ -31,6 +31,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
@@ -46,6 +47,9 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
@@ -54,6 +58,9 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
+import static org.apache.hudi.avro.HoodieAvroUtils.createFullName;
+import static org.apache.hudi.avro.HoodieAvroUtils.createNamePrefix;
+import static org.apache.hudi.avro.HoodieAvroUtils.getOldFieldNameWithRenaming;
 import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDate;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
@@ -79,69 +86,56 @@ public class HoodieArrayWritableAvroUtils {
     switch (newSchema.getType()) {
       case RECORD:
         if (!(writable instanceof ArrayWritable)) {
-          throw new SchemaCompatibilityException("cannot rewrite record with different type");
+          throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as a record", writable.getClass().getName()));
         }
 
         ArrayWritable arrayWritable = (ArrayWritable) writable;
         List<Schema.Field> fields = newSchema.getFields();
         // projection will keep the size from the "from" schema because it gets recycled
         // and if the size changes the reader will fail
+        boolean noFieldsRenaming = renameCols.isEmpty();
+        String namePrefix = createNamePrefix(noFieldsRenaming, fieldNames);
         Writable[] values = new Writable[Math.max(fields.size(), arrayWritable.get().length)];
         for (int i = 0; i < fields.size(); i++) {
-          Schema.Field field = fields.get(i);
-          String fieldName = field.name();
-          fieldNames.push(fieldName);
-          Schema.Field oldField = oldSchema.getField(field.name());
-          if (oldField != null && !renameCols.containsKey(field.name())) {
-            values[i] = rewriteRecordWithNewSchema(arrayWritable.get()[oldField.pos()], oldField.schema(), field.schema(), renameCols, fieldNames);
-          } else {
-            String fieldFullName = HoodieAvroUtils.createFullName(fieldNames);
-            String fieldNameFromOldSchema = renameCols.get(fieldFullName);
-            // deal with rename
-            Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
-            if (oldFieldRenamed != null) {
-              // find rename
-              values[i] = rewriteRecordWithNewSchema(arrayWritable.get()[oldFieldRenamed.pos()], oldFieldRenamed.schema(), field.schema(), renameCols, fieldNames);
-            } else {
-              // deal with default value
-              if (field.defaultVal() instanceof JsonProperties.Null) {
-                values[i] = NullWritable.get();
-              } else {
-                if (!isNullable(field.schema()) && field.defaultVal() == null) {
-                  throw new SchemaCompatibilityException("Field " + fieldFullName + " has no default value and is non-nullable");
-                }
-                if (field.defaultVal() != null) {
-                  switch (AvroSchemaUtils.resolveNullableSchema(field.schema()).getType()) {
-                    case BOOLEAN:
-                      values[i] = new BooleanWritable((Boolean) field.defaultVal());
-                      break;
-                    case INT:
-                      values[i] = new IntWritable((Integer) field.defaultVal());
-                      break;
-                    case LONG:
-                      values[i] = new LongWritable((Long) field.defaultVal());
-                      break;
-                    case FLOAT:
-                      values[i] = new FloatWritable((Float) field.defaultVal());
-                      break;
-                    case DOUBLE:
-                      values[i] = new DoubleWritable((Double) field.defaultVal());
-                      break;
-                    case STRING:
-                      values[i] = new Text(field.defaultVal().toString());
-                      break;
-                    default:
-                      throw new SchemaCompatibilityException("Field " + fieldFullName + " has no default value");
-                  }
-                }
-              }
+          Schema.Field newField = newSchema.getFields().get(i);
+          String newFieldName = newField.name();
+          fieldNames.push(newFieldName);
+          Schema.Field oldField = noFieldsRenaming
+              ? oldSchema.getField(newFieldName)
+              : oldSchema.getField(getOldFieldNameWithRenaming(namePrefix, newFieldName, renameCols));
+          if (oldField != null) {
+            values[i] = rewriteRecordWithNewSchema(arrayWritable.get()[oldField.pos()], oldField.schema(), newField.schema(), renameCols, fieldNames);
+          } else if (newField.defaultVal() instanceof JsonProperties.Null) {
+            values[i] = NullWritable.get();
+          } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
+            throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
+          } else if (newField.defaultVal() != null) {
+            switch (AvroSchemaUtils.resolveNullableSchema(newField.schema()).getType()) {
+              case BOOLEAN:
+                values[i] = new BooleanWritable((Boolean) newField.defaultVal());
+                break;
+              case INT:
+                values[i] = new IntWritable((Integer) newField.defaultVal());
+                break;
+              case LONG:
+                values[i] = new LongWritable((Long) newField.defaultVal());
+                break;
+              case FLOAT:
+                values[i] = new FloatWritable((Float) newField.defaultVal());
+                break;
+              case DOUBLE:
+                values[i] = new DoubleWritable((Double) newField.defaultVal());
+                break;
+              case STRING:
+                values[i] = new Text(newField.defaultVal().toString());
+                break;
+              default:
+                throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value");
             }
           }
           fieldNames.pop();
         }
         return new ArrayWritable(Writable.class, values);
-      //arrayWritable.set(values);
-      //return arrayWritable;
 
       case ENUM:
         if ((writable instanceof BytesWritable)) {
@@ -246,7 +240,9 @@ public class HoodieArrayWritableAvroUtils {
       case FLOAT:
         if ((oldSchema.getType() == Schema.Type.INT)
             || (oldSchema.getType() == Schema.Type.LONG)) {
-          return oldSchema.getType() == Schema.Type.INT ? new FloatWritable(((IntWritable) writable).get()) : new FloatWritable(((LongWritable) writable).get());
+          return oldSchema.getType() == Schema.Type.INT
+              ? new FloatWritable(((IntWritable) writable).get())
+              : new FloatWritable(((LongWritable) writable).get());
         }
         break;
       case DOUBLE:
@@ -280,9 +276,33 @@ public class HoodieArrayWritableAvroUtils {
             || oldSchema.getType() == Schema.Type.DOUBLE) {
           return new Text(writable.toString());
         }
-        throw new IllegalStateException("need to do this");
+        if (oldSchema.getType() == Schema.Type.FIXED && oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          HiveDecimalWritable hdw = (HiveDecimalWritable) writable;
+          return new Text(hdw.getHiveDecimal().bigDecimalValue().toPlainString());
+        }
+        break;
       case FIXED:
-        throw new UnsupportedOperationException("need to do this");
+        if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
+          DecimalTypeInfo decimalTypeInfo = new DecimalTypeInfo(decimal.getPrecision(), decimal.getScale());
+
+          if (oldSchema.getType() == Schema.Type.STRING
+              || oldSchema.getType() == Schema.Type.INT
+              || oldSchema.getType() == Schema.Type.LONG
+              || oldSchema.getType() == Schema.Type.FLOAT
+              || oldSchema.getType() == Schema.Type.DOUBLE) {
+            HiveDecimalWritable converted = new HiveDecimalWritable(HiveDecimal.create(new java.math.BigDecimal(writable.toString())));
+            return HiveDecimalUtils.enforcePrecisionScale(converted, decimalTypeInfo);
+          }
+
+          if (oldSchema.getType() == Schema.Type.BYTES) {
+            ByteBuffer buffer = ByteBuffer.wrap(((BytesWritable) writable).getBytes());
+            BigDecimal bd = new BigDecimal(new BigInteger(buffer.array()), decimal.getScale());
+            HiveDecimalWritable converted = new HiveDecimalWritable(HiveDecimal.create(bd));
+            return HiveDecimalUtils.enforcePrecisionScale(converted, decimalTypeInfo);
+          }
+        }
+        break;
       default:
     }
     throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));

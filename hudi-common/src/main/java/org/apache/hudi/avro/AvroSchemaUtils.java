@@ -43,7 +43,6 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -384,6 +383,9 @@ public class AvroSchemaUtils {
   /**
    * If schemas are projection equivalent, then a record with schema1 does not need to be projected to schema2
    * because the projection will be the identity.
+   *
+   *  Two schemas are considered projection equivalent if the field names and types are equivalent.
+   *  The names of records, namespaces, or docs do not need to match. Nullability is ignored.
    */
   public static boolean areSchemasProjectionEquivalent(Schema schema1, Schema schema2) {
     if (Objects.equals(schema1, schema2)) {
@@ -411,7 +413,7 @@ public class AvroSchemaUtils {
           return false;
         }
         for (int i = 0; i < fields1.size(); i++) {
-          if (!fields1.get(i).name().toLowerCase(Locale.ROOT).equals(fields2.get(i).name().toLowerCase(Locale.ROOT))) {
+          if (!fields1.get(i).name().equalsIgnoreCase(fields2.get(i).name())) {
             return false;
           }
           if (!areSchemasProjectionEquivalent(fields1.get(i).schema(), fields2.get(i).schema())) {
