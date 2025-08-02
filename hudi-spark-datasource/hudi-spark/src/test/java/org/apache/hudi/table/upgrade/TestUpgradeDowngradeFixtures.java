@@ -594,8 +594,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
       throw new RuntimeException("Data validation failed " + stage, e);
     }
   }
-
-
+  
   /**
    * Perform simple read validation and return the total row count.
    */
