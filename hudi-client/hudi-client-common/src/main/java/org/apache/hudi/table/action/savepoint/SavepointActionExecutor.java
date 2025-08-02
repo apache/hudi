@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.savepoint;
 
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
