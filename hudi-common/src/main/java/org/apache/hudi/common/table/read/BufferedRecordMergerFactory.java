@@ -434,7 +434,9 @@ public class BufferedRecordMergerFactory {
         // If pre-combine does not return existing record, update it
         if (combinedRecordData != existingRecord.getRecord()) {
           Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
-          return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), recordContext, orderingFieldNames, false));
+          // For pkless we need to use record key from existing record
+          return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), recordContext, orderingFieldNames,
+              existingRecord.getRecordKey(), false));
         }
         return Option.empty();
       }
