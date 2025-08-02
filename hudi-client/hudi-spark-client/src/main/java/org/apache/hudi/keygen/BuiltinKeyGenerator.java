@@ -183,8 +183,10 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final String combineCompositeRecordKey(Object... recordKeyParts) {
+  protected final String combineCompositeRecordKey(boolean encodeSingleKeyFieldName,
+                                                   Object... recordKeyParts) {
     return combineCompositeRecordKeyInternal(
+        encodeSingleKeyFieldName,
         StringPartitionPathFormatter.JavaStringBuilder::new,
         BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPart,
@@ -197,8 +199,10 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combineCompositeRecordKeyUnsafe(Object... recordKeyParts) {
+  protected final UTF8String combineCompositeRecordKeyUnsafe(boolean encodeSingleKeyFieldName,
+                                                             Object... recordKeyParts) {
     return combineCompositeRecordKeyInternal(
+        encodeSingleKeyFieldName,
         UTF8StringPartitionPathFormatter.UTF8StringBuilder::new,
         BuiltinKeyGenerator::toUTF8String,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPartUTF8,
@@ -233,6 +237,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   }
 
   private <S> S combineCompositeRecordKeyInternal(
+      boolean encodeSingleKeyFieldName,
       Supplier<PartitionPathFormatterBase.StringBuilder<S>> builderFactory,
       Function<Object, S> converter,
       Function<S, S> emptyKeyPartHandler,
@@ -246,7 +251,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
       S convertedKeyPart = emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i]));
 
-      if (recordKeyParts.length > 1) {
+      if (encodeSingleKeyFieldName || recordKeyParts.length > 1) {
         sb.appendJava(recordKeyFields.get(i));
         sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
       }

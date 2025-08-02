@@ -17,29 +17,27 @@
 
 package org.apache.hudi.functional
 
-import org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path, PathFilter}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENERATOR_CLASS_NAME}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
+import org.apache.hudi.common.{util, HoodiePendingRollbackInfo}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.util.{ClusteringUtils, Option}
-import org.apache.hudi.common.{HoodiePendingRollbackInfo, util}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
+import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.functional.CommonOptionUtils._
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
 import org.apache.hudi.hive.HiveSyncConfigHolder
@@ -49,22 +47,26 @@ import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
+
+import org.apache.avro.SchemaCompatibility.SchemaIncompatibilityType
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path, PathFilter}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
 import java.sql.{Date, Timestamp}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.function.Consumer
+
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
@@ -189,13 +191,15 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     val records2 = recordsToStrings(dataGen.generateInserts("000", 200)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    // hard code the value for rider and fare so that we can verify the partitions paths with hudi
+    // hard code the value for rider and fare so that we can verify the partition paths with hudi
     val toInsertDf = inputDF1.withColumn("fare", lit(100)).withColumn("rider", lit("rider-123"))
       .union(inputDF2.withColumn("fare", lit(200)).withColumn("rider", lit("rider-456")))
 
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      // Disable complex key generator validation so that the writer can succeed
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -215,6 +219,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      // Disable complex key generator validation so that the writer can succeed
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -1025,10 +1031,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   private def getDataFrameWriter(keyGenerator: String, opts: Map[String, String]): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    inputDF.write.format("hudi")
+    val writer = inputDF.write.format("hudi")
       .options(opts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .mode(SaveMode.Overwrite)
+    if (classOf[ComplexKeyGenerator].getCanonicalName.equals(keyGenerator)) {
+      // Disable complex key generator validation so that the writer can succeed
+      writer.option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
+    } else {
+      writer
+    }
   }
 
   @ParameterizedTest
@@ -1761,6 +1773,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       DataSourceWriteOptions.OPERATION.key() -> "insert",
       HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key() -> "ts",
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
+      // Disable complex key generator validation so that the writer can succeed
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false",
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
       HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger"

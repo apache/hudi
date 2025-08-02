@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.HoodieSparkUtils.isSpark2
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
+import org.apache.hudi.config.HoodieWriteConfig
 
 class TestShowPartitions extends HoodieSparkSqlTestBase {
 
@@ -107,71 +108,73 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
   }
 
   test("Test Show Table's Partitions with MultiLevel Partitions") {
-    val tableName = generateTableName
-    // Create a multi-level partitioned table
-    spark.sql(
-      s"""
-         | create table $tableName (
-         |   id int,
-         |   name string,
-         |   price double,
-         |   ts long,
-         |   year string,
-         |   month string,
-         |   day string
-         | ) using hudi
-         | partitioned by (year, month, day)
-         | tblproperties (
-         |   primaryKey = 'id',
-         |   preCombineField = 'ts'
-         | )
+    withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+      val tableName = generateTableName
+      // Create a multi-level partitioned table
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |   id int,
+           |   name string,
+           |   price double,
+           |   ts long,
+           |   year string,
+           |   month string,
+           |   day string
+           | ) using hudi
+           | partitioned by (year, month, day)
+           | tblproperties (
+           |   primaryKey = 'id',
+           |   preCombineField = 'ts'
+           | )
        """.stripMargin)
-    // Empty partitions
-    checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
+      // Empty partitions
+      checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
 
-    // Insert into dynamic partition
-    spark.sql(
-      s"""
-         | insert into $tableName
-         | values
-         |   (1, 'a1', 10, 1000, '2021', '01', '01'),
-         |   (2, 'a2', 10, 1000, '2021', '01', '02'),
-         |   (3, 'a3', 10, 1000, '2021', '02', '01'),
-         |   (4, 'a4', 10, 1000, '2021', '02', null),
-         |   (5, 'a5', 10, 1000, '2021', null, '01'),
-         |   (6, 'a6', 10, 1000, null, '01', '02'),
-         |   (7, 'a6', 10, 1000, '2022', null, null),
-         |   (8, 'a6', 10, 1000, null, '01', null),
-         |   (9, 'a6', 10, 1000, null, null, '01')
+      // Insert into dynamic partition
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | values
+           |   (1, 'a1', 10, 1000, '2021', '01', '01'),
+           |   (2, 'a2', 10, 1000, '2021', '01', '02'),
+           |   (3, 'a3', 10, 1000, '2021', '02', '01'),
+           |   (4, 'a4', 10, 1000, '2021', '02', null),
+           |   (5, 'a5', 10, 1000, '2021', null, '01'),
+           |   (6, 'a6', 10, 1000, null, '01', '02'),
+           |   (7, 'a6', 10, 1000, '2022', null, null),
+           |   (8, 'a6', 10, 1000, null, '01', null),
+           |   (9, 'a6', 10, 1000, null, null, '01')
         """.stripMargin)
 
-    // check all partitions
-    checkAnswer(s"show partitions $tableName")(
-      Seq("year=2021/month=01/day=01"),
-      Seq("year=2021/month=01/day=02"),
-      Seq("year=2021/month=02/day=01"),
-      Seq("year=2021/month=02/day=%s".format(DEFAULT_PARTITION_PATH)),
-      Seq("year=2021/month=%s/day=01".format(DEFAULT_PARTITION_PATH)),
-      Seq("year=%s/month=01/day=%s".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)),
-      Seq("year=%s/month=01/day=02".format(DEFAULT_PARTITION_PATH)),
-      Seq("year=%s/month=%s/day=01".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)),
-      Seq("year=2022/month=%s/day=%s".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH))
-    )
+      // check all partitions
+      checkAnswer(s"show partitions $tableName")(
+        Seq("year=2021/month=01/day=01"),
+        Seq("year=2021/month=01/day=02"),
+        Seq("year=2021/month=02/day=01"),
+        Seq("year=2021/month=02/day=%s".format(DEFAULT_PARTITION_PATH)),
+        Seq("year=2021/month=%s/day=01".format(DEFAULT_PARTITION_PATH)),
+        Seq("year=%s/month=01/day=%s".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)),
+        Seq("year=%s/month=01/day=02".format(DEFAULT_PARTITION_PATH)),
+        Seq("year=%s/month=%s/day=01".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)),
+        Seq("year=2022/month=%s/day=%s".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH))
+      )
 
-    // check partial partitions
-    checkAnswer(s"show partitions $tableName partition(year='2021', month='01', day='01')")(
-      Seq("year=2021/month=01/day=01")
-    )
-    checkAnswer(s"show partitions $tableName partition(year='2021', month='02')")(
-      Seq("year=2021/month=02/day=%s".format(DEFAULT_PARTITION_PATH)),
-      Seq("year=2021/month=02/day=01")
-    )
-    checkAnswer(s"show partitions $tableName partition(day='01')")(
-      Seq("year=2021/month=02/day=01"),
-      Seq("year=2021/month=%s/day=01".format(DEFAULT_PARTITION_PATH)),
-      Seq("year=2021/month=01/day=01"),
-      Seq("year=%s/month=%s/day=01".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH))
-    )
+      // check partial partitions
+      checkAnswer(s"show partitions $tableName partition(year='2021', month='01', day='01')")(
+        Seq("year=2021/month=01/day=01")
+      )
+      checkAnswer(s"show partitions $tableName partition(year='2021', month='02')")(
+        Seq("year=2021/month=02/day=%s".format(DEFAULT_PARTITION_PATH)),
+        Seq("year=2021/month=02/day=01")
+      )
+      checkAnswer(s"show partitions $tableName partition(day='01')")(
+        Seq("year=2021/month=02/day=01"),
+        Seq("year=2021/month=%s/day=01".format(DEFAULT_PARTITION_PATH)),
+        Seq("year=2021/month=01/day=01"),
+        Seq("year=%s/month=%s/day=01".format(DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH))
+      )
+    }
   }
 
   /*test("Test alter table show partitions which are dropped before") {
@@ -213,52 +216,54 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
   }*/
 
   test("Test show partitions after table being overwritten") {
-    withTable(generateTableName) { tableName =>
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |   id int,
-           |   name string,
-           |   price double,
-           |   ts long,
-           |   year string,
-           |   month string,
-           |   day string
-           | ) using hudi
-           | partitioned by (year, month, day)
-           | tblproperties (
-           |   primaryKey = 'id',
-           |   preCombineField = 'ts'
-           | )
+    withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+      withTable(generateTableName) { tableName =>
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |   id int,
+             |   name string,
+             |   price double,
+             |   ts long,
+             |   year string,
+             |   month string,
+             |   day string
+             | ) using hudi
+             | partitioned by (year, month, day)
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   preCombineField = 'ts'
+             | )
          """.stripMargin)
 
-      // Insert into dynamic partition
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | values
-           |   (1, 'a1', 10, 1000, '2023', '12', '01'),
-           |   (2, 'a2', 10, 1000, '2023', '12', '02'),
-           |   (3, 'a3', 10, 1000, '2023', '12', '03')
+        // Insert into dynamic partition
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | values
+             |   (1, 'a1', 10, 1000, '2023', '12', '01'),
+             |   (2, 'a2', 10, 1000, '2023', '12', '02'),
+             |   (3, 'a3', 10, 1000, '2023', '12', '03')
         """.stripMargin)
-      checkAnswer(s"show partitions $tableName")(
-        Seq("year=2023/month=12/day=01"),
-        Seq("year=2023/month=12/day=02"),
-        Seq("year=2023/month=12/day=03")
-      )
+        checkAnswer(s"show partitions $tableName")(
+          Seq("year=2023/month=12/day=01"),
+          Seq("year=2023/month=12/day=02"),
+          Seq("year=2023/month=12/day=03")
+        )
 
-      // Insert overwrite table
-      spark.sql(
-        s"""
-           | insert overwrite table $tableName
-           | values
-           |   (4, 'a4', 10, 1000, '2023', '12', '01'),
-           |   (2, 'a2', 10, 1000, '2023', '12', '04')
+        // Insert overwrite table
+        spark.sql(
+          s"""
+             | insert overwrite table $tableName
+             | values
+             |   (4, 'a4', 10, 1000, '2023', '12', '01'),
+             |   (2, 'a2', 10, 1000, '2023', '12', '04')
         """.stripMargin)
-      checkAnswer(s"show partitions $tableName")(
-        Seq("year=2023/month=12/day=01"),
-        Seq("year=2023/month=12/day=04")
-      )
+        checkAnswer(s"show partitions $tableName")(
+          Seq("year=2023/month=12/day=01"),
+          Seq("year=2023/month=12/day=04")
+        )
+      }
     }
   }
 

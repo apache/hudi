@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.config.HoodieWriteConfig
+
 class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_fsview_all Procedure") {
     withTempDir { tmp =>
@@ -97,51 +99,53 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
   }
 
   test("Test Call show_fsview_all Procedure For Three-Level Partition") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  f1 string,
-           |  f2 string,
-           |  ts long
-           |) using hudi
-           | partitioned by(f1, f2, ts)
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           | )
+    withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  f1 string,
+             |  f2 string,
+             |  ts long
+             |) using hudi
+             | partitioned by(f1, f2, ts)
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
        """.stripMargin)
-      // insert data to table
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 'f11', 'f21',1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 'f12', 'f22', 1500")
+        // insert data to table
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 'f11', 'f21',1000")
+        spark.sql(s"insert into $tableName select 2, 'a2', 20, 'f12', 'f22', 1500")
 
-      // Check required fields
-      checkExceptionContain(s"""call show_fsview_all(limit => 10)""")(
-        s"Argument: table is required")
+        // Check required fields
+        checkExceptionContain(s"""call show_fsview_all(limit => 10)""")(
+          s"Argument: table is required")
 
-      // not specify partition
-      val result = spark.sql(
-        s"""call show_fsview_all(table => '$tableName', limit => 10)""".stripMargin).collect()
-      assertResult(2) {
-        result.length
-      }
+        // not specify partition
+        val result = spark.sql(
+          s"""call show_fsview_all(table => '$tableName', limit => 10)""".stripMargin).collect()
+        assertResult(2) {
+          result.length
+        }
 
-      val result1 = spark.sql(
-        s"""call show_fsview_all(table => '$tableName', path_regex => '*/*/*/')""".stripMargin).collect()
-      assertResult(2){
-        result1.length
-      }
+        val result1 = spark.sql(
+          s"""call show_fsview_all(table => '$tableName', path_regex => '*/*/*/')""".stripMargin).collect()
+        assertResult(2) {
+          result1.length
+        }
 
-      val result2 = spark.sql(
-        s"""call show_fsview_all(table => '$tableName', path_regex => 'f1=f11/*/*/')""".stripMargin).collect()
-      assertResult(1) {
-        result2.length
+        val result2 = spark.sql(
+          s"""call show_fsview_all(table => '$tableName', path_regex => 'f1=f11/*/*/')""".stripMargin).collect()
+        assertResult(1) {
+          result2.length
+        }
       }
     }
   }

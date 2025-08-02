@@ -18,17 +18,20 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-public class TestGlobalDeleteRecordGenerator extends KeyGeneratorTestUtilities {
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+class TestGlobalDeleteRecordGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
@@ -60,29 +63,29 @@ public class TestGlobalDeleteRecordGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testNullRecordKeyFields() {
-    GenericRecord record = getRecord();
-    Assertions.assertThrows(StringIndexOutOfBoundsException.class, () ->  {
+  void testNullRecordKeyFields() {
+    GenericRecord avroRecord = getRecord();
+    assertThrows(StringIndexOutOfBoundsException.class, () -> {
       BaseKeyGenerator keyGenerator = new GlobalDeleteKeyGenerator(getPropertiesWithoutRecordKeyProp());
-      keyGenerator.getRecordKey(record);
+      keyGenerator.getRecordKey(avroRecord);
     });
   }
 
   @Test
-  public void testWrongRecordKeyField() {
+  void testWrongRecordKeyField() {
     GlobalDeleteKeyGenerator keyGenerator = new GlobalDeleteKeyGenerator(getWrongRecordKeyFieldProps());
-    Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
+    assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
   }
 
   @Test
-  public void testHappyFlow() {
+  void testHappyFlow() {
     GlobalDeleteKeyGenerator keyGenerator = new GlobalDeleteKeyGenerator(getProps());
-    GenericRecord record = getRecord();
-    HoodieKey key = keyGenerator.getKey(record);
-    Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");
-    Assertions.assertEquals(key.getPartitionPath(), "");
-    Row row = KeyGeneratorTestUtilities.getRow(record);
-    Assertions.assertEquals(keyGenerator.getRecordKey(row), "_row_key:key1,pii_col:pi");
-    Assertions.assertEquals(keyGenerator.getPartitionPath(row), "");
+    GenericRecord avroRecord = getRecord();
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("_row_key:key1,pii_col:pi", key.getRecordKey());
+    assertEquals("", key.getPartitionPath());
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    assertEquals("_row_key:key1,pii_col:pi", keyGenerator.getRecordKey(row));
+    assertEquals("", keyGenerator.getPartitionPath(row));
   }
 }

@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -77,6 +78,7 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -126,6 +128,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieWriteClient.class);
+  private static final String SPARK_COMPLEX_KEYGEN_CLASS_NAME = "org.apache.hudi.keygen.ComplexKeyGenerator";
 
   private final transient HoodieIndex<?, ?> index;
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
@@ -1003,6 +1006,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Completes a new commit time for a write operation (insert/update/delete) with specified action.
    */
   private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
+    if (config.enableComplexKeygenValidation()) {
+      validateComplexKeygen(metaClient);
+    }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
     startCommit(instantTime, actionType, metaClient);
@@ -1658,5 +1664,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }
     });
+  }
+
+  private void validateComplexKeygen(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
+    Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
+    if ((SPARK_COMPLEX_KEYGEN_CLASS_NAME.equals(keyGeneratorClassName)
+        || ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClassName))
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1) {
+      throw new HoodieException("This table uses the complex key generator with a single record "
+          + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
+          + "release before, the table may potentially contain duplicates due to a breaking "
+          + "change in the key encoding in the _hoodie_record_key meta field (HUDI-7001) which "
+          + "is crucial for upserts. Please take action based on the mitigation guide before "
+          + "resuming the ingestion to the this table. If you're certain that the table is not "
+          + "affected by the key encoding change, set "
+          + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.");
+    }
   }
 }

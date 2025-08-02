@@ -26,7 +26,6 @@ import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.keygen.TestComplexKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
@@ -41,11 +40,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * This class assist test KeyGenerator configuration(class name and type) priority.
  * <p>
- * The functional test of KeyGenerator is left to other unit tests. {@link TestComplexKeyGenerator etc.}.
+ * The functional test of KeyGenerator is left to other unit tests. {@link org.apache.hudi.keygen.TestComplexKeyGenerator etc.}.
  */
-public class TestHoodieSparkKeyGeneratorFactory {
+class TestHoodieSparkKeyGeneratorFactory {
   @Test
-  public void testInferKeyGeneratorTypeFromWriteConfig() {
+  void testInferKeyGeneratorTypeFromWriteConfig() {
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
         HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(new TypedProperties()));
@@ -67,7 +66,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
   }
 
   @Test
-  public void testKeyGeneratorFactory() throws IOException {
+  void testKeyGeneratorFactory() throws IOException {
     TypedProperties props = getCommonProps();
 
     // set KeyGenerator type only

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.avro.Schema
+import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
@@ -25,8 +25,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
 import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
-import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
-import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
+import org.apache.hudi.keygen.SimpleKeyGenerator
+
+import org.apache.avro.Schema
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase.getLastCleanMetadata
 import org.junit.jupiter.api.Assertions
@@ -306,6 +307,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
+          // Disable complex key generator validation so that the writer can succeed
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -319,50 +322,52 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              |""".stripMargin)
 
-        // not specified all partition column
-        checkExceptionContain(s"alter table $tableName drop partition (year='2021', month='10')")(
-          "All partition columns need to be specified for Hoodie's partition"
-        )
+        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+          // not specified all partition column
+          checkExceptionContain(s"alter table $tableName drop partition (year='2021', month='10')")(
+            "All partition columns need to be specified for Hoodie's partition"
+          )
 
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "year,month,day")
-          .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .mode(SaveMode.Append)
-          .save(tablePath)
+          df.write.format("hudi")
+            .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+            .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
+            .option(RECORDKEY_FIELD.key, "id")
+            .option(PRECOMBINE_FIELD.key, "ts")
+            .option(PARTITIONPATH_FIELD.key, "year,month,day")
+            .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+            // Disable complex key generator validation so that the writer can succeed
+            .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
+            .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+            .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+            .mode(SaveMode.Append)
+            .save(tablePath)
 
-        // drop 2021-10-01 partition
-        spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
+          // drop 2021-10-01 partition
+          spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
 
-        // trigger clean so that partition deletion kicks in.
-        spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
-        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-          .collect()
+          // trigger clean so that partition deletion kicks in.
+          spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+            .collect()
 
-        val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
-        val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
-        var totalDeletedFiles = 0
-        cleanPartitionMeta.foreach(entry =>
-        {
-          totalDeletedFiles += entry.asInstanceOf[HoodieCleanPartitionMetadata].getSuccessDeleteFiles.size()
-        })
-        assertTrue(totalDeletedFiles > 0)
+          val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
+          val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
+          var totalDeletedFiles = 0
+          cleanPartitionMeta.foreach(entry => {
+            totalDeletedFiles += entry.asInstanceOf[HoodieCleanPartitionMetadata].getSuccessDeleteFiles.size()
+          })
+          assertTrue(totalDeletedFiles > 0)
 
-        checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
-          Seq(2, "l4", "v1", "2021", "10", "02")
-        )
+          checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
+            Seq(2, "l4", "v1", "2021", "10", "02")
+          )
 
-        // show partitions
-        if (hiveStyle) {
-          checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
-        } else {
-          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+          // show partitions
+          if (hiveStyle) {
+            checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
+          } else {
+            checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+          }
         }
       }
     }
@@ -384,6 +389,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          // Disable complex key generator validation so that the writer can succeed
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -408,45 +415,47 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(PRECOMBINE_FIELD.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          .option(KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          // Disable complex key generator validation so that the writer can succeed
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Append)
           .save(tablePath)
 
-        // drop 2021-10-01 partition
-        spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
+        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+          // drop 2021-10-01 partition
+          spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
 
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
-        // trigger clean so that partition deletion kicks in.
-        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
-          .collect()
+          // trigger clean so that partition deletion kicks in.
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+            .collect()
 
-        val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
-        val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
-        var totalDeletedFiles = 0
-        cleanPartitionMeta.foreach(entry =>
-        {
-          totalDeletedFiles += entry.asInstanceOf[HoodieCleanPartitionMetadata].getSuccessDeleteFiles.size()
-        })
-        assertTrue(totalDeletedFiles > 0)
+          val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
+          val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
+          var totalDeletedFiles = 0
+          cleanPartitionMeta.foreach(entry => {
+            totalDeletedFiles += entry.asInstanceOf[HoodieCleanPartitionMetadata].getSuccessDeleteFiles.size()
+          })
+          assertTrue(totalDeletedFiles > 0)
 
-        // insert data
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+          // insert data
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
-        checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
-          Seq(2, "l4", "v1", "2021", "10", "02")
-        )
+          checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
+            Seq(2, "l4", "v1", "2021", "10", "02")
+          )
 
-        assertResult(false)(existsPath(
-          s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
+          assertResult(false)(existsPath(
+            s"${tmp.getCanonicalPath}/$tableName/year=2021/month=10/day=01"))
 
-        // show partitions
-        if (hiveStyle) {
-          checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
-        } else {
-          checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+          // show partitions
+          if (hiveStyle) {
+            checkAnswer(s"show partitions $tableName")(Seq("year=2021/month=10/day=02"))
+          } else {
+            checkAnswer(s"show partitions $tableName")(Seq("2021/10/02"))
+          }
         }
       }
     }

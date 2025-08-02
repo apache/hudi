@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.config.HoodieWriteConfig
+
 class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
 
   test("Test querying with string column + partition pruning") {
@@ -86,41 +88,43 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
   }
 
   test("Test querying with date column + partition pruning (multi-level partitioning)") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long,
-           |  country string,
-           |  date_par date
-           |) using hudi
-           | location '${tmp.getCanonicalPath}'
-           | tblproperties (
-           |  primaryKey ='id',
-           |  type = 'cow',
-           |  preCombineField = 'ts'
-           | )
-           | PARTITIONED BY (country, date_par)
+    withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  country string,
+             |  date_par date
+             |) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  primaryKey ='id',
+             |  type = 'cow',
+             |  preCombineField = 'ts'
+             | )
+             | PARTITIONED BY (country, date_par)
          """.stripMargin)
-      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 'ID', date '2023-02-27')")
-      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 'ID', date '2023-02-28')")
-      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 'ID', date '2023-03-01')")
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 'ID', date '2023-02-27')")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 'ID', date '2023-02-28')")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 'ID', date '2023-03-01')")
 
-      // for lazy fetching partition path & file slice to be enabled, filter must be applied on all partitions
-      checkAnswer(s"select id, name, price, ts from $tableName " +
-        s"where date_par='2023-03-01' and country='ID' order by id")(
-        Seq(3, "a3", 10.0, 1000)
-      )
-
-      withSQLConf("spark.sql.session.timeZone" -> "UTC+2") {
+        // for lazy fetching partition path & file slice to be enabled, filter must be applied on all partitions
         checkAnswer(s"select id, name, price, ts from $tableName " +
           s"where date_par='2023-03-01' and country='ID' order by id")(
           Seq(3, "a3", 10.0, 1000)
         )
+
+        withSQLConf("spark.sql.session.timeZone" -> "UTC+2") {
+          checkAnswer(s"select id, name, price, ts from $tableName " +
+            s"where date_par='2023-03-01' and country='ID' order by id")(
+            Seq(3, "a3", 10.0, 1000)
+          )
+        }
       }
     }
   }

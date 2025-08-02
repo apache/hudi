@@ -18,6 +18,8 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.ScalaAssertionSupport
+import org.apache.hudi.config.HoodieWriteConfig
+
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.ErrorMessageChecker.isIncompatibleDataException
 
@@ -697,68 +699,70 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
 
     // Run test cases
     testCases.foreach { testCase =>
-      withRecordType()(withTempDir { tmp =>
-        val targetTable = generateTableName
-        val sourceTable = generateTableName
+      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+        withRecordType()(withTempDir { tmp =>
+          val targetTable = generateTableName
+          val sourceTable = generateTableName
 
-        // Create target and source tables
-        createTable(
-          targetTable,
-          testCase.targetSchema,
-          testCase.partitionCols,
-          testCase.primaryKey,
-          testCase.preCombineField,
-          testCase.tableType,
-          s"${tmp.getCanonicalPath}/$targetTable"
-        )
+          // Create target and source tables
+          createTable(
+            targetTable,
+            testCase.targetSchema,
+            testCase.partitionCols,
+            testCase.primaryKey,
+            testCase.preCombineField,
+            testCase.tableType,
+            s"${tmp.getCanonicalPath}/$targetTable"
+          )
 
-        createTable(
-          sourceTable,
-          testCase.sourceSchema,
-          Seq.empty,
-          testCase.primaryKey,
-          testCase.preCombineField,
-          testCase.tableType,
-          s"${tmp.getCanonicalPath}/$sourceTable"
-        )
+          createTable(
+            sourceTable,
+            testCase.sourceSchema,
+            Seq.empty,
+            testCase.primaryKey,
+            testCase.preCombineField,
+            testCase.tableType,
+            s"${tmp.getCanonicalPath}/$sourceTable"
+          )
 
-        // Insert sample data
-        insertSampleData(targetTable, testCase.targetSchema)
-        insertSampleData(sourceTable, testCase.sourceSchema)
+          // Insert sample data
+          insertSampleData(targetTable, testCase.targetSchema)
+          insertSampleData(sourceTable, testCase.sourceSchema)
 
-        // Construct merge query based on action type
-        val mergeQuery = testCase.mergeAction match {
-          case "UPDATE" =>
-            s"""
-               |merge into $targetTable t
-               |using $sourceTable s0
-               |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-               |when matched then update set *
+          // Construct merge query based on action type
+          val mergeQuery = testCase.mergeAction match {
+            case "UPDATE" =>
+              s"""
+                 |merge into $targetTable t
+                 |using $sourceTable s0
+                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
+                 |when matched then update set *
            """.stripMargin
-          case "INSERT" =>
-            s"""
-               |merge into $targetTable t
-               |using $sourceTable s0
-               |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-               |when not matched then insert *
+            case "INSERT" =>
+              s"""
+                 |merge into $targetTable t
+                 |using $sourceTable s0
+                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
+                 |when not matched then insert *
            """.stripMargin
-          case "DELETE" =>
-            s"""
-               |merge into $targetTable t
-               |using $sourceTable s0
-               |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
-               |when matched then delete
+            case "DELETE" =>
+              s"""
+                 |merge into $targetTable t
+                 |using $sourceTable s0
+                 |on t.${testCase.primaryKey} = s0.${testCase.primaryKey}
+                 |when matched then delete
            """.stripMargin
-        }
+          }
 
-        // Attempt merge operation which should fail with expected error
-        val errorMsg = intercept[AnalysisException] {
-          spark.sql(mergeQuery)
-        }.getMessage
+          // Attempt merge operation which should fail with expected error
+          val errorMsg = intercept[AnalysisException] {
+            spark.sql(mergeQuery)
+          }.getMessage
 
-        assert(errorMsg.contains(testCase.expectedErrorPattern),
-          s"Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $errorMsg")
-      })
+          assert(errorMsg.contains(testCase.expectedErrorPattern),
+            s"Expected error pattern '${testCase.expectedErrorPattern}' not found in actual error: $errorMsg")
+        })
+      }
     }
   }
 

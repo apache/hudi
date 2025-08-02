@@ -18,12 +18,14 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.config.HoodieWriteConfig
 
 class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
 
   test("Test push down different partitions") {
     Seq("true", "false").foreach { enableMetadata =>
-      withSQLConf(HoodieMetadataConfig.ENABLE.key -> enableMetadata) {
+      withSQLConf(HoodieMetadataConfig.ENABLE.key -> enableMetadata,
+        HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
         Seq("cow", "mor").foreach { tableType =>
           withTempDir { tmp =>
             val tableName = generateTableName

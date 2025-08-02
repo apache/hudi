@@ -18,17 +18,18 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
-import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -784,6 +785,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName + loggingMode.name())
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
+        // Disable complex key generator validation so that the writer can succeed
+        .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
         .option("hoodie.table.cdc.enabled", "true")
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
@@ -804,6 +807,8 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName + loggingMode.name())
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
+        // Disable complex key generator validation so that the writer can succeed
+        .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
         .option("hoodie.table.cdc.enabled", "true")
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
