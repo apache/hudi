@@ -27,6 +27,7 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bucket.BucketBulkInsertWriterHelper;
 import org.apache.hudi.sink.bulk.BulkInsertWriteFunction;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.sink.bulk.sort.SortOperator;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
@@ -217,7 +218,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   private void setupMapFunction() {
-    RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
+    RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, rowType);
     String indexKeys = OptionsResolver.getIndexKeyField(conf);
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();

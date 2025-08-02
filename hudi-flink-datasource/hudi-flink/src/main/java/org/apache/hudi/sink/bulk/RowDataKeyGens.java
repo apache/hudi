@@ -19,9 +19,12 @@
 package org.apache.hudi.sink.bulk;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieValidationException;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
+
+import javax.annotation.Nullable;
 
 import java.util.List;
 
@@ -31,15 +34,26 @@ import java.util.List;
 public class RowDataKeyGens {
 
   /**
-   * Creates a {@link RowDataKeyGen} with given configuration.
+   * Creates {@link RowDataKeyGen} of corresponding type depending on table configuration.
    */
-  public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
+  public static RowDataKeyGen instance(Configuration conf, RowType rowType, @Nullable Integer taskId, @Nullable String instantTime) {
     String recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD);
     if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
       return RowDataKeyGen.instance(conf, rowType);
     } else {
+      if (null == taskId || null == instantTime) {
+        throw new HoodieValidationException(
+            String.format("'taskId' and 'instantTime' cannot be null to use AutoRowDataKeyGen. 'taskId' = %s, 'instantTime' = %s", taskId, instantTime));
+      }
       return AutoRowDataKeyGen.instance(conf, rowType, taskId, instantTime);
     }
+  }
+
+  /**
+   * Creates {@link RowDataKeyGen} of a type, which doesn't expect parameters besides table configuration and row type.
+   */
+  public static RowDataKeyGen instance(Configuration conf, RowType rowType) {
+    return instance(conf, rowType, null, null);
   }
 
   /**
