@@ -927,3 +927,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-08-02 16:03:54] [release-v1.157.0] ---
 [ENG-30725][INTERNAL] Set default parallelism to 10 if input parallelism less than 10 (#1474)
 [AUDIT-1071]: Changelog for release-v1.156.0 (#1470)
+
+--- [2025-08-02 22:14:17] [release-v1.158.0] ---
+[ENG-30780][HUDI-9666] Fix the record key encoding with a single record key field and add a guard for complex key generator (#1471)
+[AUDIT-1071]: Changelog for release-v1.157.0 (#1475)
