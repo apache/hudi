@@ -218,11 +218,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    *
    * @param recordSchema Avro schema for the record
    * @param props Properties containing the necessary configurations
+   * @param orderingFields name of the ordering fields
    * @return The ordering value for the record
    */
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
     if (orderingValue == null) {
-      orderingValue = doGetOrderingValue(recordSchema, props);
+      orderingValue = doGetOrderingValue(recordSchema, props, orderingFields);
     }
     return orderingValue;
   }
@@ -232,9 +233,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    *
    * @param recordSchema Avro schema for the record
    * @param props Properties containing the necessary configurations
+   * @param orderingFields name of the ordering fields
    * @return The ordering value for the record
    */
-  protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props);
+  protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields);
 
   public T getData() {
     if (data == null) {

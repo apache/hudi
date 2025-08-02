@@ -54,6 +54,7 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_BLOOM;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_SIMPLE;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.apache.hudi.index.HoodieIndex.IndexType.RECORD_INDEX;
+import static org.apache.hudi.index.HoodieIndex.IndexType.PARTITIONED_RECORD_INDEX;
 import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
 
 /**
@@ -73,8 +74,8 @@ public class HoodieIndexConfig extends HoodieConfig {
       .key("hoodie.index.type")
       // Builder#getDefaultIndexType has already set it according to engine type
       .noDefaultValue()
-      .withValidValues(INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(),
-          SIMPLE.name(), GLOBAL_SIMPLE.name(), BUCKET.name(), FLINK_STATE.name(), RECORD_INDEX.name())
+      .withValidValues(INMEMORY.name(), BLOOM.name(), GLOBAL_BLOOM.name(), SIMPLE.name(), GLOBAL_SIMPLE.name(),
+          BUCKET.name(), FLINK_STATE.name(), RECORD_INDEX.name(), PARTITIONED_RECORD_INDEX.name())
       .withDocumentation(HoodieIndex.IndexType.class);
 
 

@@ -21,7 +21,6 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.api.java.JavaSparkContext
@@ -37,7 +36,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -232,7 +231,13 @@ trait SparkAdapter extends Serializable {
   def createParquetFileReader(vectorized: Boolean,
                               sqlConf: SQLConf,
                               options: Map[String, String],
-                              hadoopConf: Configuration): SparkParquetReader
+                              hadoopConf: Configuration): SparkColumnarFileReader
+
+  def createOrcFileReader(vectorized: Boolean,
+                          sqlConf: SQLConf,
+                          options: Map[String, String],
+                          hadoopConf: Configuration,
+                          dataSchema: StructType): SparkColumnarFileReader
 
   /**
    * use new qe execute

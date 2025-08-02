@@ -19,6 +19,7 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.util.JavaConversions;
 
@@ -38,7 +39,7 @@ public class TestSparkParquetReader extends TestBootstrapReadBase {
     int n = 10;
     Dataset<Row> inserts = makeInsertDf("000", n);
     inserts.write().format("parquet").save(bootstrapBasePath);
-    Dataset<Row> parquetReadRows = JavaConversions.createTestDataFrame(sparkSession, bootstrapBasePath);
+    Dataset<Row> parquetReadRows = JavaConversions.createTestDataFrame(sparkSession, bootstrapBasePath, HoodieFileFormat.PARQUET);
     Dataset<Row> datasourceReadRows = sparkSession.read().format("parquet").load(bootstrapBasePath);
     assertEquals(datasourceReadRows.count(), n);
     assertEquals(parquetReadRows.count(), n);

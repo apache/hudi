@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -239,6 +240,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     public static final String KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY =
         "KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY";
     public static final String TIMESTAMP = "timestamp";
+    private String[] orderingFields;
 
     @Override
     public Option<Pair<HoodieRecord, Schema>> merge(
@@ -248,8 +250,11 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
         Schema newSchema,
         TypedProperties props
     ) throws IOException {
-      if (newer.getOrderingValue(newSchema, props).compareTo(
-          older.getOrderingValue(oldSchema, props)) >= 0) {
+      if (orderingFields == null) {
+        this.orderingFields = ConfigUtils.getOrderingFields(props);
+      }
+      if (newer.getOrderingValue(newSchema, props, orderingFields).compareTo(
+          older.getOrderingValue(oldSchema, props, orderingFields)) >= 0) {
         if (newer.isDelete(newSchema, props)) {
           return Option.empty();
         }

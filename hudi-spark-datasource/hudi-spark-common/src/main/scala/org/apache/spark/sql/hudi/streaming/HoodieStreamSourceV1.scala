@@ -19,19 +19,21 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 import org.apache.hudi.cdc.CDCRelation
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
 import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV1}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
+import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, FileFormatUtilsForFileGroupReader, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
@@ -54,7 +56,13 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
                            writeTableVersion: HoodieTableVersion)
   extends Source with Logging with Serializable with SparkAdapterSupport {
 
+  private lazy val enableFileGroupReader = SparkConfigUtils
+    .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
+
+
   private lazy val tableType = metaClient.getTableType
+
+  private lazy val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
 
   private val isCDCQuery = CDCRelation.isCDCEnabled(metaClient) &&
     parameters.get(DataSourceReadOptions.QUERY_TYPE.key).contains(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL) &&
@@ -146,10 +154,21 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
           DataSourceReadOptions.START_COMMIT.key()-> startCommitTime(startOffset),
           DataSourceReadOptions.END_COMMIT.key() -> endOffset.offsetCommitTime
         )
-        val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
-          .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
+        if (enableFileGroupReader) {
+          val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
+            new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
+          } else {
+            new HoodieMergeOnReadCDCHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
+          }
+          FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
+        } else {
+          val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
+            .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
 
-        sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)
+          sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)
+        }
       } else {
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
@@ -158,21 +177,31 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
           DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime,
           INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandlingMode.name
         )
-
-        val rdd = tableType match {
-          case HoodieTableType.COPY_ON_WRITE =>
-            val serDe = sparkAdapter.createSparkRowSerDe(schema)
-            new IncrementalRelationV1(sqlContext, incParams, Some(schema), metaClient)
-              .buildScan()
-              .map(serDe.serializeRow)
-          case HoodieTableType.MERGE_ON_READ =>
-            val requiredColumns = schema.fields.map(_.name)
-            new MergeOnReadIncrementalRelationV1(sqlContext, incParams, metaClient, Some(schema))
-              .buildScan(requiredColumns, Array.empty[Filter])
-              .asInstanceOf[RDD[InternalRow]]
-          case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
+        if (enableFileGroupReader) {
+          val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
+            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
+              .build()
+          } else {
+            new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
+              .build()
+          }
+          FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, schema)
+        } else {
+          val rdd = tableType match {
+            case HoodieTableType.COPY_ON_WRITE =>
+              val serDe = sparkAdapter.createSparkRowSerDe(schema)
+              new IncrementalRelationV1(sqlContext, incParams, Some(schema), metaClient)
+                .buildScan()
+                .map(serDe.serializeRow)
+            case HoodieTableType.MERGE_ON_READ =>
+              val requiredColumns = schema.fields.map(_.name)
+              new MergeOnReadIncrementalRelationV1(sqlContext, incParams, metaClient, Some(schema))
+                .buildScan(requiredColumns, Array.empty[Filter])
+                .asInstanceOf[RDD[InternalRow]]
+            case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
+          }
+          sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
         }
-        sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
       }
     }
   }

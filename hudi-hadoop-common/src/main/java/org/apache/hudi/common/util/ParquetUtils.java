@@ -200,14 +200,7 @@ public class ParquetUtils extends FileFormatUtils {
     try {
       Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
       conf.addResource(storage.newInstance(filePath, storage.getConf()).getConf().unwrapAs(Configuration.class));
-      Schema readSchema = keyGeneratorOpt
-          .map(keyGenerator -> {
-            List<String> fields = new ArrayList<>();
-            fields.addAll(keyGenerator.getRecordKeyFieldNames());
-            fields.addAll(keyGenerator.getPartitionPathFields());
-            return HoodieAvroUtils.projectSchema(readAvroSchema(storage, filePath), fields);
-          })
-          .orElse(partitionPath.isPresent() ? HoodieAvroUtils.getRecordKeySchema() : HoodieAvroUtils.getRecordKeyPartitionPathSchema());
+      Schema readSchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
       ParquetReader<GenericRecord> reader =

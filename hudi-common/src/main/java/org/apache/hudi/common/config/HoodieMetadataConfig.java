@@ -272,6 +272,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Create the HUDI Record Index within the Metadata Table");
 
+  public static final ConfigProperty<Boolean> PARTITIONED_RECORD_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".partitioned.record.index.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Create the HUDI Record Index within the Metadata Table for a partitioned dataset where a "
+          + "pair of partition path and record key is unique across the entire table");
+
   public static final ConfigProperty<Integer> RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.min.filegroup.count")
       .defaultValue(10)
@@ -285,6 +293,20 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of file groups to use for Record Index.");
+
+  public static final ConfigProperty<Integer> PARTITIONED_RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".partitioned.record.index.min.filegroup.count")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Minimum number of file groups to use for Partitioned Record Index.");
+
+  public static final ConfigProperty<Integer> PARTITIONED_RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".partitioned.record.index.max.filegroup.count")
+      .defaultValue(10)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum number of file groups to use for Partitioned Record Index.");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.max.filegroup.size")
@@ -590,6 +612,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return isEnabled() && getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
   }
 
+  public boolean isPartitionedRecordIndexEnabled() {
+    return isEnabled() && getBooleanOrDefault(PARTITIONED_RECORD_INDEX_ENABLE_PROP);
+  }
+
   public List<String> getColumnsEnabledForColumnStatsIndex() {
     return StringUtils.split(getString(COLUMN_STATS_INDEX_FOR_COLUMNS), CONFIG_VALUES_DELIMITER);
   }
@@ -654,8 +680,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP);
   }
 
+  public int getPartitionedRecordIndexMinFileGroupCount() {
+    return getInt(PARTITIONED_RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP);
+  }
+
   public int getRecordIndexMaxFileGroupCount() {
     return getInt(RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP);
+  }
+
+  public int getPartitionedRecordIndexMaxFileGroupCount() {
+    return getInt(PARTITIONED_RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP);
   }
 
   public float getRecordIndexGrowthFactor() {

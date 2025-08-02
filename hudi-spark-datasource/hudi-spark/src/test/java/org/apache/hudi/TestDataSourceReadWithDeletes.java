@@ -46,7 +46,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 import java.util.Properties;
@@ -87,8 +88,9 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     schema = new Schema.Parser().parse(jsonSchema);
   }
 
-  @Test
-  public void test() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieOperation.class, names = {"UPDATE_BEFORE", "DELETE"})
+  public void test(HoodieOperation hoodieOperation) throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
 
@@ -100,7 +102,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
 
     String[] dataset2 = new String[] {
         "I,id1,Danny,30,2,par1",
-        "D,id2,Tony,20,2,par1",
+        hoodieOperation.getName() + ",id2,Tony,20,2,par1",
         "I,id3,Julian,40,2,par1",
         "D,id4,Stephan,35,2,par1"};
     String insertTime2 = client.startCommit();
@@ -164,7 +166,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
   private List<HoodieRecord> str2HoodieRecord(String[] records) {
     return Stream.of(records).map(rawRecordStr -> {
       String[] parts = rawRecordStr.split(",");
-      boolean isDelete = parts[0].equalsIgnoreCase("D");
+      String hoodieOperationStr = parts[0];
       GenericRecord record = new GenericData.Record(schema);
       record.put("id", parts[1]);
       record.put("name", parts[2]);
@@ -175,7 +177,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
       return new HoodieAvroRecord<>(
           new HoodieKey((String) record.get("id"), (String) record.get("partition_path")),
           payload,
-          isDelete ? HoodieOperation.DELETE : HoodieOperation.INSERT);
+          HoodieOperation.fromName(hoodieOperationStr));
     }).collect(Collectors.toList());
   }
 }

@@ -181,6 +181,10 @@ public class TestData {
             TimestampData.fromEpochMillis(i), StringData.fromString("par1"))));
   }
 
+  public static List<RowData> DATA_SET_UPDATE_BEFORE = Arrays.asList(
+      updateBeforeRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+
   // data set of test_source.data
   public static List<RowData> DATA_SET_SOURCE_INSERT = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
