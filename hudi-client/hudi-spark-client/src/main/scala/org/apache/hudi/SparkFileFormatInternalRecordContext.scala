@@ -30,8 +30,12 @@ import org.apache.spark.sql.hudi.SparkAdapter
 
 import scala.collection.mutable
 
-class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRecordContext(tableConfig) {
+/**
+ * Spark record context for reading and transforming Spark InternalRow records.
+ */
+class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig,
+                                           shouldUseMetaFields: Boolean)
+  extends BaseSparkInternalRecordContext(tableConfig, shouldUseMetaFields) {
 
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()

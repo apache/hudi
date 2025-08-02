@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -46,12 +45,15 @@ import org.apache.hadoop.io.WritableComparable;
 
 import java.util.Map;
 
+/**
+ * Hive record context for reading and transforming ArrayWritable records.
+ */
 public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
   private final ObjectInspectorCache objectInspectorCache;
 
-  public HiveRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf, ObjectInspectorCache objectInspectorCache) {
-    super(tableConfig);
+  public HiveRecordContext(HoodieTableConfig tableConfig, ObjectInspectorCache objectInspectorCache, boolean shouldUseMetaFields) {
+    super(tableConfig, shouldUseMetaFields);
     this.typeConverter = new HiveJavaTypeConverter();
     this.objectInspectorCache = objectInspectorCache;
   }

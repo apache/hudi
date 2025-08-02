@@ -20,12 +20,15 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -43,6 +46,9 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -69,7 +75,6 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,12 +92,14 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
 import static org.apache.hudi.index.expression.HoodieExpressionIndex.IDENTITY_TRANSFORM;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
+import static org.apache.hudi.table.action.commit.BaseWriteHelper.merge;
 import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDeleteRecord;
 
 /**
@@ -331,7 +338,7 @@ public class HoodieIndexUtils {
    * @return {@link HoodieRecord}s that have the current location being set.
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
-      HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
+      HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable, ReaderContextFactory<R> readerContextFactory) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     final Option<String> instantTime = metaClient
         .getActiveTimeline() // we need to include all actions and completed
@@ -341,7 +348,6 @@ public class HoodieIndexUtils {
     if (instantTime.isEmpty()) {
       return hoodieTable.getContext().emptyHoodieData();
     }
-    ReaderContextFactory<R> readerContextFactory = hoodieTable.getContext().getReaderContextFactory(metaClient);
     return partitionLocations.flatMap(p -> {
       Option<FileSlice> fileSliceOption = Option.fromJavaOptional(hoodieTable
           .getHoodieView()
@@ -414,27 +420,34 @@ public class HoodieIndexUtils {
       Schema existingSchema,
       Schema writeSchemaWithMetaFields,
       HoodieWriteConfig config,
-      HoodieRecordMerger recordMerger,
-      BaseKeyGenerator keyGenerator) throws IOException {
-    Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(existing, existingSchema,
-        incoming, writeSchemaWithMetaFields, config.getProps());
-    if (!mergeResult.isPresent()) {
-      //the record was deleted
-      return Option.empty();
+      BufferedRecordMerger<R> recordMerger,
+      BaseKeyGenerator keyGenerator,
+      RecordContext<R> incomingRecordContext,
+      RecordContext<R> existingRecordContext,
+      String[] orderingFieldNames) throws IOException {
+    Option<BufferedRecord<R>> mergeResult = merge(
+        incoming, existing, writeSchemaWithMetaFields, existingSchema, incomingRecordContext, orderingFieldNames, recordMerger, config.getProps());
+    HoodieRecord<R> result;
+    if (mergeResult.isPresent()) {
+      if (mergeResult.get().isDelete()) {
+        //the record was deleted
+        return Option.empty();
+      }
+      result = existingRecordContext.constructHoodieRecord(mergeResult.get());
+    } else {
+      result = existing;
     }
-    HoodieRecord<R> result = mergeResult.get().getLeft();
     if (result.getData().equals(HoodieRecord.SENTINEL)) {
       //the record did not match and merge case and should not be modified
       return Option.of(result);
     }
 
     //record is inserted or updated
-    String partitionPath = keyGenerator.getPartitionPath((GenericRecord) result.getData());
+    String partitionPath = keyGenerator.getPartitionPath(existingRecordContext.convertToAvroRecord(mergeResult.get().getRecord(), writeSchemaWithMetaFields));
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
-            new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
+        new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
     return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
         config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
-
   }
 
   /**
@@ -445,31 +458,35 @@ public class HoodieIndexUtils {
       HoodieRecord<R> existing,
       Schema writeSchema,
       HoodieWriteConfig config,
-      HoodieRecordMerger recordMerger,
-      Option<BaseKeyGenerator> expressionPayloadKeygen) throws IOException {
+      BufferedRecordMerger<R> recordMerger,
+      Option<BaseKeyGenerator> expressionPayloadKeygen,
+      RecordContext<R> incomingRecordContext,
+      RecordContext<R> existingRecordContext,
+      String[] orderingFieldNames) throws IOException {
     Schema existingSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     Schema writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema, config.allowOperationMetadataField());
     if (expressionPayloadKeygen.isPresent()) {
       return mergeIncomingWithExistingRecordWithExpressionPayload(incoming, existing, writeSchema,
-          existingSchema, writeSchemaWithMetaFields, config, recordMerger, expressionPayloadKeygen.get());
+          existingSchema, writeSchemaWithMetaFields, config, recordMerger, expressionPayloadKeygen.get(), incomingRecordContext, existingRecordContext, orderingFieldNames);
     } else {
       // prepend the hoodie meta fields as the incoming record does not have them
       HoodieRecord incomingPrepended = incoming
           .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
-      // after prepend the meta fields, convert the record back to the original payload
-      HoodieRecord incomingWithMetaFields = incomingPrepended
-          .wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(), config.allowOperationMetadataField(), Option.empty(), false, Option.empty());
-      Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger
-          .merge(existing, existingSchema, incomingWithMetaFields, writeSchemaWithMetaFields, config.getProps());
+      Option<BufferedRecord<R>> mergeResult = merge(
+          incomingPrepended, existing, writeSchemaWithMetaFields, existingSchema, existingRecordContext, orderingFieldNames, recordMerger, config.getProps());
+      HoodieRecord<R> result;
       if (mergeResult.isPresent()) {
-        // the merged record needs to be converted back to the original payload
-        HoodieRecord<R> merged = mergeResult.get().getLeft().wrapIntoHoodieRecordPayloadWithParams(
-            writeSchemaWithMetaFields, config.getProps(), Option.empty(),
-            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema));
-        return Option.of(merged);
+        if (mergeResult.get().isDelete()) {
+          // the record was deleted
+          return Option.empty();
+        }
+        result = existingRecordContext.constructHoodieRecord(mergeResult.get());
       } else {
-        return Option.empty();
+        result = existing;
       }
+      // the merged record needs to be converted back to the original payload
+      return Option.of(result.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+          config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
     }
   }
 
@@ -477,8 +494,11 @@ public class HoodieIndexUtils {
    * Merge tagged incoming records with existing records in case of partition path updated.
    */
   public static <R> HoodieData<HoodieRecord<R>> mergeForPartitionUpdatesIfNeeded(
-      HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
-    Pair<HoodieWriteConfig, Option<BaseKeyGenerator>> keyGeneratorWriteConfigOpt = getKeygenAndUpdatedWriteConfig(config, hoodieTable.getMetaClient().getTableConfig());
+      HoodieData<Pair<HoodieRecord<R>, Option<HoodieRecordGlobalLocation>>> incomingRecordsAndLocations,
+      HoodieWriteConfig config,
+      HoodieTable hoodieTable) {
+    Pair<HoodieWriteConfig, Option<BaseKeyGenerator>> keyGeneratorWriteConfigOpt =
+        getKeygenAndUpdatedWriteConfig(config, hoodieTable.getMetaClient().getTableConfig());
     HoodieWriteConfig updatedConfig = keyGeneratorWriteConfigOpt.getLeft();
     Option<BaseKeyGenerator> expressionPayloadKeygen = keyGeneratorWriteConfigOpt.getRight();
     // completely new records
@@ -493,10 +513,35 @@ public class HoodieIndexUtils {
         .filter(p -> p.getRight().isPresent())
         .map(p -> Pair.of(p.getRight().get().getPartitionPath(), p.getRight().get().getFileId()))
         .distinct(updatedConfig.getGlobalIndexReconcileParallelism());
+    // define the buffered record merger.
+    ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) hoodieTable.getContext()
+        .<R>getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps(), false);
+    HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+    RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
+    readerContext.initRecordMerger(config.getProps());
+    // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
+    // can be using an expression payload so here we rely on the table's configured payload class if it is required.
+    ReaderContextFactory<R> readerContextFactoryForExistingRecords = (ReaderContextFactory<R>) hoodieTable.getContext()
+        .<R>getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), hoodieTable.getMetaClient().getTableConfig().getProps());
+    RecordContext<R> existingRecordContext = readerContextFactoryForExistingRecords.getContext().getRecordContext();
     // merged existing records with current locations being set
-    HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, keyGeneratorWriteConfigOpt.getLeft(), hoodieTable);
-
-    final HoodieRecordMerger recordMerger = updatedConfig.getRecordMerger();
+    HoodieData<HoodieRecord<R>> existingRecords =
+        getExistingRecords(globalLocations, keyGeneratorWriteConfigOpt.getLeft(), hoodieTable, readerContextFactoryForExistingRecords);
+    List<String> orderingFieldNames = getOrderingFieldNames(
+        readerContext.getMergeMode(), hoodieTable.getConfig().getProps(), hoodieTable.getMetaClient());
+    RecordMergeMode recordMergeMode = HoodieTableConfig.inferCorrectMergingBehavior(null, config.getPayloadClass(), null,
+        String.join(",", orderingFieldNames), hoodieTable.getMetaClient().getTableConfig().getTableVersion()).getLeft();
+    BufferedRecordMerger<R> recordMerger = BufferedRecordMergerFactory.create(
+        readerContext,
+        recordMergeMode,
+        false,
+        Option.ofNullable(updatedConfig.getRecordMerger()),
+        orderingFieldNames,
+        new SerializableSchema(hoodieTable.getConfig().getSchema()).get(),
+        Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
+        hoodieTable.getConfig().getProps(),
+        hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
+    String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     HoodieData<HoodieRecord<R>> taggedUpdatingRecords = untaggedUpdatingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r))
         .leftOuterJoin(existingRecords.mapToPair(r -> Pair.of(r.getRecordKey(), r)))
         .values().flatMap(entry -> {
@@ -512,8 +557,9 @@ public class HoodieIndexUtils {
             // incoming is a delete: force tag the incoming to the old partition
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
           }
-
-          Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(incoming, existing, writeSchema, updatedConfig, recordMerger, expressionPayloadKeygen);
+          Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(
+              incoming, existing, writeSchema, updatedConfig, recordMerger, expressionPayloadKeygen,
+              incomingRecordContext, existingRecordContext, orderingFieldsArray);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
@@ -652,7 +698,7 @@ public class HoodieIndexUtils {
     Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     List<String> sourceFields = new ArrayList<>(columns.keySet());
     String columnName = sourceFields.get(0); // We know there's only one column from the check above
-    
+
     // First check if the field exists
     try {
       getNestedFieldSchemaFromWriteSchema(tableSchema, columnName);
@@ -663,7 +709,7 @@ public class HoodieIndexUtils {
           indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? "secondary" : "expression",
           userIndexName, columnName));
     }
-    
+
     // Check for complex types (RECORD, ARRAY, MAP) - not supported for any index type
     if (!validateDataTypeForSecondaryOrExpressionIndex(sourceFields, tableSchema)) {
       Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnName);
@@ -674,7 +720,7 @@ public class HoodieIndexUtils {
           indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? "secondary" : "expression",
           userIndexName, columnName, fieldSchema.getType()));
     }
-    
+
     // For secondary index, apply stricter data type validation
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX)) {
       if (!validateDataTypeForSecondaryIndex(sourceFields, tableSchema)) {
@@ -683,7 +729,7 @@ public class HoodieIndexUtils {
         if (fieldSchema.getLogicalType() != null) {
           actualType += " with logical type " + fieldSchema.getLogicalType();
         }
-        
+
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Column '%s' has unsupported data type '%s'. "
             + "Secondary indexes only support: STRING, CHAR, INT, BIGINT/LONG, SMALLINT, TINYINT, "
@@ -691,13 +737,13 @@ public class HoodieIndexUtils {
             + "and DATE types. Please choose a column with one of these supported types.",
             userIndexName, columnName, actualType));
       }
-      
+
       // Check if record index is enabled for secondary index
       boolean hasRecordIndex = metaClient.getTableConfig().getMetadataPartitions().stream()
           .anyMatch(partition -> partition.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
       boolean recordIndexEnabled = Boolean.parseBoolean(
           options.getOrDefault(RECORD_INDEX_ENABLE_PROP.key(), RECORD_INDEX_ENABLE_PROP.defaultValue().toString()));
-      
+
       if (!hasRecordIndex && !recordIndexEnabled) {
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Record index is required for secondary indexes but is not enabled. "

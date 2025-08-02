@@ -21,11 +21,15 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
 
 import org.apache.avro.Schema;
@@ -34,14 +38,21 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Map;
 
+/**
+ * Record context for reading and transforming avro indexed records.
+ */
 public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   private final String payloadClass;
+  // This boolean indicates whether the caller requires payloads in the HoodieRecord conversion.
+  // This is temporarily required as we migrate away from payloads.
+  private final boolean requiresPayloadRecords;
 
-  public AvroRecordContext(HoodieTableConfig tableConfig) {
-    super(tableConfig);
-    this.payloadClass = tableConfig.getPayloadClass();
+  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords, boolean shouldUseMetaFields) {
+    super(tableConfig, shouldUseMetaFields);
+    this.payloadClass = payloadClass;
     this.typeConverter = new AvroJavaTypeConverter();
+    this.requiresPayloadRecords = requiresPayloadRecords;
   }
 
   public static Object getFieldValueFromIndexedRecord(
@@ -79,15 +90,27 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
+  public HoodieRecord constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
+    // HoodieKey is not required so do not generate it if partitionPath is null
+    HoodieKey hoodieKey = partitionPath == null ? null : new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
+
     if (bufferedRecord.isDelete()) {
-      return SpillableMapUtils.generateEmptyPayload(
-          bufferedRecord.getRecordKey(),
-          partitionPath,
-          bufferedRecord.getOrderingValue(),
-          payloadClass);
+      if (payloadClass != null) {
+        return SpillableMapUtils.generateEmptyPayload(
+            bufferedRecord.getRecordKey(),
+            partitionPath,
+            bufferedRecord.getOrderingValue(),
+            payloadClass);
+      } else {
+        return new HoodieEmptyRecord<>(
+            hoodieKey,
+            HoodieRecord.HoodieRecordType.AVRO);
+      }
     }
-    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
+    if (requiresPayloadRecords) {
+      HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, (GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue());
+      return new HoodieAvroRecord<>(hoodieKey, payload);
+    }
     return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
   }
 

@@ -113,6 +113,19 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   Option<IndexedRecord> getInsertValue(Schema schema) throws IOException;
 
   /**
+   * Deserializes the HoodieRecordPayload into an {@link IndexedRecord}.
+   * Unlike {@link #getInsertValue(Schema, Properties)}, this method is meant to solely perform deserialization.
+   *
+   * @param schema     Schema to use for reading the record
+   * @param properties Properties for the current context
+   * @return the {@link IndexedRecord} if one is available, otherwise returns an empty Option.
+   * @throws IOException thrown if there is an error during deserialization
+   */
+  default Option<IndexedRecord> getIndexedRecord(Schema schema, Properties properties) throws IOException {
+    return getInsertValue(schema, properties);
+  }
+
+  /**
    * Generates an avro record out of the given HoodieRecordPayload, to be written out to storage. Called when writing a new value for the given
    * HoodieKey, wherein there is no existing record in storage to be combined against. (i.e insert) Return EMPTY to skip writing this record.
    * Implementations can leverage properties if required.
