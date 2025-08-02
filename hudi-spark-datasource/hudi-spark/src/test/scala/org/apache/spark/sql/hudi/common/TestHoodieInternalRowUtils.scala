@@ -211,8 +211,8 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val renameMap: java.util.Map[String, String] = new java.util.HashMap()
     renameMap.put("years_old", "first_name")
     renameMap.put("first_name", "years_old")
-    renameMap.put("address.city", "address.street")
-    renameMap.put("address.street", "address.city")
+    renameMap.put("address.city", "street")
+    renameMap.put("address.street", "city")
 
     // Sample row
     val oldRowData = sparkSession.sparkContext.parallelize(Seq(Row("Alice", 30, Row("SF", "Mission st"))))
