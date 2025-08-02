@@ -37,7 +37,7 @@ public class FlinkReaderContextFactory implements ReaderContextFactory<RowData> 
   private InternalSchemaManager internalSchemaManager;
   private boolean shouldUseMetaFields;
 
-  public FlinkReaderContextFactory(HoodieTableMetaClient metaClient, boolean shouldUseMetaFields) {
+  public FlinkReaderContextFactory(HoodieTableMetaClient metaClient, Boolean shouldUseMetaFields) {
     this.metaClient = metaClient;
     this.shouldUseMetaFields = shouldUseMetaFields;
   }
