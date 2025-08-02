@@ -24,8 +24,9 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderOnJavaTestBase;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.SchemaOnReadEvolutionTestUtils;
+import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
@@ -115,8 +116,8 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
   }
 
   @Override
-  public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
-    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
+  public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaOnWriteConfigs() {
+    SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs = new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
     configs.nestedSupport = false;
     configs.arraySupport = false;
     configs.mapSupport = false;
@@ -133,6 +134,52 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     configs.doubleToStringSupport = false;
     configs.stringToBytesSupport = false;
     configs.bytesToStringSupport = false;
+    return configs;
+  }
+
+  @Override
+  public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
+    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
+    configs.mapSupport = false;
+
+    configs.addNewFieldSupport = false;
+    configs.addNewFieldNotAtEndSupport = false;
+    configs.reorderColumnSupport = false;
+    configs.renameColumnSupport = false;
+    configs.removeColumnSupport = false;
+
+    configs.renameColumnAsPreviouslyRemovedSupport = false;
+
+    configs.intToLongSupport = false;
+    configs.intToFloatSupport = false;
+    configs.intToDoubleSupport = false;
+    configs.intToStringSupport = false;
+    configs.intToDecimalFixedSupport = false;
+    configs.intToDecimalBytesSupport = false;
+
+    configs.longToFloatSupport = false;
+    configs.longToDoubleSupport = false;
+    configs.longToStringSupport = false;
+    configs.longToDecimalFixedSupport = false;
+    configs.longToDecimalBytesSupport = false;
+
+    configs.floatToDoubleSupport = false;
+    configs.floatToStringSupport = false;
+    configs.floatToDecimalFixedSupport = false;
+    configs.floatToDecimalBytesSupport = false;
+
+    configs.doubleToStringSupport = false;
+    configs.doubleToDecimalFixedSupport = false;
+    configs.doubleToDecimalBytesSupport = false;
+
+    configs.stringToDecimalFixedSupport = false;
+    configs.stringToDecimalBytesSupport = false;
+    configs.stringToDateSupport = false;
+
+    configs.decimalFixedToStringSupport = false;
+    configs.decimalBytesToStringSupport = false;
+
+    configs.dateToStringSupport = false;
     return configs;
   }
 
