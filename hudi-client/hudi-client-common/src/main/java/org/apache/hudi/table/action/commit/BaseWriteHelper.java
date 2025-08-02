@@ -103,9 +103,8 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    */
   public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
     HoodieReaderContext<T> readerContext =
-        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryDuringWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps())
+        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps(), false)
             .getContext();
-    readerContext.getRecordContext().updateRecordKeyExtractor(table.getMetaClient().getTableConfig(), false);
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
     readerContext.initRecordMerger(table.getConfig().getProps());
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getConfig().getProps(), table.getMetaClient());

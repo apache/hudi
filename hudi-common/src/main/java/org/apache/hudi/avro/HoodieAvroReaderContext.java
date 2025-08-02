@@ -96,14 +96,36 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
-    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), false);
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.populateMetaFields());
+  }
+
+  /**
+   * Constructs an instance of the reader context with an optional cache of reusable file readers.
+   * This provides an opportunity for increased performance when repeatedly reading from the same files.
+   * The caller of this constructor is responsible for managing the lifecycle of the reusable file readers.
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig the configuration of the Hudi table being read
+   * @param instantRangeOpt the set of valid instants for this read
+   * @param filterOpt an optional filter to apply on the record keys
+   * @param reusableFileReaders a map of reusable file readers, keyed by their storage paths.
+   * @param shouldUseMetaFields Whether meta fields can be used while reading the records
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
+      boolean shouldUseMetaFields) {
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), false, shouldUseMetaFields);
   }
 
   /**
    * Constructs an instance of the reader context for writer workflows
-   * @param storageConfiguration the storage configuration to use for reading files
-   * @param tableConfig the configuration of the Hudi table being read
-   * @param payloadClassName the payload class for the writer
+   *
+   * @param storageConfiguration   the storage configuration to use for reading files
+   * @param tableConfig            the configuration of the Hudi table being read
+   * @param payloadClassName       the payload class for the writer
    * @param requiresPayloadRecords indicates whether the caller expects payloads as the data in any HoodieRecord returned by this context
    */
   public HoodieAvroReaderContext(
@@ -111,7 +133,25 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieTableConfig tableConfig,
       String payloadClassName,
       boolean requiresPayloadRecords) {
-    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, requiresPayloadRecords);
+    this(storageConfiguration, tableConfig, payloadClassName, requiresPayloadRecords, tableConfig.populateMetaFields());
+  }
+
+  /**
+   * Constructs an instance of the reader context for writer workflows
+   *
+   * @param storageConfiguration   the storage configuration to use for reading files
+   * @param tableConfig            the configuration of the Hudi table being read
+   * @param payloadClassName       the payload class for the writer
+   * @param requiresPayloadRecords indicates whether the caller expects payloads as the data in any HoodieRecord returned by this context
+   * @param shouldUseMetaFields    Whether meta fields can be used while reading the records
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      String payloadClassName,
+      boolean requiresPayloadRecords,
+      boolean shouldUseMetaFields) {
+    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, requiresPayloadRecords, shouldUseMetaFields);
   }
 
   private HoodieAvroReaderContext(
@@ -121,8 +161,9 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
       String payloadClassName,
-      boolean requiresPayloadRecords) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName, requiresPayloadRecords));
+      boolean requiresPayloadRecords,
+      boolean shouldUseMetaFields) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName, requiresPayloadRecords, shouldUseMetaFields));
     this.reusableFileReaders = reusableFileReaders;
   }
 

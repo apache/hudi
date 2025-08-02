@@ -30,19 +30,29 @@ public class AvroReaderContextFactory implements ReaderContextFactory<IndexedRec
   private final HoodieTableMetaClient metaClient;
   private final String payloadClassName;
   private final boolean requiresPayloadRecords;
+  private final boolean shouldUseMetaFields;
 
   public AvroReaderContextFactory(HoodieTableMetaClient metaClient) {
-    this(metaClient, metaClient.getTableConfig().getPayloadClass(), false);
+    this(metaClient, metaClient.getTableConfig().populateMetaFields());
+  }
+
+  public AvroReaderContextFactory(HoodieTableMetaClient metaClient, boolean shouldUseMetaFields) {
+    this(metaClient, metaClient.getTableConfig().getPayloadClass(), false, shouldUseMetaFields);
   }
 
   public AvroReaderContextFactory(HoodieTableMetaClient metaClient, String payloadClassName, boolean requiresPayloadRecords) {
+    this(metaClient, payloadClassName, requiresPayloadRecords, metaClient.getTableConfig().populateMetaFields());
+  }
+
+  public AvroReaderContextFactory(HoodieTableMetaClient metaClient, String payloadClassName, boolean requiresPayloadRecords, boolean shouldUseMetaFields) {
     this.metaClient = metaClient;
     this.payloadClassName = payloadClassName;
     this.requiresPayloadRecords = requiresPayloadRecords;
+    this.shouldUseMetaFields = shouldUseMetaFields;
   }
 
   @Override
   public HoodieReaderContext<IndexedRecord> getContext() {
-    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), payloadClassName, requiresPayloadRecords);
+    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), payloadClassName, requiresPayloadRecords, shouldUseMetaFields);
   }
 }

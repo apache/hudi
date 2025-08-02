@@ -30,16 +30,18 @@ import org.apache.spark.sql.hudi.SparkAdapter
 
 import scala.collection.mutable
 
-class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRecordContext(tableConfig) {
+/**
+ * Spark record context for reading and transforming Spark InternalRow records.
+ */
+class SparkFileFormatInternalRecordContext(tableConfig: HoodieTableConfig,
+                                           shouldUseMetaFields: Boolean)
+  extends BaseSparkInternalRecordContext(tableConfig, shouldUseMetaFields) {
 
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
-  private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
-  private val serializerMap: mutable.Map[Schema, HoodieAvroSerializer] = mutable.Map()
+  private val deserializerMap = mutable.Map()
+  private val serializerMap = mutable.Map()
 
-  override def supportsParquetRowIndex: Boolean = {
-    HoodieSparkUtils.gteqSpark3_5
-  }
+  override def supportsParquetRowIndex: Boolean = HoodieSparkUtils.gteqSpark3_5
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an [[InternalRow]].

@@ -38,6 +38,9 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Map;
 
+/**
+ * Record context for reading and transforming avro indexed records.
+ */
 public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   private final String payloadClass;
@@ -45,8 +48,8 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   // This is temporarily required as we migrate away from payloads.
   private final boolean requiresPayloadRecords;
 
-  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords) {
-    super(tableConfig);
+  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords, boolean shouldUseMetaFields) {
+    super(tableConfig, shouldUseMetaFields);
     this.payloadClass = payloadClass;
     this.typeConverter = new AvroJavaTypeConverter();
     this.requiresPayloadRecords = requiresPayloadRecords;

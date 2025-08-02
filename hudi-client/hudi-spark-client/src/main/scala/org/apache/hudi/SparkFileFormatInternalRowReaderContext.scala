@@ -59,11 +59,20 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
-                                              tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, new SparkFileFormatInternalRecordContext(tableConfig)) {
+                                              tableConfig: HoodieTableConfig,
+                                              shouldUseMetaFields: Boolean)
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, new SparkFileFormatInternalRecordContext(tableConfig, shouldUseMetaFields)) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private lazy val allFilters = filters ++ requiredFilters
+
+  def this(parquetFileReader: SparkParquetReader,
+           filters: Seq[Filter],
+           requiredFilters: Seq[Filter],
+           storageConfiguration: StorageConfiguration[_],
+           tableConfig: HoodieTableConfig) {
+    this(parquetFileReader, filters, requiredFilters, storageConfiguration, tableConfig, tableConfig.populateMetaFields())
+  }
 
   override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
