@@ -244,7 +244,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
-    Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema, props);
+    Option<IndexedRecord> avroData = getData().getIndexedRecord(recordSchema, props);
     if (avroData.isPresent()) {
       HoodieAvroIndexedRecord record =
           new HoodieAvroIndexedRecord(key, avroData.get(), operation, getData().getMetadata());

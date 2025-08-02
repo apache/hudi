@@ -270,6 +270,17 @@ class ExpressionPayload(@transient record: GenericRecord,
     isDeletedRecord || isDeleteOnCondition
   }
 
+  override def getIndexedRecord(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
+    val recordSchema = getRecordSchema(properties)
+    val indexedRecord = bytesToAvro(recordBytes, recordSchema)
+
+    if (super.isDeleteRecord(indexedRecord)) {
+      HOption.empty[IndexedRecord]()
+    } else {
+      HOption.of(indexedRecord)
+    }
+  }
+
   override def getInsertValue(schema: Schema, properties: Properties): HOption[IndexedRecord] = {
     val recordSchema = getRecordSchema(properties)
     val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
