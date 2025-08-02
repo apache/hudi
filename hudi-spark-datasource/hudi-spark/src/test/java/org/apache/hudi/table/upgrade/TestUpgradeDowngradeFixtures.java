@@ -31,6 +31,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -101,7 +103,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
     }
     
     // Create write config for upgrade operations
-    HoodieWriteConfig config = createUpgradeWriteConfig(originalMetaClient, true);
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
     
     // Step 1: Upgrade to next version
     LOG.info("Step 1: Upgrading from {} to {}", originalVersion, targetVersion);
@@ -115,6 +117,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .build();
     assertTableVersionOnDataAndMetadataTable(upgradedMetaClient, targetVersion);
     validateVersionSpecificProperties(upgradedMetaClient, originalVersion, targetVersion);
+    performDataValidationOnTable(upgradedMetaClient, "after upgrade");
 
     // Step 2: Downgrade back to original version
     LOG.info("Step 2: Downgrading from {} back to {}", targetVersion, originalVersion);
@@ -128,6 +131,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .build();
     assertTableVersionOnDataAndMetadataTable(finalMetaClient, originalVersion);
     validateVersionSpecificProperties(finalMetaClient, targetVersion, originalVersion);
+    performDataValidationOnTable(finalMetaClient, "after round-trip");
 
     LOG.info("Successfully completed round-trip test for version {}", originalVersion);
   }
@@ -148,7 +152,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
     }
     
     // Create write config with auto-upgrade disabled
-    HoodieWriteConfig config = createUpgradeWriteConfig(originalMetaClient, false);
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
     
     // Attempt upgrade with auto-upgrade disabled
     new UpgradeDowngrade(originalMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
@@ -161,6 +165,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .build();
     assertEquals(originalVersion, unchangedMetaClient.getTableConfig().getTableVersion(),
         "Table version should remain unchanged when auto-upgrade is disabled");
+    performDataValidationOnTable(unchangedMetaClient, "after auto-upgrade disabled test");
     
     LOG.info("Auto-upgrade disabled test passed for version {}", originalVersion);
   }
@@ -181,7 +186,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
     }
     
     // Create write config for upgrade operations
-    HoodieWriteConfig config = createUpgradeWriteConfig(originalMetaClient, true);
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
     
     // Count initial timeline state
     int initialPendingCommits = originalMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
@@ -196,6 +201,9 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .setConf(storageConf.newInstance())
         .setBasePath(originalMetaClient.getBasePath())
         .build();
+    
+    // Perform data validation after upgrade
+    performDataValidationOnTable(upgradedMetaClient, "after upgrade in rollback/compaction test");
     
     // Verify rollback behavior - pending commits should be cleaned up or reduced
     int finalPendingCommits = upgradedMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
@@ -269,18 +277,28 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
   }
 
   /**
-   * Create write config for upgrade/downgrade operations.
+   * Create write config for test operations (upgrade/downgrade/validation).
    */
-  private HoodieWriteConfig createUpgradeWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade) {
+  private HoodieWriteConfig createWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade) {
     Properties props = new Properties();
     props.putAll(metaClient.getTableConfig().getProps());
     
-    return HoodieWriteConfig.newBuilder()
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath().toString())
         .withAutoUpgradeVersion(autoUpgrade)
-        .withProps(props)
-        .withTimelineLayoutVersion(metaClient.getTableConfig().getTimelineLayoutVersion().get().getVersion())
-        .build();
+        .withProps(props);
+    
+    // Add timeline layout version only if available (needed for upgrade operations)
+    if (metaClient.getTableConfig().getTimelineLayoutVersion().isPresent()) {
+      builder.withTimelineLayoutVersion(metaClient.getTableConfig().getTimelineLayoutVersion().get().getVersion());
+    }
+    
+    // For validation operations, keep timeline server disabled for simplicity
+    if (!autoUpgrade) {
+      builder.withEmbeddedTimelineServerEnabled(false);
+    }
+    
+    return builder.build();
   }
 
   /**
@@ -552,6 +570,65 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_1, layoutVersion.get(),
             "Timeline layout should be downgraded to V1");
       }
+    }
+  }
+
+  /**
+   * Perform data validation on the table to ensure it remains operational.
+   * This performs a simple read-only validation to verify table accessibility.
+   */
+  private void performDataValidationOnTable(HoodieTableMetaClient metaClient, String stage) {
+    LOG.info("Performing data validation on table {}", stage);
+    
+    try {
+      // Simple read validation to ensure table is accessible
+      long rowCount = performSimpleReadValidation(metaClient);
+      LOG.debug("Read {} rows from table {}", rowCount, stage);
+      
+      // Verify table metadata is accessible
+      assertNotNull(metaClient.getTableConfig(), "Table config should be accessible " + stage);
+      assertNotNull(metaClient.getTableConfig().getTableName(), "Table name should be accessible " + stage);
+      
+      LOG.info("✓ Data validation passed {} (table accessible, {} rows)", stage, rowCount);
+    } catch (Exception e) {
+      throw new RuntimeException("Data validation failed " + stage, e);
+    }
+  }
+
+
+  /**
+   * Perform simple read validation and return the total row count.
+   */
+  private long performSimpleReadValidation(HoodieTableMetaClient metaClient) {
+    LOG.debug("Performing read validation on table at: {}", metaClient.getBasePath());
+    try {
+      // Log table information for debugging
+      String basePath = metaClient.getBasePath().toString();
+      LOG.debug("Table base path: {}", basePath);
+      LOG.debug("Table version: {}", metaClient.getTableConfig().getTableVersion());
+      LOG.debug("Table type: {}", metaClient.getTableConfig().getTableType());
+      
+      // Read entire table using Spark's built-in Hudi support
+      LOG.debug("Attempting to read table using Spark SQL...");
+      Dataset<Row> tableData = sqlContext.read()
+          .format("hudi")
+          .load(basePath);
+      
+      // Validate read operation succeeded
+      assertNotNull(tableData, "Table read should not return null");
+      LOG.debug("Table read operation succeeded");
+      
+      // Count rows
+      LOG.debug("Counting rows...");
+      long rowCount = tableData.count();
+      assertTrue(rowCount >= 0, "Row count should be non-negative");
+      
+      LOG.debug("Successfully read {} rows from table", rowCount);
+      return rowCount;
+    } catch (Exception e) {
+      LOG.error("Read validation failed for table at: {} (version: {})", 
+          metaClient.getBasePath(), metaClient.getTableConfig().getTableVersion(), e);
+      throw new RuntimeException("Read validation failed", e);
     }
   }
 }
