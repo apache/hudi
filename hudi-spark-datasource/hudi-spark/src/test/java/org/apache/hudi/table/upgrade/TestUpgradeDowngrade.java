@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -45,15 +46,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Properties;
 import java.util.stream.Stream;
-
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -105,6 +99,10 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     // Create write config for upgrade operations
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
     
+    // Count initial timeline state
+    int initialPendingCommits = originalMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
+    int initialCompletedCommits = originalMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
+    
     // Perform upgrade to next version
     LOG.info("Upgrading from {} to {}", originalVersion, targetVersion);
     new UpgradeDowngrade(originalMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
@@ -120,6 +118,16 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     assertTableVersionOnDataAndMetadataTable(upgradedMetaClient, targetVersion);
     validateVersionSpecificProperties(upgradedMetaClient, originalVersion, targetVersion);
     performDataValidationOnTable(upgradedMetaClient, "after upgrade");
+    
+    // Verify rollback behavior - pending commits should be cleaned up or reduced
+    int finalPendingCommits = upgradedMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
+    assertTrue(finalPendingCommits <= initialPendingCommits,
+        "Pending commits should be cleaned up or reduced after upgrade");
+    
+    // Verify we still have completed commits
+    int finalCompletedCommits = upgradedMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
+    assertTrue(finalCompletedCommits >= initialCompletedCommits,
+        "Completed commits should be preserved or increased after upgrade");
 
     LOG.info("Successfully completed upgrade test for version {} -> {}", originalVersion, targetVersion);
   }
@@ -144,6 +152,10 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     // Create write config for downgrade operations
     HoodieWriteConfig config = createWriteConfig(targetMetaClient, true);
     
+    // Count initial timeline state
+    int initialPendingCommits = targetMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
+    int initialCompletedCommits = targetMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
+    
     // Perform downgrade to previous version
     LOG.info("Downgrading from {} to {}", targetVersion, sourceVersion);
     new UpgradeDowngrade(targetMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
@@ -159,6 +171,16 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     assertTableVersionOnDataAndMetadataTable(downgradedMetaClient, sourceVersion);
     validateVersionSpecificProperties(downgradedMetaClient, targetVersion, sourceVersion);
     performDataValidationOnTable(downgradedMetaClient, "after downgrade");
+    
+    // Verify rollback behavior - pending commits should be cleaned up or reduced
+    int finalPendingCommits = downgradedMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
+    assertTrue(finalPendingCommits <= initialPendingCommits,
+        "Pending commits should be cleaned up or reduced after downgrade");
+    
+    // Verify we still have completed commits
+    int finalCompletedCommits = downgradedMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
+    assertTrue(finalCompletedCommits >= initialCompletedCommits,
+        "Completed commits should be preserved or increased after downgrade");
 
     LOG.info("Successfully completed downgrade test for version {} -> {}", targetVersion, sourceVersion);
   }
@@ -199,54 +221,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     LOG.info("Auto-upgrade disabled test passed for version {}", originalVersion);
   }
 
-  @ParameterizedTest
-  @MethodSource("tableVersions")
-  public void testRollbackAndCompactionBehavior(HoodieTableVersion originalVersion) throws Exception {
-    LOG.info("Testing rollback and compaction behavior for version {}", originalVersion);
-    
-    // Load fixture table
-    HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
-    
-    // Calculate target version
-    HoodieTableVersion targetVersion = getNextVersion(originalVersion);
-    if (targetVersion == null) {
-      LOG.info("Skipping rollback/compaction test for version {} (no higher version available)", originalVersion);
-      return;
-    }
-    
-    // Create write config for upgrade operations
-    HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
-    
-    // Count initial timeline state
-    int initialPendingCommits = originalMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
-    int initialCompletedCommits = originalMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
-    
-    // Perform upgrade
-    new UpgradeDowngrade(originalMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
-        .run(targetVersion, null);
-    
-    // Create fresh meta client to validate timeline state after upgrade
-    HoodieTableMetaClient upgradedMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance())
-        .setBasePath(originalMetaClient.getBasePath())
-        .build();
-    
-    // Perform data validation after upgrade
-    performDataValidationOnTable(upgradedMetaClient, "after upgrade in rollback/compaction test");
-    
-    // Verify rollback behavior - pending commits should be cleaned up or reduced
-    int finalPendingCommits = upgradedMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
-    assertTrue(finalPendingCommits <= initialPendingCommits,
-        "Pending commits should be cleaned up or reduced after upgrade");
-    
-    // Verify we still have completed commits
-    int finalCompletedCommits = upgradedMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
-    assertTrue(finalCompletedCommits >= initialCompletedCommits,
-        "Completed commits should be preserved or increased after upgrade");
-    
-    LOG.info("Rollback and compaction behavior validated for version {}", originalVersion);
-  }
-
   /**
    * Load a fixture table from resources and copy it to a temporary location for testing.
    */
@@ -254,8 +228,9 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     String fixtureName = getFixtureName(version);
     String resourcePath = FIXTURES_BASE_PATH + fixtureName;
     
-    // Extract fixture zip from resources to temp directory
-    extractFixtureToTempDir(resourcePath, tempDir.toString());
+    // Extract fixture zip from resources to temp directory using common utility
+    LOG.info("Loading fixture from resource path: {}", resourcePath);
+    HoodieTestUtils.extractZipToDirectory(resourcePath, tempDir, getClass());
     
     // Get the table name from fixture (remove .zip extension)
     String tableName = fixtureName.replace(".zip", "");
@@ -269,40 +244,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     
     LOG.info("Loaded fixture table {} at version {}", fixtureName, metaClient.getTableConfig().getTableVersion());
     return metaClient;
-  }
-
-  /**
-   * Extract fixture zip file from resources to temporary directory.
-   */
-  private void extractFixtureToTempDir(String resourcePath, String tempPath) throws IOException {
-    LOG.info("Loading fixture from resource path: {}", resourcePath);
-    
-    try (ZipInputStream zip = new ZipInputStream(getClass().getResourceAsStream(resourcePath))) {
-      if (zip == null) {
-        throw new IOException("Fixture not found at: " + resourcePath);
-      }
-      
-      ZipEntry entry;
-      while ((entry = zip.getNextEntry()) != null) {
-        File file = Paths.get(tempPath, entry.getName()).toFile();
-        if (entry.isDirectory()) {
-          file.mkdirs();
-          continue;
-        }
-        
-        // Create parent directories if they don't exist
-        file.getParentFile().mkdirs();
-        
-        // Extract file content
-        byte[] buffer = new byte[10000];
-        try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(file.toPath()))) {
-          int count;
-          while ((count = zip.read(buffer)) != -1) {
-            out.write(buffer, 0, count);
-          }
-        }
-      }
-    }
   }
 
   /**
