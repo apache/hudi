@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.io.Serializable;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -55,7 +56,7 @@ public interface FileGroupRecordBufferLoader<T> {
     return DefaultFileGroupRecordBufferLoader.getInstance();
   }
 
-  static <T> FileGroupRecordBufferLoader<T> createRecordsBasedLoader(Map<Serializable, BufferedRecord<T>> toBeMergedRecords) {
+  static <T> FileGroupRecordBufferLoader<T> createRecordsBasedLoader(Iterator<Map.Entry<Serializable, BufferedRecord<T>>> toBeMergedRecords) {
     return RecordsBasedFileGroupRecordBufferLoader.getInstance(toBeMergedRecords);
   }
 

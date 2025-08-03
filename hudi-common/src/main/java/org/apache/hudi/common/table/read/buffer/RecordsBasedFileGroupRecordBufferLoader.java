@@ -34,6 +34,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -44,14 +45,14 @@ import java.util.Map;
  */
 public class RecordsBasedFileGroupRecordBufferLoader<T> extends DefaultFileGroupRecordBufferLoader<T> {
 
-  private final Map<Serializable, BufferedRecord<T>> toBeMergedRecords;
+  private final Iterator<Map.Entry<Serializable, BufferedRecord<T>>> toBeMergedRecords;
 
-  private RecordsBasedFileGroupRecordBufferLoader(Map<Serializable, BufferedRecord<T>> toBeMergedRecords) {
+  private RecordsBasedFileGroupRecordBufferLoader(Iterator<Map.Entry<Serializable, BufferedRecord<T>>> toBeMergedRecords) {
     super();
     this.toBeMergedRecords = toBeMergedRecords;
   }
 
-  static <T> RecordsBasedFileGroupRecordBufferLoader<T> getInstance(Map<Serializable, BufferedRecord<T>> toBeMergedRecords) {
+  static <T> RecordsBasedFileGroupRecordBufferLoader<T> getInstance(Iterator<Map.Entry<Serializable, BufferedRecord<T>>> toBeMergedRecords) {
     return new RecordsBasedFileGroupRecordBufferLoader<>(toBeMergedRecords);
   }
 
@@ -69,13 +70,14 @@ public class RecordsBasedFileGroupRecordBufferLoader<T> extends DefaultFileGroup
         readerParameters, readStats, fileGroupUpdateCallback, true);
 
     return recordBufferOpt.map(recordBuffer -> {
-      toBeMergedRecords.forEach((key, value) -> {
+      while (toBeMergedRecords.hasNext()) {
+        Map.Entry<Serializable, BufferedRecord<T>> entry = toBeMergedRecords.next();
         try {
-          recordBuffer.processNextDataRecord(value, key);
+          recordBuffer.processNextDataRecord(entry.getValue(), entry.getKey());
         } catch (IOException e) {
           throw new HoodieIOException("Failed to process next toBeMergedRecord ", e);
         }
-      });
+      }
       return Pair.of(recordBufferOpt.get(), Collections.emptyList());
     });
   }
