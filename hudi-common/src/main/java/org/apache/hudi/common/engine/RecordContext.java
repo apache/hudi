@@ -290,6 +290,28 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
+   * Gets the ordering value in particular type.
+   *
+   * @param record             An option of record.
+   * @param schema             The Avro schema of the record.
+   * @param orderingFieldNames names of the ordering fields
+   * @return The ordering value.
+   */
+  public Comparable getOrderingValue(T record,
+                                     Schema schema,
+                                     String[] orderingFieldNames) {
+    if (orderingFieldNames.length == 0) {
+      return OrderingValues.getDefault();
+    }
+
+    return OrderingValues.create(orderingFieldNames, field -> {
+      Object value = getValue(record, schema, field);
+      // API getDefaultOrderingValue is only used inside Comparables constructor
+      return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
+    });
+  }
+
+  /**
    * Extracts the record position value from the record itself.
    *
    * @return the record position in the base file.
