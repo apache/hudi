@@ -59,8 +59,8 @@ public interface FileGroupRecordBufferLoader<T> {
     return DefaultFileGroupRecordBufferLoader.getInstance();
   }
 
-  static <T> FileGroupRecordBufferLoader<T> createDefaultWithRecords(Map<Serializable, BufferedRecord<T>> toBeMergedRecords) {
-    return DefaultFileGroupRecordBufferLoader.getInstance(toBeMergedRecords);
+  static <T> FileGroupRecordBufferLoader<T> createRecordsBasedLoader(Map<Serializable, BufferedRecord<T>> toBeMergedRecords) {
+    return RecordsBasedFileGroupRecordBufferLoader.getInstance(toBeMergedRecords);
   }
 
   static <T> ReusableFileGroupRecordBufferLoader<T> createReusable(HoodieReaderContext<T> readerContextWithoutFilters) {
