@@ -300,9 +300,12 @@ class HoodieSparkSqlWriterInternal {
             hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
           else KeyGeneratorType.getKeyGeneratorClassName(hoodieConfig)
         val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
+        val autoUpgrade = hoodieConfig.getBooleanOrDefault(
+          HoodieWriteConfig.AUTO_UPGRADE_VERSION, HoodieWriteConfig.AUTO_UPGRADE_VERSION.defaultValue())
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setTableVersion(tableVersion)
+          .setAutoUpgrade(autoUpgrade)
           .setTableFormat(tableFormat)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
