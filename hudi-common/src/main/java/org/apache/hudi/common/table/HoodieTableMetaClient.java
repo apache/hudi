@@ -60,6 +60,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -1059,6 +1060,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String tableName;
     private String tableCreateSchema;
     private HoodieTableVersion tableVersion;
+    private boolean autoUpgrade = true;
     private String recordKeyFields;
     private String secondaryKeyFields;
     private String archiveLogFolder;
@@ -1124,6 +1126,11 @@ public class HoodieTableMetaClient implements Serializable {
       this.tableVersion = tableVersion;
       // TimelineLayoutVersion is an internal setting which will be consistent with table version.
       setTimelineLayoutVersion(tableVersion.getTimelineLayoutVersion().getVersion());
+      return this;
+    }
+
+    public TableBuilder setAutoUpgrade(boolean autoUpgrade) {
+      this.autoUpgrade = autoUpgrade;
       return this;
     }
 
@@ -1473,10 +1480,7 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
 
-      if (null == tableVersion) {
-        tableVersion = HoodieTableVersion.current();
-      }
-
+      tableVersion = getTableVersionProperly();
       tableConfig.setTableVersion(tableVersion);
       tableConfig.setInitialVersion(tableVersion);
 
@@ -1589,6 +1593,25 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableFormat);
       }
       return tableConfig.getProps();
+    }
+
+    HoodieTableVersion getTableVersionProperly() {
+      if (tableVersion == null
+          || tableVersion.greaterThanOrEquals(HoodieTableVersion.current())) {
+        return HoodieTableVersion.current();
+      } else {
+        if (autoUpgrade && (tableVersion.versionCode() == 6 || tableVersion.versionCode() == 8)) {
+          String errorMessage = String.format(
+              "Table version \"%d\" is set for table creation, which is lower than "
+                  + "the highest available version \"%d\" the current Hudi binary supports. Meanwhile, "
+                  + "the auto upgrade configuration \"hoodie.write.auto.upgrade\" is enabled. A Potential risk is that "
+                  + "future commits might upgrade this table without any awareness. "
+                  + "To prevent this, please either set \"hoodie.write.auto.upgrade=false\" or unset the table version.",
+              tableVersion.versionCode(), HoodieTableVersion.current().versionCode());
+          throw new HoodieNotSupportedException(errorMessage);
+        }
+        return tableVersion;
+      }
     }
 
     public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath) throws IOException {
