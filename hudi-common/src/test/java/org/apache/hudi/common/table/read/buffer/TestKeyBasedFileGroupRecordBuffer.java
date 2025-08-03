@@ -57,6 +57,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.UUID;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
@@ -325,6 +326,11 @@ class TestKeyBasedFileGroupRecordBuffer {
 
     @Override
     public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+      return Option.of(payloadRecord);
+    }
+
+    @Override
+    public Option<IndexedRecord> getIndexedRecord(Schema schema, Properties properties) throws IOException {
       return Option.of(payloadRecord);
     }
 
