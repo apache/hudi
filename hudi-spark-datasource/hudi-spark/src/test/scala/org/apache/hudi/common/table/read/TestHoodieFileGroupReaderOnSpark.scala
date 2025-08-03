@@ -490,7 +490,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
 
   override def getSchemaOnReadConfigs: SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs = {
     val configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs()
-    configs.renameColumnAsPreviouslyRemovedSupport = false;
     // TODO: [HUDI-9668]
     configs.floatToDoubleSupport = false
     configs.intToDecimalBytesSupport = false
