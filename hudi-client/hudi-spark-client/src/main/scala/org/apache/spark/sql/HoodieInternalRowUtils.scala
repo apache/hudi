@@ -188,7 +188,7 @@ object HoodieInternalRowUtils {
       fieldNamesStack.push(newField.name)
 
       val (fieldWriter, prevFieldPos): (RowFieldUpdater, Int) =
-        prevStructType.getFieldIndex(lookupRenamedField(createFullName(fieldNamesStack), renamedColumnsMap)) match {
+        prevStructType.getFieldIndex(lookupRenamedField(newField.name, createFullName(fieldNamesStack), renamedColumnsMap)) match {
           case Some(prevFieldPos) =>
             val prevField = prevStructType(prevFieldPos)
             (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNamesStack), prevFieldPos)
@@ -404,9 +404,14 @@ object HoodieInternalRowUtils {
     }
   }
 
-  private def lookupRenamedField(newFieldQualifiedName: String, renamedColumnsMap: JMap[String, String]) = {
-    val prevFieldQualifiedName = renamedColumnsMap.getOrDefault(newFieldQualifiedName, newFieldQualifiedName)
-    val prevFieldQualifiedNameParts = prevFieldQualifiedName.split("\\.")
+  private def lookupRenamedField(newFieldName: String,
+                                 newFieldQualifiedName: String,
+                                 renamedColumnsMap: JMap[String, String]): String = {
+    val renamed = renamedColumnsMap.get(newFieldQualifiedName)
+    if (renamed == null) {
+      return newFieldName
+    }
+    val prevFieldQualifiedNameParts = renamed.split("\\.")
     val prevFieldName = prevFieldQualifiedNameParts(prevFieldQualifiedNameParts.length - 1)
 
     prevFieldName
