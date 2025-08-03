@@ -70,7 +70,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final HoodieTableMetaClient metaClient;
   private final InputSplit inputSplit;
-  private final boolean couldHaveLogFiles;
   private final Option<String[]> partitionPathFields;
   private final List<String> orderingFieldNames;
   private final HoodieStorage storage;
@@ -94,7 +93,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                 FileGroupRecordBufferLoader<T> recordBufferLoader) {
     this.readerContext = readerContext;
     this.recordBufferLoader = recordBufferLoader;
-    this.couldHaveLogFiles = recordBufferLoader.hasLogFiles();
     this.fileGroupUpdateCallback = updateCallback;
     this.metaClient = hoodieTableMetaClient;
     this.storage = storage;
@@ -130,14 +128,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
-    if (couldHaveLogFiles && inputSplit.getLogFiles().isEmpty()) {
+    Option<Pair<HoodieFileGroupRecordBuffer<T>, List<String>>> initializationResultOpt = recordBufferLoader.getRecordBuffer(
+        readerContext, storage, inputSplit, orderingFieldNames, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback);
+    if (initializationResultOpt.isEmpty()) {
       this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
     } else {
       this.baseFileIterator = iter;
-      Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(
-          readerContext, storage, inputSplit, orderingFieldNames, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback);
-      recordBuffer = initializationResult.getLeft();
-      validBlockInstants = initializationResult.getRight();
+      recordBuffer = initializationResultOpt.get().getLeft();
+      validBlockInstants = initializationResultOpt.get().getRight();
       recordBuffer.setBaseFileIterator(baseFileIterator);
     }
   }

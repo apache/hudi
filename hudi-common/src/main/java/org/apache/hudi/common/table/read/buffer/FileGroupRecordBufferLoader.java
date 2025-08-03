@@ -41,7 +41,7 @@ import java.util.Map;
  */
 public interface FileGroupRecordBufferLoader<T> {
 
-  Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  Option<Pair<HoodieFileGroupRecordBuffer<T>, List<String>>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                      HoodieStorage storage,
                                                                      InputSplit inputSplit,
                                                                      List<String> orderingFieldNames,
@@ -50,10 +50,6 @@ public interface FileGroupRecordBufferLoader<T> {
                                                                      ReaderParameters readerParameters,
                                                                      HoodieReadStats readStats,
                                                                      Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback);
-
-  default boolean hasLogFiles() {
-    return true;
-  }
 
   static <T> FileGroupRecordBufferLoader<T> createDefault() {
     return DefaultFileGroupRecordBufferLoader.getInstance();

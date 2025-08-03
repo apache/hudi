@@ -51,7 +51,7 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
   }
 
   @Override
-  public Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  public Option<Pair<HoodieFileGroupRecordBuffer<T>, List<String>>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                             HoodieStorage storage,
                                                                             InputSplit inputSplit,
                                                                             List<String> orderingFieldNames,
@@ -60,20 +60,24 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
                                                                             ReaderParameters readerParameters,
                                                                             HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    FileGroupRecordBuffer<T> recordBuffer = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
-        readerParameters, readStats, fileGroupUpdateCallback);
-    return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, recordBuffer));
-
+    Option<FileGroupRecordBuffer<T>> recordBufferOpt = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
+        readerParameters, readStats, fileGroupUpdateCallback, false);
+    return recordBufferOpt.map(recordBuffer -> Pair.of(recordBufferOpt.get(), scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props,
+        readerParameters, readStats, recordBufferOpt.get())));
   }
 
-  protected FileGroupRecordBuffer getFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+  protected Option<FileGroupRecordBuffer<T>> getFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                                            InputSplit inputSplit,
                                                            List<String> orderingFieldNames,
                                                            HoodieTableMetaClient hoodieTableMetaClient,
                                                            TypedProperties props,
                                                            ReaderParameters readerParameters,
                                                            HoodieReadStats readStats,
-                                                           Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
+                                                           Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback,
+                                                                      boolean ignoreNoLogFiles) {
+    if (!ignoreNoLogFiles && inputSplit.getLogFiles().isEmpty()) {
+      return Option.empty();
+    }
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
@@ -92,6 +96,6 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
-    return recordBuffer;
+    return Option.of(recordBuffer);
   }
 }

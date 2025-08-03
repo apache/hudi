@@ -56,12 +56,7 @@ public class RecordsBasedFileGroupRecordBufferLoader<T> extends DefaultFileGroup
   }
 
   @Override
-  public boolean hasLogFiles() {
-    return false;
-  }
-
-  @Override
-  public Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  public Option<Pair<HoodieFileGroupRecordBuffer<T>, List<String>>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                             HoodieStorage storage,
                                                                             InputSplit inputSplit,
                                                                             List<String> orderingFieldNames,
@@ -70,16 +65,18 @@ public class RecordsBasedFileGroupRecordBufferLoader<T> extends DefaultFileGroup
                                                                             ReaderParameters readerParameters,
                                                                             HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    FileGroupRecordBuffer<T> recordBuffer = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
-        readerParameters, readStats, fileGroupUpdateCallback);
+    Option<FileGroupRecordBuffer<T>> recordBufferOpt = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
+        readerParameters, readStats, fileGroupUpdateCallback, true);
 
-    toBeMergedRecords.forEach((key, value) -> {
-      try {
-        recordBuffer.processNextDataRecord(value, key);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to process next toBeMergedRecord ", e);
-      }
+    return recordBufferOpt.map(recordBuffer -> {
+      toBeMergedRecords.forEach((key, value) -> {
+        try {
+          recordBuffer.processNextDataRecord(value, key);
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to process next toBeMergedRecord ", e);
+        }
+      });
+      return Pair.of(recordBufferOpt.get(), Collections.emptyList());
     });
-    return Pair.of(recordBuffer, Collections.emptyList());
   }
 }
