@@ -785,7 +785,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   static class DummyRecordContext extends RecordContext<InternalRow> {
 
     public DummyRecordContext(HoodieTableConfig tableConfig) {
-      super(tableConfig, tableConfig.populateMetaFields());
+      super(tableConfig);
     }
 
     @Override

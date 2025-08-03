@@ -85,17 +85,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       List<ExpressionPredicates.Predicate> predicates,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt) {
-    this(storageConfiguration, internalSchemaManager, predicates, tableConfig, instantRangeOpt, tableConfig.populateMetaFields());
-  }
-
-  public FlinkRowDataReaderContext(
-      StorageConfiguration<?> storageConfiguration,
-      Supplier<InternalSchemaManager> internalSchemaManager,
-      List<ExpressionPredicates.Predicate> predicates,
-      HoodieTableConfig tableConfig,
-      Option<InstantRange> instantRangeOpt,
-      boolean shouldUseMetaFields) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, Option.empty(), new FlinkRecordContext(tableConfig, storageConfiguration, shouldUseMetaFields));
+    super(storageConfiguration, tableConfig, instantRangeOpt, Option.empty(), new FlinkRecordContext(tableConfig, storageConfiguration));
     this.tableConfig = tableConfig;
     this.internalSchemaManager = internalSchemaManager;
     this.predicates = predicates;

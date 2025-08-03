@@ -82,16 +82,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                                     ObjectInspectorCache objectInspectorCache,
                                     StorageConfiguration<?> storageConfiguration,
                                     HoodieTableConfig tableConfig) {
-    this(readerCreator, partitionCols, objectInspectorCache, storageConfiguration, tableConfig, tableConfig.populateMetaFields());
-  }
-
-  protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
-                                    List<String> partitionCols,
-                                    ObjectInspectorCache objectInspectorCache,
-                                    StorageConfiguration<?> storageConfiguration,
-                                    HoodieTableConfig tableConfig,
-                                    boolean shouldUseMetaFields) {
-    super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new HiveRecordContext(tableConfig, objectInspectorCache, shouldUseMetaFields));
+    super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new HiveRecordContext(tableConfig, storageConfiguration, objectInspectorCache));
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);

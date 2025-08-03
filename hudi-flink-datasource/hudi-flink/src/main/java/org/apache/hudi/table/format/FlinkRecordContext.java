@@ -45,9 +45,6 @@ import org.apache.flink.types.RowKind;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Flink record context for reading and transforming RowData records.
- */
 public class FlinkRecordContext extends RecordContext<RowData> {
 
   private final boolean utcTimezone;
@@ -57,8 +54,8 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   // semantics is lost.
   private RecordKeyToRowDataConverter recordKeyRowConverter;
 
-  public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf, boolean shouldUseMetaFields) {
-    super(tableConfig, shouldUseMetaFields);
+  public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf) {
+    super(tableConfig);
     this.utcTimezone = storageConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(),
         FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
   }

@@ -48,8 +48,8 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   // This is temporarily required as we migrate away from payloads.
   private final boolean requiresPayloadRecords;
 
-  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords, boolean shouldUseMetaFields) {
-    super(tableConfig, shouldUseMetaFields);
+  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords) {
+    super(tableConfig);
     this.payloadClass = payloadClass;
     this.typeConverter = new AvroJavaTypeConverter();
     this.requiresPayloadRecords = requiresPayloadRecords;

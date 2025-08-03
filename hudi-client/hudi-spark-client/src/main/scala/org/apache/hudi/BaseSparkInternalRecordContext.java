@@ -41,13 +41,10 @@ import java.util.Map;
 
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
-/**
- * Base Spark record context for reading Spark InternalRow records
- */
 public abstract class BaseSparkInternalRecordContext extends RecordContext<InternalRow> {
 
-  public BaseSparkInternalRecordContext(HoodieTableConfig tableConfig, boolean shouldUseMetaFields) {
-    super(tableConfig, shouldUseMetaFields);
+  public BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
+    super(tableConfig);
   }
 
   public static Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {

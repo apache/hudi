@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
@@ -102,7 +103,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    */
   public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
     HoodieReaderContext<T> readerContext =
-        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps(), false)
+        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps())
             .getContext();
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
     readerContext.initRecordMerger(table.getConfig().getProps());
@@ -110,6 +111,12 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     HoodieRecordMerger recordMerger = HoodieRecordUtils.mergerToPreCombineMode(table.getConfig().getRecordMerger());
     RecordMergeMode recordMergeMode = HoodieTableConfig.inferCorrectMergingBehavior(null, table.getConfig().getPayloadClass(), null,
         String.join(",", orderingFieldNames), tableConfig.getTableVersion()).getLeft();
+    Schema recordSchema;
+    if (StringUtils.nonEmpty(table.getConfig().getPartialUpdateSchema())) {
+      recordSchema = new Schema.Parser().parse(table.getConfig().getPartialUpdateSchema());
+    } else {
+      recordSchema = new Schema.Parser().parse(table.getConfig().getWriteSchema());
+    }
     BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         recordMergeMode,
@@ -117,7 +124,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         Option.ofNullable(recordMerger),
         orderingFieldNames,
         Option.ofNullable(table.getConfig().getPayloadClass()),
-        new Schema.Parser().parse(table.getConfig().getWriteSchema()),
+        recordSchema,
         table.getConfig().getProps(),
         tableConfig.getPartialUpdateMode());
     return deduplicateRecords(
