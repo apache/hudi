@@ -70,10 +70,12 @@ public class BufferedRecord<T> implements Serializable {
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
     String recordKey = recordContext.getRecordKey(record, schema);
-    return forRecordWithContext(record, schema, recordContext, orderingFieldNames, recordKey, isDelete);
+    Integer schemaId = recordContext.encodeAvroSchema(schema);
+    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, String recordKey, boolean isDelete) {
+  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);

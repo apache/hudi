@@ -141,28 +141,16 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
                                        HoodieReaderContext<T> readerContext,
                                        String[] orderingFieldNames);
 
-  public static <T> Option<BufferedRecord<T>> merge(HoodieRecord<T> newRecord,
-                                                    HoodieRecord<T> oldRecord,
-                                                    Schema newSchema,
-                                                    Schema oldSchema,
-                                                    RecordContext<T> recordContext,
-                                                    String[] orderingFieldNames,
-                                                    BufferedRecordMerger<T> recordMerger,
-                                                    TypedProperties properties) throws IOException {
-    // Construct new buffered record.
-    BufferedRecord<T> newBufferedRecord = BufferedRecord.forRecordWithContext(newRecord, newSchema, recordContext, properties, orderingFieldNames);
-    // Construct old buffered record.
-    BufferedRecord<T> oldBufferedRecord = BufferedRecord.forRecordWithContext(oldRecord, oldSchema, recordContext, properties, orderingFieldNames);
-    // Run merge.
-    return recordMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
-  }
-
   protected static <T> HoodieRecord<T> reduceRecords(TypedProperties props, BufferedRecordMerger<T> recordMerger, String[] orderingFieldNames,
                                                      HoodieRecord<T> previous, HoodieRecord<T> next, Schema schema, RecordContext<T> recordContext) {
     try {
       // NOTE: The order of previous and next is uncertain within a batch in "reduceByKey".
       // If the return value is empty, it means the previous should be chosen.
-      Option<BufferedRecord<T>> merged = merge(next, previous, schema, schema, recordContext, orderingFieldNames, recordMerger, props);
+      BufferedRecord<T> newBufferedRecord = BufferedRecord.forRecordWithContext(next, schema, recordContext, props, orderingFieldNames);
+      // Construct old buffered record.
+      BufferedRecord<T> oldBufferedRecord = BufferedRecord.forRecordWithContext(previous, schema, recordContext, props, orderingFieldNames);
+      // Run merge.
+      Option<BufferedRecord<T>> merged = recordMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
       // NOTE: For merge mode based merging, it returns non-null.
       //       For mergers / payloads based merging, it may return null.
       HoodieRecord<T> reducedRecord = merged.map(recordContext::constructHoodieRecord).orElse(previous);

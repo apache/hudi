@@ -335,8 +335,9 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       spark.sql(
         s"""
            |merge into $tableName t0
-           |using ( select 1 as id, 'a1' as name, 12.0 as price, 999 as ts
-           |union select 3 as id, 'a3' as name, 25.0 as price, 1260 as ts) s0
+           |using ( select 1 as id, 1.0 as price, 100 as ts
+           |union select 1 as id, 12.0 as price, 999 as ts
+           |union select 3 as id, 25.0 as price, 1260 as ts) s0
            |on t0.id = s0.id
            |when matched then update set price = s0.price, _ts = s0.ts
            |""".stripMargin)
