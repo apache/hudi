@@ -65,9 +65,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * from different Hudi releases. Tests round-trip operations: upgrade one version up,
  * then downgrade back to original version.
  */
-public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
+public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestUpgradeDowngradeFixtures.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestUpgradeDowngrade.class);
   private static final String FIXTURES_BASE_PATH = "/upgrade-downgrade-fixtures/mor-tables/";
   
   @TempDir
@@ -86,9 +86,9 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("fixtureVersions")
-  public void testRoundTripUpgradeDowngrade(HoodieTableVersion originalVersion) throws Exception {
-    LOG.info("Testing round-trip upgrade/downgrade for version {}", originalVersion);
+  @MethodSource("upgradeVersions")
+  public void testUpgradeOnly(HoodieTableVersion originalVersion) throws Exception {
+    LOG.info("Testing upgrade for version {}", originalVersion);
     
     // Load fixture table
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
@@ -105,8 +105,8 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
     // Create write config for upgrade operations
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
     
-    // Step 1: Upgrade to next version
-    LOG.info("Step 1: Upgrading from {} to {}", originalVersion, targetVersion);
+    // Perform upgrade to next version
+    LOG.info("Upgrading from {} to {}", originalVersion, targetVersion);
     new UpgradeDowngrade(originalMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
         .run(targetVersion, null);
     
@@ -115,29 +115,56 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .setConf(storageConf.newInstance())
         .setBasePath(originalMetaClient.getBasePath())
         .build();
+    
+    // Validate upgrade was successful
     assertTableVersionOnDataAndMetadataTable(upgradedMetaClient, targetVersion);
     validateVersionSpecificProperties(upgradedMetaClient, originalVersion, targetVersion);
     performDataValidationOnTable(upgradedMetaClient, "after upgrade");
 
-    // Step 2: Downgrade back to original version
-    LOG.info("Step 2: Downgrading from {} back to {}", targetVersion, originalVersion);
-    new UpgradeDowngrade(upgradedMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
-        .run(originalVersion, null);
-    
-    // Create fresh meta client to read updated table configuration after downgrade
-    HoodieTableMetaClient finalMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance())
-        .setBasePath(upgradedMetaClient.getBasePath())
-        .build();
-    assertTableVersionOnDataAndMetadataTable(finalMetaClient, originalVersion);
-    validateVersionSpecificProperties(finalMetaClient, targetVersion, originalVersion);
-    performDataValidationOnTable(finalMetaClient, "after round-trip");
-
-    LOG.info("Successfully completed round-trip test for version {}", originalVersion);
+    LOG.info("Successfully completed upgrade test for version {} -> {}", originalVersion, targetVersion);
   }
 
   @ParameterizedTest
-  @MethodSource("fixtureVersions")
+  @MethodSource("downgradeVersions")
+  public void testDowngradeOnly(HoodieTableVersion targetVersion) throws Exception {
+    LOG.info("Testing downgrade for version {}", targetVersion);
+    
+    // Load fixture table at target version
+    HoodieTableMetaClient targetMetaClient = loadFixtureTable(targetVersion);
+    assertEquals(targetVersion, targetMetaClient.getTableConfig().getTableVersion(),
+        "Fixture table should be at expected version");
+    
+    // Calculate source version (previous version down)
+    HoodieTableVersion sourceVersion = getPreviousVersion(targetVersion);
+    if (sourceVersion == null) {
+      LOG.info("Skipping downgrade test for version {} (no lower version available)", targetVersion);
+      return;
+    }
+    
+    // Create write config for downgrade operations
+    HoodieWriteConfig config = createWriteConfig(targetMetaClient, true);
+    
+    // Perform downgrade to previous version
+    LOG.info("Downgrading from {} to {}", targetVersion, sourceVersion);
+    new UpgradeDowngrade(targetMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(sourceVersion, null);
+    
+    // Create fresh meta client to read updated table configuration after downgrade
+    HoodieTableMetaClient downgradedMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf.newInstance())
+        .setBasePath(targetMetaClient.getBasePath())
+        .build();
+    
+    // Validate downgrade was successful
+    assertTableVersionOnDataAndMetadataTable(downgradedMetaClient, sourceVersion);
+    validateVersionSpecificProperties(downgradedMetaClient, targetVersion, sourceVersion);
+    performDataValidationOnTable(downgradedMetaClient, "after downgrade");
+
+    LOG.info("Successfully completed downgrade test for version {} -> {}", targetVersion, sourceVersion);
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableVersions")
   public void testAutoUpgradeDisabled(HoodieTableVersion originalVersion) throws Exception {
     LOG.info("Testing auto-upgrade disabled for version {}", originalVersion);
     
@@ -165,13 +192,15 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
         .build();
     assertEquals(originalVersion, unchangedMetaClient.getTableConfig().getTableVersion(),
         "Table version should remain unchanged when auto-upgrade is disabled");
+    validateSpecificPropertiesForVersion(unchangedMetaClient.getTableConfig(), originalVersion);
+    validateVersionSpecificProperties(unchangedMetaClient, originalVersion, originalVersion);
     performDataValidationOnTable(unchangedMetaClient, "after auto-upgrade disabled test");
     
     LOG.info("Auto-upgrade disabled test passed for version {}", originalVersion);
   }
 
   @ParameterizedTest
-  @MethodSource("fixtureVersions") 
+  @MethodSource("tableVersions")
   public void testRollbackAndCompactionBehavior(HoodieTableVersion originalVersion) throws Exception {
     LOG.info("Testing rollback and compaction behavior for version {}", originalVersion);
     
@@ -324,6 +353,26 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
   }
 
   /**
+   * Get the previous version down from the current version.
+   */
+  private HoodieTableVersion getPreviousVersion(HoodieTableVersion current) {
+    switch (current) {
+      case NINE:
+        return HoodieTableVersion.EIGHT;
+      case EIGHT:
+        return HoodieTableVersion.SIX;
+      case SIX:
+        return HoodieTableVersion.FIVE;
+      case FIVE:
+        return HoodieTableVersion.FOUR;
+      case FOUR:
+        return null; // No lower version available
+      default:
+        return null;
+    }
+  }
+
+  /**
    * Get fixture zip file name for a given table version.
    */
   private String getFixtureName(HoodieTableVersion version) {
@@ -344,15 +393,39 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
   }
 
   /**
-   * Provide test parameters for fixture versions.
+   * Provide test parameters for all table versions.
    */
-  private static Stream<Arguments> fixtureVersions() {
+  private static Stream<Arguments> tableVersions() {
     return Stream.of(
         Arguments.of(HoodieTableVersion.FOUR),   // Hudi 0.11.1
         Arguments.of(HoodieTableVersion.FIVE),   // Hudi 0.12.2
         Arguments.of(HoodieTableVersion.SIX),    // Hudi 0.14
         Arguments.of(HoodieTableVersion.EIGHT),  // Hudi 1.0.2
         Arguments.of(HoodieTableVersion.NINE)    // Hudi 1.1
+    );
+  }
+
+  /**
+   * Provide test parameters for upgrade versions (V4-V8).
+   */
+  private static Stream<Arguments> upgradeVersions() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.FOUR),   // V4 -> V5
+        Arguments.of(HoodieTableVersion.FIVE),   // V5 -> V6  
+        Arguments.of(HoodieTableVersion.SIX),    // V6 -> V8
+        Arguments.of(HoodieTableVersion.EIGHT)   // V8 -> V9
+    );
+  }
+
+  /**
+   * Provide test parameters for downgrade versions (V9 down to V5).
+   */
+  private static Stream<Arguments> downgradeVersions() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.NINE),   // V9 -> V8
+        Arguments.of(HoodieTableVersion.EIGHT),  // V8 -> V6
+        Arguments.of(HoodieTableVersion.SIX),    // V6 -> V5
+        Arguments.of(HoodieTableVersion.FIVE)    // V5 -> V4
     );
   }
 
@@ -431,6 +504,33 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
       validateUpgradeProperties(fromVersion, toVersion, metaClient, tableConfig);
     } else if (fromVersion.versionCode() > toVersion.versionCode()) {
       validateDowngradeProperties(fromVersion, toVersion, metaClient, tableConfig);
+    }
+  }
+
+  /**
+   * Validate specific properties for a given table version.
+   */
+  private void validateSpecificPropertiesForVersion(HoodieTableConfig tableConfig, HoodieTableVersion version) throws IOException {
+    switch (version) {
+      case FOUR:
+        validateVersion4Properties(tableConfig);
+        break;
+      case FIVE:
+        validateVersion5Properties(tableConfig);
+        break;
+      case SIX:
+        validateVersion6Properties(tableConfig);
+        break;
+      case EIGHT:
+        validateVersion8Properties(tableConfig);
+        break;
+      case NINE:
+        // Note: validateVersion9Properties requires metaClient, so we'll skip this for now
+        // or we could enhance this method to accept metaClient as well
+        LOG.warn("Skipping version 9 specific validation as it requires metaClient");
+        break;
+      default:
+        LOG.warn("No specific property validation for version {}", version);
     }
   }
 
@@ -594,7 +694,7 @@ public class TestUpgradeDowngradeFixtures extends HoodieSparkClientTestHarness {
       throw new RuntimeException("Data validation failed " + stage, e);
     }
   }
-  
+
   /**
    * Perform simple read validation and return the total row count.
    */

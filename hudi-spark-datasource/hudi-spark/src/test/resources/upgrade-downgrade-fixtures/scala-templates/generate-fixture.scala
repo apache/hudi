@@ -41,6 +41,11 @@ df.write.format("hudi").
   option("hoodie.table.name", tableName).
   option("hoodie.datasource.write.table.type", "MERGE_ON_READ").
   option("hoodie.datasource.write.operation", "insert").
+  option("hoodie.index.bloom.num_entries", "20").
+  option("hoodie.bloom.index.false.positive.rate", "0.1").
+  option("hoodie.parquet.max.file.size", "51200"). // 50KB max file size
+  option("hoodie.parquet.small.file.limit", "25600"). // 25KB small file threshold
+  option("hoodie.parquet.compression.codec", "snappy").
   mode(SaveMode.Overwrite).
   save(basePath)
 
@@ -62,6 +67,11 @@ updateDf.write.format("hudi").
   option("hoodie.table.name", tableName).
   option("hoodie.datasource.write.table.type", "MERGE_ON_READ").
   option("hoodie.datasource.write.operation", "upsert").
+  option("hoodie.index.bloom.num_entries", "20").
+  option("hoodie.bloom.index.false.positive.rate", "0.1").
+  option("hoodie.parquet.max.file.size", "51200"). // 50KB max file size
+  option("hoodie.parquet.small.file.limit", "25600"). // 25KB small file threshold
+  option("hoodie.parquet.compression.codec", "snappy").
   mode(SaveMode.Append).
   save(basePath)
 
@@ -82,6 +92,11 @@ insertDf.write.format("hudi").
   option("hoodie.table.name", tableName).
   option("hoodie.datasource.write.table.type", "MERGE_ON_READ").
   option("hoodie.datasource.write.operation", "insert").
+  option("hoodie.index.bloom.num_entries", "20").
+  option("hoodie.bloom.index.false.positive.rate", "0.1").
+  option("hoodie.parquet.max.file.size", "51200"). // 50KB max file size
+  option("hoodie.parquet.small.file.limit", "25600"). // 25KB small file threshold
+  option("hoodie.parquet.compression.codec", "snappy").
   mode(SaveMode.Append).
   save(basePath)
 
