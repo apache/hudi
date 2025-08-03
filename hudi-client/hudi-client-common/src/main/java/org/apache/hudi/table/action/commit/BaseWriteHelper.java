@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -118,7 +117,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         Option.ofNullable(recordMerger),
         orderingFieldNames,
         Option.ofNullable(table.getConfig().getPayloadClass()),
-        new SerializableSchema(table.getConfig().getSchema()).get(),
+        new Schema.Parser().parse(table.getConfig().getWriteSchema()),
         table.getConfig().getProps(),
         tableConfig.getPartialUpdateMode());
     return deduplicateRecords(
