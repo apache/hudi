@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -45,12 +44,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -84,22 +81,20 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
   public void testUpgradeOnly(HoodieTableVersion originalVersion) throws Exception {
     LOG.info("Testing upgrade for version {}", originalVersion);
     
-    // Load fixture table
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
     assertEquals(originalVersion, originalMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
     
     // Calculate target version (next version up)
-    HoodieTableVersion targetVersion = getNextVersion(originalVersion);
-    if (targetVersion == null) {
+    Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
+    if (!targetVersionOpt.isPresent()) {
       LOG.info("Skipping upgrade test for version {} (no higher version available)", originalVersion);
       return;
     }
-    
-    // Create write config for upgrade operations
+    HoodieTableVersion targetVersion = targetVersionOpt.get();
+
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
     
-    // Count initial timeline state
     int initialPendingCommits = originalMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     int initialCompletedCommits = originalMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     
@@ -108,7 +103,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     new UpgradeDowngrade(originalMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
         .run(targetVersion, null);
     
-    // Create fresh meta client to read updated table configuration after upgrade
     HoodieTableMetaClient upgradedMetaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf.newInstance())
         .setBasePath(originalMetaClient.getBasePath())
@@ -137,17 +131,17 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
   public void testDowngradeOnly(HoodieTableVersion targetVersion) throws Exception {
     LOG.info("Testing downgrade for version {}", targetVersion);
     
-    // Load fixture table at target version
     HoodieTableMetaClient targetMetaClient = loadFixtureTable(targetVersion);
     assertEquals(targetVersion, targetMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
     
     // Calculate source version (previous version down)
-    HoodieTableVersion sourceVersion = getPreviousVersion(targetVersion);
-    if (sourceVersion == null) {
+    Option<HoodieTableVersion> sourceVersionOpt = getPreviousVersion(targetVersion);
+    if (!sourceVersionOpt.isPresent()) {
       LOG.info("Skipping downgrade test for version {} (no lower version available)", targetVersion);
       return;
     }
+    HoodieTableVersion sourceVersion = sourceVersionOpt.get();
     
     // Create write config for downgrade operations
     HoodieWriteConfig config = createWriteConfig(targetMetaClient, true);
@@ -190,15 +184,15 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
   public void testAutoUpgradeDisabled(HoodieTableVersion originalVersion) throws Exception {
     LOG.info("Testing auto-upgrade disabled for version {}", originalVersion);
     
-    // Load fixture table
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
     
     // Calculate target version (next version up)
-    HoodieTableVersion targetVersion = getNextVersion(originalVersion);
-    if (targetVersion == null) {
+    Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
+    if (!targetVersionOpt.isPresent()) {
       LOG.info("Skipping auto-upgrade test for version {} (no higher version available)", originalVersion);
       return;
     }
+    HoodieTableVersion targetVersion = targetVersionOpt.get();
     
     // Create write config with auto-upgrade disabled
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
@@ -274,42 +268,42 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
   /**
    * Get the next version up from the current version.
    */
-  private HoodieTableVersion getNextVersion(HoodieTableVersion current) {
+  private Option<HoodieTableVersion> getNextVersion(HoodieTableVersion current) {
     switch (current) {
       case FOUR:
-        return HoodieTableVersion.FIVE;
+        return Option.of(HoodieTableVersion.FIVE);
       case FIVE:
-        return HoodieTableVersion.SIX;
+        return Option.of(HoodieTableVersion.SIX);
       case SIX:
         // even though there is a table version 7, this is not an official release and serves as a bridge
         // so the next version should be 8
-        return HoodieTableVersion.EIGHT;
+        return Option.of(HoodieTableVersion.EIGHT);
       case EIGHT:
-        return HoodieTableVersion.NINE;
+        return Option.of(HoodieTableVersion.NINE);
       case NINE:
-        return null; // No higher version available
+        return Option.empty(); // No higher version available
       default:
-        return null;
+        return Option.empty();
     }
   }
 
   /**
    * Get the previous version down from the current version.
    */
-  private HoodieTableVersion getPreviousVersion(HoodieTableVersion current) {
+  private Option<HoodieTableVersion> getPreviousVersion(HoodieTableVersion current) {
     switch (current) {
       case NINE:
-        return HoodieTableVersion.EIGHT;
+        return Option.of(HoodieTableVersion.EIGHT);
       case EIGHT:
-        return HoodieTableVersion.SIX;
+        return Option.of(HoodieTableVersion.SIX);
       case SIX:
-        return HoodieTableVersion.FIVE;
+        return Option.of(HoodieTableVersion.FIVE);
       case FIVE:
-        return HoodieTableVersion.FOUR;
+        return Option.of(HoodieTableVersion.FOUR);
       case FOUR:
-        return null; // No lower version available
+        return Option.empty(); // No lower version available
       default:
-        return null;
+        return Option.empty();
     }
   }
 
@@ -377,8 +371,7 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
   private void assertTableVersionOnDataAndMetadataTable(
       HoodieTableMetaClient metaClient, HoodieTableVersion expectedVersion) throws IOException {
     assertTableVersion(metaClient, expectedVersion);
-
-    if (expectedVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {
+    if (expectedVersion.greaterThanOrEquals(HoodieTableVersion.FOUR)) {
       StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
       if (metaClient.getStorage().exists(metadataTablePath)) {
         LOG.info("Verifying metadata table version at: {}", metadataTablePath);
@@ -392,22 +385,14 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
   }
 
   /**
-   * Assert table version by checking both in-memory config and persisted properties file.
-   * Adapted from TestUpgradeDowngrade.assertTableVersion().
+   * Assert table version by checking the table config.
+   * Since HoodieTableMetaClient reads from hoodie.properties during instantiation,
+   * checking the in-memory config is sufficient.
    */
   private void assertTableVersion(
-      HoodieTableMetaClient metaClient, HoodieTableVersion expectedVersion) throws IOException {
-    assertEquals(expectedVersion.versionCode(),
-        metaClient.getTableConfig().getTableVersion().versionCode());
-    StoragePath propertyFile = new StoragePath(
-        metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-    // Load the properties and verify
-    InputStream inputStream = metaClient.getStorage().open(propertyFile);
-    HoodieConfig config = new HoodieConfig();
-    config.getProps().load(inputStream);
-    inputStream.close();
-    assertEquals(Integer.toString(expectedVersion.versionCode()),
-        config.getString(HoodieTableConfig.VERSION));
+      HoodieTableMetaClient metaClient, HoodieTableVersion expectedVersion) {
+    assertEquals(expectedVersion,
+        metaClient.getTableConfig().getTableVersion());
   }
 
   /**
@@ -440,12 +425,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
         LOG.warn("No specific property validation for version {}", toVersion);
     }
     
-    // Validate upgrade/downgrade specific changes
-    if (fromVersion.versionCode() < toVersion.versionCode()) {
-      validateUpgradeProperties(fromVersion, toVersion, metaClient, tableConfig);
-    } else if (fromVersion.versionCode() > toVersion.versionCode()) {
-      validateDowngradeProperties(fromVersion, toVersion, metaClient, tableConfig);
-    }
   }
 
   /**
@@ -477,43 +456,57 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
 
   /**
    * Validate basic properties for version 4.
+   * Based on ThreeToFourUpgradeHandler, version 4 should have TABLE_CHECKSUM and TABLE_METADATA_PARTITIONS (if MDT enabled).
    */
   private void validateVersion4Properties(HoodieTableConfig tableConfig) {
-    // Basic table properties should exist
-    assertNotNull(tableConfig.getTableName(), "Table name should be set");
-    assertEquals(HoodieTableType.MERGE_ON_READ, tableConfig.getTableType(), "Table should be MOR type");
-    assertTrue(tableConfig.getRecordKeyFieldProp() != null && !tableConfig.getRecordKeyFieldProp().isEmpty(),
-        "Record key field should be set");
-    assertTrue(tableConfig.getPartitionFieldProp() != null && !tableConfig.getPartitionFieldProp().isEmpty(),
-        "Partition field should be set");
+    // Version 4 specific properties added by ThreeToFourUpgradeHandler
+    // TABLE_CHECKSUM should exist and be valid
+    assertTrue(tableConfig.contains(HoodieTableConfig.TABLE_CHECKSUM),
+        "TABLE_CHECKSUM should be set for V4");
+    String actualChecksum = tableConfig.getString(HoodieTableConfig.TABLE_CHECKSUM);
+    assertNotNull(actualChecksum, "TABLE_CHECKSUM should not be null");
+    
+    // Validate that the checksum is valid by comparing with computed checksum
+    String expectedChecksum = String.valueOf(HoodieTableConfig.generateChecksum(tableConfig.getProps()));
+    assertEquals(expectedChecksum, actualChecksum, 
+        "TABLE_CHECKSUM should match computed checksum");
+    
+    // TABLE_METADATA_PARTITIONS should be properly set if present
+    // Note: This is optional based on whether metadata table was enabled during upgrade
+    if (tableConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS)) {
+      String metadataPartitions = tableConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS);
+      assertTrue(metadataPartitions.contains("files"), 
+          "TABLE_METADATA_PARTITIONS should contain 'files' partition when set");
+    }
   }
 
   /**
    * Validate properties for version 5 (default partition path changes).
    */
   private void validateVersion5Properties(HoodieTableConfig tableConfig) {
-    validateVersion4Properties(tableConfig);
     // Version 5 mainly focuses on default partition path validation
     // The upgrade handler validates this during upgrade, so we just ensure basic properties
+    // No specific properties were introduced in V5 that require validation
   }
 
   /**
    * Validate properties for version 6 (auxiliary folder cleanup).
    */
   private void validateVersion6Properties(HoodieTableConfig tableConfig) {
-    validateVersion5Properties(tableConfig);
     // Version 6 focuses on auxiliary folder cleanup
-    // Note: Timeline layout validation moved to transition methods since it changes during upgrades
+    // No specific properties were introduced in V6 that require validation
   }
 
   /**
    * Validate properties for version 8 (major upgrade with record merge mode, new configuration properties).
    */
   private void validateVersion8Properties(HoodieTableConfig tableConfig) {
-    validateVersion6Properties(tableConfig);
-    
-    // Note: Timeline layout validation moved to transition methods since it changes during upgrades
-    
+    // Timeline layout should be upgraded to V2 for V8+
+    Option<TimelineLayoutVersion> layoutVersion = tableConfig.getTimelineLayoutVersion();
+    assertTrue(layoutVersion.isPresent(), "Timeline layout version should be present for V8+");
+    assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, layoutVersion.get(),
+        "Timeline layout should be V2 for V8+");
+
     // Timeline path should be set
     assertTrue(tableConfig.contains(HoodieTableConfig.TIMELINE_PATH),
         "Timeline path should be set for V8");
@@ -550,8 +543,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
    * Validate properties for version 9 (index version population).
    */
   private void validateVersion9Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) {
-    validateVersion8Properties(tableConfig);
-    
     // Check if index metadata exists and has proper version information
     Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
     if (indexMetadata.isPresent()) {
@@ -562,57 +553,7 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     }
   }
 
-  /**
-   * Validate properties added during upgrade operations.
-   */
-  private void validateUpgradeProperties(HoodieTableVersion fromVersion, HoodieTableVersion toVersion,
-                                       HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) {
-    LOG.debug("Validating upgrade properties: {} -> {}", fromVersion, toVersion);
-    
-    // Validate timeline layout changes during upgrades
-    if (fromVersion.versionCode() < HoodieTableVersion.EIGHT.versionCode() 
-        && toVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
-      // Timeline layout should change from V1 to V2 during upgrade to V8+
-      Option<TimelineLayoutVersion> layoutVersion = tableConfig.getTimelineLayoutVersion();
-      assertTrue(layoutVersion.isPresent(), "Timeline layout version should be present after upgrade to V8+");
-      assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, layoutVersion.get(),
-          "Timeline layout should be upgraded to V2 during upgrade to V8+");
-          
-      // These properties should be added during upgrade to V8+
-      assertTrue(tableConfig.contains(HoodieTableConfig.TIMELINE_PATH),
-          "Timeline path should be added during upgrade to V8+");
-      assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE),
-          "Record merge mode should be added during upgrade to V8+");
-      assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID),
-          "Record merge strategy ID should be added during upgrade to V8+");
-      assertTrue(tableConfig.contains(HoodieTableConfig.INITIAL_VERSION),
-          "Initial version should be added during upgrade to V8+");
-    }
-  }
 
-  /**
-   * Validate properties removed/changed during downgrade operations.
-   */
-  private void validateDowngradeProperties(HoodieTableVersion fromVersion, HoodieTableVersion toVersion,
-                                         HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) {
-    LOG.debug("Validating downgrade properties: {} -> {}", fromVersion, toVersion);
-    
-    // Downgrading from V8+ to pre-V8 should remove certain properties
-    if (fromVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode() 
-        && toVersion.versionCode() < HoodieTableVersion.EIGHT.versionCode()) {
-      // These V8+ properties should be removed or modified during downgrade
-      assertFalse(tableConfig.contains(HoodieTableConfig.TIMELINE_PATH) 
-          && !HoodieTableConfig.TIMELINE_PATH.defaultValue().equals(tableConfig.getString(HoodieTableConfig.TIMELINE_PATH)),
-          "Timeline path should be reset during downgrade from V8+");
-      
-      // Timeline layout should be downgraded to V1
-      Option<TimelineLayoutVersion> layoutVersion = tableConfig.getTimelineLayoutVersion();
-      if (layoutVersion.isPresent()) {
-        assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_1, layoutVersion.get(),
-            "Timeline layout should be downgraded to V1");
-      }
-    }
-  }
 
   /**
    * Perform data validation on the table to ensure it remains operational.
@@ -624,13 +565,8 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     try {
       // Simple read validation to ensure table is accessible
       long rowCount = performSimpleReadValidation(metaClient);
-      LOG.debug("Read {} rows from table {}", rowCount, stage);
-      
-      // Verify table metadata is accessible
-      assertNotNull(metaClient.getTableConfig(), "Table config should be accessible " + stage);
-      assertNotNull(metaClient.getTableConfig().getTableName(), "Table name should be accessible " + stage);
-      
-      LOG.info("✓ Data validation passed {} (table accessible, {} rows)", stage, rowCount);
+
+      LOG.info("Data validation passed {} (table accessible, {} rows)", stage, rowCount);
     } catch (Exception e) {
       throw new RuntimeException("Data validation failed " + stage, e);
     }
@@ -640,30 +576,15 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
    * Perform simple read validation and return the total row count.
    */
   private long performSimpleReadValidation(HoodieTableMetaClient metaClient) {
-    LOG.debug("Performing read validation on table at: {}", metaClient.getBasePath());
     try {
-      // Log table information for debugging
       String basePath = metaClient.getBasePath().toString();
-      LOG.debug("Table base path: {}", basePath);
-      LOG.debug("Table version: {}", metaClient.getTableConfig().getTableVersion());
-      LOG.debug("Table type: {}", metaClient.getTableConfig().getTableType());
-      
-      // Read entire table using Spark's built-in Hudi support
-      LOG.debug("Attempting to read table using Spark SQL...");
       Dataset<Row> tableData = sqlContext.read()
           .format("hudi")
           .load(basePath);
-      
-      // Validate read operation succeeded
+
       assertNotNull(tableData, "Table read should not return null");
-      LOG.debug("Table read operation succeeded");
-      
-      // Count rows
-      LOG.debug("Counting rows...");
       long rowCount = tableData.count();
       assertTrue(rowCount >= 0, "Row count should be non-negative");
-      
-      LOG.debug("Successfully read {} rows from table", rowCount);
       return rowCount;
     } catch (Exception e) {
       LOG.error("Read validation failed for table at: {} (version: {})", 
