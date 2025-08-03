@@ -56,11 +56,11 @@ public class BaseFileGroupRecordBuffer {
 
   protected static Map<Serializable, BufferedRecord> convertToBufferedRecordsMap(List<IndexedRecord> indexedRecords,
                                                                                HoodieReaderContext<IndexedRecord> readerContext,
-                                                                               TypedProperties props) {
+                                                                               TypedProperties props, String[] orderingFieldNames) {
     return indexedRecords.stream().map(rec -> {
       HoodieAvroIndexedRecord indexedRecord = new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec, null);
       return Pair.of(rec.get(0).toString(), (BufferedRecord) BufferedRecord.forRecordWithContext(indexedRecord, readerContext.getSchemaHandler().getRequestedSchema(),
-          readerContext, props));
+          readerContext.getRecordContext(), props, orderingFieldNames));
     }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
   }
 

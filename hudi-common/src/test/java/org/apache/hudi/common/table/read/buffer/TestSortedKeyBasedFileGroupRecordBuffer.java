@@ -124,7 +124,8 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseFileGroupRecordBuffer 
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.setRecordMerger(Option.ofNullable(null));
     Map<Serializable, BufferedRecord> inputRecords =
-        convertToBufferedRecordsMap(Arrays.asList(testIndexedRecord6Update, testIndexedRecord4LowerOrdering, testIndexedRecord1, testIndexedRecord2Update), readerContext, properties);
+        convertToBufferedRecordsMap(Arrays.asList(testIndexedRecord6Update, testIndexedRecord4LowerOrdering, testIndexedRecord1, testIndexedRecord2Update), readerContext, properties,
+            new String[]{"ts"});
     inputRecords.putAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker), false));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);

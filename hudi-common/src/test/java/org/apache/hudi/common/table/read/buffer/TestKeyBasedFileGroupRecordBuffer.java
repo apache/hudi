@@ -168,7 +168,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseFileGroupRecordBuffer {
         properties);
     readerContext.setSchemaHandler(schemaHandler);
     Map<Serializable, BufferedRecord> inputRecords = convertToBufferedRecordsMap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
-        testRecord4EarlierUpdate), readerContext, properties);
+        testRecord4EarlierUpdate), readerContext, properties, new String[]{"ts"});
     inputRecords.putAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), false));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.EVENT_TIME_ORDERING, Collections.singletonList("ts"), properties);
@@ -240,7 +240,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseFileGroupRecordBuffer {
         properties);
     readerContext.setSchemaHandler(schemaHandler);
     Map<Serializable, BufferedRecord> inputRecords = convertToBufferedRecordsMap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
-        testRecord4EarlierUpdate), readerContext, properties);
+        testRecord4EarlierUpdate), readerContext, properties, new String[]{});
     inputRecords.putAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.COMMIT_TIME_ORDERING, Collections.singletonList("ts"), properties);
@@ -318,7 +318,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseFileGroupRecordBuffer {
         properties);
     readerContext.setSchemaHandler(schemaHandler);
     Map<Serializable, BufferedRecord> inputRecords = convertToBufferedRecordsMap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
-        testRecord4EarlierUpdate), readerContext, properties);
+        testRecord4EarlierUpdate), readerContext, properties, new String[]{"ts"});
     inputRecords.putAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new HoodieAvroRecordMerger(),
         RecordMergeMode.CUSTOM, Collections.singletonList("ts"), properties);
@@ -396,7 +396,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseFileGroupRecordBuffer {
         properties);
     readerContext.setSchemaHandler(schemaHandler);
     Map<Serializable, BufferedRecord> inputRecords = convertToBufferedRecordsMap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
-        testRecord4EarlierUpdate), readerContext, properties);
+        testRecord4EarlierUpdate), readerContext, properties, new String[]{"ts"});
     inputRecords.putAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new TestKeyBasedFileGroupRecordBuffer.CustomMerger(),
         RecordMergeMode.CUSTOM, Collections.singletonList("ts"), properties);
