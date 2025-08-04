@@ -143,19 +143,24 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine && !precombineFields.isEmpty) {
-              val orderingVal = OrderingValues.create(
-                precombineFields,
-                JFunction.toJavaFunction[String, Comparable[_]](
-                  field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
-                    consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
-              DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, recordLocation)
+            val payloadClass = config.getPayloadClass
+            if (StringUtils.isNullOrEmpty(payloadClass)) {
+              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey, recordLocation)
             } else {
-              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getPayloadClass, recordLocation)
+              val hoodieRecord = if (shouldCombine && !precombineFields.isEmpty) {
+                val orderingVal = OrderingValues.create(
+                  precombineFields,
+                  JFunction.toJavaFunction[String, Comparable[_]](
+                    field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
+                      consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
+                DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
+                  config.getPayloadClass, recordLocation)
+              } else {
+                DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
+                  config.getPayloadClass, recordLocation)
+              }
+              hoodieRecord
             }
-            hoodieRecord
           }
         }).toJavaRDD()
 
