@@ -29,7 +29,7 @@ import java.util.Objects;
  * Represents a raw key for column stats indexed by partition, file and column.
  * This is different from ColumnStatsIndexPrefixRawKey which is used for prefix lookups.
  */
-public class ColumnStatsIndexRawKey implements RawKey {
+public class ColumnStatsIndexRawKey implements MetadataRawKey {
   private final String partitionName;
   private final String fileName;
   private final String columnName;

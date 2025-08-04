@@ -103,6 +103,7 @@ import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
+import org.apache.hudi.metadata.MetadataRawKey;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
@@ -110,7 +111,6 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
@@ -3036,7 +3036,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // assert entry is not present for deleted partition in metadata table
       HoodieTableMetadata tableMetadata = metadata(client, storage);
       // Create a simple RawKey implementation for the partition path
-      RawKey partitionKey = new RawKey() {
+      MetadataRawKey partitionKey = new MetadataRawKey() {
         @Override
         public String encode() {
           return HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;

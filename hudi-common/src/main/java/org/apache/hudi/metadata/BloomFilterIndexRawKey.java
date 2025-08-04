@@ -27,7 +27,7 @@ import java.util.Objects;
 /**
  * Represents a raw key for bloom filter metadata.
  */
-public class BloomFilterIndexRawKey implements RawKey {
+public class BloomFilterIndexRawKey implements MetadataRawKey {
   private final String partitionName;
   private final String fileName;
 

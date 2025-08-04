@@ -24,7 +24,7 @@ import java.util.Objects;
 /**
  * Represents a record index key that requires no encoding (identity encoding).
  */
-public class RecordIndexRawKey implements RawKey {
+public class RecordIndexRawKey implements MetadataRawKey {
   private final String recordKey;
 
   public RecordIndexRawKey(String recordKey) {

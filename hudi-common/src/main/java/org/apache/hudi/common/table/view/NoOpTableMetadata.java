@@ -34,7 +34,7 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.RawKey;
+import org.apache.hudi.metadata.MetadataRawKey;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -122,7 +122,7 @@ class NoOpTableMetadata implements HoodieTableMetadata {
 
   @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
-      HoodieData<? extends RawKey> rawKeys,
+      HoodieData<? extends MetadataRawKey> rawKeys,
       String partitionName,
       boolean shouldLoadInMemory) {
     throw new HoodieMetadataException("Unsupported operation: getRecordsByKeyPrefixes!");

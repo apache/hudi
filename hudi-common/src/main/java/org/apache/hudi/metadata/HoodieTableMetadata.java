@@ -276,7 +276,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the encoded key prefixes
    */
   HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
-      HoodieData<? extends RawKey> rawKeys,
+      HoodieData<? extends MetadataRawKey> rawKeys,
       String partitionName,
       boolean shouldLoadInMemory);
 
