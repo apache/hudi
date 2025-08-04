@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.read.buffer.FileGroupRecordBufferLoader;
 import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -56,7 +57,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
@@ -131,7 +131,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
-    if (inputSplit.noLogRecords()) {
+    if (inputSplit.hasNoRecordsToMerge()) {
       this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
     } else {
       this.baseFileIterator = iter;
@@ -364,7 +364,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private String partitionPath;
     private long start = 0;
     private long length = Long.MAX_VALUE;
-    private Iterator<Map.Entry<Serializable, BufferedRecord>> inputs;
+    private Iterator<Pair<Serializable, BufferedRecord>> recordIterator;
     private boolean shouldUseRecordPosition = false;
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
@@ -400,8 +400,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withInputs(Iterator<Map.Entry<Serializable, BufferedRecord>> inputs) {
-      this.inputs = inputs;
+    public Builder<T> withInputs(Iterator<Pair<Serializable, BufferedRecord>> recordIterator) {
+      this.recordIterator = recordIterator;
       this.recordBufferLoader = FileGroupRecordBufferLoader.createInputsBased();
       return this;
     }
@@ -519,7 +519,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           .allowInflightInstants(allowInflightInstants)
           .enableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
           .build();
-      InputSplit inputSplit = new InputSplit(baseFileOption, logFiles == null ? Stream.empty() : logFiles, partitionPath, start, length, inputs);
+      InputSplit inputSplit = new InputSplit(baseFileOption, recordIterator != null ? Either.right(recordIterator) : Either.left(logFiles == null ? Stream.empty() : logFiles),
+          partitionPath, start, length);
       return new HoodieFileGroupReader<>(
           readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
           props, readerParameters, inputSplit, fileGroupUpdateCallback, recordBufferLoader);

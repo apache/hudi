@@ -23,12 +23,14 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -39,20 +41,26 @@ import java.util.stream.Stream;
 public class InputSplit {
   private final Option<HoodieBaseFile> baseFileOption;
   private final List<HoodieLogFile> logFiles;
-  private final Option<Iterator<Map.Entry<Serializable, BufferedRecord>>> inputs;
+  private final Option<Iterator<Pair<Serializable, BufferedRecord>>> recordIterator;
   private final String partitionPath;
   // Byte offset to start reading from the base file
   private final long start;
   // Length of bytes to read from the base file
   private final long length;
 
-  InputSplit(Option<HoodieBaseFile> baseFileOption, Stream<HoodieLogFile> logFiles, String partitionPath, long start, long length,
-             Iterator<Map.Entry<Serializable, BufferedRecord>> inputs) {
+  InputSplit(Option<HoodieBaseFile> baseFileOption, Either<Stream<HoodieLogFile>,Iterator<Pair<Serializable, BufferedRecord>>> logFilesOrRecordIterator,
+             String partitionPath, long start, long length) {
     this.baseFileOption = baseFileOption;
-    this.logFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator())
-        .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-        .collect(Collectors.toList());
-    this.inputs = Option.ofNullable(inputs);
+    if (logFilesOrRecordIterator.isLeft()) {
+      this.logFiles = logFilesOrRecordIterator.asLeft().sorted(HoodieLogFile.getLogFileComparator())
+          .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+          .collect(Collectors.toList());
+      this.recordIterator = Option.empty();
+    } else {
+      this.logFiles = Collections.emptyList();
+
+      this.recordIterator = Option.of(logFilesOrRecordIterator.asRight());
+    }
     this.partitionPath = partitionPath;
     this.start = start;
     this.length = length;
@@ -82,11 +90,11 @@ public class InputSplit {
     return baseFileOption.map(baseFile -> HoodieFileFormat.fromFileExtension(baseFile.getStoragePath().getFileExtension()) == HoodieFileFormat.PARQUET).orElse(false);
   }
 
-  public boolean noLogRecords() {
-    return this.logFiles.isEmpty() && inputs.isEmpty();
+  public boolean hasNoRecordsToMerge() {
+    return this.logFiles.isEmpty() && recordIterator.isEmpty();
   }
 
-  public Option<Iterator<Map.Entry<Serializable, BufferedRecord>>> getInputs() {
-    return this.inputs;
+  public Option<Iterator<Pair<Serializable, BufferedRecord>>> getRecordIterator() {
+    return this.recordIterator;
   }
 }

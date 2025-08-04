@@ -44,31 +44,26 @@ import java.util.Map;
  * This will be used in write paths for COW merge cases.
  * @param <T> Engine native presentation of the record.
  */
-public class RecordsBasedFileGroupRecordBufferLoader<T> extends DefaultFileGroupRecordBufferLoader<T> {
-  private static final RecordsBasedFileGroupRecordBufferLoader INSTANCE = new RecordsBasedFileGroupRecordBufferLoader<>();
+public class StreamingFileGroupRecordBufferLoader<T> extends DefaultFileGroupRecordBufferLoader<T> {
+  private static final StreamingFileGroupRecordBufferLoader INSTANCE = new StreamingFileGroupRecordBufferLoader<>();
 
-  private RecordsBasedFileGroupRecordBufferLoader() {
+  private StreamingFileGroupRecordBufferLoader() {
   }
 
-  static <T> RecordsBasedFileGroupRecordBufferLoader<T> getInstance() {
+  static <T> StreamingFileGroupRecordBufferLoader<T> getInstance() {
     return INSTANCE;
   }
 
   @Override
-  public Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                                            HoodieStorage storage,
-                                                                            InputSplit inputSplit,
-                                                                            List<String> orderingFieldNames,
-                                                                            HoodieTableMetaClient hoodieTableMetaClient,
-                                                                            TypedProperties props,
-                                                                            ReaderParameters readerParameters,
-                                                                            HoodieReadStats readStats,
+  public Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext, HoodieStorage storage, InputSplit inputSplit,
+                                                                            List<String> orderingFieldNames, HoodieTableMetaClient hoodieTableMetaClient,
+                                                                            TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     FileGroupRecordBuffer<T> recordBuffer = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
         readerParameters, readStats, fileGroupUpdateCallback);
 
-    Iterator<Map.Entry<Serializable, BufferedRecord>> inputs = inputSplit.getInputs()
-        .orElseThrow(() -> new HoodieValidationException("The inputs has not been setup"));
+    Iterator<Pair<Serializable, BufferedRecord>> inputs = inputSplit.getRecordIterator()
+        .orElseThrow(() -> new HoodieValidationException("The record iterator has not been setup"));
 
     while (inputs.hasNext()) {
       Map.Entry<Serializable, BufferedRecord> entry = inputs.next();
