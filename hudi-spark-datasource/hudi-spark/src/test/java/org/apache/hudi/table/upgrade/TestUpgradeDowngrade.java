@@ -55,8 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test class for upgrade/downgrade operations using pre-created fixture tables
- * from different Hudi releases. Tests round-trip operations: upgrade one version up,
- * then downgrade back to original version.
+ * from different Hudi releases.
  */
 public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
@@ -285,7 +284,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       case FIVE:
         return Option.of(HoodieTableVersion.FOUR);
       case FOUR:
-        return Option.empty(); // No lower version available
+        return Option.empty(); // for now we are focusing on V4-V9
       default:
         return Option.empty();
     }
@@ -350,7 +349,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   /**
    * Assert table version on both data table and metadata table (if exists).
-   * Adapted from TestUpgradeDowngrade.assertTableVersionOnDataAndMetadataTable().
    */
   private void assertTableVersionOnDataAndMetadataTable(
       HoodieTableMetaClient metaClient, HoodieTableVersion expectedVersion) throws IOException {
@@ -368,11 +366,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
   }
 
-  /**
-   * Assert table version by checking the table config.
-   * Since HoodieTableMetaClient reads from hoodie.properties during instantiation,
-   * checking the in-memory config is sufficient.
-   */
   private void assertTableVersion(
       HoodieTableMetaClient metaClient, HoodieTableVersion expectedVersion) {
     assertEquals(expectedVersion,
@@ -440,10 +433,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   /**
    * Validate basic properties for version 4.
-   * Based on ThreeToFourUpgradeHandler, version 4 should have TABLE_CHECKSUM and TABLE_METADATA_PARTITIONS (if MDT enabled).
    */
   private void validateVersion4Properties(HoodieTableConfig tableConfig) {
-    // Version 4 specific properties added by ThreeToFourUpgradeHandler
     // TABLE_CHECKSUM should exist and be valid
     assertTrue(tableConfig.contains(HoodieTableConfig.TABLE_CHECKSUM),
         "TABLE_CHECKSUM should be set for V4");
@@ -569,7 +560,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     try {
       Dataset<Row> currentData = readTableData(metaClient, stage);
       
-      // Exclude Hudi metadata columns that legitimately change during version transitions
+      // Exclude Hudi metadata columns
       Set<String> hoodieMetadataColumns = new HashSet<>(Arrays.asList(
           "_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", 
           "_hoodie_partition_path", "_hoodie_file_name"));
@@ -583,9 +574,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         return;
       }
       
-      LOG.info("Validating business data columns: {}", columnsToValidate);
+      LOG.info("Validating data columns: {}", columnsToValidate);
       boolean dataConsistent = areDataframesEqual(originalData, currentData, columnsToValidate);
-      assertTrue(dataConsistent, "Business data should be consistent between original and " + stage + " states");
+      assertTrue(dataConsistent, " data should be consistent between original and " + stage + " states");
       
       LOG.info("Data consistency validation passed {}", stage);
     } catch (Exception e) {
