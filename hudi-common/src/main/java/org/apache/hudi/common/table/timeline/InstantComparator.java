@@ -36,7 +36,7 @@ public interface InstantComparator extends Serializable {
   Comparator<HoodieInstant> requestedTimeOrderedComparator();
 
   /**
-   * Returns comparaor that orders primarily based on completion time and secondary ordering based on {@link #requestedTimeOrderedComparator()}.
+   * Returns comparator that orders primarily based on completion time and secondary ordering based on {@link #requestedTimeOrderedComparator()}.
    * @return
    */
   Comparator<HoodieInstant> completionTimeOrderedComparator();
