@@ -24,6 +24,20 @@ import java.util.Objects;
 /**
  * Represents a raw key for the FILES partition in the metadata table.
  * This uses identity encoding - the key is used as-is without transformation.
+ * <p>
+ * The FILES partition stores metadata about files in each partition of the data table.
+ * Each record in the FILES partition represents all files in a single data partition.
+ * <p>
+ * Raw key format: The partition path itself (or "__HIVE_DEFAULT_PARTITION__" for non-partitioned tables)
+ * <p>
+ * Examples:
+ * - For partitioned table with path "2023/01/15": key = "2023/01/15"
+ * - For partitioned table with path "country=US/state=CA": key = "country=US/state=CA"
+ * - For non-partitioned table: key = "__HIVE_DEFAULT_PARTITION__"
+ * - For root partition (empty path): key = "__HIVE_DEFAULT_PARTITION__"
+ * <p>
+ * The value associated with this key contains a list of all files (base files and log files)
+ * present in that partition along with their metadata like file size, commit time, etc.
  */
 public class FilesIndexRawKey implements MetadataRawKey {
   private final String key;
@@ -38,7 +52,7 @@ public class FilesIndexRawKey implements MetadataRawKey {
     return key;
   }
 
-  public String getKey() {
+  public String key() {
     return key;
   }
 
