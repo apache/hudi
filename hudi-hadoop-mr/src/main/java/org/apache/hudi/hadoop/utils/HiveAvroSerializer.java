@@ -19,6 +19,8 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.JsonProperties;
@@ -32,7 +34,10 @@ import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hive.common.type.HiveChar;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.common.type.HiveVarchar;
+import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
+import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeUtils;
+import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
 import org.apache.hadoop.hive.serde2.avro.InstanceCache;
 import org.apache.hadoop.hive.serde2.objectinspector.ListObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.MapObjectInspector;
@@ -46,6 +51,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.UnionTypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
 import org.slf4j.Logger;
@@ -70,24 +76,156 @@ public class HiveAvroSerializer {
 
   private final List<String> columnNames;
   private final List<TypeInfo> columnTypes;
-  private final ObjectInspector objectInspector;
+  private final ArrayWritableObjectInspector objectInspector;
+  private final Schema recordSchema;
 
   private static final Logger LOG = LoggerFactory.getLogger(HiveAvroSerializer.class);
 
-  public HiveAvroSerializer(ObjectInspector objectInspector, List<String> columnNames, List<TypeInfo> columnTypes) {
+  public HiveAvroSerializer(Schema schema) {
+    this.recordSchema = schema;
+    this.columnNames = schema.getFields().stream().map(Schema.Field::name).map(String::toLowerCase).collect(Collectors.toList());
+    try {
+      this.columnTypes = HiveTypeUtils.generateColumnTypes(schema);
+    } catch (AvroSerdeException e) {
+      throw new HoodieAvroSchemaException(String.format("Failed to generate hive column types from avro schema: %s, due to %s", schema, e));
+    }
+    StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(this.columnNames, this.columnTypes);
+    this.objectInspector = new ArrayWritableObjectInspector(rowTypeInfo);
+  }
+
+  public HiveAvroSerializer(ArrayWritableObjectInspector objectInspector, List<String> columnNames, List<TypeInfo> columnTypes) {
     this.columnNames = columnNames;
     this.columnTypes = columnTypes;
     this.objectInspector = objectInspector;
+    this.recordSchema = null;
+  }
+
+  public Object getValue(ArrayWritable record, String fieldName) {
+    if (StringUtils.isNullOrEmpty(fieldName)) {
+      return null;
+    }
+    Object currentObject = record;
+    ObjectInspector currentOI = this.objectInspector;
+    String[] path = fieldName.split("\\.");
+
+    for (int i = 0; i < path.length; i++) {
+      String field = path[i];
+
+      while (currentOI.getCategory() == ObjectInspector.Category.UNION) {
+        UnionObjectInspector unionOI = (UnionObjectInspector) currentOI;
+        byte tag = unionOI.getTag(currentObject);
+        currentObject = unionOI.getField(currentObject);
+        currentOI = unionOI.getObjectInspectors().get(tag);
+      }
+
+      if (!(currentOI instanceof ArrayWritableObjectInspector)) {
+        throw new HoodieException("Expected struct (ArrayWritableObjectInspector) to access field '"
+            + field + "', but found: " + currentOI.getClass().getSimpleName());
+      }
+
+      ArrayWritableObjectInspector structOI = (ArrayWritableObjectInspector) currentOI;
+      StructField structFieldRef = structOI.getStructFieldRef(field);
+
+      if (structFieldRef == null) {
+        throw new HoodieException("Field '" + field + "' not found in current object inspector.");
+      }
+
+      Object fieldData = structOI.getStructFieldData(currentObject, structFieldRef);
+
+      if (i == path.length - 1) {
+        // Final field — return value as-is (possibly Writable or Java object)
+        return fieldData;
+      }
+
+      currentObject = fieldData;
+      currentOI = structFieldRef.getFieldObjectInspector();
+    }
+
+    return null;
+  }
+
+  public Object getValueAsJava(ArrayWritable record, String fieldName) {
+    String[] path = fieldName.split("\\.");
+
+    int rootIdx = recordSchema.getField(path[0]).pos();
+    if (rootIdx < 0) {
+      throw new HoodieException("Top-level field '" + path[0] + "' not found");
+    }
+    TypeInfo currentTypeInfo = this.columnTypes.get(rootIdx);
+    Object currentObject = record;
+    Schema currentSchema = recordSchema;
+    ObjectInspector currentOI = this.objectInspector;
+
+    for (int i = 0; i < path.length; i++) {
+      String field = path[i];
+      currentSchema = resolveNullableSchema(currentSchema);
+      Schema.Field schemaField = currentSchema.getField(field);
+      if (schemaField == null) {
+        throw new HoodieException("Field '" + field + "' not found in schema: " + currentSchema);
+      }
+
+      Schema fieldSchema = resolveNullableSchema(schemaField.schema());
+
+      if (currentTypeInfo instanceof StructTypeInfo) {
+        StructTypeInfo structTypeInfo = (StructTypeInfo) currentTypeInfo;
+        List<String> fieldNames = structTypeInfo.getAllStructFieldNames();
+        List<TypeInfo> fieldTypes = structTypeInfo.getAllStructFieldTypeInfos();
+        int fieldIdx = fieldNames.indexOf(field.toLowerCase());
+        if (fieldIdx < 0) {
+          throw new HoodieException("Field '" + field + "' not found in TypeInfo: " + structTypeInfo);
+        }
+        currentTypeInfo = fieldTypes.get(fieldIdx);
+      } else {
+        throw new HoodieException("Expected StructTypeInfo while resolving '" + field + "', but got " + currentTypeInfo.getTypeName());
+      }
+
+      if (currentOI.getCategory() == ObjectInspector.Category.UNION) {
+        UnionObjectInspector unionOI = (UnionObjectInspector) currentOI;
+        byte tag = unionOI.getTag(currentObject);
+        currentObject = unionOI.getField(currentObject);
+        currentOI = unionOI.getObjectInspectors().get(tag);
+      }
+
+      if (currentOI.getCategory() != ObjectInspector.Category.STRUCT) {
+        throw new HoodieException("Expected STRUCT at '" + field + "', got: " + currentOI.getCategory());
+      }
+
+      StructObjectInspector structOI = (StructObjectInspector) currentOI;
+      StructField structField = structOI.getStructFieldRef(field);
+      if (structField == null) {
+        throw new HoodieException("ObjectInspector field not found: " + field);
+      }
+
+      Object fieldValue = structOI.getStructFieldData(currentObject, structField);
+      ObjectInspector fieldOI = structField.getFieldObjectInspector();
+
+      if (i == path.length - 1) {
+        return serialize(currentTypeInfo, fieldOI, fieldValue, fieldSchema);
+      }
+
+      currentObject = fieldValue;
+      currentOI = fieldOI;
+      currentSchema = fieldSchema;
+    }
+
+    return null;
   }
 
   private static final Schema STRING_SCHEMA = Schema.create(Schema.Type.STRING);
 
+  public GenericRecord serialize(Object o) {
+    if (recordSchema == null) {
+      throw new IllegalArgumentException("Cannot serialize without a record schema");
+    }
+    return serialize(o, recordSchema);
+  }
+
   public GenericRecord serialize(Object o, Schema schema) {
 
-    StructObjectInspector soi = (StructObjectInspector) objectInspector;
+    StructObjectInspector soi = objectInspector;
     GenericData.Record record = new GenericData.Record(schema);
 
-    List<? extends StructField> outputFieldRefs = soi.getAllStructFieldRefs();
+    List<? extends StructField> outputFieldRefs = objectInspector.getAllStructFieldRefs();
     if (outputFieldRefs.size() != columnNames.size()) {
       throw new HoodieException("Number of input columns was different than output columns (in = " + columnNames.size() + " vs out = " + outputFieldRefs.size());
     }
@@ -128,76 +266,13 @@ public class HiveAvroSerializer {
     }
   }
 
-  /**
-   * Determine if an Avro schema is of type Union[T, NULL].  Avro supports nullable
-   * types via a union of type T and null.  This is a very common use case.
-   * As such, we want to silently convert it to just T and allow the value to be null.
-   * <p>
-   * When a Hive union type is used with AVRO, the schema type becomes
-   * Union[NULL, T1, T2, ...]. The NULL in the union should be silently removed
-   *
-   * @return true if type represents Union[T, Null], false otherwise
-   */
-  public static boolean isNullableType(Schema schema) {
-    if (!schema.getType().equals(Schema.Type.UNION)) {
-      return false;
-    }
-
-    List<Schema> itemSchemas = schema.getTypes();
-    if (itemSchemas.size() < 2) {
-      return false;
-    }
-
-    for (Schema itemSchema : itemSchemas) {
-      if (Schema.Type.NULL.equals(itemSchema.getType())) {
-        return true;
-      }
-    }
-
-    // [null, null] not allowed, so this check is ok.
-    return false;
-  }
-
-  /**
-   * If the union schema is a nullable union, get the schema for the non-nullable type.
-   * This method does no checking that the provided Schema is nullable. If the provided
-   * union schema is non-nullable, it simply returns the union schema
-   */
-  public static Schema getOtherTypeFromNullableType(Schema unionSchema) {
-    final List<Schema> types = unionSchema.getTypes();
-    if (types.size() == 2) { // most common scenario
-      if (types.get(0).getType() == Schema.Type.NULL) {
-        return types.get(1);
-      }
-      if (types.get(1).getType() == Schema.Type.NULL) {
-        return types.get(0);
-      }
-      // not a nullable union
-      return unionSchema;
-    }
-
-    final List<Schema> itemSchemas = new ArrayList<>();
-    for (Schema itemSchema : types) {
-      if (!Schema.Type.NULL.equals(itemSchema.getType())) {
-        itemSchemas.add(itemSchema);
-      }
-    }
-
-    if (itemSchemas.size() > 1) {
-      return Schema.createUnion(itemSchemas);
-    } else {
-      return itemSchemas.get(0);
-    }
-  }
-
   private Object serialize(TypeInfo typeInfo, ObjectInspector fieldOI, Object structFieldData, Schema schema) throws HoodieException {
     if (null == structFieldData) {
       return null;
     }
 
-    if (isNullableType(schema)) {
-      schema = getOtherTypeFromNullableType(schema);
-    }
+    schema = resolveNullableSchema(schema);
+
     /* Because we use Hive's 'string' type when Avro calls for enum, we have to expressly check for enum-ness */
     if (Schema.Type.ENUM.equals(schema.getType())) {
       assert fieldOI instanceof PrimitiveObjectInspector;

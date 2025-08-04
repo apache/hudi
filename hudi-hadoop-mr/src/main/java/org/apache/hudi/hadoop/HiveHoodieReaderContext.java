@@ -242,10 +242,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     return record -> HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from, to, renamedColumns);
   }
 
-  public UnaryOperator<ArrayWritable> reverseProjectRecord(Schema from, Schema to) {
-    return HoodieArrayWritableAvroUtils.reverseProject(from, to);
-  }
-
   public long getPos() throws IOException {
     if (firstRecordReader != null) {
       return firstRecordReader.getPos();

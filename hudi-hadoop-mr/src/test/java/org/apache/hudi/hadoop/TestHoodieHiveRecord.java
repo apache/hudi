@@ -27,6 +27,8 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
@@ -52,7 +54,7 @@ class TestHoodieHiveRecord {
     schema.setFields(Collections.singletonList(new Schema.Field("testField", Schema.create(Schema.Type.STRING), null, null)));
     
     // Create HoodieHiveRecord with mocked dependencies
-    hoodieHiveRecord = new HoodieHiveRecord(key, data, schema);
+    hoodieHiveRecord = new HoodieHiveRecord(key, data, schema, new HiveAvroSerializer(schema));
   }
 
   @Test

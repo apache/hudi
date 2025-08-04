@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
+import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -157,7 +158,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
         Stream.concat(tableSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColumns.contains(n)),
             partitionColumns.stream()).collect(Collectors.toList()));
-    this.reverseProjection = readerContext.reverseProjectRecord(requestedSchema, outputSchema);
+    this.reverseProjection = HoodieArrayWritableAvroUtils.getReverseProjection(requestedSchema, outputSchema);
   }
 
   @Override

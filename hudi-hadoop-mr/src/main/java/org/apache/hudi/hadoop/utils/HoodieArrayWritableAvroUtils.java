@@ -22,27 +22,16 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
-import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
-import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
-import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
-import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
-import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
-import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
-import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.BytesWritable;
@@ -63,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 import static org.apache.hudi.avro.HoodieAvroUtils.createFullName;
@@ -317,78 +305,21 @@ public class HoodieArrayWritableAvroUtils {
     throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
-  private static final Cache<Schema, ArrayWritableObjectInspector> OBJECT_INSPECTOR_CACHE =
-      Caffeine.newBuilder().maximumSize(1000).build();
-
-  public static Object getValue(ArrayWritable record, Schema schema, String fieldName) {
-    ArrayWritable currentRecord = record;
-    String[] path = fieldName.split("\\.");
-    StructField structFieldRef;
-    ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
-    for (int i = 0; i < path.length; i++) {
-      String field = path[i];
-      structFieldRef = objectInspector.getStructFieldRef(field);
-      Object value = structFieldRef == null ? null : objectInspector.getStructFieldData(currentRecord, structFieldRef);
-      if (i == path.length - 1) {
-        return value;
-      }
-      currentRecord = (ArrayWritable) value;
-      objectInspector = (ArrayWritableObjectInspector) structFieldRef.getFieldObjectInspector();
+  private static int[] getReverseProjectionMapping(Schema from, Schema to) {
+    List<Schema.Field> fromFields = from.getFields();
+    int[] newProjection = new int[fromFields.size()];
+    for (int i = 0; i < newProjection.length; i++) {
+      newProjection[i] = to.getField(fromFields.get(i).name()).pos();
     }
-    return null;
-  }
-
-  public static ArrayWritableObjectInspector getObjectInspector(Schema schema) {
-    return OBJECT_INSPECTOR_CACHE.get(schema, s -> {
-      List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).map(String::toLowerCase).collect(Collectors.toList());
-      List<TypeInfo> columnTypeList;
-      try {
-        columnTypeList = HiveTypeUtils.generateColumnTypes(s);
-      } catch (AvroSerdeException e) {
-        throw new RuntimeException(e);
-      }
-      StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
-      return new ArrayWritableObjectInspector(rowTypeInfo);
-    });
-  }
-
-  private static final Cache<Schema, HiveAvroSerializer> SERIALIZER_CACHE =
-      Caffeine.newBuilder().maximumSize(1000).build();
-
-  public static GenericRecord serialize(ArrayWritable record, Schema schema) {
-    return SERIALIZER_CACHE.get(schema, s -> {
-      List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).map(String::toLowerCase).collect(Collectors.toList());
-      List<TypeInfo> columnTypeList;
-      try {
-        columnTypeList = HiveTypeUtils.generateColumnTypes(s);
-      } catch (AvroSerdeException e) {
-        throw new RuntimeException(e);
-      }
-      StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
-      return new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList);
-    }).serialize(record, schema);
-  }
-
-  private static final Cache<Pair<Schema, Schema>, int[]>
-      PROJECTION_CACHE = Caffeine.newBuilder().maximumSize(1000).build();
-
-  public static int[] getReverseProjection(Schema from, Schema to) {
-    return PROJECTION_CACHE.get(Pair.of(from, to), schemas -> {
-      List<Schema.Field> fromFields = from.getFields();
-      int[] newProjection = new int[fromFields.size()];
-      for (int i = 0; i < newProjection.length; i++) {
-        newProjection[i] = to.getField(fromFields.get(i).name()).pos();
-      }
-      return newProjection;
-    });
+    return newProjection;
   }
 
   /**
    * After the reading and merging etc is done, we need to put the records
    * into the positions of the original schema
    */
-  public static UnaryOperator<ArrayWritable> reverseProject(Schema from, Schema to) {
-    int[] projection = getReverseProjection(from, to);
+  public static UnaryOperator<ArrayWritable> getReverseProjection(Schema from, Schema to) {
+    int[] projection = getReverseProjectionMapping(from, to);
     return arrayWritable -> {
       Writable[] values = new Writable[to.getFields().size()];
       for (int i = 0; i < projection.length; i++) {
@@ -397,10 +328,6 @@ public class HoodieArrayWritableAvroUtils {
       arrayWritable.set(values);
       return arrayWritable;
     };
-  }
-
-  public static Object getWritableValue(ArrayWritable arrayWritable, ArrayWritableObjectInspector objectInspector, String name) {
-    return objectInspector.getStructFieldData(arrayWritable, objectInspector.getStructFieldRef(name));
   }
 }
 

@@ -61,7 +61,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.function.UnaryOperator;
 
-import static org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils.getValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -78,26 +77,28 @@ public class TestHoodieArrayWritableAvroUtils {
   public void testProjection() {
     Schema from =  tableSchema;
     Schema to = HoodieAvroUtils.generateProjectionSchema(from, Arrays.asList("trip_type", "current_ts", "weight"));
-    UnaryOperator<ArrayWritable> reverseProjection = HoodieArrayWritableAvroUtils.reverseProject(to, from);
+    UnaryOperator<ArrayWritable> reverseProjection = HoodieArrayWritableAvroUtils.getReverseProjection(to, from);
 
     //We reuse the ArrayWritable, so we need to get the values before projecting
     ArrayWritable record = convertArrayWritable(dataGen.generateGenericRecord());
-    Object tripType = getValue(record, from, "trip_type");
-    Object currentTs = getValue(record, from, "current_ts");
-    Object weight = getValue(record, from, "weight");
+    HiveAvroSerializer fromSerializer = new HiveAvroSerializer(from);
+    Object tripType = fromSerializer.getValue(record, "trip_type");
+    Object currentTs = fromSerializer.getValue(record, "current_ts");
+    Object weight = fromSerializer.getValue(record, "weight");
 
     //Make sure the projected fields can be read
     ArrayWritable projectedRecord = HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from, to, Collections.emptyMap());
-    assertEquals(tripType, getValue(projectedRecord, to, "trip_type"));
-    assertEquals(currentTs, getValue(projectedRecord, to, "current_ts"));
-    assertEquals(weight, getValue(projectedRecord, to, "weight"));
+    HiveAvroSerializer toSerializer = new HiveAvroSerializer(to);
+    assertEquals(tripType, toSerializer.getValue(projectedRecord, "trip_type"));
+    assertEquals(currentTs, toSerializer.getValue(projectedRecord, "current_ts"));
+    assertEquals(weight, toSerializer.getValue(projectedRecord, "weight"));
 
     //Reverse projection, the fields are in the original spots, but only the fields we set can be read.
     //Therefore, we can only check the 3 fields that were in the projection
     ArrayWritable reverseProjected = reverseProjection.apply(projectedRecord);
-    assertEquals(tripType, getValue(reverseProjected, from, "trip_type"));
-    assertEquals(currentTs, getValue(reverseProjected, from, "current_ts"));
-    assertEquals(weight, getValue(reverseProjected, from, "weight"));
+    assertEquals(tripType, fromSerializer.getValue(reverseProjected, "trip_type"));
+    assertEquals(currentTs, fromSerializer.getValue(reverseProjected, "current_ts"));
+    assertEquals(weight, fromSerializer.getValue(reverseProjected, "weight"));
   }
 
   private static ArrayWritable convertArrayWritable(GenericRecord record) {
