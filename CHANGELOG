@@ -931,3 +931,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-08-02 22:14:17] [release-v1.158.0] ---
 [ENG-30780][HUDI-9666] Fix the record key encoding with a single record key field and add a guard for complex key generator (#1471)
 [AUDIT-1071]: Changelog for release-v1.157.0 (#1475)
+
+--- [2025-08-04 19:42:37] [release-v1.159.0] ---
+[ENG-30713][INTERNAL] Revert revise LP metrics definition (#1477)
+[AUDIT-1629]: Changelog for release-v1.158.0 (#1476)
