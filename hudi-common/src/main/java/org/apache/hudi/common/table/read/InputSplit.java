@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
@@ -94,6 +95,7 @@ public class InputSplit {
   }
 
   public Option<Iterator<Pair<Serializable, BufferedRecord>>> getRecordIterator() {
+    ValidationUtils.checkArgument(recordIterator.isPresent(), "Record iterator is not initialized");
     return this.recordIterator;
   }
 }

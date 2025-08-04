@@ -39,7 +39,6 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Records based {@link FileGroupRecordBuffer} which takes in a map of records to be merged with a base file of interest.
