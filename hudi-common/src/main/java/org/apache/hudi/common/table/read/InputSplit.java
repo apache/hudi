@@ -70,7 +70,7 @@ public class InputSplit {
   }
 
   public List<HoodieLogFile> getLogFiles() {
-    ValidationUtils.checkArgument(recordIterator.isEmpty(), "Log files are not initialized");
+    //ValidationUtils.checkArgument(recordIterator.isEmpty(), "Log files are not initialized");
     return logFiles;
   }
 

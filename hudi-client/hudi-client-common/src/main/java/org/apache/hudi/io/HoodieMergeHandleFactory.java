@@ -165,6 +165,7 @@ public class HoodieMergeHandleFactory {
   static Pair<String, String> getMergeHandleClassesWrite(WriteOperationType operationType, HoodieWriteConfig writeConfig, HoodieTable table) {
     String mergeHandleClass;
     String fallbackMergeHandleClass = null;
+
     // Overwrite to a different implementation for {@link HoodieWriteMergeHandle} if sorting or CDC is enabled.
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
