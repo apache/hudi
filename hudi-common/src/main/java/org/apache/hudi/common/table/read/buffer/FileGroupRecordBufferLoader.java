@@ -52,7 +52,7 @@ public interface FileGroupRecordBufferLoader<T> {
     return DefaultFileGroupRecordBufferLoader.getInstance();
   }
 
-  static <T> FileGroupRecordBufferLoader<T> createInputsBased() {
+  static <T> FileGroupRecordBufferLoader<T> createStreamingRecordsBufferLoader() {
     return StreamingFileGroupRecordBufferLoader.getInstance();
   }
 

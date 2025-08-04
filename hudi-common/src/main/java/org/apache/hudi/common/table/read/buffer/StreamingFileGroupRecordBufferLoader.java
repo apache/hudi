@@ -21,11 +21,13 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -44,11 +46,8 @@ import java.util.Map;
  * This will be used in write paths for COW merge cases.
  * @param <T> Engine native presentation of the record.
  */
-public class StreamingFileGroupRecordBufferLoader<T> extends DefaultFileGroupRecordBufferLoader<T> {
+public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordBufferLoader<T> {
   private static final StreamingFileGroupRecordBufferLoader INSTANCE = new StreamingFileGroupRecordBufferLoader<>();
-
-  private StreamingFileGroupRecordBufferLoader() {
-  }
 
   static <T> StreamingFileGroupRecordBufferLoader<T> getInstance() {
     return INSTANCE;
@@ -59,14 +58,22 @@ public class StreamingFileGroupRecordBufferLoader<T> extends DefaultFileGroupRec
                                                                             List<String> orderingFieldNames, HoodieTableMetaClient hoodieTableMetaClient,
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    FileGroupRecordBuffer<T> recordBuffer = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
-        readerParameters, readStats, fileGroupUpdateCallback);
+    PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
+    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
+    FileGroupRecordBuffer<T> recordBuffer;
+    if (readerParameters.sortOutputs()) {
+      recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+    } else {
+      recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+    }
 
-    Iterator<Pair<Serializable, BufferedRecord>> inputs = inputSplit.getRecordIterator()
+    Iterator<Pair<Serializable, BufferedRecord>> recordIterator = inputSplit.getRecordIterator()
         .orElseThrow(() -> new HoodieValidationException("The record iterator has not been setup"));
 
-    while (inputs.hasNext()) {
-      Map.Entry<Serializable, BufferedRecord> entry = inputs.next();
+    while (recordIterator.hasNext()) {
+      Pair<Serializable, BufferedRecord> entry = recordIterator.next();
       try {
         recordBuffer.processNextDataRecord(entry.getValue(), entry.getKey());
       } catch (IOException e) {

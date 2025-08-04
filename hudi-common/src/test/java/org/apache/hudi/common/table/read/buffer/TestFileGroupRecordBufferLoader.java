@@ -38,11 +38,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Collections;
 
@@ -53,70 +52,67 @@ import static org.mockito.Mockito.when;
 
 public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuffer {
 
-  private static final StoragePath TEMP_STORAGE_PATH = new StoragePath("file:///tmp/test_table");
-
   @ParameterizedTest
-  @ValueSource(strings = {"KeyBasedFileGroupRecordBuffer", "SortedKeyBasedFileGroupRecordBuffer", "PositionBasedFileGroupRecordBuffer"})
-  public void testDefaultFileGroupBufferRecordLoader(String fileGroupRecordBufferType) {
-    for (boolean testRecordsBased : new boolean[] {false, true}) {
-      FileGroupRecordBufferLoader fileGroupRecordBufferLoader = !testRecordsBased
-          ? FileGroupRecordBufferLoader.createDefault()
-          : FileGroupRecordBufferLoader.createInputsBased();
-      HoodieReadStats readStats = new HoodieReadStats();
-      HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-      when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
-      when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
-      when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
-      when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
-      StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
-      HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
-      readerContext.initRecordMerger(new TypedProperties());
-      FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
-      when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
-      when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
-      DeleteContext deleteContext = mock(DeleteContext.class);
-      when(deleteContext.getCustomDeleteMarkerKeyValue()).thenReturn(Option.empty());
-      when(deleteContext.getHoodieOperationPos()).thenReturn(-1);
-      when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(deleteContext);
-      readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
-      readerContext.setRecordMerger(Option.ofNullable(null));
-      HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-      when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
-      HoodieStorage storage = mock(HoodieStorage.class);
-      when(mockMetaClient.getStorage()).thenReturn(storage);
-      InputSplit inputSplit = mock(InputSplit.class);
-      if (testRecordsBased) {
-        when(inputSplit.getRecordIterator()).thenReturn(Option.of(Collections.emptyIterator()));
-      }
-      ReaderParameters readerParameters = mock(ReaderParameters.class);
-      if (fileGroupRecordBufferType.contains("Sorted")) {
-        when(readerParameters.sortOutputs()).thenReturn(true);
-      }
-      if (fileGroupRecordBufferType.contains("Position")) {
-        HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
-        when(inputSplit.getBaseFileOption()).thenReturn(Option.of(baseFile));
-        when(readerParameters.useRecordPosition()).thenReturn(true);
-      }
+  @CsvSource({"KeyBasedFileGroupRecordBuffer,true", "KeyBasedFileGroupRecordBuffer,false", "SortedKeyBasedFileGroupRecordBuffer,true",
+      "SortedKeyBasedFileGroupRecordBuffer,false", "PositionBasedFileGroupRecordBuffer,false"})
+  public void testDefaultFileGroupBufferRecordLoader(String fileGroupRecordBufferType, boolean testRecordsBased) {
+    FileGroupRecordBufferLoader fileGroupRecordBufferLoader = !testRecordsBased
+        ? FileGroupRecordBufferLoader.createDefault()
+        : FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
+    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
+    readerContext.initRecordMerger(new TypedProperties());
+    FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
+    when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    DeleteContext deleteContext = mock(DeleteContext.class);
+    when(deleteContext.getCustomDeleteMarkerKeyValue()).thenReturn(Option.empty());
+    when(deleteContext.getHoodieOperationPos()).thenReturn(-1);
+    when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(deleteContext);
+    readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
+    readerContext.setRecordMerger(Option.ofNullable(null));
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(mockMetaClient.getStorage()).thenReturn(storage);
+    InputSplit inputSplit = mock(InputSplit.class);
+    if (testRecordsBased) {
+      when(inputSplit.getRecordIterator()).thenReturn(Option.of(Collections.emptyIterator()));
+    }
+    ReaderParameters readerParameters = mock(ReaderParameters.class);
+    if (fileGroupRecordBufferType.contains("Sorted")) {
+      when(readerParameters.sortOutputs()).thenReturn(true);
+    }
+    if (fileGroupRecordBufferType.contains("Position")) {
+      HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
+      when(inputSplit.getBaseFileOption()).thenReturn(Option.of(baseFile));
+      when(readerParameters.useRecordPosition()).thenReturn(true);
+    }
 
-      Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
+    Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
 
-      HoodieFileGroupRecordBuffer fileGroupRecordBuffer = (HoodieFileGroupRecordBuffer) fileGroupRecordBufferLoader
-          .getRecordBuffer(readerContext, storage, inputSplit, Collections.singletonList("ts"),
-          mockMetaClient, new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
+    HoodieFileGroupRecordBuffer fileGroupRecordBuffer = (HoodieFileGroupRecordBuffer) fileGroupRecordBufferLoader
+        .getRecordBuffer(readerContext, storage, inputSplit, Collections.singletonList("ts"),
+            mockMetaClient, new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
 
-      switch (fileGroupRecordBufferType) {
-        case "KeyBasedFileGroupRecordBuffer":
-          assertTrue(fileGroupRecordBuffer instanceof KeyBasedFileGroupRecordBuffer);
-          break;
-        case "SortedKeyBasedFileGroupRecordBuffer":
-          assertTrue(fileGroupRecordBuffer instanceof SortedKeyBasedFileGroupRecordBuffer);
-          break;
-        case "PositionBasedFileGroupRecordBuffer":
-          assertTrue(fileGroupRecordBuffer instanceof PositionBasedFileGroupRecordBuffer);
-          break;
-        default:
-          throw new HoodieIOException("Undefined type");
-      }
+    switch (fileGroupRecordBufferType) {
+      case "KeyBasedFileGroupRecordBuffer":
+        assertTrue(fileGroupRecordBuffer instanceof KeyBasedFileGroupRecordBuffer);
+        break;
+      case "SortedKeyBasedFileGroupRecordBuffer":
+        assertTrue(fileGroupRecordBuffer instanceof SortedKeyBasedFileGroupRecordBuffer);
+        break;
+      case "PositionBasedFileGroupRecordBuffer":
+        assertTrue(fileGroupRecordBuffer instanceof PositionBasedFileGroupRecordBuffer);
+        break;
+      default:
+        throw new HoodieIOException("Undefined type");
     }
   }
 }
