@@ -39,7 +39,6 @@ import java.util.stream.Stream;
  */
 public class InputSplit {
   private final Option<HoodieBaseFile> baseFileOption;
-  private final Either<Stream<HoodieLogFile>, Iterator<BufferedRecord>> recordsToMerge;
   private final List<HoodieLogFile> logFiles;
   private final Option<Iterator<BufferedRecord>> recordIterator;
   private final String partitionPath;
@@ -52,7 +51,6 @@ public class InputSplit {
              Either<Stream<HoodieLogFile>, Iterator<BufferedRecord>> recordsToMerge,
              String partitionPath, long start, long length) {
     this.baseFileOption = baseFileOption;
-    this.recordsToMerge = recordsToMerge;
     if (recordsToMerge.isLeft()) {
       this.logFiles = recordsToMerge.asLeft().sorted(HoodieLogFile.getLogFileComparator())
           .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
@@ -72,7 +70,7 @@ public class InputSplit {
   }
 
   public List<HoodieLogFile> getLogFiles() {
-    ValidationUtils.checkArgument(recordIterator.isEmpty(),"Log files are not initialized");
+    ValidationUtils.checkArgument(recordIterator.isEmpty(), "Log files are not initialized");
     return logFiles;
   }
 

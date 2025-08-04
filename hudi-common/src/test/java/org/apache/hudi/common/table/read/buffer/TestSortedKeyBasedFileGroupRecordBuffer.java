@@ -100,7 +100,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
 
-    List<TestRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
+    List<TestRecord> actualRecords = getActualRecordsForSortedKeyBased(fileGroupRecordBuffer);
     assertEquals(Arrays.asList(testRecord1, testRecord2Update, testRecord4, testRecord5, testRecord6Update), actualRecords);
     assertEquals(3, readStats.getNumInserts());
     assertEquals(1, readStats.getNumUpdates());
@@ -108,7 +108,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
   }
 
   @Test
-  void readWithEventTimeOrderingWithRecords() throws IOException {
+  void readWithStreamingRecordBufferLoaderAndEventTimeOrdering() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     TypedProperties properties = new TypedProperties();
     properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "ts");
@@ -127,9 +127,9 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.initRecordMerger(properties);
     List<BufferedRecord> inputRecords =
-        convertToBufferedRecordsMap(Arrays.asList(testIndexedRecord6Update, testIndexedRecord4LowerOrdering, testIndexedRecord1, testIndexedRecord2Update), readerContext, properties,
+        convertToBufferedRecordsList(Arrays.asList(testIndexedRecord6Update, testIndexedRecord4LowerOrdering, testIndexedRecord1, testIndexedRecord2Update), readerContext, properties,
             new String[]{"ts"});
-    inputRecords.addAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker), false));
+    inputRecords.addAll(convertToBufferedRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker), false));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
@@ -179,7 +179,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
 
 
-    List<TestRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
+    List<TestRecord> actualRecords = getActualRecordsForSortedKeyBased(fileGroupRecordBuffer);
     assertEquals(Arrays.asList(testRecord1, testRecord2Update, testRecord4, testRecord5, testRecord6Update), actualRecords);
     assertEquals(5, readStats.getNumInserts());
     assertEquals(0, readStats.getNumUpdates());
@@ -206,7 +206,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
         mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, Collections.emptyList(), updateProcessor);
   }
 
-  private static <T> List<T> getActualRecords(SortedKeyBasedFileGroupRecordBuffer<T> fileGroupRecordBuffer) throws IOException {
+  private static <T> List<T> getActualRecordsForSortedKeyBased(SortedKeyBasedFileGroupRecordBuffer<T> fileGroupRecordBuffer) throws IOException {
     List<T> actualRecords = new ArrayList<>();
     while (fileGroupRecordBuffer.hasNext()) {
       actualRecords.add(fileGroupRecordBuffer.next());

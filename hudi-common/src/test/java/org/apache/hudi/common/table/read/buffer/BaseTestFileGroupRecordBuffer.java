@@ -19,21 +19,48 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.BaseAvroPayload;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.InputSplit;
+import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.UpdateProcessor;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class BaseTestFileGroupRecordBuffer {
 
@@ -51,9 +78,9 @@ public class BaseTestFileGroupRecordBuffer {
     return record;
   }
 
-  protected static List<BufferedRecord> convertToBufferedRecordsMap(List<IndexedRecord> indexedRecords,
-                                                                               HoodieReaderContext<IndexedRecord> readerContext,
-                                                                               TypedProperties props, String[] orderingFieldNames) {
+  protected static List<BufferedRecord> convertToBufferedRecordsList(List<IndexedRecord> indexedRecords,
+                                                                     HoodieReaderContext<IndexedRecord> readerContext,
+                                                                     TypedProperties props, String[] orderingFieldNames) {
     return indexedRecords.stream().map(rec -> {
       HoodieAvroIndexedRecord indexedRecord = new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec, null);
       return (BufferedRecord) BufferedRecord.forRecordWithContext(indexedRecord, readerContext.getSchemaHandler().getRequestedSchema(),
@@ -61,11 +88,141 @@ public class BaseTestFileGroupRecordBuffer {
     }).collect(Collectors.toList());
   }
 
-  protected static List<BufferedRecord> convertToBufferedRecordsMapForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
+  protected static List<BufferedRecord> convertToBufferedRecordsListForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
     return indexedRecords.stream().map(rec -> {
       return
           (BufferedRecord) BufferedRecord.forDeleteRecord(DeleteRecord.create(new HoodieKey(rec.get(0).toString(), ""), defaultOrderingValue ? 0 : (Comparable) rec.get(2)),
               defaultOrderingValue ? 0 : (Comparable) rec.get(2));
     }).collect(Collectors.toList());
+  }
+
+  protected static KeyBasedFileGroupRecordBuffer<IndexedRecord> buildKeyBasedFileGroupRecordBuffer(HoodieReaderContext<IndexedRecord> readerContext,
+                                                                                                 HoodieTableConfig tableConfig,
+                                                                                                 HoodieReadStats readStats,
+                                                                                                 HoodieRecordMerger recordMerger,
+                                                                                                 RecordMergeMode recordMergeMode,
+                                                                                                 List<String> orderingFieldNames,
+                                                                                                 Option<Pair<String, String>> deleteMarkerKeyValue) {
+    TypedProperties props = new TypedProperties();
+    deleteMarkerKeyValue.ifPresent(markerKeyValue -> {
+      props.setProperty(DELETE_KEY, markerKeyValue.getLeft());
+      props.setProperty(DELETE_MARKER, markerKeyValue.getRight());
+    });
+    FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
+    when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, SCHEMA));
+    readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
+    return buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, recordMerger, recordMergeMode, orderingFieldNames, props,
+        Option.empty());
+  }
+
+  protected static KeyBasedFileGroupRecordBuffer<IndexedRecord> buildKeyBasedFileGroupRecordBuffer(HoodieReaderContext<IndexedRecord> readerContext,
+                                                                                                 HoodieTableConfig tableConfig,
+                                                                                                 HoodieReadStats readStats,
+                                                                                                 HoodieRecordMerger recordMerger,
+                                                                                                 RecordMergeMode recordMergeMode,
+                                                                                                 List<String> orderingFieldNames,
+                                                                                                 TypedProperties props,
+                                                                                                 Option<Iterator<BufferedRecord>> fileGroupRecordBufferItrOpt) {
+
+    readerContext.setRecordMerger(Option.ofNullable(recordMerger));
+    HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
+    when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
+    UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
+
+    if (fileGroupRecordBufferItrOpt.isEmpty()) {
+      return new KeyBasedFileGroupRecordBuffer<>(
+          readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, orderingFieldNames, updateProcessor);
+    } else {
+      FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
+      InputSplit inputSplit = mock(InputSplit.class);
+      when(inputSplit.hasNoRecordsToMerge()).thenReturn(false);
+      when(inputSplit.getRecordIterator()).thenReturn(fileGroupRecordBufferItrOpt.get());
+      ReaderParameters readerParameters = mock(ReaderParameters.class);
+      when(readerParameters.sortOutputs()).thenReturn(false);
+      return (KeyBasedFileGroupRecordBuffer<IndexedRecord>) recordBufferLoader.getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit,
+          orderingFieldNames, mockMetaClient, props, readerParameters, readStats, Option.empty()).getKey();
+    }
+  }
+
+  protected static List<IndexedRecord> getActualRecords(FileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer) throws IOException {
+    List<IndexedRecord> actualRecords = new ArrayList<>();
+    while (fileGroupRecordBuffer.hasNext()) {
+      actualRecords.add(fileGroupRecordBuffer.next());
+    }
+    return actualRecords;
+  }
+
+  /**
+   * A custom payload implementation for testing purposes that marks records as deleted once the counter exceeds 2.
+   * During the merge, it will combine the counter values.
+   */
+  public static class CustomPayload extends BaseAvroPayload
+      implements HoodieRecordPayload<CustomPayload> {
+    private final GenericRecord payloadRecord;
+
+    public CustomPayload(GenericRecord record, Comparable orderingVal) {
+      super(record, orderingVal);
+      this.payloadRecord = record;
+    }
+
+    @Override
+    public TestKeyBasedFileGroupRecordBuffer.CustomPayload preCombine(TestKeyBasedFileGroupRecordBuffer.CustomPayload oldValue) {
+      return this;
+    }
+
+    @Override
+    public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+      if (currentValue.get(2).equals(payloadRecord.get(2))) {
+        // If the timestamps are the same, we do not update
+        return Option.of(currentValue);
+      }
+      int result = (int) currentValue.get(1) + (int) payloadRecord.get(1);
+      if (result > 2) {
+        return Option.empty();
+      }
+      return Option.of(createTestRecord(currentValue.get(0).toString(), result, (long) payloadRecord.get(2)));
+    }
+
+    @Override
+    public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+      return Option.of(payloadRecord);
+    }
+
+    @Override
+    public Comparable<?> getOrderingValue() {
+      return null;
+    }
+  }
+
+  public static class CustomMerger implements HoodieRecordMerger {
+    private final String strategy = UUID.randomUUID().toString();
+
+    @Override
+    public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+      GenericRecord olderData = (GenericRecord) older.getData();
+      GenericRecord newerData = (GenericRecord) newer.getData();
+      if (olderData.get(2).equals(newerData.get(2))) {
+        // If the timestamps are the same, we do not update
+        return Option.of(Pair.of(older, oldSchema));
+      }
+      int result = (int) olderData.get(1) + (int) newerData.get(1);
+      if (result > 2) {
+        return Option.empty();
+      }
+      HoodieKey hoodieKey = older.getKey();
+      return Option.of(Pair.of(new HoodieAvroIndexedRecord(createTestRecord(hoodieKey.getRecordKey(), result, (long) newerData.get(2))), SCHEMA));
+    }
+
+    @Override
+    public HoodieRecord.HoodieRecordType getRecordType() {
+      return HoodieRecord.HoodieRecordType.AVRO;
+    }
+
+    @Override
+    public String getMergingStrategy() {
+      return strategy;
+    }
   }
 }
