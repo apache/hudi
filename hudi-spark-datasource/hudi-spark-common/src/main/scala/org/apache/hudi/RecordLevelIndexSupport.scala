@@ -75,7 +75,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @return Sequence of file names which need to be queried
    */
   private def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
-    val recordIndexData = metadataTable.readRecordIndexLocationsWithKeys(
+    val recordIndexData = metadataTable.readRecordIndexKeysAndLocation(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(recordKeys).asJava))
     try {
       val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData)
