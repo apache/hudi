@@ -58,6 +58,7 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
       HoodieConfig config = new HoodieConfig();
       config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME,
           "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+      config.setValue(HoodieTableConfig.VERSION, "9");
       // Test with PAYLOAD_CLASS_NAME key
       String result = HoodieWriterUtils.getKeyInTableConfig(
           HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);
@@ -155,6 +156,7 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
       // Set up table config with custom legacy payload class
       HoodieConfig config = new HoodieConfig();
       config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, "com.example.CustomPayload");
+      config.setValue(HoodieTableConfig.VERSION, "9");
       // Test with PAYLOAD_CLASS_NAME key
       String result = HoodieWriterUtils.getKeyInTableConfig(
           HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);

@@ -231,7 +231,7 @@ object HoodieWriterUtils {
    *   return writer key.
    */
   def getKeyInTableConfig(key: String, tableConfig: HoodieConfig): String = {
-    if (HoodieTableVersion.current() == HoodieTableVersion.NINE
+    if (tableConfig.getInt(HoodieTableConfig.VERSION) == HoodieTableVersion.NINE.versionCode()
         && key.equals(PAYLOAD_CLASS_NAME.key)
         && !StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING).trim)) {
@@ -252,7 +252,7 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          val keyInTableConfig = getKeyInTableConfig(key, tableConfig)
+          val keyInTableConfig = getKeyInTableConfig(key, tableConfig.asInstanceOf[HoodieTableConfig])
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")
