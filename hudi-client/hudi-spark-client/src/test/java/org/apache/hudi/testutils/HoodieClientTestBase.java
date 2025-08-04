@@ -22,12 +22,14 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
@@ -613,11 +615,15 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
    * @param baseRecordsToUpdate The base records to update
    */
   @SuppressWarnings("rawtypes, unchecked")
-  protected void updateBatchWithoutCommit(String newCommitTime, List<HoodieRecord> baseRecordsToUpdate) throws IOException {
+  protected void updateBatchWithoutCommit(String newCommitTime, List<HoodieRecord> baseRecordsToUpdate, HoodieTableVersion tableVersion) throws IOException {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withAutoCommit(false) // disable auto commit
         .withRollbackUsingMarkers(true)
         .withHeartbeatTolerableMisses(0)
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+        .build())
         .build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
