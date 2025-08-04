@@ -120,19 +120,19 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource("downgradeVersions")
-  public void testDowngradeOnly(HoodieTableVersion targetVersion) throws Exception {
-    LOG.info("Testing downgrade for version {}", targetVersion);
+  public void testDowngradeOnly(HoodieTableVersion tableVersion) throws Exception {
+    LOG.info("Testing downgrade for version {}", tableVersion);
     
-    HoodieTableMetaClient targetMetaClient = loadFixtureTable(targetVersion);
-    assertEquals(targetVersion, targetMetaClient.getTableConfig().getTableVersion(),
+    HoodieTableMetaClient targetMetaClient = loadFixtureTable(tableVersion);
+    assertEquals(tableVersion, targetMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
     
-    Option<HoodieTableVersion> sourceVersionOpt = getPreviousVersion(targetVersion);
-    if (!sourceVersionOpt.isPresent()) {
-      LOG.info("Skipping downgrade test for version {} (no lower version available)", targetVersion);
+    Option<HoodieTableVersion> previousVersionOpt = getPreviousVersion(tableVersion);
+    if (!previousVersionOpt.isPresent()) {
+      LOG.info("Skipping downgrade test for version {} (no lower version available)", tableVersion);
       return;
     }
-    HoodieTableVersion sourceVersion = sourceVersionOpt.get();
+    HoodieTableVersion previousVersion = previousVersionOpt.get();
     
     HoodieWriteConfig config = createWriteConfig(targetMetaClient, true);
     
@@ -140,12 +140,11 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     int initialPendingCommits = targetMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     int initialCompletedCommits = targetMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     
-    // Read original data before downgrade for validation
     Dataset<Row> originalData = readTableData(targetMetaClient, "before downgrade");
     
-    LOG.info("Downgrading from {} to {}", targetVersion, sourceVersion);
+    LOG.info("Downgrading from {} to {}", tableVersion, previousVersion);
     new UpgradeDowngrade(targetMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
-        .run(sourceVersion, null);
+        .run(previousVersion, null);
     
     // Create fresh meta client to read updated table configuration after downgrade
     HoodieTableMetaClient downgradedMetaClient = HoodieTableMetaClient.builder()
@@ -153,8 +152,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .setBasePath(targetMetaClient.getBasePath())
         .build();
     
-    assertTableVersionOnDataAndMetadataTable(downgradedMetaClient, sourceVersion);
-    validateVersionSpecificProperties(downgradedMetaClient, targetVersion, sourceVersion);
+    assertTableVersionOnDataAndMetadataTable(downgradedMetaClient, previousVersion);
+    validateVersionSpecificProperties(downgradedMetaClient, tableVersion, previousVersion);
     validateDataConsistency(originalData, downgradedMetaClient, "after downgrade");
     
     // Verify rollback behavior - pending commits should be cleaned up or reduced
@@ -167,7 +166,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     assertTrue(finalCompletedCommits >= initialCompletedCommits,
         "Completed commits should be preserved or increased after downgrade");
 
-    LOG.info("Successfully completed downgrade test for version {} -> {}", targetVersion, sourceVersion);
+    LOG.info("Successfully completed downgrade test for version {} -> {}", tableVersion, previousVersion);
   }
 
   @ParameterizedTest
@@ -231,18 +230,11 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
    */
   private HoodieWriteConfig createWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade) {
     Properties props = new Properties();
-    props.putAll(metaClient.getTableConfig().getProps());
-    
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath().toString())
         .withAutoUpgradeVersion(autoUpgrade)
         .withProps(props);
-    
-    // Add timeline layout version only if available (needed for upgrade operations)
-    if (metaClient.getTableConfig().getTimelineLayoutVersion().isPresent()) {
-      builder.withTimelineLayoutVersion(metaClient.getTableConfig().getTimelineLayoutVersion().get().getVersion());
-    }
-    
+
     // For validation operations, keep timeline server disabled for simplicity
     if (!autoUpgrade) {
       builder.withEmbeddedTimelineServerEnabled(false);
@@ -267,7 +259,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       case EIGHT:
         return Option.of(HoodieTableVersion.NINE);
       case NINE:
-        return Option.empty(); // No higher version available
       default:
         return Option.empty();
     }
@@ -287,7 +278,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       case FIVE:
         return Option.of(HoodieTableVersion.FOUR);
       case FOUR:
-        return Option.empty(); // for now we are focusing on V4-V9
       default:
         return Option.empty();
     }
@@ -446,13 +436,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     String expectedChecksum = String.valueOf(HoodieTableConfig.generateChecksum(tableConfig.getProps()));
     assertEquals(expectedChecksum, actualChecksum, 
         "TABLE_CHECKSUM should match computed checksum");
-    
+
+    assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_1, tableConfig.getTimelineLayoutVersion().get());
     // TABLE_METADATA_PARTITIONS should be properly set if present
     // Note: This is optional based on whether metadata table was enabled during upgrade
     if (tableConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS)) {
       String metadataPartitions = tableConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS);
-      assertTrue(metadataPartitions.contains("files"), 
-          "TABLE_METADATA_PARTITIONS should contain 'files' partition when set");
+      assertTrue(metadataPartitions.contains("files"), "TABLE_METADATA_PARTITIONS should contain 'files' partition when set");
     }
   }
 
@@ -460,6 +450,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
    * Validate properties for version 5 (default partition path migration).
    */
   private void validateVersion5Properties(HoodieTableConfig tableConfig) {
+
     // Version 5 upgrade validates that no deprecated default partition paths exist
     // The upgrade handler checks for DEPRECATED_DEFAULT_PARTITION_PATH ("default") 
     // and requires migration to DEFAULT_PARTITION_PATH ("__HIVE_DEFAULT_PARTITION__")
@@ -487,7 +478,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   private void validateVersion6Properties(HoodieTableMetaClient metaClient) throws IOException {
     // Version 6 upgrade deletes compaction requested files from .aux folder (HUDI-6040)
     // Validate that no REQUESTED compaction files remain in auxiliary folder
-    
+
     StoragePath auxPath = new StoragePath(metaClient.getMetaAuxiliaryPath());
     
     if (!metaClient.getStorage().exists(auxPath)) {
@@ -635,19 +626,15 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       throw new RuntimeException("Data consistency validation failed " + stage, e);
     }
   }
-  
-  /**
-   * Simple data validation for testAutoUpgradeDisabled.
-   */
+
   private void performDataValidationOnTable(HoodieTableMetaClient metaClient, String stage) {
-    LOG.info("Performing simple data validation on table {}", stage);
+    LOG.info("Performing data validation on table {}", stage);
     
     try {
       Dataset<Row> tableData = readTableData(metaClient, stage);
-      LOG.info("Simple data validation passed {} (table accessible, {} rows)", stage, tableData.count());
+      LOG.info("Data validation passed {} (table accessible, {} rows)", stage, tableData.count());
     } catch (Exception e) {
-      throw new RuntimeException("Simple data validation failed " + stage, e);
+      throw new RuntimeException("Data validation failed " + stage, e);
     }
   }
-
 }
