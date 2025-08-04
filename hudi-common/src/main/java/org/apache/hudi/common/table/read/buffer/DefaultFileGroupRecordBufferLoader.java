@@ -47,7 +47,7 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
     return INSTANCE;
   }
 
-  DefaultFileGroupRecordBufferLoader() {
+  private DefaultFileGroupRecordBufferLoader() {
   }
 
   @Override
@@ -60,36 +60,25 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
                                                                             ReaderParameters readerParameters,
                                                                             HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    FileGroupRecordBuffer<T> recordBuffer = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
-        readerParameters, readStats, fileGroupUpdateCallback);
-    return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props,
-        readerParameters, readStats, recordBuffer));
-  }
-
-  protected FileGroupRecordBuffer<T> getFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                           InputSplit inputSplit,
-                                                           List<String> orderingFieldNames,
-                                                           HoodieTableMetaClient hoodieTableMetaClient,
-                                                           TypedProperties props,
-                                                           ReaderParameters readerParameters,
-                                                           HoodieReadStats readStats,
-                                                           Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
+    FileGroupRecordBuffer<T> recordBuffer;
     if (isSkipMerge) {
-      return new UnmergedFileGroupRecordBuffer<>(
+      recordBuffer = new UnmergedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats);
     } else if (readerParameters.sortOutputs()) {
-      return new SortedKeyBasedFileGroupRecordBuffer<>(
+      recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     } else if (readerParameters.useRecordPosition() && inputSplit.getBaseFileOption().isPresent()) {
-      return new PositionBasedFileGroupRecordBuffer<>(
+      recordBuffer = new PositionBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, inputSplit.getBaseFileOption().get().getCommitTime(), props,
           orderingFieldNames, updateProcessor);
     } else {
-      return new KeyBasedFileGroupRecordBuffer<>(
+      recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
+    return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props,
+        readerParameters, readStats, recordBuffer));
   }
 }
