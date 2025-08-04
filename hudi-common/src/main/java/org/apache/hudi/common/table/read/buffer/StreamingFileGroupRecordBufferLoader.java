@@ -18,67 +18,64 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 /**
- * Default implementation of {@link FileGroupRecordBufferLoader} that initializes a buffer based on the reader parameters.
- *
- * @param <T> the engine specific record type
+ * Records based {@link FileGroupRecordBuffer} which takes in a map of records to be merged with a base file of interest.
+ * This will be used in write paths for COW merge cases.
+ * @param <T> Engine native presentation of the record.
  */
-class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoader implements FileGroupRecordBufferLoader<T> {
-  private static final DefaultFileGroupRecordBufferLoader INSTANCE = new DefaultFileGroupRecordBufferLoader<>();
+public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordBufferLoader<T> {
+  private static final StreamingFileGroupRecordBufferLoader INSTANCE = new StreamingFileGroupRecordBufferLoader<>();
 
-  static <T> DefaultFileGroupRecordBufferLoader<T> getInstance() {
+  static <T> StreamingFileGroupRecordBufferLoader<T> getInstance() {
     return INSTANCE;
   }
 
-  private DefaultFileGroupRecordBufferLoader() {
-  }
-
   @Override
-  public Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                                            HoodieStorage storage,
-                                                                            InputSplit inputSplit,
-                                                                            List<String> orderingFieldNames,
-                                                                            HoodieTableMetaClient hoodieTableMetaClient,
-                                                                            TypedProperties props,
-                                                                            ReaderParameters readerParameters,
-                                                                            HoodieReadStats readStats,
+  public Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext, HoodieStorage storage, InputSplit inputSplit,
+                                                                            List<String> orderingFieldNames, HoodieTableMetaClient hoodieTableMetaClient,
+                                                                            TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
     FileGroupRecordBuffer<T> recordBuffer;
-    if (isSkipMerge) {
-      recordBuffer = new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats);
-    } else if (readerParameters.sortOutputs()) {
+    if (readerParameters.sortOutputs()) {
       recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
-    } else if (readerParameters.useRecordPosition() && inputSplit.getBaseFileOption().isPresent()) {
-      recordBuffer = new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, inputSplit.getBaseFileOption().get().getCommitTime(), props,
-          orderingFieldNames, updateProcessor);
     } else {
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
-    return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props,
-        readerParameters, readStats, recordBuffer));
+
+    Iterator<BufferedRecord> recordIterator = inputSplit.getRecordIterator();
+
+    while (recordIterator.hasNext()) {
+      BufferedRecord bufferedRecord = recordIterator.next();
+      try {
+        recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to process next buffered record", e);
+      }
+    }
+    return Pair.of(recordBuffer, Collections.emptyList());
   }
 }
