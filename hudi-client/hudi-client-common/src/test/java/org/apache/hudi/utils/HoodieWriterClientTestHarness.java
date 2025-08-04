@@ -1218,24 +1218,22 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    */
   protected void testUpsertsInternal(Function3<Object, BaseHoodieWriteClient, Object, String> writeFn, boolean populateMetaFields, boolean isPrepped,
                                      SupportsUpgradeDowngrade upgradeDowngrade) throws Exception {
-
     metaClient.getStorage().deleteDirectory(new StoragePath(basePath));
-
-    metaClient = HoodieTableMetaClient.newTableBuilder()
-        .fromMetaClient(metaClient)
-        .setTableVersion(6)
-        .setPopulateMetaFields(populateMetaFields)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
-
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,rider")
             .withMetadataIndexColumnStatsFileGroupCount(1).withEngineType(getEngineType()).build())
         .withWriteTableVersion(6);
 
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.SIX);
-
     HoodieWriteConfig config = cfgBuilder.build();
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(config.getProps())
+        .setTableVersion(6)
+        .setTableType(metaClient.getTableType())
+        .setPopulateMetaFields(populateMetaFields)
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+
+    metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.SIX);
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (only inserts)

@@ -305,7 +305,7 @@ public abstract class SchemaHandlerTestBase {
   static class StubbedReaderContext extends HoodieReaderContext<String> {
 
     protected StubbedReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex) {
-      super(null, hoodieTableConfig, Option.empty(), Option.empty(), new RecordContext<String>(hoodieTableConfig, hoodieTableConfig.populateMetaFields()) {
+      super(null, hoodieTableConfig, Option.empty(), Option.empty(), new RecordContext<String>(hoodieTableConfig) {
         @Override
         public boolean supportsParquetRowIndex() {
           return supportsParquetRowIndex;

@@ -65,14 +65,13 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
   private final Broadcast<SparkColumnarFileReader> baseFileReaderBroadcast;
   private final Broadcast<SerializableConfiguration> configurationBroadcast;
   private final Broadcast<HoodieTableConfig> tableConfigBroadcast;
-  private final boolean shouldUseMetaFields;
 
-  SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient, boolean shouldUseMetaFields) {
-    this(hoodieSparkEngineContext, metaClient, new TableSchemaResolver(metaClient), SparkAdapterSupport$.MODULE$.sparkAdapter(), shouldUseMetaFields);
+  SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient) {
+    this(hoodieSparkEngineContext, metaClient, new TableSchemaResolver(metaClient), SparkAdapterSupport$.MODULE$.sparkAdapter());
   }
 
   SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient,
-                            TableSchemaResolver resolver, SparkAdapter sparkAdapter, boolean shouldUseMetaFields) {
+                            TableSchemaResolver resolver, SparkAdapter sparkAdapter) {
     SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sessionState().conf();
     JavaSparkContext jsc = hoodieSparkEngineContext.jsc();
 
@@ -108,7 +107,6 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
     // Broadcast: TableConfig.
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     tableConfigBroadcast = jsc.broadcast(tableConfig);
-    this.shouldUseMetaFields = shouldUseMetaFields;
   }
 
   @Override
@@ -133,8 +131,7 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           new HadoopStorageConfiguration(configurationBroadcast.getValue().value()),
-          tableConfigBroadcast.getValue(),
-          shouldUseMetaFields);
+          tableConfigBroadcast.getValue());
     } else {
       throw new HoodieException("Cannot get the broadcast Spark Parquet reader.");
     }

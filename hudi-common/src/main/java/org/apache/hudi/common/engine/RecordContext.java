@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.JavaTypeConverter;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
@@ -61,15 +60,17 @@ public abstract class RecordContext<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private final Option<SerializableBiFunction<T, Schema, String>> recordKeyExtractor;  // for encoding and decoding schemas to the spillable map
+  private final SerializableBiFunction<T, Schema, String> recordKeyExtractor;
+  // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   protected JavaTypeConverter typeConverter;
   protected String partitionPath = null;
 
-  protected RecordContext(HoodieTableConfig tableConfig, boolean shouldUseMetaFields) {
+  protected RecordContext(HoodieTableConfig tableConfig) {
     this.typeConverter = new DefaultJavaTypeConverter();
-    this.recordKeyExtractor = shouldUseMetaFields ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields());
+    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
+        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
   }
 
   public void setPartitionPath(String partitionPath) {
@@ -146,8 +147,7 @@ public abstract class RecordContext<T> implements Serializable {
    * @return The record key in String.
    */
   public String getRecordKey(T record, Schema schema) {
-    return recordKeyExtractor.orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated"))
-        .apply(record, schema);
+    return recordKeyExtractor.apply(record, schema);
   }
 
   /**
@@ -332,18 +332,17 @@ public abstract class RecordContext<T> implements Serializable {
     return false;
   }
 
-  private Option<SerializableBiFunction<T, Schema, String>> metadataKeyExtractor() {
-    return Option.of((record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString());
+  private SerializableBiFunction<T, Schema, String> metadataKeyExtractor() {
+    return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
   }
 
-  private Option<SerializableBiFunction<T, Schema, String>> virtualKeyExtractor(Option<String[]> recordKeyFieldsOpt) {
-    return recordKeyFieldsOpt.map(recordKeyFields ->
-        (record, schema) -> {
-          BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
-            Object result = getValue(record, schema, recordKeyField);
-            return result != null ? result.toString() : null;
-          };
-          return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
-        });
+  private SerializableBiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {
+    return (record, schema) -> {
+      BiFunction<String, Integer, String> valueFunction = (recordKeyField, index) -> {
+        Object result = getValue(record, schema, recordKeyField);
+        return result != null ? result.toString() : null;
+      };
+      return KeyGenerator.constructRecordKey(recordKeyFields, valueFunction);
+    };
   }
 }
