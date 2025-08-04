@@ -23,6 +23,9 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -194,7 +197,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .build();
     assertEquals(originalVersion, unchangedMetaClient.getTableConfig().getTableVersion(),
         "Table version should remain unchanged when auto-upgrade is disabled");
-    validateSpecificPropertiesForVersion(unchangedMetaClient.getTableConfig(), originalVersion);
+    validateSpecificPropertiesForVersion(unchangedMetaClient, unchangedMetaClient.getTableConfig(), originalVersion);
     validateVersionSpecificProperties(unchangedMetaClient, originalVersion, originalVersion);
     performDataValidationOnTable(unchangedMetaClient, "after auto-upgrade disabled test");
     
@@ -390,7 +393,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         validateVersion5Properties(tableConfig);
         break;
       case SIX:
-        validateVersion6Properties(tableConfig);
+        validateVersion6Properties(metaClient);
         break;
       case EIGHT:
         validateVersion8Properties(tableConfig);
@@ -407,7 +410,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   /**
    * Validate specific properties for a given table version.
    */
-  private void validateSpecificPropertiesForVersion(HoodieTableConfig tableConfig, HoodieTableVersion version) throws IOException {
+  private void validateSpecificPropertiesForVersion(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig, HoodieTableVersion version) throws IOException {
     switch (version) {
       case FOUR:
         validateVersion4Properties(tableConfig);
@@ -416,15 +419,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         validateVersion5Properties(tableConfig);
         break;
       case SIX:
-        validateVersion6Properties(tableConfig);
+        validateVersion6Properties(metaClient);
         break;
       case EIGHT:
         validateVersion8Properties(tableConfig);
         break;
       case NINE:
-        // Note: validateVersion9Properties requires metaClient, so we'll skip this for now
-        // or we could enhance this method to accept metaClient as well
-        LOG.warn("Skipping version 9 specific validation as it requires metaClient");
+        validateVersion9Properties(metaClient, tableConfig);
         break;
       default:
         LOG.warn("No specific property validation for version {}", version);
@@ -456,17 +457,68 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   }
 
   /**
-   * Validate properties for version 5 (default partition path changes).
+   * Validate properties for version 5 (default partition path migration).
    */
   private void validateVersion5Properties(HoodieTableConfig tableConfig) {
-    // Version 5 mainly focuses on default partition path validation, to file JIRA
+    // Version 5 upgrade validates that no deprecated default partition paths exist
+    // The upgrade handler checks for DEPRECATED_DEFAULT_PARTITION_PATH ("default") 
+    // and requires migration to DEFAULT_PARTITION_PATH ("__HIVE_DEFAULT_PARTITION__")
+    
+    // If table is partitioned, validate partition path migration
+    if (tableConfig.isTablePartitioned()) {
+      LOG.info("Validating V5 partition path migration for partitioned table");
+      
+      // Check hive-style partitioning configuration
+      boolean hiveStylePartitioningEnable = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
+      LOG.info("Hive-style partitioning enabled: {}", hiveStylePartitioningEnable);
+      
+      // Validate partition field configuration exists
+      assertTrue(tableConfig.getPartitionFields().isPresent(),
+          "Partition fields should be present for partitioned table in V5");
+    } else {
+      LOG.info("Non-partitioned table - skipping partition path validation for V5");
+    }
   }
 
   /**
    * Validate properties for version 6 (auxiliary folder cleanup).
+   * Based on FiveToSixUpgradeHandler - validates that compaction REQUESTED files were properly cleaned up.
    */
-  private void validateVersion6Properties(HoodieTableConfig tableConfig) {
-    // Version 6 focuses on auxiliary folder cleanup, to file JIRA
+  private void validateVersion6Properties(HoodieTableMetaClient metaClient) throws IOException {
+    // Version 6 upgrade deletes compaction requested files from .aux folder (HUDI-6040)
+    // Validate that no REQUESTED compaction files remain in auxiliary folder
+    
+    StoragePath auxPath = new StoragePath(metaClient.getMetaAuxiliaryPath());
+    
+    if (!metaClient.getStorage().exists(auxPath)) {
+      // Auxiliary folder doesn't exist - this is valid, nothing to clean up
+      LOG.info("V6 validation passed: Auxiliary folder does not exist");
+      return;
+    }
+    
+    // Auxiliary folder exists - validate that REQUESTED compaction files were cleaned up
+    LOG.info("V6 validation: Checking auxiliary folder cleanup at: {}", auxPath);
+    
+    // Get pending compaction timeline with REQUESTED state (same as upgrade handler)
+    HoodieTimeline compactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline()
+        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
+    
+    InstantFileNameGenerator factory = metaClient.getInstantFileNameGenerator();
+    
+    // Validate that none of the REQUESTED compaction files exist in auxiliary folder
+    compactionTimeline.getInstantsAsStream().forEach(instant -> {
+      StoragePath compactionFile = new StoragePath(metaClient.getMetaAuxiliaryPath(), factory.getFileName(instant));
+      try {
+        if (metaClient.getStorage().exists(compactionFile)) {
+          throw new AssertionError("V6 validation failed: REQUESTED compaction file should have been cleaned up but still exists: " + compactionFile);
+        }
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to check existence of compaction file: " + compactionFile, e);
+      }
+    });
+    
+    LOG.info("V6 validation passed: {} REQUESTED compaction instants verified to be cleaned up from auxiliary folder", 
+        compactionTimeline.countInstants());
   }
 
   /**
