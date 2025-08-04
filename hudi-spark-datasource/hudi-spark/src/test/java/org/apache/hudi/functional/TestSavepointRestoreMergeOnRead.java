@@ -502,7 +502,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       validateFilesMetadata(hoodieWriteConfig);
       assertEquals(Collections.singletonMap(inflightCommit, numRecords), getRecordCountPerCommit());
       // ensure the compaction instant is still present because it was completed before the target of the restore
-      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
+      assertFalse(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
           .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get())));
     }
   }
@@ -574,15 +574,8 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       client.restoreToSavepoint(inflightCommit);
       validateFilesMetadata(hoodieWriteConfig);
       assertEquals(Collections.singletonMap(inflightCommit, numRecords), getRecordCountPerCommit());
-      boolean compactionIsPresent = metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
-          .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get()));
-      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        // ensure the compaction instant is not present because it was completed after the target of the restore
-        assertFalse(compactionIsPresent);
-      } else {
-        // for versions before 8, the compaction instant is not removed because the log files of the savepoint instant are associated with this compaction instant
-        assertTrue(compactionIsPresent);
-      }
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream()
+          .anyMatch(hoodieInstant -> hoodieInstant.requestedTime().equals(compactionInstant.get())));
       assertEquals(tableVersion, HoodieTableMetaClient.reload(metaClient).getTableConfig().getTableVersion());
     }
   }
