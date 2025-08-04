@@ -83,7 +83,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     when(mockMetaClient.getStorage()).thenReturn(storage);
     InputSplit inputSplit = mock(InputSplit.class);
     if (testRecordsBased) {
-      when(inputSplit.getRecordIterator()).thenReturn(Option.of(Collections.emptyIterator()));
+      when(inputSplit.getRecordIterator()).thenReturn(Collections.emptyIterator());
     }
     ReaderParameters readerParameters = mock(ReaderParameters.class);
     if (fileGroupRecordBufferType.contains("Sorted")) {

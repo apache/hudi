@@ -25,10 +25,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
 
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -42,14 +39,15 @@ import java.util.stream.Stream;
 public class InputSplit {
   private final Option<HoodieBaseFile> baseFileOption;
   private final List<HoodieLogFile> logFiles;
-  private final Option<Iterator<Pair<Serializable, BufferedRecord>>> recordIterator;
+  private final Option<Iterator<BufferedRecord>> recordIterator;
   private final String partitionPath;
   // Byte offset to start reading from the base file
   private final long start;
   // Length of bytes to read from the base file
   private final long length;
 
-  InputSplit(Option<HoodieBaseFile> baseFileOption, Either<Stream<HoodieLogFile>,Iterator<Pair<Serializable, BufferedRecord>>> logFilesOrRecordIterator,
+  InputSplit(Option<HoodieBaseFile> baseFileOption,
+             Either<Stream<HoodieLogFile>, Iterator<BufferedRecord>> logFilesOrRecordIterator,
              String partitionPath, long start, long length) {
     this.baseFileOption = baseFileOption;
     if (logFilesOrRecordIterator.isLeft()) {
@@ -94,8 +92,7 @@ public class InputSplit {
     return this.logFiles.isEmpty() && recordIterator.isEmpty();
   }
 
-  public Option<Iterator<Pair<Serializable, BufferedRecord>>> getRecordIterator() {
-    ValidationUtils.checkArgument(recordIterator.isPresent(), "Record iterator is not initialized");
-    return this.recordIterator;
+  public Iterator<BufferedRecord> getRecordIterator() {
+    return this.recordIterator.orElseThrow(() -> new IllegalStateException("The record iterator has not been setup"));
   }
 }

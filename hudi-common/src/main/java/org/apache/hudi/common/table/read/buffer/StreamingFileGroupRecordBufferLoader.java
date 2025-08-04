@@ -31,11 +31,9 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -68,15 +66,14 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
 
-    Iterator<Pair<Serializable, BufferedRecord>> recordIterator = inputSplit.getRecordIterator()
-        .orElseThrow(() -> new HoodieValidationException("The record iterator has not been setup"));
+    Iterator<BufferedRecord> recordIterator = inputSplit.getRecordIterator();
 
     while (recordIterator.hasNext()) {
-      Pair<Serializable, BufferedRecord> entry = recordIterator.next();
+      BufferedRecord bufferedRecord = recordIterator.next();
       try {
-        recordBuffer.processNextDataRecord(entry.getValue(), entry.getKey());
+        recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {
-        throw new HoodieIOException("Failed to process next toBeMergedRecord ", e);
+        throw new HoodieIOException("Failed to process next buffered record", e);
       }
     }
     return Pair.of(recordBuffer, Collections.emptyList());

@@ -51,7 +51,6 @@ import org.apache.avro.Schema;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -364,7 +363,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private String partitionPath;
     private long start = 0;
     private long length = Long.MAX_VALUE;
-    private Iterator<Pair<Serializable, BufferedRecord>> recordIterator;
+    private Iterator<BufferedRecord> recordIterator;
     private boolean shouldUseRecordPosition = false;
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
@@ -400,7 +399,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withRecordIterator(Iterator<Pair<Serializable, BufferedRecord>> recordIterator) {
+    public Builder<T> withRecordIterator(Iterator<BufferedRecord> recordIterator) {
       this.recordIterator = recordIterator;
       this.recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
       return this;
