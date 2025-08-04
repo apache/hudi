@@ -230,7 +230,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Returns pairs of (record key, location of record key) which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocation(HoodieData<String> recordKeys);
 
   /**
    * Returns pairs of (record key, location of record key) which are found in the record index.
@@ -242,28 +242,28 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return map from recordkey to the location of the record that was read from the index
    *
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocation(HoodieData<String> recordKeys, Option<String> dataTablePartition);
 
   /**
    * Returns the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
   default HoodieData<HoodieRecordGlobalLocation> readRecordIndexLocations(HoodieData<String> recordKeys) {
-    return readRecordIndexLocationsWithKeys(recordKeys).values();
+    return readRecordIndexKeysAndLocation(recordKeys).values();
   }
 
   /**
    * Returns pairs of (secondary key, location of secondary key) which the provided secondary keys maps to.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexLocationsWithKeys(HoodieData<String> secondaryKeys, String partitionName);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocation(HoodieData<String> secondaryKeys, String partitionName);
 
   /**
    * Returns the location of secondary keys which are found in the secondary index.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
   default HoodieData<HoodieRecordGlobalLocation> readSecondaryIndexLocations(HoodieData<String> secondaryKeys, String partitionName) {
-    return readSecondaryIndexLocationsWithKeys(secondaryKeys, partitionName).values();
+    return readSecondaryIndexKeysAndLocation(secondaryKeys, partitionName).values();
   }
 
   /**
