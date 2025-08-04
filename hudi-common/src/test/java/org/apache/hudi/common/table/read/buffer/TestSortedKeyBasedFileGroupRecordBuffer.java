@@ -206,12 +206,11 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
         mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, Collections.emptyList(), updateProcessor);
   }
 
-  private static List<TestRecord> getActualRecords(SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer) throws IOException {
-    List<TestRecord> actualRecords = new ArrayList<>();
+  private static <T> List<T> getActualRecords(SortedKeyBasedFileGroupRecordBuffer<T> fileGroupRecordBuffer) throws IOException {
+    List<T> actualRecords = new ArrayList<>();
     while (fileGroupRecordBuffer.hasNext()) {
       actualRecords.add(fileGroupRecordBuffer.next());
     }
     return actualRecords;
   }
-
 }
