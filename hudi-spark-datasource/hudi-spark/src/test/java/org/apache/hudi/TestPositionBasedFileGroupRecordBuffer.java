@@ -38,7 +38,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
-import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
@@ -59,7 +59,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader;
 import org.apache.spark.sql.sources.Filter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -123,7 +123,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         .build();
     avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
 
-    SparkParquetReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(false, spark().sessionState().conf(),
+    SparkColumnarFileReader reader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(false, spark().sessionState().conf(),
         Map$.MODULE$.empty(), storageConf().unwrapAs(Configuration.class));
     HoodieReaderContext<InternalRow> ctx = new SparkFileFormatInternalRowReaderContext(reader, JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(),
         JavaConverters.asScalaBufferConverter(Collections.<Filter>emptyList()).asScala().toSeq(), storageConf(), metaClient.getTableConfig());
@@ -158,7 +158,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
         metaClient.getTableConfig().getPartialUpdateMode(),
         baseFileInstantTime,
         props,
-        Option.of("timestamp"),
+        Collections.singletonList("timestamp"),
         updateProcessor);
   }
 

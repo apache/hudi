@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.partitioner;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
+import org.apache.hudi.adapter.KeyedProcessFunctionAdapter;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -31,19 +31,19 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
+import org.apache.hudi.util.FlinkTaskContextSupplier;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.utils.RuntimeContextUtils;
+import org.apache.hudi.utils.StateTtlConfigUtils;
 
 import org.apache.flink.api.common.state.CheckpointListener;
-import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
@@ -66,7 +66,7 @@ import java.util.Objects;
  * @see BucketAssigner
  */
 public class BucketAssignFunction
-    extends KeyedProcessFunction<String, HoodieFlinkInternalRow, HoodieFlinkInternalRow>
+    extends KeyedProcessFunctionAdapter<String, HoodieFlinkInternalRow, HoodieFlinkInternalRow>
     implements CheckpointedFunction, CheckpointListener {
 
   /**
@@ -100,24 +100,26 @@ public class BucketAssignFunction
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
-        WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
-    this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED)
-        && !conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
+        WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
+    this.globalIndex = conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED)
+        && !conf.get(FlinkOptions.CHANGELOG_ENABLED);
   }
 
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, true);
+    // not load fs view storage config for incremental job graph, since embedded timeline server
+    // is started in write coordinator which is started after bucket assigner operator finished
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(this.conf, !OptionsResolver.isIncrementalJobGraph(conf));
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHadoopConf(this.conf)),
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(
-        getRuntimeContext().getIndexOfThisSubtask(),
-        getRuntimeContext().getMaxNumberOfParallelSubtasks(),
-        getRuntimeContext().getNumberOfParallelSubtasks(),
+        RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext()),
+        RuntimeContextUtils.getMaxNumberOfParallelSubtasks(getRuntimeContext()),
+        RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()),
         OptionsResolver.isInsertOverwrite(conf),
-        HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
+        HoodieTableType.valueOf(conf.get(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
   }
@@ -133,9 +135,9 @@ public class BucketAssignFunction
         new ValueStateDescriptor<>(
             "indexState",
             TypeInformation.of(HoodieRecordGlobalLocation.class));
-    double ttl = conf.getDouble(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
+    double ttl = conf.get(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
     if (ttl > 0) {
-      indexStateDesc.enableTimeToLive(StateTtlConfig.newBuilder(Time.milliseconds((long) ttl)).build());
+      indexStateDesc.enableTimeToLive(StateTtlConfigUtils.createTtlConfig((long) ttl));
     }
     indexState = context.getKeyedStateStore().getState(indexStateDesc);
   }

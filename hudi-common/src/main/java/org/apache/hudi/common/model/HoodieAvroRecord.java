@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -98,7 +98,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
     return this.getData().getOrderingValue();
   }
 
@@ -128,7 +128,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     try {
       Option<IndexedRecord> indexedRecordOpt = getData().getInsertValue(recordSchema, props);
       if (indexedRecordOpt.isPresent()) {
-        return HoodieAvroReaderContext.getFieldValueFromIndexedRecord(indexedRecordOpt.get(), column);
+        return AvroRecordContext.getFieldValueFromIndexedRecord(indexedRecordOpt.get(), column);
       } else {
         return null;
       }
@@ -227,8 +227,9 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       Option<Schema> schemaWithoutMetaFields) throws IOException {
     IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema, props).get();
     String payloadClass = ConfigUtils.getPayloadClass(props);
-    String preCombineField = ConfigUtils.getOrderingField(props);
-    return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
+    String[] orderingFields = ConfigUtils.getOrderingFields(props);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, orderingFields, simpleKeyGenFieldsOpt,
+        withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override
@@ -277,5 +278,13 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   @Override
   protected final T readRecordPayload(Kryo kryo, Input input) {
     return (T) kryo.readClassAndObject(input);
+  }
+
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    return HoodieAvroUtils.convertValueForAvroLogicalTypes(
+        fieldSchema, fieldValue, keepConsistentLogicalTimestamp);
   }
 }

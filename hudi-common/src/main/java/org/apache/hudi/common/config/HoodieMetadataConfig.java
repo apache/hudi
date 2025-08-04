@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
@@ -271,6 +272,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Create the HUDI Record Index within the Metadata Table");
 
+  public static final ConfigProperty<Boolean> PARTITIONED_RECORD_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".partitioned.record.index.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Create the HUDI Record Index within the Metadata Table for a partitioned dataset where a "
+          + "pair of partition path and record key is unique across the entire table");
+
   public static final ConfigProperty<Integer> RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.min.filegroup.count")
       .defaultValue(10)
@@ -284,6 +293,20 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of file groups to use for Record Index.");
+
+  public static final ConfigProperty<Integer> PARTITIONED_RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".partitioned.record.index.min.filegroup.count")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Minimum number of file groups to use for Partitioned Record Index.");
+
+  public static final ConfigProperty<Integer> PARTITIONED_RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".partitioned.record.index.max.filegroup.count")
+      .defaultValue(10)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum number of file groups to use for Partitioned Record Index.");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.max.filegroup.size")
@@ -496,6 +519,63 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Default number of partitions to use when repartitioning is needed. "
           + "This provides a reasonable level of parallelism for metadata table operations.");
 
+  public static final ConfigProperty<Integer> METADATA_FILE_CACHE_MAX_SIZE_MB = ConfigProperty
+      .key(METADATA_PREFIX + ".file.cache.max.size.mb")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Max size in MB below which metadata file (HFile) will be downloaded "
+          + "and cached entirely for the HFileReader.");
+
+  public static final ConfigProperty<Boolean> BLOOM_FILTER_ENABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".bloom.filter.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Whether to use bloom filter in the files for lookup in the metadata table.");
+
+  // Configs that control the bloom filter that is written to the file footer
+  public static final ConfigProperty<String> BLOOM_FILTER_TYPE = ConfigProperty
+      .key(METADATA_PREFIX + ".bloom.filter.type")
+      .defaultValue(BloomFilterTypeCode.DYNAMIC_V0.name())
+      .withValidValues(BloomFilterTypeCode.SIMPLE.name(), BloomFilterTypeCode.DYNAMIC_V0.name())
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation(BloomFilterTypeCode.class, "Bloom filter type for the files in the metadata table");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_NUM_ENTRIES = ConfigProperty
+      .key(METADATA_PREFIX + ".bloom.filter.num.entries")
+      .defaultValue("10000")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("This is the number of entries stored in a bloom filter for the files in the metadata table. "
+          + "The rationale for the default: 10000 is chosen to be a good tradeoff between false positive rate and "
+          + "storage size. Warning: Setting this very low generates a lot of false positives and the metadata "
+          + "table reading has to scan a lot more files than it has to and setting this to a very high number "
+          + "increases the size every base file linearly (roughly 4KB for every 50000 entries). "
+          + "This config is also used with DYNAMIC bloom filter which determines the initial size for the bloom.");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_FPP = ConfigProperty
+      .key(METADATA_PREFIX + ".bloom.filter.fpp")
+      .defaultValue("0.000000001")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Expected probability a false positive in a bloom filter for the files in the "
+          + "metadata table. This is used to calculate how many bits should be assigned for the bloom filter "
+          + "and the number of hash functions. This is usually set very low (default: 0.000000001), "
+          + "we like to tradeoff disk space for lower false positives. If the number of entries "
+          + "added to bloom filter exceeds the configured value (hoodie.metadata.bloom.num_entries), "
+          + "then this fpp may not be honored.");
+
+  public static final ConfigProperty<String> BLOOM_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
+      .key(METADATA_PREFIX + ".bloom.filter.dynamic.max.entries")
+      .defaultValue("100000")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The threshold for the maximum number of keys to record in a dynamic "
+          + "bloom filter row for the files in the metadata table. Only applies if the filter "
+          + "type (" + BLOOM_FILTER_TYPE.key() + " ) is BloomFilterTypeCode.DYNAMIC_V0.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -530,6 +610,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isRecordIndexEnabled() {
     return isEnabled() && getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
+  }
+
+  public boolean isPartitionedRecordIndexEnabled() {
+    return isEnabled() && getBooleanOrDefault(PARTITIONED_RECORD_INDEX_ENABLE_PROP);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -596,8 +680,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP);
   }
 
+  public int getPartitionedRecordIndexMinFileGroupCount() {
+    return getInt(PARTITIONED_RECORD_INDEX_MIN_FILE_GROUP_COUNT_PROP);
+  }
+
   public int getRecordIndexMaxFileGroupCount() {
     return getInt(RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP);
+  }
+
+  public int getPartitionedRecordIndexMaxFileGroupCount() {
+    return getInt(PARTITIONED_RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP);
   }
 
   public float getRecordIndexGrowthFactor() {
@@ -654,6 +746,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public Map<String, String> getExpressionIndexOptions() {
     return getExpressionIndexOptions(getString(EXPRESSION_INDEX_OPTIONS));
+  }
+
+  public boolean enableBloomFilter() {
+    return getBooleanOrDefault(BLOOM_FILTER_ENABLE);
+  }
+
+  public String getBloomFilterType() {
+    return getStringOrDefault(BLOOM_FILTER_TYPE);
+  }
+
+  public int getBloomFilterNumEntries() {
+    return getIntOrDefault(BLOOM_FILTER_NUM_ENTRIES);
+  }
+
+  public double getBloomFilterFpp() {
+    return getDoubleOrDefault(BLOOM_FILTER_FPP);
+  }
+
+  public int getDynamicBloomFilterMaxNumEntries() {
+    return getIntOrDefault(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES);
   }
 
   private Map<String, String> getExpressionIndexOptions(String configValue) {
@@ -727,6 +839,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getRepartitionDefaultPartitions() {
     return getInt(REPARTITION_DEFAULT_PARTITIONS);
+  }
+
+  public int getFileCacheMaxSizeMB() {
+    return getInt(METADATA_FILE_CACHE_MAX_SIZE_MB);
   }
 
   /**

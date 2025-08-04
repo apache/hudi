@@ -21,6 +21,8 @@ package org.apache.hudi.util;
 import org.apache.hudi.common.model.HoodieRecord;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.api.Schema.UnresolvedPhysicalColumn;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
@@ -37,6 +39,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Utilities for {@link org.apache.flink.table.types.DataType}.
@@ -60,6 +63,18 @@ public class DataTypeUtils {
     } else {
       throw new AssertionError("Unexpected type: " + logicalType);
     }
+  }
+
+  /**
+   * Convert the given {@link Schema} into {@link RowType}.
+   */
+  public static RowType toRowType(Schema schema) {
+    List<RowType.RowField> rowFields =
+        schema.getColumns().stream()
+            .filter(col -> col instanceof UnresolvedPhysicalColumn)
+            .map(col -> new RowType.RowField(col.getName(), ((DataType) ((UnresolvedPhysicalColumn) col).getDataType()).getLogicalType()))
+            .collect(Collectors.toList());
+    return new RowType(false, rowFields);
   }
 
   /**

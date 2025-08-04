@@ -27,12 +27,13 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
@@ -90,6 +91,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   private final long maxMemorySizeInBytes;
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
+  private final String[] orderingFields;
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
@@ -115,6 +117,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
       this.scannedPrefixes = new HashSet<>();
       this.allowInflightInstants = allowInflightInstants;
+      this.orderingFields = ConfigUtils.getOrderingFields(this.hoodieTableMetaClient.getTableConfig().getProps());
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -275,12 +278,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
       // For same ordering values, uses the natural order(arrival time semantics).
 
-      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
+      Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps(), orderingFields);
       Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
-      boolean choosePrev = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
+      boolean choosePrev = !OrderingValues.isDefault(deleteOrderingVal)
+          && OrderingValues.isSameClass(curOrderingVal, deleteOrderingVal)
           && curOrderingVal.compareTo(deleteOrderingVal) > 0;
       if (choosePrev) {
         // The DELETE message is obsolete if the old message has greater orderingVal.

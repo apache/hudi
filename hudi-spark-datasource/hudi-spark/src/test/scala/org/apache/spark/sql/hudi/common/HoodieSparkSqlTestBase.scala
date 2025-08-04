@@ -28,12 +28,14 @@ import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -369,6 +371,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       }
     }
   }
+
+  /**
+   * Wraps test execution with RDD persistence validation.
+   * This ensures that no new RDDs remain persisted after test execution.
+   *
+   * @param f The test code to execute
+   */
+  protected def withRDDPersistenceValidation(f: => Unit): Unit = {
+    org.apache.hudi.testutils.SparkRDDValidationUtils.withRDDPersistenceValidation(spark, new org.apache.hudi.testutils.SparkRDDValidationUtils.ThrowingRunnable {
+      override def run(): Unit = f
+    })
+  }
 }
 
 object HoodieSparkSqlTestBase {
@@ -438,7 +452,7 @@ object HoodieSparkSqlTestBase {
       val logBlock = logReader.next()
       if (logBlock.isInstanceOf[HoodieDeleteBlock]) {
         val deleteLogBlock = logBlock.asInstanceOf[HoodieDeleteBlock]
-        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue() == 0 || i.getOrderingValue() == null))
+        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue().equals(OrderingValues.getDefault) || i.getOrderingValue() == null))
         deleteLogBlockFound = true
       }
     }

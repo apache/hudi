@@ -124,6 +124,108 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     assertEquals(serDe.deserializeRow(newRow2), Row("Andrew", 25, Row("Mission st", "SF")));
   }
 
+  test("Test rewrite row with renamed columns") {
+    // Original schema
+    val oldSchema = StructType(Seq(
+      StructField("first_name", StringType),
+      StructField("years_old", IntegerType)
+    ))
+
+    // Renamed schema
+    val newSchema = StructType(Seq(
+      StructField("name", StringType),
+      StructField("age", IntegerType)
+    ))
+
+    // Rename mapping: new -> old
+    val renameMap: java.util.Map[String, String] = new java.util.HashMap()
+    renameMap.put("name", "first_name")
+    renameMap.put("age", "years_old")
+
+    // Sample row
+    val oldRowData = sparkSession.sparkContext.parallelize(Seq(Row("Alice", 30)))
+    val oldRow = sparkSession.createDataFrame(oldRowData, oldSchema).queryExecution.toRdd.first()
+
+    // Generate writer with rename map
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(oldSchema, newSchema, renameMap, JCollections.emptyMap())
+    val newRow = rowWriter(oldRow)
+
+    val serDe = sparkAdapter.createSparkRowSerDe(newSchema)
+    assertEquals(Row("Alice", 30), serDe.deserializeRow(newRow))
+  }
+
+  test("Test rewrite row with columns swap") {
+    // Original schema
+    val oldSchema = StructType(Seq(
+      StructField("first_name", StringType),
+      StructField("years_old", IntegerType)
+    ))
+
+    // Renamed schema
+    val newSchema = StructType(Seq(
+      StructField("years_old", StringType),
+      StructField("first_name", IntegerType)
+    ))
+
+    // Rename mapping: new -> old
+    val renameMap: java.util.Map[String, String] = new java.util.HashMap()
+    renameMap.put("years_old", "first_name")
+    renameMap.put("first_name", "years_old")
+
+    // Sample row
+    val oldRowData = sparkSession.sparkContext.parallelize(Seq(Row("Alice", 30)))
+    val oldRow = sparkSession.createDataFrame(oldRowData, oldSchema).queryExecution.toRdd.first()
+
+    // Generate writer with rename map
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(oldSchema, newSchema, renameMap, JCollections.emptyMap())
+    val newRow = rowWriter(oldRow)
+
+    val serDe = sparkAdapter.createSparkRowSerDe(newSchema)
+    assertEquals(Row("Alice", 30), serDe.deserializeRow(newRow))
+  }
+
+  test("Test rewrite row with columns swap nested") {
+    // Original schema
+    val oldSchema = StructType(Seq(
+      StructField("first_name", StringType),
+      StructField("years_old", IntegerType),
+      StructField("address",
+        StructType(Seq(
+          StructField("city", StringType),
+          StructField("street", StringType)
+        )
+    ))))
+
+    // Renamed schema
+    val newSchema = StructType(Seq(
+      StructField("years_old", StringType),
+      StructField("first_name", IntegerType),
+      StructField("address",
+        StructType(Seq(
+          StructField("street", StringType),
+          StructField("city", StringType)
+        )
+        ))))
+
+    // Rename mapping: new -> old
+    val renameMap: java.util.Map[String, String] = new java.util.HashMap()
+    renameMap.put("years_old", "first_name")
+    renameMap.put("first_name", "years_old")
+    renameMap.put("address.city", "street")
+    renameMap.put("address.street", "city")
+
+    // Sample row
+    val oldRowData = sparkSession.sparkContext.parallelize(Seq(Row("Alice", 30, Row("SF", "Mission st"))))
+    val oldRow = sparkSession.createDataFrame(oldRowData, oldSchema).queryExecution.toRdd.first()
+
+    // Generate writer with rename map
+    val rowWriter = HoodieInternalRowUtils.genUnsafeRowWriter(oldSchema, newSchema, renameMap, JCollections.emptyMap())
+    val newRow = rowWriter(oldRow)
+
+    val serDe = sparkAdapter.createSparkRowSerDe(newSchema)
+    assertEquals(Row("Alice", 30, Row("SF", "Mission st")), serDe.deserializeRow(newRow))
+  }
+
   /**
    * test record data type changes.
    * int => long/float/double/string

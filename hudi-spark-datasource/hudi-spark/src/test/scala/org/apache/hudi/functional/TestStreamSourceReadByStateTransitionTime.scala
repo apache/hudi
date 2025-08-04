@@ -17,6 +17,8 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.{SparkRDDWriteClient, WriteClientTestUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.EngineType
@@ -25,13 +27,33 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
+import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, UPSERT_PARALLELISM_VALUE}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.api.java.JavaRDD
+import org.apache.spark.sql.streaming.StreamTest
 
 import scala.collection.JavaConverters._
 
-class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
+class TestStreamSourceReadByStateTransitionTime extends StreamTest  {
+
+  protected val commonOptions: Map[String, String] = Map(
+    RECORDKEY_FIELD.key -> "id",
+    PRECOMBINE_FIELD.key -> "ts",
+    INSERT_PARALLELISM_VALUE.key -> "4",
+    UPSERT_PARALLELISM_VALUE.key -> "4",
+    DELETE_PARALLELISM_VALUE.key -> "4",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition_path"
+  )
+
+  org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
+
+  override protected def sparkConf = {
+    super.sparkConf
+      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
+      .set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+  }
 
   private val dataGen = new HoodieTestDataGenerator(System.currentTimeMillis())
 
@@ -42,7 +64,8 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setTableName(s"test_stream_${tableType.name()}")
-          .setPreCombineField("timestamp")
+          .setPreCombineFields("timestamp")
+          .setPartitionFields("partition_path")
           .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
         val writeConfig = HoodieWriteConfig.newBuilder()

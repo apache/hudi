@@ -136,13 +136,13 @@ public class IncrementalInputSplits implements Serializable {
 
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .startCompletionTime(this.conf.getString(FlinkOptions.READ_START_COMMIT))
-        .endCompletionTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
+        .startCompletionTime(this.conf.get(FlinkOptions.READ_START_COMMIT))
+        .endCompletionTime(this.conf.get(FlinkOptions.READ_END_COMMIT))
         .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .skipInsertOverwrite(skipInsertOverwrite)
-        .readCdcFromChangelog(this.conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG))
+        .readCdcFromChangelog(this.conf.get(FlinkOptions.READ_CDC_FROM_CHANGELOG))
         .build();
 
     IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
@@ -191,7 +191,7 @@ public class IncrementalInputSplits implements Serializable {
         return Result.instance(inputSplits, endInstant);
       }
       // case2: normal incremental read
-      String tableName = conf.getString(FlinkOptions.TABLE_NAME);
+      String tableName = conf.get(FlinkOptions.TABLE_NAME);
       List<HoodieInstant> instants = analyzingResult.getActiveInstants();
       List<HoodieCommitMetadata> metadataList = instants.stream()
           .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline))
@@ -247,13 +247,13 @@ public class IncrementalInputSplits implements Serializable {
     metaClient.reloadActiveTimeline();
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .startCompletionTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))
-        .endCompletionTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
+        .startCompletionTime(issuedOffset != null ? issuedOffset : this.conf.get(FlinkOptions.READ_START_COMMIT))
+        .endCompletionTime(this.conf.get(FlinkOptions.READ_END_COMMIT))
         .rangeType(issuedOffset != null ? InstantRange.RangeType.OPEN_CLOSED : InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .skipInsertOverwrite(skipInsertOverwrite)
-        .readCdcFromChangelog(this.conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG))
+        .readCdcFromChangelog(this.conf.get(FlinkOptions.READ_CDC_FROM_CHANGELOG))
         .limit(OptionsResolver.getReadCommitsLimit(conf))
         .build();
 
@@ -318,7 +318,7 @@ public class IncrementalInputSplits implements Serializable {
       return getCdcInputSplits(metaClient, instantRange);
     }
     // case2: normal streaming read
-    String tableName = conf.getString(FlinkOptions.TABLE_NAME);
+    String tableName = conf.get(FlinkOptions.TABLE_NAME);
     List<HoodieCommitMetadata> activeMetadataList = queryContext.getActiveInstants().stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
     List<HoodieCommitMetadata> archivedMetadataList = queryContext.getArchivedInstants().stream()
@@ -361,7 +361,7 @@ public class IncrementalInputSplits implements Serializable {
       boolean skipBaseFiles) {
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, pathInfoList);
     final AtomicInteger cnt = new AtomicInteger(0);
-    final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
+    final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()
         .map(relPartitionPath -> getFileSlices(fsView, relPartitionPath, maxCompletionTime, skipBaseFiles)
             .map(fileSlice -> {

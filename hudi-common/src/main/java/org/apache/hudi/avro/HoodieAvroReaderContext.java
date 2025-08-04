@@ -23,9 +23,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
@@ -37,10 +35,8 @@ import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -54,11 +50,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -68,16 +63,41 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * This implementation does not rely on a specific engine and can be used in any JVM environment as a result.
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
-  private final String payloadClass;
+  private final Map<StoragePath, HoodieAvroFileReader> reusableFileReaders;
 
+  /**
+   * Constructs an instance of the reader context that will read data into Avro records.
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig the configuration of the Hudi table being read
+   * @param instantRangeOpt the set of valid instants for this read
+   * @param filterOpt an optional filter to apply on the record keys
+   */
   public HoodieAvroReaderContext(
       StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt);
-    this.payloadClass = tableConfig.getPayloadClass();
-    this.typeConverter = new AvroReaderContextTypeConverter();
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, Collections.emptyMap());
+  }
+
+  /**
+   * Constructs an instance of the reader context with an optional cache of reusable file readers.
+   * This provides an opportunity for increased performance when repeatedly reading from the same files.
+   * The caller of this constructor is responsible for managing the lifecycle of the reusable file readers.
+   * @param storageConfiguration the storage configuration to use for reading files
+   * @param tableConfig the configuration of the Hudi table being read
+   * @param instantRangeOpt the set of valid instants for this read
+   * @param filterOpt an optional filter to apply on the record keys
+   * @param reusableFileReaders a map of reusable file readers, keyed by their storage paths.
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig));
+    this.reusableFileReaders = reusableFileReaders;
   }
 
   @Override
@@ -88,9 +108,14 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema dataSchema,
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
-    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
-        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-            filePath, baseFileFormat, Option.empty());
+    HoodieAvroFileReader reader;
+    if (reusableFileReaders.containsKey(filePath)) {
+      reader = reusableFileReaders.get(filePath);
+    } else {
+      reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
+              filePath, baseFileFormat, Option.empty());
+    }
     if (keyFilterOpt.isEmpty()) {
       return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
     }
@@ -107,21 +132,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       }
     }
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
-  }
-
-  @Override
-  public IndexedRecord convertAvroRecord(IndexedRecord record) {
-    return record;
-  }
-
-  @Override
-  public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema) {
-    return (GenericRecord) record;
-  }
-
-  @Override
-  public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 
   @Override
@@ -143,40 +153,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public Object getValue(IndexedRecord record, Schema schema, String fieldName) {
-    return getFieldValueFromIndexedRecord(record, fieldName);
-  }
-
-  @Override
-  public String getMetaFieldValue(IndexedRecord record, int pos) {
-    return record.get(pos).toString();
-  }
-
-  @Override
-  public HoodieRecord<IndexedRecord> constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
-    if (bufferedRecord.isDelete()) {
-      return SpillableMapUtils.generateEmptyPayload(
-          bufferedRecord.getRecordKey(),
-          partitionPath,
-          bufferedRecord.getOrderingValue(),
-          payloadClass);
-    }
-    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
-  }
-
-  @Override
-  public IndexedRecord constructEngineRecord(Schema schema,
-                                             Map<Integer, Object> updateValues,
-                                             BufferedRecord<IndexedRecord> baseRecord) {
-    IndexedRecord engineRecord = baseRecord.getRecord();
-    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
-      engineRecord.put(value.getKey(), value.getValue());
-    }
-    return engineRecord;
-  }
-
-  @Override
   public IndexedRecord seal(IndexedRecord record) {
     return record;
   }
@@ -193,7 +169,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public CustomSerializer<BufferedRecord<IndexedRecord>> getRecordSerializer() {
-    return new BufferedRecordSerializer<>(new AvroRecordSerializer(this::decodeAvroSchema));
+    return new BufferedRecordSerializer<>(new AvroRecordSerializer(versionId -> getRecordContext().decodeAvroSchema(versionId)));
   }
 
   @Override
@@ -207,68 +183,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    if (!renamedColumns.isEmpty()) {
-      throw new UnsupportedOperationException("Column renaming is not supported for the HoodieAvroReaderContext");
-    }
-    Map<String, Integer> fromFields = IntStream.range(0, from.getFields().size())
-        .boxed()
-        .collect(Collectors.toMap(
-            i -> from.getFields().get(i).name(), i -> i));
-    Map<String, Integer> toFields = IntStream.range(0, to.getFields().size())
-        .boxed()
-        .collect(Collectors.toMap(
-            i -> to.getFields().get(i).name(), i -> i));
-
-    // Check if source schema contains all fields from target schema.
-    List<Schema.Field> missingFields = to.getFields().stream()
-        .filter(f -> !fromFields.containsKey(f.name())).collect(Collectors.toList());
-    if (!missingFields.isEmpty()) {
-      throw new HoodieException("There are some fields missing in source schema: "
-          + missingFields);
-    }
-
-    // Build the mapping from source schema to target schema.
-    Map<Integer, Integer> fieldMap = toFields.entrySet().stream()
-        .filter(e -> fromFields.containsKey(e.getKey()))
-        .collect(Collectors.toMap(
-            e -> fromFields.get(e.getKey()), Map.Entry::getValue));
-
-    // Do the transformation.
-    return record -> {
-      IndexedRecord outputRecord = new GenericData.Record(to);
-      for (int i = 0; i < from.getFields().size(); i++) {
-        if (!fieldMap.containsKey(i)) {
-          continue;
-        }
-        int j = fieldMap.get(i);
-        outputRecord.put(j, record.get(i));
-      }
-      return outputRecord;
-    };
-  }
-
-  public static Object getFieldValueFromIndexedRecord(
-      IndexedRecord record,
-      String fieldName) {
-    Schema currentSchema = record.getSchema();
-    IndexedRecord currentRecord = record;
-    String[] path = fieldName.split("\\.");
-    for (int i = 0; i < path.length; i++) {
-      if (currentSchema.isUnion()) {
-        currentSchema = AvroSchemaUtils.resolveNullableSchema(currentSchema);
-      }
-      Schema.Field field = currentSchema.getField(path[i]);
-      if (field == null) {
-        return null;
-      }
-      Object value = currentRecord.get(field.pos());
-      if (i == path.length - 1) {
-        return value;
-      }
-      currentSchema = field.schema();
-      currentRecord = (IndexedRecord) value;
-    }
-    return null;
+    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
   }
 
   /**

@@ -32,6 +32,7 @@ import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.CatalogUtils;
 
 import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -44,7 +45,6 @@ import org.apache.flink.table.catalog.CatalogDatabaseImpl;
 import org.apache.flink.table.catalog.CatalogFunction;
 import org.apache.flink.table.catalog.CatalogPartition;
 import org.apache.flink.table.catalog.CatalogPartitionSpec;
-import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogView;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
@@ -273,11 +273,11 @@ public class HoodieCatalog extends AbstractCatalog {
         builder.primaryKey(pkColumns);
       }
       final org.apache.flink.table.api.Schema schema = builder.build();
-      return CatalogTable.of(
+      return CatalogUtils.createCatalogTable(
           schema,
-          TableOptionProperties.getComment(options),
           TableOptionProperties.getPartitionColumns(options),
-          TableOptionProperties.getTableOptions(options));
+          TableOptionProperties.getTableOptions(options),
+          TableOptionProperties.getComment(options));
     } else {
       throw new TableNotExistException(getName(), tablePath);
     }
@@ -306,7 +306,7 @@ public class HoodieCatalog extends AbstractCatalog {
     final String tablePathStr = inferTablePath(catalogPathStr, tablePath);
     Map<String, String> options = applyOptionsHook(tablePathStr, catalogTable.getOptions());
     Configuration conf = Configuration.fromMap(options);
-    conf.setString(FlinkOptions.PATH, tablePathStr);
+    conf.set(FlinkOptions.PATH, tablePathStr);
     ResolvedSchema resolvedSchema = resolvedTable.getResolvedSchema();
     if (!resolvedSchema.getPrimaryKey().isPresent() && !conf.containsKey(RECORD_KEY_FIELD.key())) {
       throw new CatalogException("Primary key definition is missing");
@@ -314,7 +314,7 @@ public class HoodieCatalog extends AbstractCatalog {
     final String avroSchema = AvroSchemaConverter.convertToSchema(
         resolvedSchema.toPhysicalRowDataType().getLogicalType(),
         AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:
     // - partition keys
@@ -326,14 +326,14 @@ public class HoodieCatalog extends AbstractCatalog {
     if (resolvedSchema.getPrimaryKey().isPresent()
             && !conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
       final String pkColumns = String.join(",", resolvedSchema.getPrimaryKey().get().getColumns());
-      conf.setString(RECORD_KEY_FIELD, pkColumns);
+      conf.set(RECORD_KEY_FIELD, pkColumns);
     }
 
     if (resolvedSchema.getPrimaryKey().isPresent()) {
       options.put(TableOptionProperties.PK_CONSTRAINT_NAME, resolvedSchema.getPrimaryKey().get().getName());
     }
     if (conf.containsKey(RECORD_KEY_FIELD.key())) {
-      options.put(TableOptionProperties.PK_COLUMNS, conf.getString(RECORD_KEY_FIELD));
+      options.put(TableOptionProperties.PK_COLUMNS, conf.get(RECORD_KEY_FIELD));
     }
 
     // check preCombine
@@ -341,16 +341,16 @@ public class HoodieCatalog extends AbstractCatalog {
 
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());
-      conf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, partitions);
       options.put(TableOptionProperties.PARTITION_COLUMNS, partitions);
 
-      final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      final String[] pks = conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
       boolean complexHoodieKey = pks.length > 1 || resolvedTable.getPartitionKeys().size() > 1;
       StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
     } else {
       conf.setString(FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
     }
-    conf.setString(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
+    conf.set(FlinkOptions.TABLE_NAME, tablePath.getObjectName());
     try {
       HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
       // prepare the non-table-options properties

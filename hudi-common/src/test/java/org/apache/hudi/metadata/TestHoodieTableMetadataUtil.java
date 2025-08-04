@@ -22,31 +22,32 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.constructSecondaryIndexKey;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieTableMetadataUtil {
 
   @Test
-  public void testGetRecordKeyToFileGroupIndexFunctionOptimized() {
-    // Test with secondary key format
-    String compositeKey = "secondaryKey$recordKey";
+  public void testGetRecordKeyToFileGroupIndexFunction() {
+    int numFileGroups = 10;
+    String recordKey = "recordKey$";
+    String secondaryKey = "secondaryKey$";
+    // Raw key used for read path
+    SecondaryIndexPrefixRawKey rawKey1 = new SecondaryIndexPrefixRawKey(secondaryKey);
+    // Composite key used for write path
+    String compositeKey = constructSecondaryIndexKey(secondaryKey, recordKey);
 
-    SerializableBiFunction<String, Integer, Integer> optimizedFunction =
+    SerializableBiFunction<String, Integer, Integer> hashOnSecKeyOnly =
         HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(true);
+    SerializableBiFunction<String, Integer, Integer> hashOnFullKey =
+        HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(false);
 
-    int result1 = optimizedFunction.apply(compositeKey, 10);
-    int result2 = optimizedFunction.apply("anotherSecondaryKey$anotherRecordKey", 10);
+    // On write path we use hashOnSecKeyOnly
+    int result1 = hashOnSecKeyOnly.apply(compositeKey, numFileGroups);
+    // On read path, we use hashOnFullKey
+    int result2 = hashOnFullKey.apply(rawKey1.encode(), numFileGroups);
 
-    // Both should hash the secondary key portion
-    assertNotEquals(result1, result2);
-
-    // Test with regular key format
-    optimizedFunction = HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(false);
-
-    int result3 = optimizedFunction.apply("simpleKey", 10);
-    int result4 = optimizedFunction.apply("anotherSimpleKey", 10);
-
-    // Both should hash the full key
-    assertNotEquals(result3, result4);
+    // Both should hash the secondary key portion so read and write paths are consistent.
+    assertEquals(result1, result2);
   }
 }

@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,7 +32,10 @@ import java.util.Map;
  * A map of {version_id, schema} is maintained.
  */
 @NotThreadSafe
-public class LocalAvroSchemaCache {
+public class LocalAvroSchemaCache implements Serializable {
+
+  private static final long serialVersionUID = 1L;
+
   private final Map<Integer, Schema> versionIdToSchema; // the mapping from version_id -> schema
   private final Map<Schema, Integer> schemaToVersionId; // the mapping from schema -> version_id
 

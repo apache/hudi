@@ -20,12 +20,12 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 /**
- * A {@link BufferedRecord} merger that covers three core merging scenarios within {@link FileGroupRecordBuffer}:
+ * A {@link BufferedRecord} merger that covers three core merging scenarios within {@link org.apache.hudi.common.table.read.buffer.FileGroupRecordBuffer}:
  *
  * <ol>
  *   <li>log & log merging;</li>
@@ -33,7 +33,9 @@ import java.io.IOException;
  *   <li>base & log merging.</li>
  * </ol>
  */
-public interface BufferedRecordMerger<T> {
+public interface BufferedRecordMerger<T> extends Serializable {
+
+  long serialVersionUID = 1L;
 
   /**
    * Merges incoming record from log file with existing record in record buffer.
@@ -60,8 +62,7 @@ public interface BufferedRecordMerger<T> {
    *
    * @param olderRecord Older record from base file
    * @param newerRecord Newer record from log file
-   *
    * @return The merged record.
    */
-  Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
+  MergeResult<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
 }

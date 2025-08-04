@@ -1300,13 +1300,18 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       this.riderValue = riderValue;
     }
 
+    public static RecordIdentifier clone(RecordIdentifier toClone, String orderingVal) {
+      return new RecordIdentifier(toClone.recordKey, toClone.partitionPath, orderingVal, toClone.riderValue);
+    }
+
     public static RecordIdentifier fromTripTestPayload(RawTripTestPayload payload) {
       try {
         String recordKey = payload.getRowKey();
         String partitionPath = payload.getPartitionPath();
-        String orderingVal = payload.getOrderingValue().toString();
+        Comparable orderingValue = payload.getOrderingValue();
+        String orderingValStr = orderingValue.toString();
         String riderValue = payload.getJsonDataAsMap().getOrDefault("rider", "").toString();
-        return new RecordIdentifier(recordKey, partitionPath, orderingVal, riderValue);
+        return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);
       } catch (IOException ex) {
         throw new HoodieIOException("Failed to parse payload", ex);
       }

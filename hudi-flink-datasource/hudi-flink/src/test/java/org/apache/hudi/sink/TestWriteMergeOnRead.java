@@ -41,7 +41,7 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
 
   @Override
   protected void setUp(Configuration conf) {
-    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
   }
 
   @Test
@@ -65,14 +65,14 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         .end();
 
     // reset the config option
-    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     validateIndexLoaded();
   }
 
   @Test
   public void testIndexStateBootstrapWithCompactionScheduled() throws Exception {
     // sets up the delta commits as 1 to generate a new compaction plan.
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     // open the function and ingest data
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)
@@ -86,7 +86,7 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     // reset config options
     conf.removeConfig(FlinkOptions.COMPACTION_DELTA_COMMITS);
     // sets up index bootstrap
-    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     validateIndexLoaded();
   }
 
@@ -166,12 +166,12 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
 
   @Test
   public void testConsistentBucketIndex() throws Exception {
-    conf.setString(FlinkOptions.INDEX_TYPE, "BUCKET");
-    conf.setString(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
-    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.BUCKET_INDEX_ENGINE_TYPE, "CONSISTENT_HASHING");
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
     conf.setString(HoodieIndexConfig.BUCKET_INDEX_MAX_NUM_BUCKETS.key(), "8");
     // Enable inline resize scheduling
-    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     // Manually set the max commits to trigger clustering quickly
     conf.setString(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS.key(), "1");
     // Manually set the split threshold to trigger split in the clustering

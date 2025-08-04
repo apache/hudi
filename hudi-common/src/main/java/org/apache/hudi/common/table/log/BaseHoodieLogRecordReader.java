@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.buffer.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -95,7 +95,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   // Partition name override
   private final Option<String> partitionNameOverrideOpt;
   // Pre-combining field
-  protected final String preCombineField;
+  protected final String preCombineFields;
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
@@ -151,11 +151,11 @@ public abstract class BaseHoodieLogRecordReader<T> {
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
-    this.preCombineField = tableConfig.getPreCombineField();
+    this.preCombineFields = tableConfig.getPreCombineFieldsStr().orElse(null);
     // Log scanner merge log with precombine
     TypedProperties props = new TypedProperties();
-    if (this.preCombineField != null) {
-      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
+    if (this.preCombineFields != null) {
+      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineFields);
     }
     this.payloadProps = props;
     this.totalLogFiles.addAndGet(logFilePaths.size());

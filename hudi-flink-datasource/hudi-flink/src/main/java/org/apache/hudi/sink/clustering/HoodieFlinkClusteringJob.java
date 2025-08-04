@@ -177,16 +177,16 @@ public class HoodieFlinkClusteringJob {
       this.metaClient = StreamerUtil.createMetaClient(conf);
 
       // set table name
-      conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+      conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
 
       // set table type
-      conf.setString(FlinkOptions.TABLE_TYPE, metaClient.getTableConfig().getTableType().name());
+      conf.set(FlinkOptions.TABLE_TYPE, metaClient.getTableConfig().getTableType().name());
 
       // set record key field
-      conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
 
       // set partition field
-      conf.setString(FlinkOptions.PARTITION_PATH_FIELD, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
 
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
@@ -312,9 +312,9 @@ public class HoodieFlinkClusteringJob {
       int inputGroupSize = clusteringPlan.getInputGroups().size();
 
       // get clusteringParallelism.
-      int clusteringParallelism = conf.getInteger(FlinkOptions.CLUSTERING_TASKS) == -1
+      int clusteringParallelism = conf.get(FlinkOptions.CLUSTERING_TASKS) == -1
           ? inputGroupSize
-          : Math.min(conf.getInteger(FlinkOptions.CLUSTERING_TASKS), inputGroupSize);
+          : Math.min(conf.get(FlinkOptions.CLUSTERING_TASKS), inputGroupSize);
 
       // Mark instant as clustering inflight
       ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
@@ -327,7 +327,7 @@ public class HoodieFlinkClusteringJob {
 
       // setup configuration
       long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
-      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+      conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
 
       DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstant.requestedTime(), clusteringPlan, conf))
           .name("clustering_source")
@@ -340,7 +340,7 @@ public class HoodieFlinkClusteringJob {
 
       if (OptionsResolver.sortClusteringEnabled(conf)) {
         ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(),
-            conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+            conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
       }
 
       dataStream

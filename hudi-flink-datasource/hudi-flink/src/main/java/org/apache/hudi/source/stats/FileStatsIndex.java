@@ -24,13 +24,12 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
-import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -389,15 +388,15 @@ public class FileStatsIndex implements ColumnStatsIndex {
         "Column stats is only valid when push down filters have referenced columns");
 
     // Read Metadata Table's column stats Flink's RowData list by
-    //    - Fetching the records by key-prefixes (encoded column names)
+    //    - Fetching the records by key-prefixes (column names)
     //    - Deserializing fetched records into [[RowData]]s
-    // TODO encoding should be done internally w/in HoodieBackedTableMetadata
-    List<String> encodedTargetColumnNames = Arrays.stream(targetColumns)
-        .map(colName -> new ColumnIndexID(colName).asBase64EncodedString()).collect(Collectors.toList());
+    List<ColumnStatsIndexPrefixRawKey> rawKeys = Arrays.stream(targetColumns)
+        .map(ColumnStatsIndexPrefixRawKey::new)  // Just column name, no partition
+        .collect(Collectors.toList());
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
         getMetadataTable().getRecordsByKeyPrefixes(
-            HoodieListData.lazy(encodedTargetColumnNames), getIndexPartitionName(), false, Option.empty());
+            HoodieListData.lazy(rawKeys), getIndexPartitionName(), false);
 
     org.apache.hudi.util.AvroToRowDataConverters.AvroToRowDataConverter converter =
         AvroToRowDataConverters.createRowConverter((RowType) METADATA_DATA_TYPE.getLogicalType());

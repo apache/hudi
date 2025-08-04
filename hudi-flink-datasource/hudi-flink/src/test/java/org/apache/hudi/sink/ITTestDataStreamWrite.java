@@ -48,10 +48,8 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.source.ContinuousFileSource;
 
-import org.apache.flink.api.common.io.FilePathFilter;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.RestartStrategyOptions;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.streaming.api.CheckpointingMode;
@@ -122,9 +120,9 @@ public class ITTestDataStreamWrite extends TestLogger {
   @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
   public void testWriteCopyOnWrite(String indexType) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
-    conf.setString(FlinkOptions.INDEX_TYPE, indexType);
-    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
-    conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    conf.set(FlinkOptions.INDEX_TYPE, indexType);
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
+    conf.set(FlinkOptions.PRE_COMBINE, true);
 
     defaultWriteAndCheckExpected(conf, "cow_write", 2);
   }
@@ -167,12 +165,12 @@ public class ITTestDataStreamWrite extends TestLogger {
   @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
   public void testWriteMergeOnReadWithCompaction(String indexType) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
-    conf.setString(FlinkOptions.INDEX_TYPE, indexType);
-    conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.set(FlinkOptions.INDEX_TYPE, indexType);
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     // use synchronized compaction to ensure flink job finishing with compaction completed.
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
     defaultWriteAndCheckExpected(conf, "mor_write_with_compact", 1);
   }
@@ -182,11 +180,11 @@ public class ITTestDataStreamWrite extends TestLogger {
   public void testWriteCopyOnWriteWithClustering(boolean sortClusteringEnabled) throws Exception {
     String basePath = tempFile.toURI().toString();
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setBoolean(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
-    conf.setInteger(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
-    conf.setString(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+    conf.set(FlinkOptions.OPERATION, "insert");
     if (sortClusteringEnabled) {
-      conf.setString(FlinkOptions.CLUSTERING_SORT_COLUMNS, "uuid");
+      conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, "uuid");
     }
 
     writeWithClusterAndCheckExpected(conf, "cow_write_with_cluster", 1, EXPECTED);
@@ -216,7 +214,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     // use synchronized compaction to avoid sleeping for async compact.
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
-    conf.setString(FlinkOptions.TABLE_TYPE, tableType);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType);
 
     writeAndCheckExpected(
         conf,
@@ -227,7 +225,7 @@ public class ITTestDataStreamWrite extends TestLogger {
         EXPECTED);
 
     // check that there is no exceptions during the same with enabled index bootstrap
-    conf.setString(FlinkOptions.INDEX_BOOTSTRAP_ENABLED.key(), "true");
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
     writeAndCheckExpected(
         conf,
         Option.empty(),
@@ -271,15 +269,17 @@ public class ITTestDataStreamWrite extends TestLogger {
       boolean restartJob,
       Map<String, List<String>> expected) throws Exception {
 
-    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+    Configuration envConf = new Configuration();
+    if (!restartJob) {
+      envConf.set(RestartStrategyOptions.RESTART_STRATEGY, "disable");
+    }
+
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment(envConf);
     execEnv.getConfig().disableObjectReuse();
     execEnv.setParallelism(4);
     // set up checkpoint interval
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
-    if (!restartJob) {
-      execEnv.setRestartStrategy(new RestartStrategies.NoRestartStrategyConfiguration());
-    }
 
     // Read from file source
     RowType rowType =
@@ -289,7 +289,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
-    boolean isMor = conf.getString(FlinkOptions.TABLE_TYPE).equals(HoodieTableType.MERGE_ON_READ.name());
+    boolean isMor = conf.get(FlinkOptions.TABLE_TYPE).equals(HoodieTableType.MERGE_ON_READ.name());
 
     DataStream<RowData> dataStream;
 
@@ -372,8 +372,8 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
-    conf.setString(FlinkOptions.TABLE_NAME, "t1");
-    conf.setString(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
+    conf.set(FlinkOptions.TABLE_NAME, "t1");
+    conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
 
     // write 3 batches of data set
     TestData.writeData(TestData.dataSetInsert(1, 2), conf);
@@ -420,10 +420,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
-    TextInputFormat format = new TextInputFormat(new Path(sourcePath));
-    format.setFilesFilter(FilePathFilter.createDefaultFilter());
-    format.setCharsetName("UTF-8");
-
     DataStream dataStream = execEnv
         // use continuous file source to trigger checkpoint
         .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
@@ -466,8 +462,8 @@ public class ITTestDataStreamWrite extends TestLogger {
     testTable.mkdir();
 
     Configuration conf = TestConfigurations.getDefaultConf(testTable.toURI().toString());
-    conf.setString(FlinkOptions.TABLE_NAME, tableName);
-    conf.setString(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
+    conf.set(FlinkOptions.TABLE_NAME, tableName);
+    conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
 
     // write 3 batches of data set
     TestData.writeData(TestData.dataSetInsert(1, 2), conf);
@@ -521,10 +517,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
-    TextInputFormat format = new TextInputFormat(new Path(sourcePath));
-    format.setFilesFilter(FilePathFilter.createDefaultFilter());
-    format.setCharsetName("UTF-8");
-
     DataStream dataStream = execEnv
         // use continuous file source to trigger checkpoint
         .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
@@ -562,9 +554,9 @@ public class ITTestDataStreamWrite extends TestLogger {
     defaultWriteAndCheckExpected(conf, "initial write", 1);
 
     // Write cols: uuid, name, ts, partition
-    conf.setBoolean(AVRO_SCHEMA_VALIDATE_ENABLE.key(), false);
-    conf.setBoolean(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key(), false);
-    conf.setString(
+    conf.setString(AVRO_SCHEMA_VALIDATE_ENABLE.key(), "false");
+    conf.setString(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key(), "false");
+    conf.set(
         FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader()

@@ -17,10 +17,8 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.FileSlice
-import org.apache.hudi.exception.HoodieException
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -28,15 +26,11 @@ import org.apache.spark.sql.execution.datasources.PartitionDirectory
 
 object PartitionDirectoryConverter extends SparkAdapterSupport {
 
-  def convertFileSliceToPartitionDirectory(partitionOpt: Option[PartitionPath],
+  def convertFileSliceToPartitionDirectory(partitionValues: InternalRow,
                                            fileSlice: FileSlice,
                                            options: Map[String, String]): PartitionDirectory = {
     val logFileEstimationFraction = options.getOrElse(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key(),
       HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()).toDouble
-    if (fileSlice.isEmpty) {
-      throw new HoodieException(
-        s"File slice is empty for partition: ${partitionOpt.map(_.values.mkString("/")).getOrElse("N/A")}, fileId: ${fileSlice.getFileId}")
-    }
     // 1. Generate a delegate file for file slice, which spark uses to optimize rdd partition parallelism based on data such as file size
     //    - For file slice only has base file, we directly use the base file size as delegate file size
     //    - For file slice has log file, we estimate the delegate file size based on the log file size and option(base file) size
@@ -53,10 +47,9 @@ object PartitionDirectoryConverter extends SparkAdapterSupport {
     if (fileSlice.hasLogFiles || fileSlice.hasBootstrapBase) {
       // should read as file slice, so we need to create a mapping from fileId to file slice
       sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-        new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), Map(fileSlice.getFileId -> fileSlice)), Seq(delegateFile))
+        new HoodiePartitionFileSliceMapping(partitionValues, Map(fileSlice.getFileId -> fileSlice)), Seq(delegateFile))
     } else {
-      sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-        InternalRow.fromSeq(partitionOpt.get.values), Seq(delegateFile))
+      sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(partitionValues, Seq(delegateFile))
     }
   }
 

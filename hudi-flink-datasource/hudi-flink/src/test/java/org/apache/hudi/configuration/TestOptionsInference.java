@@ -41,10 +41,10 @@ public class TestOptionsInference {
   @Test
   void testSetupClientId() throws Exception {
     Configuration conf = getConf();
-    conf.setString(FlinkOptions.WRITE_CLIENT_ID, "2");
+    conf.set(FlinkOptions.WRITE_CLIENT_ID, "2");
     OptionsInference.setupClientId(conf);
     assertThat("Explicit client id has higher priority",
-        conf.getString(FlinkOptions.WRITE_CLIENT_ID), is("2"));
+        conf.get(FlinkOptions.WRITE_CLIENT_ID), is("2"));
 
     for (int i = 0; i < 3; i++) {
       conf = getConf();
@@ -52,7 +52,7 @@ public class TestOptionsInference {
         OptionsInference.setupClientId(conf);
         String expectedId = i == 0 ? ClientIds.INIT_CLIENT_ID : i + "";
         assertThat("The client id should auto inc to " + expectedId,
-            conf.getString(FlinkOptions.WRITE_CLIENT_ID), is(expectedId));
+            conf.get(FlinkOptions.WRITE_CLIENT_ID), is(expectedId));
       }
     }
 
@@ -72,7 +72,7 @@ public class TestOptionsInference {
   private Configuration getConf() {
     Configuration conf = new Configuration();
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-    conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
     return conf;
   }
 }

@@ -23,7 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
-import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Option;
@@ -34,6 +34,7 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -105,20 +106,25 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndex(HoodieData<String> recordKeys) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys) {
     throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndex(HoodieData<String> secondaryKeys, String partitionName) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
+    throw new HoodieMetadataException("Unsupported operation: readRecordIndex!");
+  }
+
+  @Override
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexLocationsWithKeys(HoodieData<String> secondaryKeys, String partitionName) {
     return HoodieListPairData.eager(Collections.emptyMap());
   }
 
   @Override
-  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(HoodieData<String> keyPrefixes,
-                                                                                 String partitionName,
-                                                                                 boolean shouldLoadInMemory,
-                                                                                 Option<SerializableFunctionUnchecked<String, String>> keyEncoder) {
+  public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
+      HoodieData<? extends RawKey> rawKeys,
+      String partitionName,
+      boolean shouldLoadInMemory) {
     throw new HoodieMetadataException("Unsupported operation: getRecordsByKeyPrefixes!");
   }
 
@@ -140,6 +146,11 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     throw new HoodieMetadataException("Unsupported operation: getNumFileGroupsForPartition!");
+  }
+
+  @Override
+  public Map<String, List<FileSlice>> getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType partition) {
+    throw new HoodieMetadataException("Unsupported operation: getFileGroupsFromPartition!");
   }
 
   @Override

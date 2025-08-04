@@ -58,10 +58,12 @@ import javax.annotation.concurrent.ThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.containsFieldInSchema;
@@ -99,7 +101,7 @@ public class TableSchemaResolver {
   private final Lazy<ConcurrentHashMap<HoodieInstant, HoodieCommitMetadata>> commitMetadataCache;
 
   private volatile HoodieInstant latestCommitWithValidSchema = null;
-  private volatile HoodieInstant latestCommitWithValidData = null;
+  private volatile HoodieInstant latestCommitWithInsertOrUpdate = null;
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
@@ -247,29 +249,28 @@ public class TableSchemaResolver {
    * Fetches the schema for a table from any the table's data files
    */
   private Option<Schema> getTableParquetSchemaFromDataFile() {
-    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = getLatestCommitMetadataWithValidData();
-    try {
-      switch (metaClient.getTableType()) {
-        case COPY_ON_WRITE:
-        case MERGE_ON_READ:
-          // For COW table, data could be written in either Parquet or Orc format currently;
-          // For MOR table, data could be written in either Parquet, Orc, Hfile or Delta-log format currently;
-          //
-          // Determine the file format based on the file name, and then extract schema from it.
-          if (instantAndCommitMetadata.isPresent()) {
-            HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
-            Iterator<String> filePaths = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().iterator();
-            return Option.of(fetchSchemaFromFiles(filePaths));
-          } else {
-            LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
-            return Option.empty();
-          }
-        default:
-          LOG.error("Unknown table type {}", metaClient.getTableType());
-          throw new InvalidTableException(metaClient.getBasePath().toString());
-      }
-    } catch (IOException e) {
-      throw new HoodieException("Failed to read data schema", e);
+    Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata = getLatestCommitMetadataWithInsertOrUpdate();
+    switch (metaClient.getTableType()) {
+      case COPY_ON_WRITE:
+      case MERGE_ON_READ:
+        // For COW table, data could be written in either Parquet or Orc format currently;
+        // For MOR table, data could be written in either Parquet, Orc, Hfile or Delta-log format currently;
+        //
+        // Determine the file format based on the file name, and then extract schema from it.
+        if (instantAndCommitMetadata.isPresent()) {
+          HoodieCommitMetadata commitMetadata = instantAndCommitMetadata.get().getRight();
+          // inspect non-empty files for schema
+          Stream<StoragePath> filePaths = commitMetadata.getPartitionToWriteStats().values().stream().flatMap(Collection::stream)
+              .filter(writeStat -> writeStat.getNumInserts() > 0 || writeStat.getNumUpdateWrites() > 0)
+              .map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath()));
+          return Option.of(fetchSchemaFromFiles(filePaths));
+        } else {
+          LOG.warn("Could not find any data file written for commit, so could not get schema for table {}", metaClient.getBasePath());
+          return Option.empty();
+        }
+      default:
+        LOG.error("Unknown table type {}", metaClient.getTableType());
+        throw new InvalidTableException(metaClient.getBasePath().toString());
     }
   }
 
@@ -427,24 +428,48 @@ public class TableSchemaResolver {
         .map(instant -> Pair.of(instant, commitMetadataCache.get().get(instant)));
   }
 
-  private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitMetadataWithValidData() {
-    if (latestCommitWithValidData == null) {
-      Option<Pair<HoodieInstant, HoodieCommitMetadata>> instantAndCommitMetadata =
-          metaClient.getActiveTimeline().getLastCommitMetadataWithValidData();
-      if (instantAndCommitMetadata.isPresent()) {
-        HoodieInstant instant = instantAndCommitMetadata.get().getLeft();
-        HoodieCommitMetadata metadata = instantAndCommitMetadata.get().getRight();
+  private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitMetadataWithInsertOrUpdate() {
+    if (latestCommitWithValidSchema != null && commitMetadataCache.get().containsKey(latestCommitWithValidSchema)) {
+      HoodieCommitMetadata commitMetadata = commitMetadataCache.get().get(latestCommitWithValidSchema);
+      if (commitHasInsertOrUpdate(commitMetadata)) {
+        latestCommitWithInsertOrUpdate = latestCommitWithValidSchema;
+      }
+    }
+    if (latestCommitWithInsertOrUpdate == null) {
+      getLatestCommitWithInsertOrUpdate().ifPresent(instantAndCommitMetadata -> {
+        HoodieInstant instant = instantAndCommitMetadata.getLeft();
+        HoodieCommitMetadata metadata = instantAndCommitMetadata.getRight();
         synchronized (this) {
-          if (latestCommitWithValidData == null) {
-            latestCommitWithValidData = instant;
+          if (latestCommitWithInsertOrUpdate == null) {
+            latestCommitWithInsertOrUpdate = instant;
           }
           commitMetadataCache.get().putIfAbsent(instant, metadata);
         }
-      }
+      });
     }
 
-    return Option.ofNullable(latestCommitWithValidData)
+    return Option.ofNullable(latestCommitWithInsertOrUpdate)
         .map(instant -> Pair.of(instant, commitMetadataCache.get().get(instant)));
+  }
+
+  private Option<Pair<HoodieInstant, HoodieCommitMetadata>> getLatestCommitWithInsertOrUpdate() {
+    HoodieTimeline commitsTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+    return Option.fromJavaOptional(commitsTimeline.getReverseOrderedInstants()
+        .map(instant -> {
+          try {
+            HoodieCommitMetadata commitMetadata = commitsTimeline.readCommitMetadata(instant);
+            return Pair.of(instant, commitMetadata);
+          } catch (IOException e) {
+            throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
+          }
+        })
+        .filter(pair -> commitHasInsertOrUpdate(pair.getRight()))
+        .findFirst());
+  }
+
+  private boolean commitHasInsertOrUpdate(HoodieCommitMetadata commitMetadata) {
+    return commitMetadata.getPartitionToWriteStats().values().stream().flatMap(Collection::stream)
+        .anyMatch(writeStat -> writeStat.getNumInserts() > 0 || writeStat.getNumUpdateWrites() > 0);
   }
 
   private HoodieCommitMetadata getCachedCommitMetadata(HoodieInstant instant) {
@@ -459,19 +484,20 @@ public class TableSchemaResolver {
         });
   }
 
-  private Schema fetchSchemaFromFiles(Iterator<String> filePaths) throws IOException {
-    Schema schema = null;
-    while (filePaths.hasNext() && schema == null) {
-      StoragePath filePath = new StoragePath(filePaths.next());
-      if (FSUtils.isLogFile(filePath)) {
-        // this is a log file
-        schema = readSchemaFromLogFile(filePath);
-      } else {
-        schema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
-            .getFileFormatUtils(filePath).readAvroSchema(metaClient.getStorage(), filePath);
+  private Schema fetchSchemaFromFiles(Stream<StoragePath> filePaths) {
+    return filePaths.map(filePath -> {
+      try {
+        if (FSUtils.isLogFile(filePath)) {
+          // this is a log file
+          return readSchemaFromLogFile(filePath);
+        } else {
+          return HoodieIOFactory.getIOFactory(metaClient.getStorage())
+              .getFileFormatUtils(filePath).readAvroSchema(metaClient.getStorage(), filePath);
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read schema from file: " + filePath, e);
       }
-    }
-    return schema;
+    }).filter(Objects::nonNull).findFirst().orElse(null);
   }
 
   public static Schema appendPartitionColumns(Schema dataSchema, Option<String[]> partitionFields) {

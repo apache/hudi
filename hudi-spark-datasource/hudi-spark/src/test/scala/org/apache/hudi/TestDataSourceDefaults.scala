@@ -579,7 +579,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   @Test def testDefaultHoodieRecordPayloadCombineAndGetUpdateValue(): Unit = {
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
     val props = HoodiePayloadConfig.newBuilder()
-      .withPayloadOrderingField("favoriteIntNumber").build().getProps;
+      .withPayloadOrderingFields("favoriteIntNumber").build().getProps;
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")

@@ -97,7 +97,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
     this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
-    this.needSortInput = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
+    this.needSortInput = conf.get(FlinkOptions.WRITE_BULK_INSERT_SORT_INPUT);
   }
 
   public void openFunction() throws Exception {
@@ -219,7 +219,6 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private void setupMapFunction() {
     RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, rowType);
     String indexKeys = OptionsResolver.getIndexKeyField(conf);
-    int numBuckets = conf.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     boolean needFixedFileIdSuffix = OptionsResolver.isNonBlockingConcurrencyControl(conf);
     this.bucketIdToFileId = new HashMap<>();
     this.mapFunction = r -> BucketBulkInsertWriterHelper.rowWithFileId(bucketIdToFileId, keyGen, r, indexKeys, conf, needFixedFileIdSuffix);

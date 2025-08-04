@@ -38,12 +38,12 @@ public class TestFormatUtils {
         FormatUtils.getRawValueWithAltKeys(flinkConf, TEST_BOOLEAN_CONFIG_PROPERTY));
 
     boolean setValue = !Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue());
-    flinkConf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue);
+    flinkConf.setString(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue + "");
     assertEquals(Option.of(String.valueOf(setValue)),
         FormatUtils.getRawValueWithAltKeys(flinkConf, TEST_BOOLEAN_CONFIG_PROPERTY));
 
     flinkConf = new Configuration();
-    flinkConf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
+    flinkConf.setString(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue + "");
     assertEquals(Option.of(String.valueOf(setValue)),
         FormatUtils.getRawValueWithAltKeys(flinkConf, TEST_BOOLEAN_CONFIG_PROPERTY));
   }
@@ -55,12 +55,12 @@ public class TestFormatUtils {
         FormatUtils.getBooleanWithAltKeys(flinkConf, TEST_BOOLEAN_CONFIG_PROPERTY));
 
     boolean setValue = !Boolean.parseBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.defaultValue());
-    flinkConf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue);
+    flinkConf.setString(TEST_BOOLEAN_CONFIG_PROPERTY.key(), setValue + "");
     assertEquals(setValue,
         FormatUtils.getBooleanWithAltKeys(flinkConf, TEST_BOOLEAN_CONFIG_PROPERTY));
 
     flinkConf = new Configuration();
-    flinkConf.setBoolean(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue);
+    flinkConf.setString(TEST_BOOLEAN_CONFIG_PROPERTY.getAlternatives().get(0), setValue + "");
     assertEquals(setValue,
         FormatUtils.getBooleanWithAltKeys(flinkConf, TEST_BOOLEAN_CONFIG_PROPERTY));
   }

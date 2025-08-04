@@ -403,8 +403,8 @@ public class FilePathUtils {
     if (partitionKeys.isEmpty()) {
       return new Path[] {path};
     } else {
-      final String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
-      final boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING);
+      final String defaultParName = conf.get(FlinkOptions.PARTITION_DEFAULT_NAME);
+      final boolean hivePartition = conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING);
       List<Map<String, String>> partitionPaths =
           getPartitions(path, hadoopConf, partitionKeys, defaultParName, hivePartition);
       return partitionPath2ReadPath(path, partitionKeys, partitionPaths, hivePartition);
@@ -480,7 +480,7 @@ public class FilePathUtils {
     if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
       return new String[0];
     }
-    return conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+    return conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",");
   }
 
   /**
@@ -493,7 +493,7 @@ public class FilePathUtils {
     if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_FIELDS)) {
       return extractPartitionKeys(conf);
     }
-    return conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS).split(",");
+    return conf.get(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS).split(",");
   }
 
   public static boolean isHiveStylePartitioning(String path) {

@@ -115,9 +115,9 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue("ts")
       .withFallbackKeys("write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
-      .withDescription("Field used in preCombining before actual write. When two records have the same\n"
+      .withDescription("Comma separated list of fields used in preCombining before actual write. When two records have the same\n"
           + "key value, we will pick the one with the largest value for the precombine field,\n"
-          + "determined by Object.compareTo(..)");
+          + "determined by Object.compareTo(..). For multiple fields if first key comparison is same, second key comparison is made and so on");
 
   @AdvancedConfig
   public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
@@ -694,7 +694,15 @@ public class FlinkOptions extends HoodieConfig {
       .longType()
       .defaultValue(300_000L)
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
-          + "waits for the instant commit success, only for internal use");
+          + "waits for the instant commit success, only for internal use.");
+
+  // this is only for internal use
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_INCREMENTAL_JOB_GRAPH_GENERATION = ConfigOptions
+      .key("write.incremental.job.graph.generation")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Flag saying whether the incremental job graph generation is enabled.");
 
   @AdvancedConfig
   public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_INPUT = ConfigOptions

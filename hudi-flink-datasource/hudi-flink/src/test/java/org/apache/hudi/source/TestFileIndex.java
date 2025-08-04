@@ -79,8 +79,8 @@ public class TestFileIndex {
   @ValueSource(booleans = {true, false})
   void testFileListingUsingMetadata(boolean hiveStylePartitioning) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(METADATA_ENABLED, true);
-    conf.setBoolean(HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
+    conf.set(METADATA_ENABLED, true);
+    conf.set(HIVE_STYLE_PARTITIONING, hiveStylePartitioning);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
         .rowType(TestConfigurations.ROW_TYPE).metaClient(StreamerUtil.createMetaClient(conf)).build();
@@ -102,9 +102,9 @@ public class TestFileIndex {
   @Test
   void testFileListingUsingMetadataNonPartitionedTable() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(PARTITION_PATH_FIELD, "");
-    conf.setString(KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
-    conf.setBoolean(METADATA_ENABLED, true);
+    conf.set(PARTITION_PATH_FIELD, "");
+    conf.set(KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
+    conf.set(METADATA_ENABLED, true);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
         .rowType(TestConfigurations.ROW_TYPE).metaClient(StreamerUtil.createMetaClient(conf)).build();
@@ -123,7 +123,7 @@ public class TestFileIndex {
   @ValueSource(booleans = {true, false})
   void testFileListingEmptyTable(boolean enableMetadata) {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setBoolean(METADATA_ENABLED, enableMetadata);
+    conf.set(METADATA_ENABLED, enableMetadata);
     FileIndex fileIndex = FileIndex.builder().path(new StoragePath(tempFile.getAbsolutePath())).conf(conf)
         .rowType(TestConfigurations.ROW_TYPE).build();
     List<String> partitionKeys = Collections.singletonList("partition");
@@ -139,9 +139,9 @@ public class TestFileIndex {
   void testFileListingWithDataSkipping() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), TestConfigurations.ROW_DATA_TYPE_BIGINT);
     conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
-    conf.setBoolean(FlinkOptions.METADATA_ENABLED, true);
-    conf.setBoolean(READ_DATA_SKIPPING_ENABLED, true);
-    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
 
     writeBigintDataset(conf);
 
@@ -151,7 +151,7 @@ public class TestFileIndex {
             .conf(conf)
             .rowType(TestConfigurations.ROW_TYPE_BIGINT)
             .metaClient(StreamerUtil.createMetaClient(conf))
-            .columnStatsProbe(ColumnStatsProbe.newInstance(Collections.singletonList(new CallExpression(
+            .columnStatsProbe(ColumnStatsProbe.newInstance(Collections.singletonList(CallExpression.permanent(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
                 Arrays.asList(
@@ -173,12 +173,12 @@ public class TestFileIndex {
     conf.set(READ_DATA_SKIPPING_ENABLED, true);
     conf.set(METADATA_ENABLED, true);
     conf.set(TABLE_TYPE, tableType.name());
-    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
-    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       // enable CSI for MOR table to collect col stats for delta write stats,
       // which will be used to construct partition stats then.
-      conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+      conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     }
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -186,7 +186,7 @@ public class TestFileIndex {
     // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
     ColumnStatsProbe columnStatsProbe =
         ColumnStatsProbe.newInstance(Arrays.asList(
-            new CallExpression(
+            CallExpression.permanent(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
                 Arrays.asList(
@@ -194,7 +194,7 @@ public class TestFileIndex {
                     new ValueLiteralExpression("id5", DataTypes.STRING().notNull())
                 ),
                 DataTypes.BOOLEAN()),
-            new CallExpression(
+            CallExpression.permanent(
                 FunctionIdentifier.of("lessThan"),
                 BuiltInFunctionDefinitions.LESS_THAN,
                 Arrays.asList(

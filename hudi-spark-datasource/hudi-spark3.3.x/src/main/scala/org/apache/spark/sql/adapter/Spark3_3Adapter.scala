@@ -34,7 +34,8 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark33LegacyHoodieParquetFileFormat, Spark33ParquetReader, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.orc.Spark33OrcReader
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark33LegacyHoodieParquetFileFormat, Spark33ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
@@ -143,11 +144,16 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   override def createParquetFileReader(vectorized: Boolean,
                                        sqlConf: SQLConf,
                                        options: Map[String, String],
-                                       hadoopConf: Configuration): SparkParquetReader = {
+                                       hadoopConf: Configuration): SparkColumnarFileReader = {
     Spark33ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  override def createOrcFileReader(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String], hadoopConf: Configuration, dataSchema: StructType): SparkColumnarFileReader = {
+    Spark33OrcReader.build(vectorized, sqlConf, options, hadoopConf, dataSchema)
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
     jssc.stop()
   }
+
 }

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -47,7 +48,9 @@ import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -80,7 +83,6 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  * Tests {@link HoodieTableConfig}.
  */
 class TestHoodieTableConfig extends HoodieCommonTestHarness {
-
   private HoodieStorage storage;
   private StoragePath metaPath;
   private StoragePath cfgPath;
@@ -93,14 +95,18 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
-    HoodieTableConfig.create(storage, metaPath, props);
-    cfgPath = new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
-    backupCfgPath = new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+    initializeNewTableConfig(props);
   }
 
   @AfterEach
   public void tearDown() throws Exception {
     storage.close();
+  }
+
+  private void initializeNewTableConfig(Properties properties) throws IOException {
+    HoodieTableConfig.create(storage, metaPath, properties);
+    cfgPath = new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    backupCfgPath = new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
   }
 
   @Test
@@ -115,7 +121,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testUpdate() throws IOException {
     Properties updatedProps = new Properties();
     updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table2");
-    updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field");
+    updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "new_field");
     HoodieTableConfig.update(storage, metaPath, updatedProps);
 
     assertTrue(storage.exists(cfgPath));
@@ -123,7 +129,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
-    assertEquals("new_field", config.getPreCombineField());
+    assertEquals(Collections.singletonList("new_field"), config.getPreCombineFields());
+    assertEquals(Option.of("new_field"), config.getPreCombineFieldsStr());
   }
 
   @Test
@@ -253,7 +260,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
       for (int i = 0; i < 100; i++) {
         Properties updatedProps = new Properties();
         updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table" + i);
-        updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "new_field" + i);
+        updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "new_field" + i);
         HoodieTableConfig.update(storage, metaPath, updatedProps);
       }
     });
@@ -332,11 +339,37 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(42, configProperties.size());
+    assertEquals(41, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
     });
+  }
+
+  @Test
+  void testTableMergeProperties() throws IOException {
+    // for out of the box, there are no merge properties
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    assertTrue(config.getTableMergeProperties().isEmpty());
+
+    // delete and re-create w/ merge properties
+    storage.deleteFile(cfgPath);
+    storage.deleteFile(backupCfgPath);
+
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
+    // no merge props
+    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES_PREFIX + "key1", "value1");
+    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES_PREFIX + "key2", "value2");
+    // add some random property which does not match the prefix.
+    props.setProperty("key3", "value3");
+
+    initializeNewTableConfig(props);
+    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    Map<String, String> expectedProps = new HashMap<>();
+    expectedProps.put("key1","value1");
+    expectedProps.put("key2","value2");
+    assertEquals(expectedProps, config.getTableMergeProperties());
   }
 
   private static Stream<Arguments> argumentsForInferringRecordMergeMode() {

@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -41,7 +42,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * This only use by reader returning.
@@ -122,7 +122,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return HoodieAvroReaderContext.getFieldValueFromIndexedRecord(data, column);
+    return AvroRecordContext.getFieldValueFromIndexedRecord(data, column);
   }
 
   @Override
@@ -181,8 +181,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       Boolean populateMetaFields,
       Option<Schema> schemaWithoutMetaFields) {
     String payloadClass = ConfigUtils.getPayloadClass(props);
-    String preCombineField = ConfigUtils.getOrderingField(props);
-    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
+    String[] orderingFields = ConfigUtils.getOrderingFields(props);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, orderingFields, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override
@@ -206,20 +206,23 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Option<Map<String, String>> getMetadata() {
-    return Option.empty();
+    if (metaData == null) {
+      return Option.empty();
+    }
+    return metaData;
   }
 
   @Override
-  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
-      return DEFAULT_ORDERING_VALUE;
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
     }
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    return (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data,
-        orderingField, true, consistentLogicalTimestampEnabled);
+    return OrderingValues.create(
+        orderingFields,
+        field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, consistentLogicalTimestampEnabled));
   }
 
   @Override
@@ -256,6 +259,14 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     Serializer<GenericRecord> avroSerializer = kryo.getSerializer(GenericRecord.class);
 
     return kryo.readObjectOrNull(input, GenericRecord.class, avroSerializer);
+  }
+
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    return HoodieAvroUtils.convertValueForAvroLogicalTypes(
+        fieldSchema, fieldValue, keepConsistentLogicalTimestamp);
   }
 
   static void updateMetadataValuesInternal(GenericRecord avroRecord, MetadataValues metadataValues) {

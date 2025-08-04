@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -158,6 +159,7 @@ import java.sql.DriverManager;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1939,7 +1941,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     cfg.tableType = tableType;
     cfg.filterDupes = true;
-    cfg.sourceOrderingField = sourceOrderingField;
+    cfg.sourceOrderingFields = sourceOrderingField;
     addRecordMerger(recordType, cfg.configs);
     new HoodieStreamer(cfg, jsc).sync();
 
@@ -1953,6 +1955,59 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
 
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testDeltaStreamerWithMultipleOrderingFields(HoodieTableType tableType) throws Exception {
+    String tableBasePath = basePath + "/test_with_multiple_ordering_fields";
+    HoodieDeltaStreamer.Config cfg =
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.tableType = tableType.name();
+    cfg.filterDupes = true;
+    cfg.sourceOrderingFields = "timestamp,rider";
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+
+    TestDataSource.recordInstantTime = Option.of("002");
+    new HoodieStreamer(cfg, jsc).sync();
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
+
+    // Generate new updates with lower recordInstantTime so that updates are rejected
+    TestDataSource.recordInstantTime = Option.of("001");
+    runStreamSync(cfg, false, 50, WriteOperationType.UPSERT);
+    int numInserts = 25;
+    // TestDataSource generates 25 inserts and 25 updates
+    assertRecordCount(1025, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+    // Filter records with rider-001 value and deduct the number of inserts to get number of updates written
+    long numUpdates = sparkSession.read().format("hudi").load(tableBasePath).filter("rider = 'rider-001'").count()
+        - numInserts;
+    // There should be no updates since ordering value rider-001 is lower than existing record ordering value rider-002
+    assertEquals(0, numUpdates);
+
+    // Generate new updates with higher recordInstantTime so that updates are accepted
+    TestDataSource.recordInstantTime = Option.of("003");
+    runStreamSync(cfg, false, 50, WriteOperationType.UPSERT);
+    // TestDataSource generates 25 inserts and 25 updates
+    assertRecordCount(1050, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00002", tableBasePath, 3);
+    // Filter records with rider-003 value and deduct the number of inserts to get number of updates written
+    numUpdates = sparkSession.read().format("hudi").load(tableBasePath).filter("rider = 'rider-003'").count()
+        - numInserts;
+    // All updates should reflect since the ordering value rider-003 is higher
+    assertEquals(25, numUpdates);
+
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  private static long getNumUpdates(HoodieCommitMetadata metadata) {
+    return metadata.getPartitionToWriteStats().values().stream()
+        .flatMap(Collection::stream)
+        .mapToLong(HoodieWriteStat::getNumUpdateWrites)
+        .sum();
   }
 
   @Test
