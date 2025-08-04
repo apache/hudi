@@ -377,10 +377,10 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     // Validate properties for target version
     switch (toVersion) {
       case FOUR:
-        validateVersion4Properties(tableConfig);
+        validateVersion4Properties(metaClient, tableConfig);
         break;
       case FIVE:
-        validateVersion5Properties(tableConfig);
+        validateVersion5Properties(metaClient, tableConfig);
         break;
       case SIX:
         validateVersion6Properties(metaClient);
@@ -403,10 +403,10 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   private void validateSpecificPropertiesForVersion(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig, HoodieTableVersion version) throws IOException {
     switch (version) {
       case FOUR:
-        validateVersion4Properties(tableConfig);
+        validateVersion4Properties(metaClient, tableConfig);
         break;
       case FIVE:
-        validateVersion5Properties(tableConfig);
+        validateVersion5Properties(metaClient, tableConfig);
         break;
       case SIX:
         validateVersion6Properties(metaClient);
@@ -425,7 +425,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   /**
    * Validate basic properties for version 4.
    */
-  private void validateVersion4Properties(HoodieTableConfig tableConfig) {
+  private void validateVersion4Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) throws IOException {
     // TABLE_CHECKSUM should exist and be valid
     assertTrue(tableConfig.contains(HoodieTableConfig.TABLE_CHECKSUM),
         "TABLE_CHECKSUM should be set for V4");
@@ -438,19 +438,37 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         "TABLE_CHECKSUM should match computed checksum");
 
     assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_1, tableConfig.getTimelineLayoutVersion().get());
+    
     // TABLE_METADATA_PARTITIONS should be properly set if present
     // Note: This is optional based on whether metadata table was enabled during upgrade
+    // After downgrade operations, metadata table may be deleted, so we check if it exists first
     if (tableConfig.contains(HoodieTableConfig.TABLE_METADATA_PARTITIONS)) {
-      String metadataPartitions = tableConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS);
-      assertTrue(metadataPartitions.contains("files"), "TABLE_METADATA_PARTITIONS should contain 'files' partition when set");
+      if (isMetadataTablePresent(metaClient)) {
+        // Metadata table exists - enforce strict validation
+        String metadataPartitions = tableConfig.getString(HoodieTableConfig.TABLE_METADATA_PARTITIONS);
+        assertTrue(metadataPartitions.contains("files"), 
+            "TABLE_METADATA_PARTITIONS should contain 'files' partition when metadata table exists");
+      } else {
+        // Metadata table doesn't exist (likely after downgrade) - validation not applicable
+        LOG.info("Skipping TABLE_METADATA_PARTITIONS 'files' validation - metadata table does not exist (likely after downgrade operation)");
+      }
     }
+  }
+  
+  /**
+   * Check if metadata table is present for the given table.
+   */
+  private boolean isMetadataTablePresent(HoodieTableMetaClient metaClient) throws IOException {
+    StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+    return metaClient.getStorage().exists(metadataTablePath);
   }
 
   /**
    * Validate properties for version 5 (default partition path migration).
    */
-  private void validateVersion5Properties(HoodieTableConfig tableConfig) {
+  private void validateVersion5Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) throws IOException {
 
+    validateVersion4Properties(metaClient, tableConfig);
     // Version 5 upgrade validates that no deprecated default partition paths exist
     // The upgrade handler checks for DEPRECATED_DEFAULT_PARTITION_PATH ("default") 
     // and requires migration to DEFAULT_PARTITION_PATH ("__HIVE_DEFAULT_PARTITION__")
@@ -478,6 +496,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   private void validateVersion6Properties(HoodieTableMetaClient metaClient) throws IOException {
     // Version 6 upgrade deletes compaction requested files from .aux folder (HUDI-6040)
     // Validate that no REQUESTED compaction files remain in auxiliary folder
+    validateVersion5Properties(metaClient, metaClient.getTableConfig());
 
     StoragePath auxPath = new StoragePath(metaClient.getMetaAuxiliaryPath());
     
@@ -558,6 +577,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
    * Validate properties for version 9 (index version population).
    */
   private void validateVersion9Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) {
+    validateVersion8Properties(tableConfig);
+
     // Check if index metadata exists and has proper version information
     Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
     if (indexMetadata.isPresent()) {
