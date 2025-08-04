@@ -1147,7 +1147,7 @@ public class HoodieAvroUtils {
   }
 
   public static String createNamePrefix(boolean noFieldsRenaming, Deque<String> fieldNames) {
-    return noFieldsRenaming ? null : fieldNames.isEmpty() ? null : createFullName(fieldNames);
+    return noFieldsRenaming || fieldNames.isEmpty() ? null : createFullName(fieldNames);
   }
 
   public static String getOldFieldNameWithRenaming(String namePrefix, String newFieldName, Map<String, String> renameCols) {

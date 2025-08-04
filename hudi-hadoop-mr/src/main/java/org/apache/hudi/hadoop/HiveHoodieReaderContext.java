@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -99,11 +100,13 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   private void setSchemas(JobConf jobConf, Schema dataSchema, Schema requiredSchema) {
     List<String> dataColumnNameList = dataSchema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).collect(Collectors.toList());
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
+    List<TypeInfo> columnTypes;
     try {
-      jobConf.set(serdeConstants.LIST_COLUMN_TYPES, HiveTypeUtils.generateColumnTypes(dataSchema).stream().map(TypeInfo::getTypeName).collect(Collectors.joining(",")));
+      columnTypes = HiveTypeUtils.generateColumnTypes(dataSchema);
     } catch (AvroSerdeException e) {
-      throw new RuntimeException(e);
+      throw new HoodieAvroSchemaException(String.format("Failed to generate hive column types from avro schema: %s, due to %s", dataSchema, e));
     }
+    jobConf.set(serdeConstants.LIST_COLUMN_TYPES, columnTypes.stream().map(TypeInfo::getTypeName).collect(Collectors.joining(",")));
     // don't replace `f -> f.name()` with lambda reference
     String readColNames = requiredSchema.getFields().stream().map(f -> f.name()).collect(Collectors.joining(","));
     jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, readColNames);

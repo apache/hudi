@@ -300,7 +300,7 @@ public class HoodieArrayWritableAvroUtils {
               || oldSchema.getType() == Schema.Type.FLOAT
               || oldSchema.getType() == Schema.Type.DOUBLE) {
             // loses trailing zeros due to hive issue. Since we only read with hive, I think this is fine
-            HiveDecimalWritable converted = new HiveDecimalWritable(HiveDecimal.create(new java.math.BigDecimal(writable.toString())));
+            HiveDecimalWritable converted = new HiveDecimalWritable(HiveDecimal.create(new BigDecimal(writable.toString())));
             return HiveDecimalUtils.enforcePrecisionScale(converted, decimalTypeInfo);
           }
 
@@ -371,34 +371,6 @@ public class HoodieArrayWritableAvroUtils {
 
   private static final Cache<Pair<Schema, Schema>, int[]>
       PROJECTION_CACHE = Caffeine.newBuilder().maximumSize(1000).build();
-
-  public static int[] getProjection(Schema from, Schema to) {
-    return PROJECTION_CACHE.get(Pair.of(from, to), schemas -> {
-      List<Schema.Field> toFields = to.getFields();
-      int[] newProjection = new int[toFields.size()];
-      for (int i = 0; i < newProjection.length; i++) {
-        newProjection[i] = from.getField(toFields.get(i).name()).pos();
-      }
-      return newProjection;
-    });
-  }
-
-  /**
-   * Projection will keep the size from the "from" schema because it gets recycled
-   * and if the size changes the reader will fail
-   */
-  public static UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to) {
-    //TODO: [HUDI-8261] add casting to the projection
-    int[] projection = getProjection(from, to);
-    return arrayWritable -> {
-      Writable[] values = new Writable[arrayWritable.get().length];
-      for (int i = 0; i < projection.length; i++) {
-        values[i] = arrayWritable.get()[projection[i]];
-      }
-      arrayWritable.set(values);
-      return arrayWritable;
-    };
-  }
 
   public static int[] getReverseProjection(Schema from, Schema to) {
     return PROJECTION_CACHE.get(Pair.of(from, to), schemas -> {

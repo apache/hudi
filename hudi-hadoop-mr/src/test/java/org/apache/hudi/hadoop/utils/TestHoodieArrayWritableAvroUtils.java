@@ -54,6 +54,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.util.Arrays;
@@ -77,7 +78,6 @@ public class TestHoodieArrayWritableAvroUtils {
   public void testProjection() {
     Schema from =  tableSchema;
     Schema to = HoodieAvroUtils.generateProjectionSchema(from, Arrays.asList("trip_type", "current_ts", "weight"));
-    UnaryOperator<ArrayWritable> projection = HoodieArrayWritableAvroUtils.projectRecord(from, to);
     UnaryOperator<ArrayWritable> reverseProjection = HoodieArrayWritableAvroUtils.reverseProject(to, from);
 
     //We reuse the ArrayWritable, so we need to get the values before projecting
@@ -87,7 +87,7 @@ public class TestHoodieArrayWritableAvroUtils {
     Object weight = getValue(record, from, "weight");
 
     //Make sure the projected fields can be read
-    ArrayWritable projectedRecord = projection.apply(record);
+    ArrayWritable projectedRecord = HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from, to, Collections.emptyMap());
     assertEquals(tripType, getValue(projectedRecord, to, "trip_type"));
     assertEquals(currentTs, getValue(projectedRecord, to, "current_ts"));
     assertEquals(weight, getValue(projectedRecord, to, "weight"));
@@ -318,20 +318,20 @@ public class TestHoodieArrayWritableAvroUtils {
     TypeInfo oldTypeInfo = HiveTypeUtils.generateTypeInfo(oldSchema, Collections.emptySet());
     TypeInfo newTypeInfo = HiveTypeUtils.generateTypeInfo(newSchema, Collections.emptySet());
 
-    ObjectInspector oldOI = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(oldTypeInfo);
-    ObjectInspector newOI = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(newTypeInfo);
+    ObjectInspector oldObjectInspector = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(oldTypeInfo);
+    ObjectInspector newObjectInspector = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(newTypeInfo);
 
     ObjectInspector writableOIOld = getWritableOIForType(oldTypeInfo);
     ObjectInspector writableOINew = getWritableOIForType(newTypeInfo);
 
-    Object javaInput = ObjectInspectorConverters.getConverter(writableOIOld, oldOI).convert(oldWritable);
+    Object javaInput = ObjectInspectorConverters.getConverter(writableOIOld, oldObjectInspector).convert(oldWritable);
     if (isDecimalSchema(oldSchema)) {
       javaInput = HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(getDecimalValue(javaInput, oldSchema), oldSchema, oldSchema.getLogicalType());
     } else if (javaInput instanceof byte[]) {
       javaInput = ByteBuffer.wrap((byte[]) javaInput);
     }
     Object javaOutput = HoodieAvroUtils.rewritePrimaryType(javaInput, oldSchema, newSchema);
-    Object javaExpected = ObjectInspectorConverters.getConverter(writableOINew, newOI).convert(newWritable);
+    Object javaExpected = ObjectInspectorConverters.getConverter(writableOINew, newObjectInspector).convert(newWritable);
 
     if (isDecimalSchema(newSchema)) {
       BigDecimal outputDecimal = getDecimalValue(javaOutput, newSchema);
@@ -357,11 +357,11 @@ public class TestHoodieArrayWritableAvroUtils {
       return (BigDecimal) value;
     } else if (value instanceof byte[]) {
       int scale = ((LogicalTypes.Decimal) decimalSchema.getLogicalType()).getScale();
-      return new BigDecimal(new java.math.BigInteger((byte[]) value), scale);
+      return new BigDecimal(new BigInteger((byte[]) value), scale);
     } else if (value instanceof GenericData.Fixed) {
       int scale = ((LogicalTypes.Decimal) decimalSchema.getLogicalType()).getScale();
       byte[] bytes = ((GenericData.Fixed) value).bytes();
-      return new BigDecimal(new java.math.BigInteger(bytes), scale);
+      return new BigDecimal(new BigInteger(bytes), scale);
     }
     throw new IllegalArgumentException("Unsupported decimal object: " + value.getClass() + " -> " + value);
   }

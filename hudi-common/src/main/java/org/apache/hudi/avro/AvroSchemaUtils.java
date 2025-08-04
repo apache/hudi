@@ -476,6 +476,26 @@ public class AvroSchemaUtils {
     return false;
   }
 
+  /**
+   * Prunes a data schema to match the structure of a required schema while preserving
+   * original metadata where possible.
+   *
+   * <p>This method recursively traverses both schemas and creates a new schema that:
+   * <ul>
+   *   <li>Contains only fields present in the required schema</li>
+   *   <li>Preserves field metadata (type, documentation, default values) from the data schema</li>
+   *   <li>Optionally includes fields from the required schema that are marked for exclusion</li>
+   * </ul>
+   *
+   * @param dataSchema the source schema containing the original data structure and metadata
+   * @param requiredSchema the target schema that defines the desired structure and field requirements
+   * @param excludeFields a set of field names that should be included from the required schema
+   *                     even if they don't exist in the data schema. This allows for adding
+   *                     fields that may be missing from the original data.
+   *
+   * @return a new pruned schema that matches the required schema structure while preserving
+   *         data schema metadata where possible
+   */
   public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
     Schema prunedDataSchema = pruneDataSchemaInternal(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), excludeFields);
     if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
