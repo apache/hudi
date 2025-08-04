@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.io.IOException;
@@ -44,20 +45,17 @@ import java.util.Map;
  * @param <T> Engine native presentation of the record.
  */
 public class RecordsBasedFileGroupRecordBufferLoader<T> extends DefaultFileGroupRecordBufferLoader<T> {
+  private static final RecordsBasedFileGroupRecordBufferLoader INSTANCE = new RecordsBasedFileGroupRecordBufferLoader<>();
 
-  private final Iterator<Map.Entry<Serializable, BufferedRecord<T>>> toBeMergedRecords;
-
-  private RecordsBasedFileGroupRecordBufferLoader(Iterator<Map.Entry<Serializable, BufferedRecord<T>>> toBeMergedRecords) {
-    super();
-    this.toBeMergedRecords = toBeMergedRecords;
+  private RecordsBasedFileGroupRecordBufferLoader() {
   }
 
-  static <T> RecordsBasedFileGroupRecordBufferLoader<T> getInstance(Iterator<Map.Entry<Serializable, BufferedRecord<T>>> toBeMergedRecords) {
-    return new RecordsBasedFileGroupRecordBufferLoader<>(toBeMergedRecords);
+  static <T> RecordsBasedFileGroupRecordBufferLoader<T> getInstance() {
+    return INSTANCE;
   }
 
   @Override
-  public Option<Pair<HoodieFileGroupRecordBuffer<T>, List<String>>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  public Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                             HoodieStorage storage,
                                                                             InputSplit inputSplit,
                                                                             List<String> orderingFieldNames,
@@ -66,19 +64,20 @@ public class RecordsBasedFileGroupRecordBufferLoader<T> extends DefaultFileGroup
                                                                             ReaderParameters readerParameters,
                                                                             HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    Option<FileGroupRecordBuffer<T>> recordBufferOpt = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
-        readerParameters, readStats, fileGroupUpdateCallback, true);
+    FileGroupRecordBuffer<T> recordBuffer = getFileGroupRecordBuffer(readerContext, inputSplit, orderingFieldNames, hoodieTableMetaClient, props,
+        readerParameters, readStats, fileGroupUpdateCallback);
 
-    return recordBufferOpt.map(recordBuffer -> {
-      while (toBeMergedRecords.hasNext()) {
-        Map.Entry<Serializable, BufferedRecord<T>> entry = toBeMergedRecords.next();
-        try {
-          recordBuffer.processNextDataRecord(entry.getValue(), entry.getKey());
-        } catch (IOException e) {
-          throw new HoodieIOException("Failed to process next toBeMergedRecord ", e);
-        }
+    Iterator<Map.Entry<Serializable, BufferedRecord>> inputs = inputSplit.getInputs()
+        .orElseThrow(() -> new HoodieValidationException("The inputs has not been setup"));
+
+    while (inputs.hasNext()) {
+      Map.Entry<Serializable, BufferedRecord> entry = inputs.next();
+      try {
+        recordBuffer.processNextDataRecord(entry.getValue(), entry.getKey());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to process next toBeMergedRecord ", e);
       }
-      return Pair.of(recordBufferOpt.get(), Collections.emptyList());
-    });
+    }
+    return Pair.of(recordBuffer, Collections.emptyList());
   }
 }

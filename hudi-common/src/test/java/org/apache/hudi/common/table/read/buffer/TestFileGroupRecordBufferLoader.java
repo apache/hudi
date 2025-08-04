@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -35,7 +34,6 @@ import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
@@ -47,23 +45,23 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestFileGroupRecordBufferLoader extends BaseFileGroupRecordBuffer {
+public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuffer {
 
-  private static final StoragePath TEMP_STORAGE_PATH = new StoragePath("file:///tmp");
+  private static final StoragePath TEMP_STORAGE_PATH = new StoragePath("file:///tmp/test_table");
 
   @ParameterizedTest
   @ValueSource(strings = {"KeyBasedFileGroupRecordBuffer", "SortedKeyBasedFileGroupRecordBuffer", "PositionBasedFileGroupRecordBuffer"})
   public void testDefaultFileGroupBufferRecordLoader(String fileGroupRecordBufferType) {
     for (boolean testRecordsBased : new boolean[] {false, true}) {
-      FileGroupRecordBufferLoader fileGroupRecordBufferLoader = !testRecordsBased ? FileGroupRecordBufferLoader.createDefault()
-          : FileGroupRecordBufferLoader.createRecordsBasedLoader(Collections.emptyIterator());
+      FileGroupRecordBufferLoader fileGroupRecordBufferLoader = !testRecordsBased
+          ? FileGroupRecordBufferLoader.createDefault()
+          : FileGroupRecordBufferLoader.createInputsBased();
       HoodieReadStats readStats = new HoodieReadStats();
       HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
       when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
@@ -87,11 +85,8 @@ public class TestFileGroupRecordBufferLoader extends BaseFileGroupRecordBuffer {
       HoodieStorage storage = mock(HoodieStorage.class);
       when(mockMetaClient.getStorage()).thenReturn(storage);
       InputSplit inputSplit = mock(InputSplit.class);
-      if (!testRecordsBased) {
-        HoodieLogFile logFile = mock(HoodieLogFile.class);
-        when(logFile.getPath()).thenReturn(TEMP_STORAGE_PATH);
-        // first time, return non empty list so that Record buffer will be instantiated. but return empty list so that scanLogFiles will be bypassed.
-        when(inputSplit.getLogFiles()).thenReturn(Collections.singletonList(logFile), Collections.emptyList());
+      if (testRecordsBased) {
+        when(inputSplit.getInputs()).thenReturn(Option.of(Collections.emptyIterator()));
       }
       ReaderParameters readerParameters = mock(ReaderParameters.class);
       if (fileGroupRecordBufferType.contains("Sorted")) {
@@ -105,9 +100,9 @@ public class TestFileGroupRecordBufferLoader extends BaseFileGroupRecordBuffer {
 
       Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
 
-      HoodieFileGroupRecordBuffer fileGroupRecordBuffer = (HoodieFileGroupRecordBuffer) ((Option<Pair<HoodieFileGroupRecordBuffer, List<String>>>)fileGroupRecordBufferLoader
+      HoodieFileGroupRecordBuffer fileGroupRecordBuffer = (HoodieFileGroupRecordBuffer) fileGroupRecordBufferLoader
           .getRecordBuffer(readerContext, storage, inputSplit, Collections.singletonList("ts"),
-          mockMetaClient, new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback)).get().getLeft();
+          mockMetaClient, new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
 
       switch (fileGroupRecordBufferType) {
         case "KeyBasedFileGroupRecordBuffer":

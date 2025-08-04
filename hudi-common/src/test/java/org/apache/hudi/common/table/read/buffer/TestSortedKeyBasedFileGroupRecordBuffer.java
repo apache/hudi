@@ -59,7 +59,7 @@ import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class TestSortedKeyBasedFileGroupRecordBuffer extends BaseFileGroupRecordBuffer {
+class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
   private final TestRecord testRecord1 = new TestRecord("1", 0);
   private final TestRecord testRecord2 = new TestRecord("2", 0);
   private final TestRecord testRecord2Update = new TestRecord("2", 1);

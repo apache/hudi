@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class BaseFileGroupRecordBuffer {
+public class BaseTestFileGroupRecordBuffer {
 
   protected static final Schema SCHEMA = Schema.createRecord("test_record", null, "namespace", false,
       Arrays.asList(

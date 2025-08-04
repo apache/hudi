@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
@@ -30,10 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 
-import java.io.Serializable;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 /**
  * This interface defines the contract for initializing a {@link FileGroupRecordBuffer} for a given file group.
@@ -42,7 +38,7 @@ import java.util.Map;
  */
 public interface FileGroupRecordBufferLoader<T> {
 
-  Option<Pair<HoodieFileGroupRecordBuffer<T>, List<String>>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                      HoodieStorage storage,
                                                                      InputSplit inputSplit,
                                                                      List<String> orderingFieldNames,
@@ -56,8 +52,8 @@ public interface FileGroupRecordBufferLoader<T> {
     return DefaultFileGroupRecordBufferLoader.getInstance();
   }
 
-  static <T> FileGroupRecordBufferLoader<T> createRecordsBasedLoader(Iterator<Map.Entry<Serializable, BufferedRecord<T>>> toBeMergedRecords) {
-    return RecordsBasedFileGroupRecordBufferLoader.getInstance(toBeMergedRecords);
+  static <T> FileGroupRecordBufferLoader<T> createInputsBased() {
+    return RecordsBasedFileGroupRecordBufferLoader.getInstance();
   }
 
   static <T> ReusableFileGroupRecordBufferLoader<T> createReusable(HoodieReaderContext<T> readerContextWithoutFilters) {

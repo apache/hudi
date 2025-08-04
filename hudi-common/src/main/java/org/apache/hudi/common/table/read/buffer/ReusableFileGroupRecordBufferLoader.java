@@ -49,7 +49,7 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
   }
 
   @Override
-  public synchronized Option<Pair<HoodieFileGroupRecordBuffer<T>, List<String>>> getRecordBuffer(HoodieReaderContext<T> readerContext,
+  public synchronized Pair<HoodieFileGroupRecordBuffer<T>, List<String>> getRecordBuffer(HoodieReaderContext<T> readerContext,
                                                                                          HoodieStorage storage,
                                                                                          InputSplit inputSplit,
                                                                                          List<String> orderingFieldNames,
@@ -58,9 +58,6 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
                                                                                          ReaderParameters readerParameters,
                                                                                          HoodieReadStats readStats,
                                                                                          Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    if (inputSplit.getLogFiles().isEmpty()) {
-      return Option.empty();
-    }
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
     PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     if (cachedResults == null) {
@@ -73,7 +70,7 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
     // Create a reusable buffer with the results from the initial scan
     ReusableKeyBasedRecordBuffer<T> reusableBuffer = new ReusableKeyBasedRecordBuffer<>(
         readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor, cachedResults.getLeft().getLogRecords());
-    return Option.of(Pair.of(reusableBuffer, cachedResults.getRight()));
+    return Pair.of(reusableBuffer, cachedResults.getRight());
   }
 
   @Override
