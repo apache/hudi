@@ -841,6 +841,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return HoodieRecordPayload.getPayloadClassName(this);
   }
 
+  public String getLegacyPayloadClass() {
+    return getStringOrDefault(LEGACY_PAYLOAD_CLASS_NAME, "");
+  }
+
   public String getRecordMergeStrategyId() {
     return getString(RECORD_MERGE_STRATEGY_ID);
   }

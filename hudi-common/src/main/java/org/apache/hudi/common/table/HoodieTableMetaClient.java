@@ -1482,7 +1482,8 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setInitialVersion(tableVersion);
 
       // For table version <= 8
-      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      if (tableVersion.lesserThan(HoodieTableVersion.NINE)
+          || tableType == HoodieTableType.COPY_ON_WRITE) {
         Triple<RecordMergeMode, String, String> mergeConfigs =
             HoodieTableConfig.inferBasicMergingBehavior(
                 recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields,
