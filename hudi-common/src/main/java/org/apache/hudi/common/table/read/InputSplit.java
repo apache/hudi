@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -38,6 +39,7 @@ import java.util.stream.Stream;
  */
 public class InputSplit {
   private final Option<HoodieBaseFile> baseFileOption;
+  private final Either<Stream<HoodieLogFile>, Iterator<BufferedRecord>> recordsToMerge;
   private final List<HoodieLogFile> logFiles;
   private final Option<Iterator<BufferedRecord>> recordIterator;
   private final String partitionPath;
@@ -47,17 +49,18 @@ public class InputSplit {
   private final long length;
 
   InputSplit(Option<HoodieBaseFile> baseFileOption,
-             Either<Stream<HoodieLogFile>, Iterator<BufferedRecord>> logFilesOrRecordIterator,
+             Either<Stream<HoodieLogFile>, Iterator<BufferedRecord>> recordsToMerge,
              String partitionPath, long start, long length) {
     this.baseFileOption = baseFileOption;
-    if (logFilesOrRecordIterator.isLeft()) {
-      this.logFiles = logFilesOrRecordIterator.asLeft().sorted(HoodieLogFile.getLogFileComparator())
+    this.recordsToMerge = recordsToMerge;
+    if (recordsToMerge.isLeft()) {
+      this.logFiles = recordsToMerge.asLeft().sorted(HoodieLogFile.getLogFileComparator())
           .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
           .collect(Collectors.toList());
       this.recordIterator = Option.empty();
     } else {
       this.logFiles = Collections.emptyList();
-      this.recordIterator = Option.of(logFilesOrRecordIterator.asRight());
+      this.recordIterator = Option.of(recordsToMerge.asRight());
     }
     this.partitionPath = partitionPath;
     this.start = start;
@@ -69,6 +72,7 @@ public class InputSplit {
   }
 
   public List<HoodieLogFile> getLogFiles() {
+    ValidationUtils.checkArgument(recordIterator.isEmpty(),"Log files are not initialized");
     return logFiles;
   }
 

@@ -88,6 +88,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
   private final IndexedRecord testRecord5DeleteByCustomMarker = createTestRecord("5", 3, 2L);
   private final IndexedRecord testRecord6 = createTestRecord("6", 1, 5L);
   private final IndexedRecord testRecord6DeleteByCustomMarker = createTestRecord("6", 3, 2L);
+  private final IndexedRecord testRecord7 = createTestRecord("7", 1, 5L);
 
   @Test
   void readWithEventTimeOrdering() throws IOException {
@@ -168,7 +169,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
         properties);
     readerContext.setSchemaHandler(schemaHandler);
     Map<Serializable, BufferedRecord> inputRecords = convertToBufferedRecordsMap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
-        testRecord4EarlierUpdate), readerContext, properties, new String[]{"ts"});
+        testRecord4EarlierUpdate, testRecord7), readerContext, properties, new String[]{"ts"});
     inputRecords.putAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), false));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.EVENT_TIME_ORDERING, Collections.singletonList("ts"), properties);
@@ -188,8 +189,8 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     // update for 4 is ignored due to lower ordering value.
     // record5 is deleted.
     // delete for 6 is ignored due to lower ordering value.
-    assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4, testRecord6), actualRecords);
-    assertEquals(0, readStats.getNumInserts());
+    assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4, testRecord6, testRecord7), actualRecords);
+    assertEquals(1, readStats.getNumInserts());
     assertEquals(1, readStats.getNumDeletes());
     assertEquals(3, readStats.getNumUpdates());
   }
@@ -240,7 +241,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
         properties);
     readerContext.setSchemaHandler(schemaHandler);
     Map<Serializable, BufferedRecord> inputRecords = convertToBufferedRecordsMap(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
-        testRecord4EarlierUpdate), readerContext, properties, new String[]{});
+        testRecord4EarlierUpdate, testRecord7), readerContext, properties, new String[]{});
     inputRecords.putAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.COMMIT_TIME_ORDERING, Collections.singletonList("ts"), properties);
@@ -257,8 +258,8 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     });
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
-    assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate), actualRecords);
-    assertEquals(0, readStats.getNumInserts());
+    assertEquals(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate, testRecord7), actualRecords);
+    assertEquals(1, readStats.getNumInserts());
     assertEquals(2, readStats.getNumDeletes());
     assertEquals(4, readStats.getNumUpdates());
   }
