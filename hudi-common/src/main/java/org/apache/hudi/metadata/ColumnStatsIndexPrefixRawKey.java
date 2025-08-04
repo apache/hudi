@@ -27,7 +27,7 @@ import java.util.Objects;
 /**
  * Represents a raw key for column stats index consisting of column name and optional partition name.
  */
-public class ColumnStatsIndexPrefixRawKey implements RawKey {
+public class ColumnStatsIndexPrefixRawKey implements MetadataRawKey {
   private static final long serialVersionUID = 1L;
   
   private final String columnName;

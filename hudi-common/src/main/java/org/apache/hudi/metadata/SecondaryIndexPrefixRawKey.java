@@ -24,7 +24,7 @@ import java.util.Objects;
 /**
  * Represents a secondary index key, whose raw content is the column value of the data table.
  */
-public class SecondaryIndexPrefixRawKey implements RawKey {
+public class SecondaryIndexPrefixRawKey implements MetadataRawKey {
   private final String secondaryKey;
 
   public SecondaryIndexPrefixRawKey(String secondaryKey) {

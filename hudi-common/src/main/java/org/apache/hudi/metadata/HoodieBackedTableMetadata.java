@@ -225,7 +225,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
-      HoodieData<? extends RawKey> rawKeys,
+      HoodieData<? extends MetadataRawKey> rawKeys,
       String partitionName,
       boolean shouldLoadInMemory) {
     // Apply key encoding
@@ -421,13 +421,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
-      HoodieData<? extends RawKey> rawKeys, String partitionName) {
+      HoodieData<? extends MetadataRawKey> rawKeys, String partitionName) {
     return readIndexRecordsWithKeys(rawKeys, partitionName, Option.empty());
   }
 
   @Override
   public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
-      HoodieData<? extends RawKey> rawKeys, String partitionName, Option<String> dataTablePartition) {
+      HoodieData<? extends MetadataRawKey> rawKeys, String partitionName, Option<String> dataTablePartition) {
     return readIndexRecords(rawKeys, partitionName, dataTablePartition)
         .mapToPair(record -> Pair.of(record.getRecordKey(), record));
   }
@@ -461,7 +461,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return readRecordIndexKeysAndLocation(HoodieListData.eager(recordKeys));
   }
 
-  protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexRecords(HoodieData<? extends RawKey> rawKeys,
+  protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexRecords(HoodieData<? extends MetadataRawKey> rawKeys,
                                                                              String partitionName,
                                                                              Option<String> dataTablePartition) {
     List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,

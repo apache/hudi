@@ -25,7 +25,7 @@ import java.util.Objects;
  * Represents a raw key for the FILES partition in the metadata table.
  * This uses identity encoding - the key is used as-is without transformation.
  */
-public class FilesIndexRawKey implements RawKey {
+public class FilesIndexRawKey implements MetadataRawKey {
   private final String key;
 
   public FilesIndexRawKey(String key) {

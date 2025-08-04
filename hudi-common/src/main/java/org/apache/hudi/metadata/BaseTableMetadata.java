@@ -450,7 +450,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @return A collection of pairs (key -> record)
    */
   public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
-          HoodieData<? extends RawKey> rawKeys, String partitionName);
+      HoodieData<? extends MetadataRawKey> rawKeys, String partitionName);
 
   /**
    * Retrieves a collection of pairs (key -> record) from the metadata table by its keys.
@@ -460,7 +460,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param dataTablePartition The data table partition to look up from
    * @return A collection of pairs (key -> record)
    */
-  protected abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(HoodieData<? extends RawKey> rawKeys,
+  protected abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(HoodieData<? extends MetadataRawKey> rawKeys,
                                                                                                           String partitionName,
                                                                                                           Option<String> dataTablePartition);
 
