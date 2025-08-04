@@ -109,7 +109,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
   private Predicate<HoodieInstant> constructInstantFilter(String completionTime) {
     HoodieInstant instantToRestoreTo = table.getMetaClient().getInstantGenerator()
         .createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.RESTORE_ACTION, savepointToRestoreTimestamp, completionTime);
-    Comparator<HoodieInstant> comparator = new RestoreInstantComparator(table.getMetaClient());
+    Comparator<HoodieInstant> comparator = RestoreInstantComparatorFactory.createComparator(table.getMetaClient());
     return instant -> comparator.compare(instant, instantToRestoreTo) > 0;
   }
 }

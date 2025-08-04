@@ -38,27 +38,24 @@ import java.util.stream.Stream;
  * ... DC-10 starts -> DC-10 ends -> compaction-1 starts -> delta-commit-11 starts -> delta-commit-11 ends -> compaction-1 ends ...
  * If we restore to delta-commit-11, we do not roll back the compaction-1 instant, even though it finished after delta-commit-11.
  */
-public class RestoreInstantComparator implements Comparator<HoodieInstant> {
+public class RestoreInstantComparatorFactory {
   private static final Set<String> COMPACTION_ACTIONS = Stream.of(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION).collect(Collectors.toSet());
-  private final InstantComparator instantComparator;
-  private final HoodieTableType tableType;
 
-  public RestoreInstantComparator(HoodieTableMetaClient metaClient) {
-    this.instantComparator = metaClient.getTimelineLayout().getInstantComparator();
-    this.tableType = metaClient.getTableType();
-  }
-
-  @Override
-  public int compare(HoodieInstant o1, HoodieInstant o2) {
+  public static Comparator<HoodieInstant> createComparator(HoodieTableMetaClient metaClient) {
+    InstantComparator instantComparator = metaClient.getTimelineLayout().getInstantComparator();
+    HoodieTableType tableType = metaClient.getTableType();
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
-      return instantComparator.completionTimeOrderedComparator().compare(o1, o2);
+      return (o1, o2) -> instantComparator.completionTimeOrderedComparator().compare(o1, o2);
     } else {
-      // Do to special handling of compaction instants, we need to use requested time based comparator for compaction instants but completion time based comparator for others
-      if (COMPACTION_ACTIONS.contains(o1.getAction()) || COMPACTION_ACTIONS.contains(o2.getAction())) {
-        return instantComparator.requestedTimeOrderedComparator().compare(o1, o2);
-      } else {
-        return instantComparator.completionTimeOrderedComparator().compare(o1, o2);
-      }
+      return (o1, o2) -> {
+        // Do to special handling of compaction instants, we need to use requested time based comparator for compaction instants
+        // but completion time based comparator for others
+        if (COMPACTION_ACTIONS.contains(o1.getAction()) || COMPACTION_ACTIONS.contains(o2.getAction())) {
+          return instantComparator.requestedTimeOrderedComparator().compare(o1, o2);
+        } else {
+          return instantComparator.completionTimeOrderedComparator().compare(o1, o2);
+        }
+      };
     }
   }
 }
