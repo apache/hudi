@@ -58,7 +58,6 @@ public class InputSplit {
       this.recordIterator = Option.empty();
     } else {
       this.logFiles = Collections.emptyList();
-
       this.recordIterator = Option.of(logFilesOrRecordIterator.asRight());
     }
     this.partitionPath = partitionPath;
