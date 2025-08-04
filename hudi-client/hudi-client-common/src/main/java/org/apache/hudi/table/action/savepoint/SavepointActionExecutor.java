@@ -161,12 +161,12 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
       }
     }).orElseGet(() ->
-      // If there is no earliest commit to retain, but there are clean instants on the timeline, we must assume KEEP_LATEST_FILE_VERSIONS policy is used.
-      // In that case, the last commit before the clean instant is the last commit guaranteed to be retained.
+      // If there is no earliest commit to retain in the clean commit's metadata, but there are clean instants on the timeline,
+      // we assume the last commit before the clean instant is the last commit guaranteed to be retained.
       table.getActiveTimeline().getWriteTimeline().filterCompletedInstants()
           .filter(instant -> compareTimestamps(instant.requestedTime(), LESSER_THAN_OR_EQUALS, cleanInstant.get().requestedTime()))
           .lastInstant()
           .map(HoodieInstant::requestedTime)
-          .orElseThrow(() -> new HoodieSavepointException("No commits found before clean instant " + cleanInstant.get())));
+          .orElse(cleanInstant.get().requestedTime()));
   }
 }

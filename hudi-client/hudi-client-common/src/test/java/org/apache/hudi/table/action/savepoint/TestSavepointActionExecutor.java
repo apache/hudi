@@ -32,6 +32,9 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.stream.Stream;
@@ -42,6 +45,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TestSavepointActionExecutor {
+  private static final String CLEAN_REQUEST_TIME = "20240111101012345";
   private final HoodieTable mockTable = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
   private final HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
   private final String instantTime = "20240121101012345";
@@ -60,7 +64,7 @@ class TestSavepointActionExecutor {
   @Test
   void testLastCommitRetained_completedClean() throws IOException {
     String expectedInstant = "20240101101012345";
-    HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "20240111101012345",
+    HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, CLEAN_REQUEST_TIME,
         InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     when(mockTable.getCompletedCommitsTimeline().firstInstant()).thenReturn(Option.of(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, expectedInstant,
         InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)));
@@ -77,7 +81,7 @@ class TestSavepointActionExecutor {
   @Test
   void testLastCommitRetained_requestedClean() throws IOException {
     String expectedInstant = "20240101101012345";
-    String cleanRequested = "20240111101012345";
+    String cleanRequested = CLEAN_REQUEST_TIME;
     HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanRequested,
         InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     InstantGenerator instantGenerator = mock(InstantGenerator.class);
@@ -99,10 +103,18 @@ class TestSavepointActionExecutor {
     assertEquals(expectedInstant, executor.getLastCommitRetained());
   }
 
-  @Test
-  void testLastCommitRetained_completedCleanWithoutEarliestInstantRetained() throws IOException {
-    String expectedInstant = "20240110101012345";
-    HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "20240111101012345",
+  private static Stream<Arguments> noEarliestInstantRetained() {
+    String lastCommitBeforeClean = "20240110101012345";
+    return Stream.of(
+        Arguments.of(Stream.of("20240108101012345", "20240109101012345", lastCommitBeforeClean, "20240129101012345"), lastCommitBeforeClean),
+        Arguments.of(Stream.of("20240129101012345", "20240139101012345", "20240149101012345"), CLEAN_REQUEST_TIME)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("noEarliestInstantRetained")
+  void testLastCommitRetained_completedCleanWithoutEarliestInstantRetained(Stream<String> writeInstants, String expectedInstant) throws IOException {
+    HoodieInstant cleanInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, CLEAN_REQUEST_TIME,
         InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
     when(mockTable.getCompletedCommitsTimeline().firstInstant()).thenReturn(Option.of(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, expectedInstant,
         InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)));
@@ -111,7 +123,7 @@ class TestSavepointActionExecutor {
     HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata();
     when(mockTable.getActiveTimeline().readCleanMetadata(cleanInstant)).thenReturn(cleanMetadata);
 
-    MockHoodieTimeline mockTimeline = new MockHoodieTimeline(Stream.of("20240108101012345", "20240109101012345", expectedInstant), Stream.empty());
+    MockHoodieTimeline mockTimeline = new MockHoodieTimeline(writeInstants, Stream.empty());
     when(mockTable.getActiveTimeline().getWriteTimeline().filterCompletedInstants()).thenReturn(mockTimeline);
 
     SavepointActionExecutor executor = new SavepointActionExecutor(engineContext, null, mockTable, instantTime, "user", "comment");
