@@ -62,7 +62,7 @@ public abstract class RecordContext<T> implements Serializable {
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   protected JavaTypeConverter typeConverter;
-  protected String partitionPath = null;
+  protected String partitionPath;
 
   protected RecordContext(HoodieTableConfig tableConfig) {
     this.typeConverter = new DefaultJavaTypeConverter();

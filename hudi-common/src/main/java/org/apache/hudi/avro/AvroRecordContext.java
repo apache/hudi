@@ -95,7 +95,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public HoodieRecord constructHoodieRecord(BufferedRecord<IndexedRecord> bufferedRecord) {
     // HoodieKey is not required so do not generate it if partitionPath is null
-    HoodieKey hoodieKey = partitionPath == null ? null : new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
+    HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
 
     if (bufferedRecord.isDelete()) {
       if (payloadClass != null) {
