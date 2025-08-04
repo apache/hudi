@@ -912,9 +912,18 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return generateDeleteRecord(key);
   }
 
+  public HoodieRecord generateDeleteRecord(HoodieRecord existingRecord, Comparable orderingValue) throws IOException {
+    HoodieKey key = existingRecord.getKey();
+    return generateDeleteRecord(key, orderingValue);
+  }
+
   public HoodieRecord generateDeleteRecord(HoodieKey key) throws IOException {
+    return generateDeleteRecord(key, DEFAULT_ORDERING_VALUE);
+  }
+
+  public HoodieRecord generateDeleteRecord(HoodieKey key, Comparable orderingValue) throws IOException {
     RawTripTestPayload payload =
-        new RawTripTestPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true, DEFAULT_ORDERING_VALUE);
+        new RawTripTestPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true, orderingValue);
     return new HoodieAvroRecord(key, payload);
   }
 

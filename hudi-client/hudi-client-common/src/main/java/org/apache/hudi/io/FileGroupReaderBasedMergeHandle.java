@@ -229,9 +229,15 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       // avoid populating external spillable in base {@link HoodieWriteMergeHandle)
       this.incomingRecordsItr = new MappingIterator(newRecordsItr, record -> {
         try {
-          HoodieAvroIndexedRecord indexedRecord = ((HoodieRecord<T>) record).toIndexedRecord(readerContext.getSchemaHandler().getTableSchema(), props).get();
-          BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext((HoodieRecord<T>) indexedRecord, readerContext.getSchemaHandler().getTableSchema(),
-              readerContext.getRecordContext(), props, orderingFields);
+          Option<HoodieAvroIndexedRecord> indexedRecordOpt = ((HoodieRecord<T>) record).toIndexedRecord(readerContext.getSchemaHandler().getTableSchema(), props);
+          BufferedRecord<T> bufferedRecord;
+          if (indexedRecordOpt.isPresent()) {
+            bufferedRecord = BufferedRecord.forRecordWithContext((HoodieRecord<T>) indexedRecordOpt.get(), readerContext.getSchemaHandler().getTableSchema(),
+                readerContext.getRecordContext(), props, orderingFields);
+          } else {
+           bufferedRecord = BufferedRecord.forDeleteRecord(((HoodieRecord<?>) record).getRecordKey(),
+                ((HoodieRecord<?>) record).getOrderingValue(readerContext.getSchemaHandler().getTableSchema(), props, orderingFields));
+          }
           return bufferedRecord;
         } catch (IOException e) {
           throw new HoodieIOException("Failed to convert to Indexed record ", e);
