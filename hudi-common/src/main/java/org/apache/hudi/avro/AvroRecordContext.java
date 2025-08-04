@@ -31,12 +31,15 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.IOException;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Record context for reading and transforming avro indexed records.
@@ -112,6 +115,15 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
       return new HoodieAvroRecord<>(hoodieKey, payload);
     }
     return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
+  }
+
+  @Override
+  public IndexedRecord extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+    try {
+      return record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
+    } catch (IOException e) {
+      throw new HoodieException("Failed to extract data from record: " + record, e);
+    }
   }
 
   @Override

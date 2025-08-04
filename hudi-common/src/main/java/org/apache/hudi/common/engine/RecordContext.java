@@ -22,7 +22,6 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
@@ -32,7 +31,6 @@ import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.apache.avro.Schema;
@@ -41,7 +39,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import javax.annotation.Nullable;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
@@ -77,16 +74,8 @@ public abstract class RecordContext<T> implements Serializable {
     this.partitionPath = partitionPath;
   }
 
-  public T extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
-    try {
-      if (record.getData() instanceof HoodieRecordPayload) {
-        HoodieRecordPayload payload = (HoodieRecordPayload) record.getData();
-        return (T) payload.getIndexedRecord(schema, properties).map(value -> convertAvroRecord((IndexedRecord) value)).orElse(null);
-      }
-      return (T) record.getData();
-    } catch (IOException e) {
-      throw new HoodieException("Failed to extract data from record: " + record, e);
-    }
+  public T extractDataFromRecord(HoodieRecord<T> record, Schema schema, Properties properties) {
+    return record.getData();
   }
 
   /**
