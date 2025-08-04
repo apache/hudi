@@ -74,8 +74,8 @@ public abstract class RecordContext<T> implements Serializable {
     this.partitionPath = partitionPath;
   }
 
-  public T extractDataFromRecord(HoodieRecord<T> record, Schema schema, Properties properties) {
-    return record.getData();
+  public T extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+    return (T) record.getData();
   }
 
   /**
