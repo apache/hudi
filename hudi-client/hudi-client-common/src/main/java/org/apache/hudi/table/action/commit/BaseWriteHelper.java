@@ -105,7 +105,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps())
             .getContext();
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
-    readerContext.initRecordMerger(table.getConfig().getProps());
+    readerContext.initRecordMergerForIngestion(table.getConfig().getProps());
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getConfig().getProps(), table.getMetaClient());
     Schema recordSchema;
     if (StringUtils.nonEmpty(table.getConfig().getPartialUpdateSchema())) {
