@@ -101,9 +101,17 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     validateVersionSpecificProperties(resultMetaClient, fromVersion, toVersion);
     validateDataConsistency(originalData, resultMetaClient, "after " + operation);
     
+    // Validate pending commits based on whether this transition performs rollback operations
     int finalPendingCommits = resultMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
-    assertTrue(finalPendingCommits <= initialPendingCommits,
-        "Pending commits should be cleaned up or reduced after " + operation);
+    if (isRollbackTransition(fromVersion, toVersion)) {
+      // Handlers that call rollbackFailedWritesAndCompact() clear all pending commits
+      assertEquals(0, finalPendingCommits,
+          "Pending commits should be cleared to 0 after " + operation + " (rollback transition)");
+    } else {
+      // Other handlers may clean up some pending commits but don't necessarily clear all
+      assertTrue(finalPendingCommits <= initialPendingCommits,
+          "Pending commits should be cleaned up or reduced after " + operation);
+    }
     
     int finalCompletedCommits = resultMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     assertTrue(finalCompletedCommits >= initialCompletedCommits,
@@ -375,6 +383,33 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   private boolean isMetadataTablePresent(HoodieTableMetaClient metaClient) throws IOException {
     StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
     return metaClient.getStorage().exists(metadataTablePath);
+  }
+  
+  /**
+   * Determine if a version transition performs rollback operations that clear all pending commits.
+   * These handlers call rollbackFailedWritesAndCompact() which clears pending commits to 0.
+   */
+  private boolean isRollbackTransition(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
+    // Upgrade handlers that perform rollbacks
+    if (fromVersion == HoodieTableVersion.SEVEN && toVersion == HoodieTableVersion.EIGHT) {
+      return true; // SevenToEightUpgradeHandler
+    }
+    if (fromVersion == HoodieTableVersion.EIGHT && toVersion == HoodieTableVersion.NINE) {
+      return true; // EightToNineUpgradeHandler
+    }
+    
+    // Downgrade handlers that perform rollbacks
+    if (fromVersion == HoodieTableVersion.SIX && toVersion == HoodieTableVersion.FIVE) {
+      return true; // SixToFiveDowngradeHandler
+    }
+    if (fromVersion == HoodieTableVersion.EIGHT && toVersion == HoodieTableVersion.SEVEN) {
+      return true; // EightToSevenDowngradeHandler  
+    }
+    if (fromVersion == HoodieTableVersion.NINE && toVersion == HoodieTableVersion.EIGHT) {
+      return true; // NineToEightDowngradeHandler
+    }
+    
+    return false; // All other transitions don't perform rollbacks
   }
 
   /**
