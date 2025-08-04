@@ -18,15 +18,22 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -56,10 +63,17 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
   }
 
   @Override
-  public HoodieData<HoodieRecord<T>> deduplicateRecords(
-      HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, TypedProperties props, HoodieRecordMerger merger) {
+  public HoodieData<HoodieRecord<T>> deduplicateRecords(HoodieData<HoodieRecord<T>> records,
+                                                        HoodieIndex<?, ?> index,
+                                                        int parallelism,
+                                                        String schemaStr,
+                                                        TypedProperties props,
+                                                        BufferedRecordMerger<T> recordMerger,
+                                                        HoodieReaderContext<T> readerContext,
+                                                        String[] orderingFieldNames) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
+    RecordContext<T> recordContext = readerContext.getRecordContext();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
@@ -71,14 +85,23 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     }).reduceByKey((rec1, rec2) -> {
       HoodieRecord<T> reducedRecord;
       try {
-        reducedRecord = merger.merge(rec1, schema.get(), rec2, schema.get(), props).get().getLeft();
+        // NOTE: The order of rec1 and rec2 is uncertain within "reduceByKey".
+        Option<BufferedRecord<T>> merged = merge(rec1, rec2, schema.get(), schema.get(), recordContext, orderingFieldNames, recordMerger, props);
+        // NOTE: For merge mode based merging, it returns non-null.
+        //       For mergers / payloads based merging, it may return null.
+        reducedRecord = merged.map(bufferedRecord -> recordContext.constructHoodieRecord(bufferedRecord)).orElse(rec1);
       } catch (IOException e) {
         throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
       }
       boolean choosePrev = rec1.getData().equals(reducedRecord.getData());
       HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
       HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      return reducedRecord.newInstance(reducedKey, operation);
+      if (recordContext instanceof AvroRecordContext) {
+        HoodieRecordPayload reducedPayload = (HoodieRecordPayload) (choosePrev ? rec1.getData() : rec2.getData());
+        return new HoodieAvroRecord(reducedKey, reducedPayload, operation);
+      } else {
+        return reducedRecord.newInstance(reducedKey, operation);
+      }
     }, parallelism).map(Pair::getRight);
   }
 }

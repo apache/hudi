@@ -30,6 +30,7 @@ import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableSortingIterator;
@@ -135,9 +136,11 @@ public abstract class HoodieEngineContext {
 
   public abstract <T> ReaderContextFactory<T> getReaderContextFactory(HoodieTableMetaClient metaClient);
 
-  public ReaderContextFactory<?> getReaderContextFactoryDuringWrite(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType) {
+  public ReaderContextFactory<?> getReaderContextFactoryDuringWrite(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType,
+                                                                    TypedProperties properties) {
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
-      return new AvroReaderContextFactory(metaClient);
+      String payloadClass = ConfigUtils.getPayloadClass(properties);
+      return new AvroReaderContextFactory(metaClient, payloadClass);
     }
     return getDefaultContextFactory(metaClient);
   }
