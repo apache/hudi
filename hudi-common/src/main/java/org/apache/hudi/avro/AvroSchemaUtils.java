@@ -489,22 +489,22 @@ public class AvroSchemaUtils {
    *
    * @param dataSchema the source schema containing the original data structure and metadata
    * @param requiredSchema the target schema that defines the desired structure and field requirements
-   * @param excludeFields a set of field names that should be included from the required schema
-   *                     even if they don't exist in the data schema. This allows for adding
-   *                     fields that may be missing from the original data.
+   * @param mandatoryFields a set of top level field names that should be included from the required schema
+   *                     even if they don't exist in the data schema. This allows for fields like cdc operation
+   *                     don't exist in the data schema
    *
    * @return a new pruned schema that matches the required schema structure while preserving
    *         data schema metadata where possible
    */
-  public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
-    Schema prunedDataSchema = pruneDataSchemaInternal(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), excludeFields);
+  public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
+    Schema prunedDataSchema = pruneDataSchemaInternal(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), mandatoryFields);
     if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
       return createNullableSchema(prunedDataSchema);
     }
     return prunedDataSchema;
   }
 
-  private static Schema pruneDataSchemaInternal(Schema dataSchema, Schema requiredSchema, Set<String> excludeFields) {
+  private static Schema pruneDataSchemaInternal(Schema dataSchema, Schema requiredSchema, Set<String> MandatoryFields) {
     switch (requiredSchema.getType()) {
       case RECORD:
         if (dataSchema.getType() != Schema.Type.RECORD) {
@@ -516,12 +516,12 @@ public class AvroSchemaUtils {
           if (dataSchemaField != null) {
             Schema.Field newField = new Schema.Field(
                 dataSchemaField.name(),
-                pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), excludeFields),
+                pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
                 dataSchemaField.doc(),
                 dataSchemaField.defaultVal()
             );
             newFields.add(newField);
-          } else if (excludeFields.contains(requiredSchemaField.name())) {
+          } else if (MandatoryFields.contains(requiredSchemaField.name())) {
             newFields.add(new Schema.Field(
                 requiredSchemaField.name(),
                 requiredSchemaField.schema(),
@@ -538,13 +538,13 @@ public class AvroSchemaUtils {
         if (dataSchema.getType() != Schema.Type.ARRAY) {
           throw new IllegalArgumentException("Data schema is not an array");
         }
-        return Schema.createArray(pruneDataSchema(dataSchema.getElementType(), requiredSchema.getElementType(), excludeFields));
+        return Schema.createArray(pruneDataSchema(dataSchema.getElementType(), requiredSchema.getElementType(), Collections.emptySet()));
 
       case MAP:
         if (dataSchema.getType() != Schema.Type.MAP) {
           throw new IllegalArgumentException("Data schema is not a map");
         }
-        return Schema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), excludeFields));
+        return Schema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
 
       case UNION:
         throw new IllegalArgumentException("Data schema is a union");

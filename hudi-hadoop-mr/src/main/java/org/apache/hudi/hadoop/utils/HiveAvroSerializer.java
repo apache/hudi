@@ -225,7 +225,7 @@ public class HiveAvroSerializer {
     StructObjectInspector soi = objectInspector;
     GenericData.Record record = new GenericData.Record(schema);
 
-    List<? extends StructField> outputFieldRefs = objectInspector.getAllStructFieldRefs();
+    List<? extends StructField> outputFieldRefs = soi.getAllStructFieldRefs();
     if (outputFieldRefs.size() != columnNames.size()) {
       throw new HoodieException("Number of input columns was different than output columns (in = " + columnNames.size() + " vs out = " + outputFieldRefs.size());
     }
