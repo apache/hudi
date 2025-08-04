@@ -71,102 +71,45 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   private HoodieTableMetaClient metaClient;
 
   @ParameterizedTest
-  @MethodSource("upgradeVersions")
-  public void testUpgradeOnly(HoodieTableVersion originalVersion) throws Exception {
-    LOG.info("Testing upgrade for version {}", originalVersion);
+  @MethodSource("upgradeDowngradeVersionPairs")
+  public void testUpgradeOrDowngrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
+    boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
+    String operation = isUpgrade ? "upgrade" : "downgrade";
+    LOG.info("Testing {} from version {} to {}", operation, fromVersion, toVersion);
     
-    HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
-    assertEquals(originalVersion, originalMetaClient.getTableConfig().getTableVersion(),
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion);
+    assertEquals(fromVersion, originalMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
     
-    Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
-    if (!targetVersionOpt.isPresent()) {
-      LOG.info("Skipping upgrade test for version {} (no higher version available)", originalVersion);
-      return;
-    }
-    HoodieTableVersion targetVersion = targetVersionOpt.get();
-
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
     
     int initialPendingCommits = originalMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     int initialCompletedCommits = originalMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     
-    // Read original data before upgrade for validation
-    Dataset<Row> originalData = readTableData(originalMetaClient, "before upgrade");
+    Dataset<Row> originalData = readTableData(originalMetaClient, "before " + operation);
     
-    LOG.info("Upgrading from {} to {}", originalVersion, targetVersion);
+    LOG.info("{} from {} to {}", isUpgrade ? "Upgrading" : "Downgrading", fromVersion, toVersion);
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
-        .run(targetVersion, null);
+        .run(toVersion, null);
     
-    HoodieTableMetaClient upgradedMetaClient = HoodieTableMetaClient.builder()
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf().newInstance())
         .setBasePath(originalMetaClient.getBasePath())
         .build();
     
-    assertTableVersionOnDataAndMetadataTable(upgradedMetaClient, targetVersion);
-    validateVersionSpecificProperties(upgradedMetaClient, originalVersion, targetVersion);
-    validateDataConsistency(originalData, upgradedMetaClient, "after upgrade");
+    assertTableVersionOnDataAndMetadataTable(resultMetaClient, toVersion);
+    validateVersionSpecificProperties(resultMetaClient, fromVersion, toVersion);
+    validateDataConsistency(originalData, resultMetaClient, "after " + operation);
     
-    int finalPendingCommits = upgradedMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
+    int finalPendingCommits = resultMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     assertTrue(finalPendingCommits <= initialPendingCommits,
-        "Pending commits should be cleaned up or reduced after upgrade");
+        "Pending commits should be cleaned up or reduced after " + operation);
     
-    int finalCompletedCommits = upgradedMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
+    int finalCompletedCommits = resultMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     assertTrue(finalCompletedCommits >= initialCompletedCommits,
-        "Completed commits should be preserved or increased after upgrade");
+        "Completed commits should be preserved or increased after " + operation);
 
-    LOG.info("Successfully completed upgrade test for version {} -> {}", originalVersion, targetVersion);
-  }
-
-  @ParameterizedTest
-  @MethodSource("downgradeVersions")
-  public void testDowngradeOnly(HoodieTableVersion tableVersion) throws Exception {
-    LOG.info("Testing downgrade for version {}", tableVersion);
-    
-    HoodieTableMetaClient targetMetaClient = loadFixtureTable(tableVersion);
-    assertEquals(tableVersion, targetMetaClient.getTableConfig().getTableVersion(),
-        "Fixture table should be at expected version");
-    
-    Option<HoodieTableVersion> previousVersionOpt = getPreviousVersion(tableVersion);
-    if (!previousVersionOpt.isPresent()) {
-      LOG.info("Skipping downgrade test for version {} (no lower version available)", tableVersion);
-      return;
-    }
-    HoodieTableVersion previousVersion = previousVersionOpt.get();
-    
-    HoodieWriteConfig config = createWriteConfig(targetMetaClient, true);
-    
-    // Count initial timeline state
-    int initialPendingCommits = targetMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
-    int initialCompletedCommits = targetMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
-    
-    Dataset<Row> originalData = readTableData(targetMetaClient, "before downgrade");
-    
-    LOG.info("Downgrading from {} to {}", tableVersion, previousVersion);
-    new UpgradeDowngrade(targetMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
-        .run(previousVersion, null);
-    
-    // Create fresh meta client to read updated table configuration after downgrade
-    HoodieTableMetaClient downgradedMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf().newInstance())
-        .setBasePath(targetMetaClient.getBasePath())
-        .build();
-    
-    assertTableVersionOnDataAndMetadataTable(downgradedMetaClient, previousVersion);
-    validateVersionSpecificProperties(downgradedMetaClient, tableVersion, previousVersion);
-    validateDataConsistency(originalData, downgradedMetaClient, "after downgrade");
-    
-    // Verify rollback behavior - pending commits should be cleaned up or reduced
-    int finalPendingCommits = downgradedMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
-    assertTrue(finalPendingCommits <= initialPendingCommits,
-        "Pending commits should be cleaned up or reduced after downgrade");
-    
-    // Verify we still have completed commits
-    int finalCompletedCommits = downgradedMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
-    assertTrue(finalCompletedCommits >= initialCompletedCommits,
-        "Completed commits should be preserved or increased after downgrade");
-
-    LOG.info("Successfully completed downgrade test for version {} -> {}", tableVersion, previousVersion);
+    LOG.info("Successfully completed {} test for version {} -> {}", operation, fromVersion, toVersion);
   }
 
   @ParameterizedTest
@@ -264,24 +207,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
   }
 
-  /**
-   * Get the previous version down from the current version.
-   */
-  private Option<HoodieTableVersion> getPreviousVersion(HoodieTableVersion current) {
-    switch (current) {
-      case NINE:
-        return Option.of(HoodieTableVersion.EIGHT);
-      case EIGHT:
-        return Option.of(HoodieTableVersion.SIX);
-      case SIX:
-        return Option.of(HoodieTableVersion.FIVE);
-      case FIVE:
-        return Option.of(HoodieTableVersion.FOUR);
-      case FOUR:
-      default:
-        return Option.empty();
-    }
-  }
 
   /**
    * Get fixture zip file name for a given table version.
@@ -303,9 +228,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
   }
 
-  /**
-   * Provide test parameters for all table versions.
-   */
   private static Stream<Arguments> tableVersions() {
     return Stream.of(
         Arguments.of(HoodieTableVersion.FOUR),   // Hudi 0.11.1
@@ -316,27 +238,19 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     );
   }
 
-  /**
-   * Provide test parameters for upgrade versions (V4-V8).
-   */
-  private static Stream<Arguments> upgradeVersions() {
+  private static Stream<Arguments> upgradeDowngradeVersionPairs() {
     return Stream.of(
-        Arguments.of(HoodieTableVersion.FOUR),   // V4 -> V5
-        Arguments.of(HoodieTableVersion.FIVE),   // V5 -> V6  
-        Arguments.of(HoodieTableVersion.SIX),    // V6 -> V8
-        Arguments.of(HoodieTableVersion.EIGHT)   // V8 -> V9
-    );
-  }
-
-  /**
-   * Provide test parameters for downgrade versions (V9 down to V5).
-   */
-  private static Stream<Arguments> downgradeVersions() {
-    return Stream.of(
-        Arguments.of(HoodieTableVersion.NINE),   // V9 -> V8
-        Arguments.of(HoodieTableVersion.EIGHT),  // V8 -> V6
-        Arguments.of(HoodieTableVersion.SIX),    // V6 -> V5
-        Arguments.of(HoodieTableVersion.FIVE)    // V5 -> V4
+        // Upgrade test cases
+        Arguments.of(HoodieTableVersion.FOUR, HoodieTableVersion.FIVE),   // V4 -> V5
+        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.SIX),    // V5 -> V6  
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT),   // V6 -> V8
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE),  // V8 -> V9
+        
+        // Downgrade test cases
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT),  // V9 -> V8
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX),   // V8 -> V6
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5
+        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4
     );
   }
 
