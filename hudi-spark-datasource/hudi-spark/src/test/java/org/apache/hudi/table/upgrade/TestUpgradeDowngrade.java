@@ -74,7 +74,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @MethodSource("upgradeDowngradeVersionPairs")
   public void testUpgradeOrDowngrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
-    boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
+    boolean isUpgrade = fromVersion.lesserThan(toVersion);
     String operation = isUpgrade ? "upgrade" : "downgrade";
     LOG.info("Testing {} from version {} to {}", operation, fromVersion, toVersion);
     
@@ -89,7 +89,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     Dataset<Row> originalData = readTableData(originalMetaClient, "before " + operation);
     
-    LOG.info("{} from {} to {}", isUpgrade ? "Upgrading" : "Downgrading", fromVersion, toVersion);
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(toVersion, null);
     
@@ -107,7 +106,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     if (isRollbackTransition(fromVersion, toVersion)) {
       // Handlers that call rollbackFailedWritesAndCompact() clear all pending commits
       assertEquals(0, finalPendingCommits,
-          "Pending commits should be cleared to 0 after " + operation + " (rollback transition)");
+          "Pending commits should be cleared to 0 after " + operation);
     } else {
       // Other handlers may clean up some pending commits but don't necessarily clear all
       assertTrue(finalPendingCommits <= initialPendingCommits,
@@ -148,8 +147,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .build();
     assertEquals(originalVersion, unchangedMetaClient.getTableConfig().getTableVersion(),
         "Table version should remain unchanged when auto-upgrade is disabled");
-    validateSpecificPropertiesForVersion(unchangedMetaClient, unchangedMetaClient.getTableConfig(), originalVersion);
-    validateVersionSpecificProperties(unchangedMetaClient, originalVersion, originalVersion);
+    validateVersionSpecificProperties(unchangedMetaClient, originalVersion);
     performDataValidationOnTable(unchangedMetaClient, "after auto-upgrade disabled test");
     
     LOG.info("Auto-upgrade disabled test passed for version {}", originalVersion);
@@ -177,9 +175,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return metaClient;
   }
 
-  /**
-   * Create write config for test operations (upgrade/downgrade/validation).
-   */
   private HoodieWriteConfig createWriteConfig(HoodieTableMetaClient metaClient, boolean autoUpgrade) {
     Properties props = new Properties();
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
@@ -195,9 +190,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return builder.build();
   }
 
-  /**
-   * Get the next version up from the current version.
-   */
   private Option<HoodieTableVersion> getNextVersion(HoodieTableVersion current) {
     switch (current) {
       case FOUR:
@@ -215,7 +207,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         return Option.empty();
     }
   }
-  
+
   /**
    * Get fixture zip file name for a given table version.
    */
@@ -316,13 +308,18 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       default:
         LOG.warn("No specific property validation for version {}", toVersion);
     }
-    
   }
 
   /**
-   * Validate specific properties for a given table version.
+   * Validate version-specific properties for a single table version.
    */
-  private void validateSpecificPropertiesForVersion(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig, HoodieTableVersion version) throws IOException {
+  private void validateVersionSpecificProperties(
+      HoodieTableMetaClient metaClient, HoodieTableVersion version) throws IOException {
+    LOG.info("Validating version-specific properties for version {}", version);
+    
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    
+    // Validate properties for the version
     switch (version) {
       case FOUR:
         validateVersion4Properties(metaClient, tableConfig);
@@ -344,11 +341,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
   }
 
-  /**
-   * Validate basic properties for version 4.
-   */
   private void validateVersion4Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) throws IOException {
-    // TABLE_CHECKSUM should exist and be valid
     assertTrue(tableConfig.contains(HoodieTableConfig.TABLE_CHECKSUM),
         "TABLE_CHECKSUM should be set for V4");
     String actualChecksum = tableConfig.getString(HoodieTableConfig.TABLE_CHECKSUM);
@@ -376,10 +369,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       }
     }
   }
-  
-  /**
-   * Check if metadata table is present for the given table.
-   */
+
   private boolean isMetadataTablePresent(HoodieTableMetaClient metaClient) throws IOException {
     StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
     return metaClient.getStorage().exists(metadataTablePath);
@@ -412,9 +402,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return false; // All other transitions don't perform rollbacks
   }
 
-  /**
-   * Validate properties for version 5 (default partition path migration).
-   */
   private void validateVersion5Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) throws IOException {
 
     validateVersion4Properties(metaClient, tableConfig);
@@ -438,10 +425,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
   }
 
-  /**
-   * Validate properties for version 6 (auxiliary folder cleanup).
-   * Based on FiveToSixUpgradeHandler - validates that compaction REQUESTED files were properly cleaned up.
-   */
   private void validateVersion6Properties(HoodieTableMetaClient metaClient) throws IOException {
     // Version 6 upgrade deletes compaction requested files from .aux folder (HUDI-6040)
     // Validate that no REQUESTED compaction files remain in auxiliary folder
@@ -480,51 +463,38 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         compactionTimeline.countInstants());
   }
 
-  /**
-   * Validate properties for version 8 (major upgrade with record merge mode, new configuration properties).
-   */
   private void validateVersion8Properties(HoodieTableConfig tableConfig) {
-    // Timeline layout should be upgraded to V2 for V8+
     Option<TimelineLayoutVersion> layoutVersion = tableConfig.getTimelineLayoutVersion();
     assertTrue(layoutVersion.isPresent(), "Timeline layout version should be present for V8+");
     assertEquals(TimelineLayoutVersion.LAYOUT_VERSION_2, layoutVersion.get(),
         "Timeline layout should be V2 for V8+");
 
-    // Timeline path should be set
     assertTrue(tableConfig.contains(HoodieTableConfig.TIMELINE_PATH),
         "Timeline path should be set for V8");
     assertEquals(HoodieTableConfig.TIMELINE_PATH.defaultValue(),
         tableConfig.getString(HoodieTableConfig.TIMELINE_PATH),
         "Timeline path should have default value");
     
-    // Record merge mode should be set
     assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE),
         "Record merge mode should be set for V8");
     RecordMergeMode mergeMode = tableConfig.getRecordMergeMode();
     assertNotNull(mergeMode, "Merge mode should not be null");
     
-    // Record merge strategy ID should be set
     assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID),
         "Record merge strategy ID should be set for V8");
     
-    // Payload class should be set
     assertTrue(tableConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME),
         "Payload class should be set for V8");
     
-    // Initial version should be set
     assertTrue(tableConfig.contains(HoodieTableConfig.INITIAL_VERSION),
         "Initial version should be set for V8");
     
-    // Key generator type should be set if key generator class is present
     if (tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
       assertTrue(tableConfig.contains(HoodieTableConfig.KEY_GENERATOR_TYPE),
           "Key generator type should be set when key generator class is present");
     }
   }
 
-  /**
-   * Validate properties for version 9 (index version population).
-   */
   private void validateVersion9Properties(HoodieTableMetaClient metaClient, HoodieTableConfig tableConfig) {
     validateVersion8Properties(tableConfig);
 
@@ -553,7 +523,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       assertNotNull(tableData, "Table read should not return null " + stage);
       
       // Force execution to ensure data is read immediately (not lazily)
-      // This prevents the "before upgrade" data from actually being read after upgrade operations
       List<Row> rows = tableData.collectAsList();
       long rowCount = rows.size();
       assertTrue(rowCount >= 0, "Row count should be non-negative " + stage);

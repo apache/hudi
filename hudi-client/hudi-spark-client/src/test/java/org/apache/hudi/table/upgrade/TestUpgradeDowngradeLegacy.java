@@ -110,6 +110,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests {@link UpgradeDowngrade}.
+ * New tests for upgrade and downgrade operations should be added to TestUpgradeDowngrade using the test fixtures.
  */
 public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
 
