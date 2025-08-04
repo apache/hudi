@@ -338,7 +338,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     }
     this.setLock(lockUpdateStatus.getRight().get());
     hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-        (int) (latestLock.getRight().get().getValidUntilMs() - getCurrentEpochMs())));
+        (int) (lockUpdateStatus.getRight().get().getValidUntilMs() - getCurrentEpochMs())));
 
     // There is a remote chance that
     // - after lock is acquired but before heartbeat starts the lock is expired.
