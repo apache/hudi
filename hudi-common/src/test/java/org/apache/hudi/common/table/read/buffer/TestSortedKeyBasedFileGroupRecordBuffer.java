@@ -23,20 +23,23 @@ import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.InputSplit;
+import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -44,12 +47,10 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
@@ -115,6 +116,8 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
+    when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     readerContext.setHasLogFiles(false);
@@ -122,27 +125,29 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
         properties);
     readerContext.setSchemaHandler(schemaHandler);
-    readerContext.setRecordMerger(Option.ofNullable(null));
-    Map<Serializable, BufferedRecord> inputRecords =
+    readerContext.initRecordMerger(properties);
+    List<BufferedRecord> inputRecords =
         convertToBufferedRecordsMap(Arrays.asList(testIndexedRecord6Update, testIndexedRecord4LowerOrdering, testIndexedRecord1, testIndexedRecord2Update), readerContext, properties,
             new String[]{"ts"});
-    inputRecords.putAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker), false));
+    inputRecords.addAll(convertToBufferedRecordsMapForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker), false));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
-    UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
-    SortedKeyBasedFileGroupRecordBuffer fileGroupRecordBuffer = new SortedKeyBasedFileGroupRecordBuffer(
-        readerContext, mockMetaClient, RecordMergeMode.EVENT_TIME_ORDERING, PartialUpdateMode.NONE, properties, Collections.singletonList("ts"), updateProcessor);
+    when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+
+    FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
+    InputSplit inputSplit = mock(InputSplit.class);
+    when(inputSplit.hasNoRecordsToMerge()).thenReturn(false);
+    when(inputSplit.getRecordIterator()).thenReturn(inputRecords.iterator());
+    ReaderParameters readerParameters = mock(ReaderParameters.class);
+    when(readerParameters.sortOutputs()).thenReturn(true);
+    SortedKeyBasedFileGroupRecordBuffer fileGroupRecordBuffer  = (SortedKeyBasedFileGroupRecordBuffer<IndexedRecord>) recordBufferLoader
+        .getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit, Collections.singletonList("ts"), mockMetaClient, properties,
+            readerParameters, readStats, Option.empty()).getKey();
+    when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
 
     fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testIndexedRecord2, testIndexedRecord3, testIndexedRecord4,
         testIndexedRecord5, testIndexedRecord6).iterator()));
-
-    inputRecords.entrySet().forEach(kv -> {
-      try {
-        fileGroupRecordBuffer.processNextDataRecord(kv.getValue(), kv.getKey());
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to process next data ", e);
-      }
-    });
 
     List<IndexedRecord> actualRecords = getActualRecords(fileGroupRecordBuffer);
     assertEquals(Arrays.asList(testIndexedRecord1, testIndexedRecord2Update, testIndexedRecord3, testIndexedRecord4, testIndexedRecord6Update), actualRecords);

@@ -25,17 +25,14 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 public class BaseTestFileGroupRecordBuffer {
@@ -54,21 +51,21 @@ public class BaseTestFileGroupRecordBuffer {
     return record;
   }
 
-  protected static Map<Serializable, BufferedRecord> convertToBufferedRecordsMap(List<IndexedRecord> indexedRecords,
+  protected static List<BufferedRecord> convertToBufferedRecordsMap(List<IndexedRecord> indexedRecords,
                                                                                HoodieReaderContext<IndexedRecord> readerContext,
                                                                                TypedProperties props, String[] orderingFieldNames) {
     return indexedRecords.stream().map(rec -> {
       HoodieAvroIndexedRecord indexedRecord = new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec, null);
-      return Pair.of(rec.get(0).toString(), (BufferedRecord) BufferedRecord.forRecordWithContext(indexedRecord, readerContext.getSchemaHandler().getRequestedSchema(),
-          readerContext.getRecordContext(), props, orderingFieldNames));
-    }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+      return (BufferedRecord) BufferedRecord.forRecordWithContext(indexedRecord, readerContext.getSchemaHandler().getRequestedSchema(),
+          readerContext.getRecordContext(), props, orderingFieldNames);
+    }).collect(Collectors.toList());
   }
 
-  protected static Map<Serializable, BufferedRecord> convertToBufferedRecordsMapForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
+  protected static List<BufferedRecord> convertToBufferedRecordsMapForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
     return indexedRecords.stream().map(rec -> {
-      return Pair.of(rec.get(0).toString(),
+      return
           (BufferedRecord) BufferedRecord.forDeleteRecord(DeleteRecord.create(new HoodieKey(rec.get(0).toString(), ""), defaultOrderingValue ? 0 : (Comparable) rec.get(2)),
-              defaultOrderingValue ? 0 : (Comparable) rec.get(2)));
-    }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+              defaultOrderingValue ? 0 : (Comparable) rec.get(2));
+    }).collect(Collectors.toList());
   }
 }
