@@ -106,16 +106,16 @@ object HoodieParquetFileFormatHelper {
                                schemaUtils: HoodieSchemaUtils): UnsafeProjection = {
     val floatToDoubleCache = scala.collection.mutable.HashMap.empty[(DataType, DataType), Boolean]
 
-    def hasFloatToDouble(src: DataType, dst: DataType): Boolean = {
+    def hasFloatToDoubleConversion(src: DataType, dst: DataType): Boolean = {
       floatToDoubleCache.getOrElseUpdate((src, dst), {
         (src, dst) match {
           case (FloatType, DoubleType) => true
           case (StructType(srcFields), StructType(dstFields)) =>
-            srcFields.zip(dstFields).exists { case (sf, df) => hasFloatToDouble(sf.dataType, df.dataType) }
+            srcFields.zip(dstFields).exists { case (sf, df) => hasFloatToDoubleConversion(sf.dataType, df.dataType) }
           case (ArrayType(sElem, _), ArrayType(dElem, _)) =>
-            hasFloatToDouble(sElem, dElem)
+            hasFloatToDoubleConversion(sElem, dElem)
           case (MapType(sKey, sVal, _), MapType(dKey, dVal, _)) =>
-            hasFloatToDouble(sKey, dKey) || hasFloatToDouble(sVal, dVal)
+            hasFloatToDoubleConversion(sKey, dKey) || hasFloatToDoubleConversion(sVal, dVal)
           case _ => false
         }
       })
@@ -127,7 +127,7 @@ object HoodieParquetFileFormatHelper {
         case (FloatType, DoubleType) =>
           val toStr = Cast(expr, StringType, if (needTimeZone) timeZoneId else None)
           Cast(toStr, dstType, if (needTimeZone) timeZoneId else None)
-        case (s: StructType, d: StructType) if hasFloatToDouble(s, d) =>
+        case (s: StructType, d: StructType) if hasFloatToDoubleConversion(s, d) =>
           val structFields = s.fields.zip(d.fields).zipWithIndex.map {
             case ((srcField, dstField), i) =>
               val child = GetStructField(expr, i, Some(dstField.name))
@@ -136,12 +136,13 @@ object HoodieParquetFileFormatHelper {
           CreateNamedStruct(d.fields.zip(structFields).flatMap {
             case (f, c) => Seq(Literal(f.name), c)
           })
-        case (ArrayType(sElementType, containsNull), ArrayType(dElementType, _)) if hasFloatToDouble(sElementType, dElementType) =>
+        case (ArrayType(sElementType, containsNull), ArrayType(dElementType, _)) if hasFloatToDoubleConversion(sElementType, dElementType) =>
           val lambdaVar = NamedLambdaVariable("element", sElementType, containsNull)
           val body = recursivelyCastExpressions(lambdaVar, sElementType, dElementType)
           val func = LambdaFunction(body, Seq(lambdaVar))
           ArrayTransform(expr, func)
-        case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _)) if hasFloatToDouble(sKeyType, dKeyType) || hasFloatToDouble(sValType, dValType) =>
+        case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _))
+          if hasFloatToDoubleConversion(sKeyType, dKeyType) || hasFloatToDoubleConversion(sValType, dValType) =>
           val kv = NamedLambdaVariable("kv", new StructType()
             .add("key", sKeyType, nullable = false)
             .add("value", sValType, nullable = vnull), nullable = false)
