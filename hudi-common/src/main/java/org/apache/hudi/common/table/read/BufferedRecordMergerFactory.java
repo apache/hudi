@@ -427,21 +427,25 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<BufferedRecord<T>> deltaMergeNonDeleteRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
-      Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = getMergedRecord(existingRecord, newRecord, false);
-      if (combinedRecordAndSchemaOpt.map(combinedRecordAndSchema -> combinedRecordAndSchema.getRight() != null).orElse(false)) {
-        Schema combinedSchema = combinedRecordAndSchemaOpt.get().getRight();
-        T combinedRecordData = recordContext.convertAvroRecord(combinedRecordAndSchemaOpt.get().getLeft().toIndexedRecord(combinedSchema, props).get().getData());
-        // If pre-combine does not return existing record, update it
-        if (combinedRecordData != existingRecord.getRecord()) {
-          Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
-          // For pkless we need to use record key from existing record
-          return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), recordContext, orderingFieldNames,
-              existingRecord.getRecordKey(), combinedRecordAndSchema.getLeft().isDelete(combinedSchema, props)));
-        }
+      Option<Pair<HoodieRecord, Schema>> mergedRecordAndSchema = getMergedRecord(existingRecord, newRecord, false);
+      if (mergedRecordAndSchema.isEmpty()) {
+        // An empty Option indicates that the output represents a delete.
+        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, true));
+      }
+      HoodieRecord mergedRecord = mergedRecordAndSchema.get().getLeft();
+      Schema mergeResultSchema = mergedRecordAndSchema.get().getRight();
+      // Special handling for SENTINEL record in Expression Payload. This is returned if the condition does not match.
+      if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
         return Option.empty();
       }
-      // An empty Option indicates that the output represents a delete.
-      return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, true));
+      T combinedRecordData = recordContext.convertAvroRecord(mergedRecord.toIndexedRecord(mergeResultSchema, props).get().getData());
+      // If pre-combine does not return existing record, update it
+      if (combinedRecordData != existingRecord.getRecord()) {
+        // For pkless we need to use record key from existing record
+        return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, mergeResultSchema, recordContext, orderingFieldNames,
+            existingRecord.getRecordKey(), mergedRecord.isDelete(mergeResultSchema, props)));
+      }
+      return Option.empty();
     }
 
     @Override

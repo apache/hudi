@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -28,7 +27,6 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
@@ -109,9 +107,6 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
     readerContext.initRecordMerger(table.getConfig().getProps());
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getConfig().getProps(), table.getMetaClient());
-    HoodieRecordMerger recordMerger = HoodieRecordUtils.mergerToPreCombineMode(table.getConfig().getRecordMerger());
-    RecordMergeMode recordMergeMode = HoodieTableConfig.inferCorrectMergingBehavior(null, table.getConfig().getPayloadClass(), null,
-        String.join(",", orderingFieldNames), tableConfig.getTableVersion()).getLeft();
     Schema recordSchema;
     if (StringUtils.nonEmpty(table.getConfig().getPartialUpdateSchema())) {
       recordSchema = new Schema.Parser().parse(table.getConfig().getPartialUpdateSchema());
@@ -121,9 +116,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     recordSchema = AvroSchemaCache.intern(recordSchema);
     BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext,
-        recordMergeMode,
+        readerContext.getMergeMode(),
         false,
-        Option.ofNullable(recordMerger),
+        readerContext.getRecordMerger().map(HoodieRecordUtils::mergerToPreCombineMode),
         orderingFieldNames,
         Option.ofNullable(table.getConfig().getPayloadClass()),
         recordSchema,

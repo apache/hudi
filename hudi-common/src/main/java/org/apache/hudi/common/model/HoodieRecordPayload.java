@@ -182,16 +182,18 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   static String getPayloadClassName(Properties props) {
-    String payloadClassName;
+    return getPayloadClassNameIfPresent(props).orElse(HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME);
+  }
+
+  static Option<String> getPayloadClassNameIfPresent(Properties props) {
+    String payloadClassName = null;
     if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
       payloadClassName = props.getProperty(PAYLOAD_CLASS_NAME.key());
     } else if (props.containsKey("hoodie.datasource.write.payload.class")) {
       payloadClassName = props.getProperty("hoodie.datasource.write.payload.class");
-    } else {
-      return HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
     }
     // There could be tables written with payload class from com.uber.hoodie.
     // Need to transparently change to org.apache.hudi.
-    return payloadClassName.replace("com.uber.hoodie", "org.apache.hudi");
+    return Option.ofNullable(payloadClassName).map(className -> className.replace("com.uber.hoodie", "org.apache.hudi"));
   }
 }

@@ -20,7 +20,6 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -446,7 +445,15 @@ public class HoodieIndexUtils {
     }
 
     //record is inserted or updated
-    String partitionPath = keyGenerator.getPartitionPath(existingRecordContext.convertToAvroRecord(mergeResult.getMergedRecord(), writeSchemaWithMetaFields));
+    String partitionPath;
+    if (result.getData() == incoming.getData()) {
+      partitionPath = incoming.getPartitionPath();
+    } else if (result.getData() == existing.getData()) {
+      partitionPath = existing.getPartitionPath();
+    } else {
+      // the merged record is not the same as either incoming or existing, so we need to compute the partition path
+      partitionPath = keyGenerator.getPartitionPath(existingRecordContext.convertToAvroRecord(mergeResult.getMergedRecord(), writeSchemaWithMetaFields));
+    }
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
         new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
     return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
@@ -535,13 +542,11 @@ public class HoodieIndexUtils {
         getExistingRecords(globalLocations, keyGeneratorWriteConfigOpt.getLeft(), hoodieTable, readerContextFactoryForExistingRecords, writerSchemaWithMetaFields.get());
     List<String> orderingFieldNames = getOrderingFieldNames(
         readerContext.getMergeMode(), hoodieTable.getConfig().getProps(), hoodieTable.getMetaClient());
-    RecordMergeMode recordMergeMode = HoodieTableConfig.inferCorrectMergingBehavior(null, config.getPayloadClass(), null,
-        String.join(",", orderingFieldNames), hoodieTable.getMetaClient().getTableConfig().getTableVersion()).getLeft();
     BufferedRecordMerger<R> recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
-        recordMergeMode,
+        readerContext.getMergeMode(),
         false,
-        Option.ofNullable(updatedConfig.getRecordMerger()),
+        readerContext.getRecordMerger(),
         orderingFieldNames,
         writerSchema.get(),
         Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
