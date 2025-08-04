@@ -176,9 +176,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key, String partitionName) {
+  protected Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key) {
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData = readIndexRecordsWithKeys(
-        HoodieListData.eager(Collections.singletonList(new FilesIndexRawKey(key))), partitionName);
+        HoodieListData.eager(Collections.singletonList(new FilesIndexRawKey(key))), MetadataPartitionType.FILES.getPartitionPath());
     try {
       List<HoodieRecord<HoodieMetadataPayload>> records = recordsData.values().collectAsList();
       ValidationUtils.checkArgument(records.size() <= 1, () -> "Found more than 1 record for record key " + key);

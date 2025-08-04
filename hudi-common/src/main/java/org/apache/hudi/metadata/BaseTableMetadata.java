@@ -260,8 +260,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    */
   protected List<String> fetchAllPartitionPaths() {
     HoodieTimer timer = HoodieTimer.start();
-    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = readFilesIndexRecords(RECORDKEY_PARTITION_LIST,
-        MetadataPartitionType.FILES.getPartitionPath());
+    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = readFilesIndexRecords(RECORDKEY_PARTITION_LIST);
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
 
     List<String> partitions = recordOpt.map(record -> {
@@ -292,8 +291,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     String recordKey = relativePartitionPath.isEmpty() ? NON_PARTITIONED_NAME : relativePartitionPath;
 
     HoodieTimer timer = HoodieTimer.start();
-    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = readFilesIndexRecords(recordKey,
-        MetadataPartitionType.FILES.getPartitionPath());
+    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = readFilesIndexRecords(recordKey);
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
     List<StoragePathInfo> pathInfoList = recordOpt
@@ -437,10 +435,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * Retrieves a single record from the metadata table by its key.
    *
    * @param key The escaped/encoded key to look up in the metadata table
-   * @param partitionName The partition name where the record is stored
    * @return Option containing the record if found, empty Option if not found
    */
-  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key, String partitionName);
+  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key);
 
   /**
    * Retrieves a collection of pairs (key -> record) from the metadata table by its keys.
