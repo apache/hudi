@@ -38,6 +38,7 @@ import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -214,8 +215,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         return Option.empty();
     }
   }
-
-
+  
   /**
    * Get fixture zip file name for a given table version.
    */
@@ -551,11 +551,18 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
           .load(basePath);
 
       assertNotNull(tableData, "Table read should not return null " + stage);
-      long rowCount = tableData.count();
+      
+      // Force execution to ensure data is read immediately (not lazily)
+      // This prevents the "before upgrade" data from actually being read after upgrade operations
+      List<Row> rows = tableData.collectAsList();
+      long rowCount = rows.size();
       assertTrue(rowCount >= 0, "Row count should be non-negative " + stage);
       
-      LOG.info("Successfully read table data {} ({} rows)", stage, rowCount);
-      return tableData;
+      // Convert collected rows back to Dataset for use in validation
+      Dataset<Row> materializedData = sqlContext().createDataFrame(rows, tableData.schema());
+      
+      LOG.info("Successfully read and materialized table data {} ({} rows)", stage, rowCount);
+      return materializedData;
     } catch (Exception e) {
       LOG.error("Failed to read table data {} from: {} (version: {})", 
           stage, metaClient.getBasePath(), metaClient.getTableConfig().getTableVersion(), e);
