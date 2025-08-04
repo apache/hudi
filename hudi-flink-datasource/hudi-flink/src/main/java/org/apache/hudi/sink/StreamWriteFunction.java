@@ -49,6 +49,7 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -242,7 +243,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         Option.ofNullable(writeClient.getConfig().getRecordMerger()),
         orderingFieldNames,
         Option.ofNullable(writeClient.getConfig().getPayloadClass()),
-        new SerializableSchema(writeClient.getConfig().getSchema()).get(),
+        new Schema.Parser().parse(writeClient.getConfig().getSchema()),
         writeClient.getConfig().getProps(),
         metaClient.getTableConfig().getPartialUpdateMode());
     LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());

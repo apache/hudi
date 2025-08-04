@@ -97,6 +97,7 @@ import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.jetbrains.annotations.NotNull;
 
@@ -563,7 +564,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         Option.ofNullable(writeClient.getConfig().getRecordMerger()),
         orderingFieldNames,
         Option.ofNullable(writeClient.getConfig().getPayloadClass()),
-        new SerializableSchema(writeClient.getConfig().getSchema()).get(),
+        new Schema.Parser().parse(writeClient.getConfig().getSchema()),
         writeClient.getConfig().getProps(),
         metaClient.getTableConfig().getPartialUpdateMode());
     HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd =

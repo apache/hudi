@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -117,6 +118,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     } else {
       recordSchema = new Schema.Parser().parse(table.getConfig().getWriteSchema());
     }
+    recordSchema = AvroSchemaCache.intern(recordSchema);
     BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         recordMergeMode,
@@ -163,6 +165,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       boolean choosePrevious = merged.isEmpty();
       HoodieKey reducedKey = choosePrevious ? previous.getKey() : next.getKey();
       HoodieOperation operation = choosePrevious ? previous.getOperation() : next.getOperation();
+      reducedRecord = reducedRecord.newInstance(reducedKey, operation);
+      reducedRecord.setCurrentLocation(choosePrevious ? previous.getCurrentLocation() : next.getCurrentLocation());
+      reducedRecord.setNewLocation(choosePrevious ? previous.getNewLocation() : next.getNewLocation());
       return reducedRecord.newInstance(reducedKey, operation);
     } catch (IOException e) {
       throw new HoodieException(String.format("Error to merge two records, %s, %s", previous, next), e);
