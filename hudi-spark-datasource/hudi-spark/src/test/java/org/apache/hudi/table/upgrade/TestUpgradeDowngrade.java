@@ -20,7 +20,6 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -30,12 +29,16 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -56,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * from different Hudi releases. Tests round-trip operations: upgrade one version up,
  * then downgrade back to original version.
  */
-public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
+public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestUpgradeDowngrade.class);
   private static final String FIXTURES_BASE_PATH = "/upgrade-downgrade-fixtures/mor-tables/";
@@ -65,16 +68,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
   java.nio.file.Path tempDir;
   
   private HoodieTableMetaClient metaClient;
-
-  @BeforeEach
-  public void setUp() throws IOException {
-    initSparkContexts();
-  }
-
-  @AfterEach
-  public void tearDown() throws IOException {
-    cleanupSparkContexts();
-  }
 
   @ParameterizedTest
   @MethodSource("upgradeVersions")
@@ -85,7 +78,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     assertEquals(originalVersion, originalMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
     
-    // Calculate target version (next version up)
     Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
     if (!targetVersionOpt.isPresent()) {
       LOG.info("Skipping upgrade test for version {} (no higher version available)", originalVersion);
@@ -98,27 +90,26 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     int initialPendingCommits = originalMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     int initialCompletedCommits = originalMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     
-    // Perform upgrade to next version
+    // Read original data before upgrade for validation
+    Dataset<Row> originalData = readTableData(originalMetaClient, "before upgrade");
+    
     LOG.info("Upgrading from {} to {}", originalVersion, targetVersion);
-    new UpgradeDowngrade(originalMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+    new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(targetVersion, null);
     
     HoodieTableMetaClient upgradedMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance())
+        .setConf(storageConf().newInstance())
         .setBasePath(originalMetaClient.getBasePath())
         .build();
     
-    // Validate upgrade was successful
     assertTableVersionOnDataAndMetadataTable(upgradedMetaClient, targetVersion);
     validateVersionSpecificProperties(upgradedMetaClient, originalVersion, targetVersion);
-    performDataValidationOnTable(upgradedMetaClient, "after upgrade");
+    validateDataConsistency(originalData, upgradedMetaClient, "after upgrade");
     
-    // Verify rollback behavior - pending commits should be cleaned up or reduced
     int finalPendingCommits = upgradedMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     assertTrue(finalPendingCommits <= initialPendingCommits,
         "Pending commits should be cleaned up or reduced after upgrade");
     
-    // Verify we still have completed commits
     int finalCompletedCommits = upgradedMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     assertTrue(finalCompletedCommits >= initialCompletedCommits,
         "Completed commits should be preserved or increased after upgrade");
@@ -135,7 +126,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     assertEquals(targetVersion, targetMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should be at expected version");
     
-    // Calculate source version (previous version down)
     Option<HoodieTableVersion> sourceVersionOpt = getPreviousVersion(targetVersion);
     if (!sourceVersionOpt.isPresent()) {
       LOG.info("Skipping downgrade test for version {} (no lower version available)", targetVersion);
@@ -143,28 +133,28 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     }
     HoodieTableVersion sourceVersion = sourceVersionOpt.get();
     
-    // Create write config for downgrade operations
     HoodieWriteConfig config = createWriteConfig(targetMetaClient, true);
     
     // Count initial timeline state
     int initialPendingCommits = targetMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     int initialCompletedCommits = targetMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     
-    // Perform downgrade to previous version
+    // Read original data before downgrade for validation
+    Dataset<Row> originalData = readTableData(targetMetaClient, "before downgrade");
+    
     LOG.info("Downgrading from {} to {}", targetVersion, sourceVersion);
-    new UpgradeDowngrade(targetMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+    new UpgradeDowngrade(targetMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(sourceVersion, null);
     
     // Create fresh meta client to read updated table configuration after downgrade
     HoodieTableMetaClient downgradedMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance())
+        .setConf(storageConf().newInstance())
         .setBasePath(targetMetaClient.getBasePath())
         .build();
     
-    // Validate downgrade was successful
     assertTableVersionOnDataAndMetadataTable(downgradedMetaClient, sourceVersion);
     validateVersionSpecificProperties(downgradedMetaClient, targetVersion, sourceVersion);
-    performDataValidationOnTable(downgradedMetaClient, "after downgrade");
+    validateDataConsistency(originalData, downgradedMetaClient, "after downgrade");
     
     // Verify rollback behavior - pending commits should be cleaned up or reduced
     int finalPendingCommits = downgradedMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
@@ -186,7 +176,6 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
     
-    // Calculate target version (next version up)
     Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
     if (!targetVersionOpt.isPresent()) {
       LOG.info("Skipping auto-upgrade test for version {} (no higher version available)", originalVersion);
@@ -194,16 +183,15 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     }
     HoodieTableVersion targetVersion = targetVersionOpt.get();
     
-    // Create write config with auto-upgrade disabled
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
     
     // Attempt upgrade with auto-upgrade disabled
-    new UpgradeDowngrade(originalMetaClient, config, context, SparkUpgradeDowngradeHelper.getInstance())
+    new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(targetVersion, null);
     
     // Create fresh meta client to validate that version remained unchanged 
     HoodieTableMetaClient unchangedMetaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance())
+        .setConf(storageConf().newInstance())
         .setBasePath(originalMetaClient.getBasePath())
         .build();
     assertEquals(originalVersion, unchangedMetaClient.getTableConfig().getTableVersion(),
@@ -222,17 +210,14 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
     String fixtureName = getFixtureName(version);
     String resourcePath = FIXTURES_BASE_PATH + fixtureName;
     
-    // Extract fixture zip from resources to temp directory using common utility
     LOG.info("Loading fixture from resource path: {}", resourcePath);
     HoodieTestUtils.extractZipToDirectory(resourcePath, tempDir, getClass());
     
-    // Get the table name from fixture (remove .zip extension)
     String tableName = fixtureName.replace(".zip", "");
     String tablePath = tempDir.resolve(tableName).toString();
     
-    // Initialize meta client for the copied fixture
     metaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance())
+        .setConf(storageConf().newInstance())
         .setBasePath(tablePath)
         .build();
     
@@ -484,17 +469,14 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
    * Validate properties for version 5 (default partition path changes).
    */
   private void validateVersion5Properties(HoodieTableConfig tableConfig) {
-    // Version 5 mainly focuses on default partition path validation
-    // The upgrade handler validates this during upgrade, so we just ensure basic properties
-    // No specific properties were introduced in V5 that require validation
+    // Version 5 mainly focuses on default partition path validation, to file JIRA
   }
 
   /**
    * Validate properties for version 6 (auxiliary folder cleanup).
    */
   private void validateVersion6Properties(HoodieTableConfig tableConfig) {
-    // Version 6 focuses on auxiliary folder cleanup
-    // No specific properties were introduced in V6 that require validation
+    // Version 6 focuses on auxiliary folder cleanup, to file JIRA
   }
 
   /**
@@ -556,40 +538,76 @@ public class TestUpgradeDowngrade extends HoodieSparkClientTestHarness {
 
 
   /**
-   * Perform data validation on the table to ensure it remains operational.
-   * This performs a simple read-only validation to verify table accessibility.
+   * Read table data for validation purposes.
    */
-  private void performDataValidationOnTable(HoodieTableMetaClient metaClient, String stage) {
-    LOG.info("Performing data validation on table {}", stage);
+  private Dataset<Row> readTableData(HoodieTableMetaClient metaClient, String stage) {
+    LOG.info("Reading table data {}", stage);
     
     try {
-      // Simple read validation to ensure table is accessible
-      long rowCount = performSimpleReadValidation(metaClient);
-
-      LOG.info("Data validation passed {} (table accessible, {} rows)", stage, rowCount);
-    } catch (Exception e) {
-      throw new RuntimeException("Data validation failed " + stage, e);
-    }
-  }
-
-  /**
-   * Perform simple read validation and return the total row count.
-   */
-  private long performSimpleReadValidation(HoodieTableMetaClient metaClient) {
-    try {
       String basePath = metaClient.getBasePath().toString();
-      Dataset<Row> tableData = sqlContext.read()
+      Dataset<Row> tableData = sqlContext().read()
           .format("hudi")
           .load(basePath);
 
-      assertNotNull(tableData, "Table read should not return null");
+      assertNotNull(tableData, "Table read should not return null " + stage);
       long rowCount = tableData.count();
-      assertTrue(rowCount >= 0, "Row count should be non-negative");
-      return rowCount;
+      assertTrue(rowCount >= 0, "Row count should be non-negative " + stage);
+      
+      LOG.info("Successfully read table data {} ({} rows)", stage, rowCount);
+      return tableData;
     } catch (Exception e) {
-      LOG.error("Read validation failed for table at: {} (version: {})", 
-          metaClient.getBasePath(), metaClient.getTableConfig().getTableVersion(), e);
-      throw new RuntimeException("Read validation failed", e);
+      LOG.error("Failed to read table data {} from: {} (version: {})", 
+          stage, metaClient.getBasePath(), metaClient.getTableConfig().getTableVersion(), e);
+      throw new RuntimeException("Failed to read table data " + stage, e);
     }
   }
+  
+  /**
+   * Validate data consistency between original data and data after upgrade/downgrade.
+   * This ensures that upgrade/downgrade operations preserve data integrity.
+   */
+  private void validateDataConsistency(Dataset<Row> originalData, HoodieTableMetaClient metaClient, String stage) {
+    LOG.info("Validating data consistency {}", stage);
+    
+    try {
+      Dataset<Row> currentData = readTableData(metaClient, stage);
+      
+      // Exclude Hudi metadata columns that legitimately change during version transitions
+      Set<String> hoodieMetadataColumns = new HashSet<>(Arrays.asList(
+          "_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key", 
+          "_hoodie_partition_path", "_hoodie_file_name"));
+      
+      Set<String> columnsToValidate = Arrays.stream(originalData.columns())
+          .filter(col -> !hoodieMetadataColumns.contains(col))
+          .collect(Collectors.toSet());
+      
+      if (columnsToValidate.isEmpty()) {
+        LOG.info("Skipping data consistency validation {} (no business columns to validate)", stage);
+        return;
+      }
+      
+      LOG.info("Validating business data columns: {}", columnsToValidate);
+      boolean dataConsistent = areDataframesEqual(originalData, currentData, columnsToValidate);
+      assertTrue(dataConsistent, "Business data should be consistent between original and " + stage + " states");
+      
+      LOG.info("Data consistency validation passed {}", stage);
+    } catch (Exception e) {
+      throw new RuntimeException("Data consistency validation failed " + stage, e);
+    }
+  }
+  
+  /**
+   * Simple data validation for testAutoUpgradeDisabled.
+   */
+  private void performDataValidationOnTable(HoodieTableMetaClient metaClient, String stage) {
+    LOG.info("Performing simple data validation on table {}", stage);
+    
+    try {
+      Dataset<Row> tableData = readTableData(metaClient, stage);
+      LOG.info("Simple data validation passed {} (table accessible, {} rows)", stage, tableData.count());
+    } catch (Exception e) {
+      throw new RuntimeException("Simple data validation failed " + stage, e);
+    }
+  }
+
 }
