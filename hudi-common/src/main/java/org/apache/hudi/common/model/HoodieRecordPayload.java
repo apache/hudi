@@ -23,7 +23,6 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -182,7 +181,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   static String getPayloadClassName(Properties props) {
-    return getPayloadClassNameIfPresent(props).orElse(HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME);
+    return getPayloadClassNameIfPresent(props).orElse(StringUtils.EMPTY_STRING);
   }
 
   static Option<String> getPayloadClassNameIfPresent(Properties props) {
