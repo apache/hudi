@@ -22,8 +22,10 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -37,9 +39,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
@@ -82,7 +87,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     // Update table properties.
     List<ConfigProperty> propertiesToRemove = new ArrayList<>();
-    propertiesToRemove.add(MERGE_PROPERTIES);
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
     // For specified payload classes, add strategy id and custom merge mode.
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
@@ -95,6 +99,16 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
           && !payloadClass.equals(DefaultHoodieRecordPayload.class.getName())) {
         propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, PAYLOAD_BASED_MERGE_STRATEGY_UUID);
         propertiesToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
+      }
+      if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
+        propertiesToRemove.add(
+            ConfigProperty.key(MERGE_PROPERTIES_PREFIX + DELETE_KEY).noDefaultValue());
+        propertiesToRemove.add(
+            ConfigProperty.key(MERGE_PROPERTIES_PREFIX + DELETE_MARKER).noDefaultValue());
+      }
+      if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+        propertiesToRemove.add(
+            ConfigProperty.key(MERGE_PROPERTIES_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue());
       }
     }
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);

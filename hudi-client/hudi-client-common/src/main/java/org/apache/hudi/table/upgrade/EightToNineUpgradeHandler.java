@@ -53,7 +53,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
@@ -189,27 +189,22 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
 
   private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                               HoodieTableConfig tableConfig) {
-    // Set merge properties for all tables.
-    String mergeProperties = StringUtils.EMPTY_STRING;
-    tablePropsToAdd.put(MERGE_PROPERTIES, mergeProperties);
-
     String payloadClass = tableConfig.getPayloadClass();
     if (StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
-    // Handle table configs.
     if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
-      String propertiesToAdd = DELETE_KEY + "=Op," + DELETE_MARKER + "=D";
-      mergeProperties = StringUtils.isNullOrEmpty(mergeProperties)
-          ? propertiesToAdd : mergeProperties + "," + mergeProperties;
+      tablePropsToAdd.put(
+          ConfigProperty.key(MERGE_PROPERTIES_PREFIX + DELETE_KEY).noDefaultValue(),
+          AWSDmsAvroPayload.OP_FIELD);
+      tablePropsToAdd.put(
+          ConfigProperty.key(MERGE_PROPERTIES_PREFIX + DELETE_MARKER).noDefaultValue(),
+          AWSDmsAvroPayload.D_VALUE);
     } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
-      String propertiesToAdd =
-          PARTIAL_UPDATE_CUSTOM_MARKER + "=" + DEBEZIUM_UNAVAILABLE_VALUE;
-      mergeProperties = StringUtils.isNullOrEmpty(mergeProperties)
-          ? propertiesToAdd : mergeProperties + "," + mergeProperties;
+      tablePropsToAdd.put(
+          ConfigProperty.key(MERGE_PROPERTIES_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue(),
+          DEBEZIUM_UNAVAILABLE_VALUE);
     }
-    // else: No op, which means merge_properties is not changed.
-    tablePropsToAdd.put(MERGE_PROPERTIES, mergeProperties);
   }
 
   /**

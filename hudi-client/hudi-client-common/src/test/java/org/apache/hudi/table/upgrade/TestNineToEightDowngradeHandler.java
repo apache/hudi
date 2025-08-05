@@ -56,7 +56,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
@@ -173,7 +172,6 @@ class TestNineToEightDowngradeHandler {
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
       // Assert properties to remove
       assertEquals(expectedPropertiesToRemoveSize, propertiesToChange.getPropertiesToDelete().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getPropertiesToDelete().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getPropertiesToDelete().get(1));
       assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getPropertiesToDelete().get(2));
       // Assert properties to add
@@ -204,7 +202,6 @@ class TestNineToEightDowngradeHandler {
       UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
       assertEquals(2, propertiesToChange.getPropertiesToDelete().size());
-      assertEquals(MERGE_PROPERTIES, propertiesToChange.getPropertiesToDelete().get(0));
       assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getPropertiesToDelete().get(1));
       assertEquals(0, propertiesToChange.getPropertiesToUpdate().size());
     }

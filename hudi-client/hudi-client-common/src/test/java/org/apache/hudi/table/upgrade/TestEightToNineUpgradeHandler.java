@@ -69,7 +69,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
@@ -99,8 +99,7 @@ class TestEightToNineUpgradeHandler {
       mock(SupportsUpgradeDowngrade.class);
   private final HoodieWriteConfig config = mock(HoodieWriteConfig.class);
   private static final Map<ConfigProperty, String> DEFAULT_CONFIG_UPDATED = Stream.of(
-      new AbstractMap.SimpleEntry<>(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name()),
-      new AbstractMap.SimpleEntry<>(MERGE_PROPERTIES, StringUtils.EMPTY_STRING)
+      new AbstractMap.SimpleEntry<>(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name())
   ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   private static final List<ConfigProperty> DEFAULT_CONFIG_REMOVED = Collections.emptyList();
   private static final UpgradeDowngrade.TableConfigChangeSet DEFAULT_UPGRADE_RESULT =
@@ -161,7 +160,8 @@ class TestEightToNineUpgradeHandler {
         // AWSDmsAvroPayload
         Arguments.of(
             AWSDmsAvroPayload.class.getName(),
-            DELETE_KEY + "=Op," + DELETE_MARKER + "=D", // mergeProperties
+            MERGE_PROPERTIES_PREFIX + DELETE_KEY + "=Op,"
+                + MERGE_PROPERTIES_PREFIX + DELETE_MARKER + "=D", // mergeProperties
             COMMIT_TIME_ORDERING.name(), // recordMergeMode
             PartialUpdateMode.NONE.name(), // partialUpdateMode
             "AWSDmsAvroPayload"
@@ -169,7 +169,8 @@ class TestEightToNineUpgradeHandler {
         // PostgresDebeziumAvroPayload
         Arguments.of(
             PostgresDebeziumAvroPayload.class.getName(),
-            PARTIAL_UPDATE_CUSTOM_MARKER + "=" + DEBEZIUM_UNAVAILABLE_VALUE, // mergeProperties
+            MERGE_PROPERTIES_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER
+                + "=" + DEBEZIUM_UNAVAILABLE_VALUE, // mergeProperties
             EVENT_TIME_ORDERING.name(), // recordMergeMode
             IGNORE_MARKERS.name(), // partialUpdateMode
             "PostgresDebeziumAvroPayload"
@@ -218,11 +219,19 @@ class TestEightToNineUpgradeHandler {
       Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.getPropertiesToUpdate();
       List<ConfigProperty> propertiesToRemove = propertiesToHandle.getPropertiesToDelete();
       // Assert merge properties
-      assertTrue(propertiesToAdd.containsKey(MERGE_PROPERTIES));
-      if (StringUtils.isNullOrEmpty(expectedMergeProperties)) {
-        assertTrue(StringUtils.isNullOrEmpty(propertiesToAdd.get(MERGE_PROPERTIES)));
-      } else {
-        assertEquals(expectedMergeProperties, propertiesToAdd.get(MERGE_PROPERTIES));
+      if (!StringUtils.isNullOrEmpty(expectedMergeProperties)) {
+        String[] configs = expectedMergeProperties.split(",");
+        for (String config : configs) {
+          String[] kv = config.split("=");
+          boolean found = false;
+          for (Map.Entry<ConfigProperty, String> e : propertiesToAdd.entrySet()) {
+            if (e.getKey().key().equals(kv[0])) {
+              assertEquals(kv[1], e.getValue());
+              found = true;
+            }
+          }
+          assertTrue(found);
+        }
       }
       // Assert record merge mode
       if (expectedRecordMergeMode == null) {
