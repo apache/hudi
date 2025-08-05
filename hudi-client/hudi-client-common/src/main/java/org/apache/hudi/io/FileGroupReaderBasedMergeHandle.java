@@ -19,15 +19,19 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -61,11 +65,13 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
@@ -83,9 +89,9 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(FileGroupReaderBasedMergeHandle.class);
 
-  private final HoodieReaderContext<T> readerContext;
   private final Option<CompactionOperation> operation;
   private final String maxInstantTime;
+  private HoodieReaderContext<T> readerContext;
   private HoodieReadStats readStats;
   private HoodieRecord.HoodieRecordType recordType;
   private Option<HoodieCDCLogger> cdcLogger;
@@ -96,15 +102,22 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                         TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
-                                         HoodieReaderContext<T> readerContext, HoodieRecord.HoodieRecordType enginRecordType) {
+                                         TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.operation = Option.empty();
-    this.readerContext = readerContext;
+    // to do: fix this to getReaderContextFactoryForWrite after we land the dedup and global index path fix.
+    this.readerContext = hoodieTable.getContext().<T>getReaderContextFactory(hoodieTable.getMetaClient()).getContext();
+    if (config.getEngineType() == EngineType.SPARK) { // AVRO
+      this.readerContext = (HoodieReaderContext<T>) new HoodieAvroReaderContext(hoodieTable.getMetaClient().getStorageConf(), hoodieTable.getMetaClient().getTableConfig(), Option.empty(),
+          Option.empty());
+    }
+    TypedProperties properties = config.getProps();
+    properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
+    this.readerContext.initRecordMerger(properties);
     // with cow merge flows, incoming records may not have the meta fields populate while merging with FileGroupReader
     this.readerContext.getRecordContext().updateRecordKeyExtractor(hoodieTable.getMetaClient().getTableConfig(), false);
     this.maxInstantTime = instantTime;
-    initRecordTypeAndCdcLogger(enginRecordType);
+    initRecordTypeAndCdcLogger(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.usePosition = false;
     this.props = TypedProperties.copy(config.getProps());
     this.isCompaction = false;
@@ -260,12 +273,12 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
             config.getBasePath(), op.getPartitionPath()), logFileName))));
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, internalSchemaOption, props, isCompaction, logFilesStreamOpt, incomingRecordsItr)) {
+    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, getNewSchema(), internalSchemaOption, props, isCompaction, logFilesStreamOpt, incomingRecordsItr)) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
           HoodieRecord<T> record = recordIterator.next();
-          record.setCurrentLocation(newRecordLocation);
+          record.setCurrentLocation(newRecordLocation); // fix me : We need to be able to differentiate inserts from updates.
           record.setNewLocation(newRecordLocation);
           Option<Map<String, String>> recordMetadata = record.getMetadata();
           if (!partitionPath.equals(record.getPartitionPath())) {
@@ -298,14 +311,14 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
-  private HoodieFileGroupReader getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props, boolean isCompaction,
+  private HoodieFileGroupReader getFileGroupReader(boolean usePosition, Schema schemaToUse, Option<InternalSchema> internalSchemaOption, TypedProperties props, boolean isCompaction,
                                                    Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<BufferedRecord<T>> incomingRecordsItr) {
     HoodieFileGroupReader.Builder fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
-        .withDataSchema(isCompaction ? writeSchemaWithMetaFields : writeSchema).withRequestedSchema(isCompaction ? writeSchemaWithMetaFields : writeSchema)
+        .withDataSchema(schemaToUse).withRequestedSchema(schemaToUse)
         .withInternalSchema(internalSchemaOption).withProps(props)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
-        .withFileGroupUpdateCallback(cdcLogger.map(logger -> new CDCCallback(logger, readerContext)));
+        .withFileGroupUpdateCallback(createCallback());
 
     if (isCompaction) {
       fileGroupBuilder.withLogFiles(logFileStreamOpt.get());
@@ -348,6 +361,30 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
+  private Option<BaseFileUpdateCallback<T>> createCallback() {
+    List<BaseFileUpdateCallback<T>> callbacks = new ArrayList<>();
+    // Handle CDC workflow.
+    if (cdcLogger.isPresent()) {
+      callbacks.add(new CDCCallback<>(cdcLogger.get(), readerContext));
+    }
+    // Stream secondary index stats.
+    if (isSecondaryIndexStatsStreamingWritesEnabled) {
+      callbacks.add(new SecondaryIndexCallback(
+          partitionPath,
+          writeSchemaWithMetaFields,
+          readerContext,
+          () -> getNewSchema(),
+          writeStatus,
+          secondaryIndexDefns,
+          keyGeneratorOpt,
+          config
+      ));
+    }
+    return callbacks.isEmpty()
+        ? Option.empty()
+        : callbacks.size() == 1 ? Option.of(callbacks.get(0)) : Option.of(new CompositeCallback<>(callbacks));
+  }
+
   private static class CDCCallback<T> implements BaseFileUpdateCallback<T> {
     private final HoodieCDCLogger cdcLogger;
     private final HoodieReaderContext<T> readerContext;
@@ -384,6 +421,114 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     private GenericRecord convertOutput(T record) {
       T convertedRecord = outputConverter.get().map(converter -> record == null ? null : converter.apply(record)).orElse(record);
       return convertedRecord == null ? null : readerContext.getRecordContext().convertToAvroRecord(convertedRecord, requestedSchema.get());
+    }
+  }
+
+  private static class SecondaryIndexCallback<T> implements BaseFileUpdateCallback<T> {
+    private final String partitionPath;
+    private final Schema writeSchemaWithMetaFields;
+    private final HoodieReaderContext<T> readerContext;
+    private final Supplier<Schema> newSchemaSupplier;
+    private final WriteStatus writeStatus;
+    private final List<HoodieIndexDefinition> secondaryIndexDefns;
+    private final Option<BaseKeyGenerator> keyGeneratorOpt;
+    private final HoodieWriteConfig config;
+
+    public SecondaryIndexCallback(String partitionPath,
+                                  Schema writeSchemaWithMetaFields,
+                                  HoodieReaderContext<T> readerContext,
+                                  Supplier<Schema> newSchemaSupplier,
+                                  WriteStatus writeStatus,
+                                  List<HoodieIndexDefinition> secondaryIndexDefns,
+                                  Option<BaseKeyGenerator> keyGeneratorOpt,
+                                  HoodieWriteConfig config) {
+      this.partitionPath = partitionPath;
+      this.writeSchemaWithMetaFields = writeSchemaWithMetaFields;
+      this.readerContext = readerContext;
+      this.newSchemaSupplier = newSchemaSupplier;
+      this.secondaryIndexDefns = secondaryIndexDefns;
+      this.keyGeneratorOpt = keyGeneratorOpt;
+      this.writeStatus = writeStatus;
+      this.config = config;
+    }
+
+    @Override
+    public void onUpdate(String recordKey, T previousRecord, T mergedRecord) {
+      HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
+      BufferedRecord<T> bufferedPreviousRecord = BufferedRecord.forRecordWithContext(
+          previousRecord, writeSchemaWithMetaFields, readerContext.getRecordContext(), Collections.emptyList(), false);
+      BufferedRecord<T> bufferedMergedRecord = BufferedRecord.forRecordWithContext(
+          mergedRecord, writeSchemaWithMetaFields, readerContext.getRecordContext(), Collections.emptyList(), false);
+      SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
+          hoodieKey,
+          Option.of(readerContext.getRecordContext().constructHoodieRecord(bufferedMergedRecord)),
+          readerContext.getRecordContext().constructHoodieRecord(bufferedPreviousRecord),
+          false,
+          writeStatus,
+          writeSchemaWithMetaFields,
+          newSchemaSupplier,
+          secondaryIndexDefns,
+          keyGeneratorOpt,
+          config);
+    }
+
+    @Override
+    public void onInsert(String recordKey, T newRecord) {
+      HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
+      BufferedRecord<T> bufferedNewRecord = BufferedRecord.forRecordWithContext(
+          newRecord, writeSchemaWithMetaFields, readerContext.getRecordContext(), Collections.emptyList(), false);
+      SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
+          hoodieKey,
+          Option.of(readerContext.getRecordContext().constructHoodieRecord(bufferedNewRecord)),
+          null,
+          false,
+          writeStatus,
+          writeSchemaWithMetaFields,
+          newSchemaSupplier,
+          secondaryIndexDefns,
+          keyGeneratorOpt,
+          config);
+    }
+
+    @Override
+    public void onDelete(String recordKey, T previousRecord) {
+      HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
+      BufferedRecord<T> bufferedPreviousRecord = BufferedRecord.forRecordWithContext(
+          previousRecord, writeSchemaWithMetaFields, readerContext.getRecordContext(), Collections.emptyList(), false);
+      SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
+          hoodieKey,
+          Option.empty(),
+          readerContext.getRecordContext().constructHoodieRecord(bufferedPreviousRecord),
+          true,
+          writeStatus,
+          writeSchemaWithMetaFields,
+          newSchemaSupplier,
+          secondaryIndexDefns,
+          keyGeneratorOpt,
+          config);
+    }
+  }
+
+  private static class CompositeCallback<T> implements BaseFileUpdateCallback<T> {
+    private final List<BaseFileUpdateCallback<T>> callbacks;
+
+    public CompositeCallback(List<BaseFileUpdateCallback<T>> callbacks) {
+      this.callbacks = callbacks;
+    }
+
+    @Override
+    public void onUpdate(String recordKey, T previousRecord, T mergedRecord) {
+      this.callbacks.forEach(callback -> callback.onUpdate(recordKey, previousRecord, mergedRecord));
+    }
+
+    @Override
+    public void onInsert(String recordKey, T newRecord) {
+      this.callbacks.forEach(callback -> callback.onInsert(recordKey, newRecord));
+    }
+
+    @Override
+    public void onDelete(String recordKey, T previousRecord) {
+      this.callbacks.forEach(callback -> callback.onDelete(recordKey, previousRecord));
     }
   }
 }

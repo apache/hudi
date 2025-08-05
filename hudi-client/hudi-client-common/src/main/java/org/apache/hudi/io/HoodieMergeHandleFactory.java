@@ -179,7 +179,11 @@ public class HoodieMergeHandleFactory {
         fallbackMergeHandleClass = HoodieWriteConfig.CONCAT_HANDLE_CLASS_NAME.defaultValue();
       }
     } else if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
-      mergeHandleClass = HoodieMergeHandleWithChangeLog.class.getName();
+      if (writeConfig.getMergeHandleClassName().equals(FileGroupReaderBasedMergeHandle.class.getName())) {
+        mergeHandleClass = writeConfig.getMergeHandleClassName();
+      } else {
+        mergeHandleClass = HoodieMergeHandleWithChangeLog.class.getName();
+      }
     } else {
       mergeHandleClass = writeConfig.getMergeHandleClassName();
       if (!mergeHandleClass.equals(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue())) {

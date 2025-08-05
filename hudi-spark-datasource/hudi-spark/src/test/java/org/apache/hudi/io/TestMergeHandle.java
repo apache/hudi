@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
@@ -179,6 +180,8 @@ public class TestMergeHandle extends BaseTestHandle {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     // initial write
     List<HoodieRecord> recordsBatch1 = initialWrite(config, dataGenerator, payloadClass, partitionPath);
+    Map<String, HoodieRecord> recordsBatch1Map = recordsBatch1.stream().map(record -> Pair.of(record.getRecordKey(), record))
+        .collect(Collectors.toMap(pair -> pair.getKey(), pair -> pair.getValue()));
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String commit1 = metaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().getInstants().get(0).requestedTime();
@@ -187,7 +190,19 @@ public class TestMergeHandle extends BaseTestHandle {
     String fileId = fileGroup.getFileGroupId().getFileId();
 
     String instantTime = "001";
-    InputAndExpectedDataSet inputAndExpectedDataSet = prepareInputFor2ndBatch(config, dataGenerator, payloadClass, partitionPath, mergeMode, recordsBatch1, instantTime);
+    InputAndExpectedDataSet inputAndExpectedDataSet = prepareInputFor2ndBatch(config, dataGenerator, payloadClass, partitionPath, mergeMode, recordsBatch1, instantTime,
+        fileGroup);
+
+    Map<String, HoodieRecord> newInsertRecordsMap = inputAndExpectedDataSet.getNewInserts().stream().map(record -> Pair.of(record.getRecordKey(), record))
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    setCurLocation(inputAndExpectedDataSet.getRecordsToMerge().stream().filter(record -> !newInsertRecordsMap.containsKey(record.getRecordKey())).collect(Collectors.toList()),
+        fileId, commit1);
+    Map<String, HoodieRecord> validUpdatesRecordsMap = inputAndExpectedDataSet.getValidUpdates().stream().map(record -> Pair.of(record.getRecordKey(), record))
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    Map<String, HoodieRecord> validDeletesMap = inputAndExpectedDataSet.getValidDeletes();
+    Map<String, HoodieRecord> untouchedRecordsFromBatch1 = recordsBatch1Map.entrySet().stream().filter(kv -> {
+      return (!validUpdatesRecordsMap.containsKey(kv.getKey()) && !validDeletesMap.containsKey(kv.getKey()));
+    }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty());
     TypedProperties typedProperties = new TypedProperties();
@@ -197,7 +212,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table, inputAndExpectedDataSet.getRecordsToMerge().iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        Option.empty(), readerContext, HoodieRecord.HoodieRecordType.AVRO);
+        Option.empty());
 
     fileGroupReaderBasedMergeHandle.doMerge();
     List<WriteStatus> writeStatuses = fileGroupReaderBasedMergeHandle.close();
@@ -229,6 +244,27 @@ public class TestMergeHandle extends BaseTestHandle {
 
     validateWriteStatus(writeStatuses.get(0), commit1, 10 - inputAndExpectedDataSet.getExpectedDeletes() + 2,
         inputAndExpectedDataSet.getExpectedUpdates(), 2, inputAndExpectedDataSet.getExpectedDeletes());
+
+    // validate RLI stats
+    List<HoodieRecordDelegate> recordDelegates = writeStatuses.get(0).getIndexStats().getWrittenRecordDelegates();
+    recordDelegates.forEach(recordDelegate -> {
+      if (recordDelegate.getNewLocation().isPresent() && recordDelegate.getCurrentLocation().isPresent()) {
+        // updates
+        // inserts are also tagged as updates. To be fixed.
+        assertTrue(validUpdatesRecordsMap.containsKey(recordDelegate.getRecordKey())  || newInsertRecordsMap.containsKey(recordDelegate.getRecordKey())
+            || untouchedRecordsFromBatch1.containsKey(recordDelegate.getRecordKey()));
+      } else if (recordDelegate.getNewLocation().isPresent() && recordDelegate.getCurrentLocation().isEmpty()) {
+        // inserts
+        assertTrue(newInsertRecordsMap.containsKey(recordDelegate.getRecordKey())
+            || (!validUpdatesRecordsMap.containsKey(recordDelegate.getRecordKey()) && validDeletesMap.containsKey(recordDelegate.getRecordKey())));
+      } else if (recordDelegate.getCurrentLocation().isPresent() && recordDelegate.getNewLocation().isEmpty()) {
+        // deletes
+        assertTrue(validDeletesMap.containsKey(recordDelegate.getRecordKey()));
+      }
+    });
+
+    // validate SI stats.
+    
   }
 
   private List<HoodieRecord> initialWrite(HoodieWriteConfig config, HoodieTestDataGenerator dataGenerator, String payloadClass, String partitionPath) {
@@ -246,7 +282,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
   private InputAndExpectedDataSet prepareInputFor2ndBatch(HoodieWriteConfig config, HoodieTestDataGenerator dataGenerator, String payloadClass,
                                                           String partitionPath, String mergeMode, List<HoodieRecord> recordsBatch1,
-                                                          String instantTime) {
+                                                          String instantTime, HoodieFileGroup fileGroup) {
     List<HoodieRecord> recordsToDelete = new ArrayList<>();
     Map<String, HoodieRecord> validDeletes = new HashMap<>();
     List<GenericRecord> recordsToUpdate = new ArrayList<>();
@@ -312,7 +348,7 @@ public class TestMergeHandle extends BaseTestHandle {
       expectedRecordsMap.put(record.getRecordKey(), record);
     });
 
-    return new InputAndExpectedDataSet(expectedRecordsMap, expectedUpdates, expectedDeletes, recordsToMerge, validDeletes);
+    return new InputAndExpectedDataSet(expectedRecordsMap, expectedUpdates, expectedDeletes, recordsToMerge, newInserts, validUpdates, validDeletes);
   }
 
   HoodieWriteConfig.Builder getHoodieWriteConfigBuilder() {
@@ -375,6 +411,10 @@ public class TestMergeHandle extends BaseTestHandle {
     }).collect(Collectors.toList());
   }
 
+  private void setCurLocation(List<HoodieRecord> records, String fileId, String instantTime) {
+    records.forEach(record -> record.setCurrentLocation(new HoodieRecordLocation(instantTime, fileId)));
+  }
+
   private static void validateWriteStatus(WriteStatus writeStatus, String previousCommit, long expectedTotalRecordsWritten, long expectedTotalUpdatedRecords,
                                           long expectedTotalInsertedRecords, long expectedTotalDeletedRecords) {
     HoodieWriteStat writeStat = writeStatus.getStat();
@@ -398,14 +438,19 @@ public class TestMergeHandle extends BaseTestHandle {
     private final int expectedUpdates;
     private final int expectedDeletes;
     private final List<HoodieRecord> recordsToMerge;
+    private final List<HoodieRecord> newInserts;
+    private final List<HoodieRecord> validUpdates;
     private final Map<String, HoodieRecord> validDeletes;
 
     public InputAndExpectedDataSet(Map<String, HoodieRecord> expectedRecordsMap, int expectedUpdates, int expectedDeletes,
-                                   List<HoodieRecord> recordsToMerge, Map<String, HoodieRecord> validDeletes) {
+                                   List<HoodieRecord> recordsToMerge, List<HoodieRecord> newInserts, List<HoodieRecord> validUpdates,
+                                   Map<String, HoodieRecord> validDeletes) {
       this.expectedRecordsMap = expectedRecordsMap;
       this.expectedUpdates = expectedUpdates;
       this.expectedDeletes = expectedDeletes;
       this.recordsToMerge = recordsToMerge;
+      this.validUpdates = validUpdates;
+      this.newInserts = newInserts;
       this.validDeletes = validDeletes;
     }
 
@@ -423,6 +468,14 @@ public class TestMergeHandle extends BaseTestHandle {
 
     public List<HoodieRecord> getRecordsToMerge() {
       return recordsToMerge;
+    }
+
+    public List<HoodieRecord> getNewInserts() {
+      return newInserts;
+    }
+
+    public List<HoodieRecord> getValidUpdates() {
+      return validUpdates;
     }
 
     public Map<String, HoodieRecord> getValidDeletes() {
