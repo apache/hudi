@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -50,11 +51,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -151,6 +154,42 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     performDataValidationOnTable(unchangedMetaClient, "after auto-upgrade disabled test");
     
     LOG.info("Auto-upgrade disabled test passed for version {}", originalVersion);
+  }
+
+  @ParameterizedTest
+  @MethodSource("metadataTableCorruptionTestVersionPairs")
+  public void testMetadataTableUpgradeDowngradeFailure(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
+    boolean isUpgrade = fromVersion.lesserThan(toVersion);
+    String operation = isUpgrade ? "upgrade" : "downgrade";
+    LOG.info("Testing metadata table failure during {} from version {} to {}", operation, fromVersion, toVersion);
+
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion);
+    assertEquals(fromVersion, originalMetaClient.getTableConfig().getTableVersion(),
+        "Fixture table should be at expected version");
+
+    HoodieWriteConfig cfg = createWriteConfig(originalMetaClient, true);
+
+    String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
+        originalMetaClient.getBasePath().toString());
+    StoragePath metadataHoodiePath = new StoragePath(metadataTablePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    StoragePath propsPath = new StoragePath(metadataHoodiePath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    StoragePath backupPropsPath = new StoragePath(metadataHoodiePath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+
+    String corruptedContent = "CORRUPTED_INVALID_CONTENT\n\nTHIS_IS_NOT_VALID_PROPERTIES_FORMAT";
+    try (OutputStream propsOut = originalMetaClient.getStorage().create(propsPath, true);
+         OutputStream backupOut = originalMetaClient.getStorage().create(backupPropsPath, true)) {
+      propsOut.write(corruptedContent.getBytes());
+      backupOut.write(corruptedContent.getBytes());
+    }
+
+    HoodieUpgradeDowngradeException exception = assertThrows(
+        HoodieUpgradeDowngradeException.class,
+        () -> new UpgradeDowngrade(originalMetaClient, cfg, context(), SparkUpgradeDowngradeHelper.getInstance())
+            .run(toVersion, null)
+    );
+
+    LOG.info("Successfully caught expected exception during {} from {} to {}: {}", 
+        operation, fromVersion, toVersion, exception.getMessage());
   }
 
   /**
@@ -251,6 +290,20 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX),   // V8 -> V6
         Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5
         Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4
+    );
+  }
+
+  /**
+   * Version pairs that should be tested for metadata upgrade/downgrade failures.
+   * Excludes pairs that trigger rollback operations which delete metadata tables.
+   */
+  private static Stream<Arguments> metadataTableCorruptionTestVersionPairs() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.FOUR, HoodieTableVersion.FIVE),   // V4 -> V5
+        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4
+    // Note: Other pairs like V5->V6, V6->V8 are excluded because they may trigger
+    // rollback operations in rollbackFailedWritesAndCompact() that disable metadata
+    // tables, causing automatic deletion before testing can occur
     );
   }
 
