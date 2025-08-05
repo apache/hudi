@@ -300,6 +300,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
     if (fileFormat == HoodieFileFormat.ORC) {
       // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToDoubleSupport = false;
       schemaEvolutionConfigs.floatToStringSupport = false;
     }
 
@@ -342,6 +343,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
     if (fileFormat == HoodieFileFormat.ORC) {
       // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToDoubleSupport = false;
       schemaEvolutionConfigs.floatToStringSupport = false;
     }
 
@@ -395,6 +397,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
     if (fileFormat == HoodieFileFormat.ORC) {
       // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToDoubleSupport = false;
       schemaEvolutionConfigs.floatToStringSupport = false;
     }
 
