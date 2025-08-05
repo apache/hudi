@@ -110,8 +110,9 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests {@link UpgradeDowngrade}.
+ * New tests for upgrade and downgrade operations should be added to TestUpgradeDowngrade using the test fixtures.
  */
-public class TestUpgradeDowngrade extends HoodieClientTestBase {
+public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
 
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with deletePartialMarkerFiles={0} and TableType = {1}";
   private static final String TEST_NAME_WITH_DOWNGRADE_PARAMS = "[{index}] Test with deletePartialMarkerFiles={0} and TableType = {1} and "
