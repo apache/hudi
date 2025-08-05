@@ -95,14 +95,11 @@ public class BufferedRecordMergerFactory {
         return new EventTimePartiaRecordMerger<>(readerContext.getRecordContext(), partialUpdateMode, props);
       default:
         if (payloadClasses.isPresent()) {
-          if (payloadClasses.get().getLeft().equals(payloadClasses.get().getRight())) {
-            return new CustomPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClasses.get().getLeft(), readerSchema, props);
-          } else {
-            // The payload classes can only be different when the expression payload is used with a Merge-Into operation.
-            ValidationUtils.checkArgument(payloadClasses.get().getRight().contains("ExpressionPayload"),
-                "The payload class for the new record must be ExpressionPayload when specifying two separate payload classes in the merger.");
+          if (payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
             return new ExpressionPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames,
                 payloadClasses.get().getLeft(), payloadClasses.get().getRight(), readerSchema, props);
+          } else {
+            return new CustomPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClasses.get().getLeft(), readerSchema, props);
           }
         } else {
           return new CustomRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, readerSchema, props);
