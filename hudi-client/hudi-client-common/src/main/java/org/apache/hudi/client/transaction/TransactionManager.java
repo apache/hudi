@@ -153,6 +153,10 @@ public class TransactionManager implements Serializable, AutoCloseable {
   }
 
   private void acquireLock() {
+    if (hasLock) {
+      LOG.info("Lock already acquired, skipping lock acquisition.");
+      return;
+    }
     lockManager.lock();
     hasLock = true;
   }
