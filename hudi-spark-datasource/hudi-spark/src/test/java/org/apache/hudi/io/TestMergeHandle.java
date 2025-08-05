@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -216,9 +217,10 @@ public class TestMergeHandle extends BaseTestHandle {
 
     fileGroupReaderBasedMergeHandle.doMerge();
     List<WriteStatus> writeStatuses = fileGroupReaderBasedMergeHandle.close();
+    WriteStatus writeStatus = writeStatuses.get(0);
 
     // read the file and validate values.
-    String filePath = writeStatuses.get(0).getStat().getPath();
+    String filePath = writeStatus.getStat().getPath();
     String fullPath = metaClient.getBasePath() + "/" + filePath;
 
     List<GenericRecord> actualRecords = new ParquetUtils().readAvroRecords(metaClient.getStorage(), new StoragePath(fullPath));
@@ -237,26 +239,24 @@ public class TestMergeHandle extends BaseTestHandle {
       assertTrue(!actualRecordsMap.containsKey(deletedKey));
     });
 
-    HoodieWriteStat stat = writeStatuses.get(0).getStat();
+    HoodieWriteStat stat = writeStatus.getStat();
     assertEquals(inputAndExpectedDataSet.getExpectedUpdates(), stat.getNumUpdateWrites());
     assertEquals(inputAndExpectedDataSet.getExpectedDeletes(), stat.getNumDeletes());
     assertEquals(2, stat.getNumInserts());
 
-    validateWriteStatus(writeStatuses.get(0), commit1, 10 - inputAndExpectedDataSet.getExpectedDeletes() + 2,
+    validateWriteStatus(writeStatus, commit1, 10 - inputAndExpectedDataSet.getExpectedDeletes() + 2,
         inputAndExpectedDataSet.getExpectedUpdates(), 2, inputAndExpectedDataSet.getExpectedDeletes());
 
     // validate RLI stats
-    List<HoodieRecordDelegate> recordDelegates = writeStatuses.get(0).getIndexStats().getWrittenRecordDelegates();
+    List<HoodieRecordDelegate> recordDelegates = writeStatus.getIndexStats().getWrittenRecordDelegates();
     recordDelegates.forEach(recordDelegate -> {
       if (recordDelegate.getNewLocation().isPresent() && recordDelegate.getCurrentLocation().isPresent()) {
         // updates
         // inserts are also tagged as updates. To be fixed.
-        assertTrue(validUpdatesRecordsMap.containsKey(recordDelegate.getRecordKey())  || newInsertRecordsMap.containsKey(recordDelegate.getRecordKey())
-            || untouchedRecordsFromBatch1.containsKey(recordDelegate.getRecordKey()));
+        assertTrue(validUpdatesRecordsMap.containsKey(recordDelegate.getRecordKey()) || untouchedRecordsFromBatch1.containsKey(recordDelegate.getRecordKey()));
       } else if (recordDelegate.getNewLocation().isPresent() && recordDelegate.getCurrentLocation().isEmpty()) {
         // inserts
-        assertTrue(newInsertRecordsMap.containsKey(recordDelegate.getRecordKey())
-            || (!validUpdatesRecordsMap.containsKey(recordDelegate.getRecordKey()) && validDeletesMap.containsKey(recordDelegate.getRecordKey())));
+        assertTrue(newInsertRecordsMap.containsKey(recordDelegate.getRecordKey()));
       } else if (recordDelegate.getCurrentLocation().isPresent() && recordDelegate.getNewLocation().isEmpty()) {
         // deletes
         assertTrue(validDeletesMap.containsKey(recordDelegate.getRecordKey()));
@@ -264,7 +264,19 @@ public class TestMergeHandle extends BaseTestHandle {
     });
 
     // validate SI stats.
-    
+    assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
+    assertEquals(inputAndExpectedDataSet.expectedDeletes + 2 * inputAndExpectedDataSet.expectedUpdates + inputAndExpectedDataSet.newInserts.size(),
+        writeStatus.getIndexStats().getSecondaryIndexStats().get("secondary_index_sec-rider").size());
+    for (SecondaryIndexStats secondaryIndexStat : writeStatus.getIndexStats().getSecondaryIndexStats().get("secondary_index_sec-rider")) {
+      if (secondaryIndexStat.isDeleted()) {
+        assertTrue(inputAndExpectedDataSet.validDeletes.containsKey(secondaryIndexStat.getRecordKey())
+            || inputAndExpectedDataSet.getValidUpdates().stream().anyMatch(rec -> rec.getRecordKey().equals(secondaryIndexStat.getRecordKey())));
+      } else {
+        HoodieRecord record = inputAndExpectedDataSet.expectedRecordsMap.get(secondaryIndexStat.getRecordKey());
+        assertEquals(record.getColumnValueAsJava(AVRO_SCHEMA, "rider", properties).toString(),
+            secondaryIndexStat.getSecondaryKeyValue().toString());
+      }
+    }
   }
 
   private List<HoodieRecord> initialWrite(HoodieWriteConfig config, HoodieTestDataGenerator dataGenerator, String payloadClass, String partitionPath) {

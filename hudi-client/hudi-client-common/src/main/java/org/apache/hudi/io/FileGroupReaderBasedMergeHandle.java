@@ -67,6 +67,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -95,6 +96,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   private HoodieReadStats readStats;
   private HoodieRecord.HoodieRecordType recordType;
   private Option<HoodieCDCLogger> cdcLogger;
+  private Option<RecordLevelIndexCallback> recordIndexCallbackOpt;
+  private Option<SecondaryIndexCallback> secondaryIndexCallbackOpt;
   private boolean usePosition;
   private boolean isCompaction;
   private final TypedProperties props;
@@ -122,6 +125,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     this.props = TypedProperties.copy(config.getProps());
     this.isCompaction = false;
     populateIncomingRecordsMapIterator(recordItr);
+    initRecordIndexCallback();
   }
 
   /**
@@ -150,6 +154,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     init(operation, this.partitionPath);
     this.props = TypedProperties.copy(config.getProps());
     this.isCompaction = true;
+    initRecordIndexCallback();
   }
 
   private void initRecordTypeAndCdcLogger(HoodieRecord.HoodieRecordType enginRecordType) {
@@ -167,6 +172,14 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config)));
     } else {
       this.cdcLogger = Option.empty();
+    }
+  }
+
+  private void initRecordIndexCallback() {
+    if (this.writeStatus.isTrackingSuccessfulWrites()) {
+      this.recordIndexCallbackOpt = Option.of(new RecordLevelIndexCallback());
+    } else {
+      this.recordIndexCallbackOpt = Option.empty();
     }
   }
 
@@ -278,8 +291,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
           HoodieRecord<T> record = recordIterator.next();
-          record.setCurrentLocation(newRecordLocation); // fix me : We need to be able to differentiate inserts from updates.
-          record.setNewLocation(newRecordLocation);
+          setRecordLocations(record);
           Option<Map<String, String>> recordMetadata = record.getMetadata();
           if (!partitionPath.equals(record.getPartitionPath())) {
             HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -308,6 +320,35 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to compact file group: " + fileId, e);
+    }
+  }
+
+  private void setRecordLocations(HoodieRecord<T> record) {
+    if (recordIndexCallbackOpt.isEmpty()) {
+      record.setCurrentLocation(newRecordLocation);
+      record.setNewLocation(newRecordLocation);
+    } else {
+      if (this.recordIndexCallbackOpt.get().getRecordUpdateStateMap().containsKey(record.getRecordKey())) {
+        HoodieRecordUpdateState recordUpdateState = (HoodieRecordUpdateState) this.recordIndexCallbackOpt.get().getRecordUpdateStateMap().get(record.getRecordKey());
+        switch (recordUpdateState) {
+          case INSERT:
+            record.setNewLocation(newRecordLocation);
+            break;
+          case UPDATE:
+            record.setNewLocation(newRecordLocation);
+            record.setCurrentLocation(newRecordLocation);
+            break;
+          case DELETE:
+            record.setCurrentLocation(newRecordLocation);
+            break;
+          default:
+            throw new HoodieIOException("Unsupported HoodieRecordUpdateState " + recordUpdateState + " while processing callback updates for " + record.getRecordKey());
+        }
+      } else {
+        // for records copied over from prev base file w/o any log file updates, we reach here.
+        record.setNewLocation(newRecordLocation);
+        record.setCurrentLocation(newRecordLocation);
+      }
     }
   }
 
@@ -367,9 +408,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     if (cdcLogger.isPresent()) {
       callbacks.add(new CDCCallback<>(cdcLogger.get(), readerContext));
     }
+    // record index callback
+    recordIndexCallbackOpt.ifPresent(recordLevelIndexCallback -> callbacks.add(recordLevelIndexCallback));
     // Stream secondary index stats.
     if (isSecondaryIndexStatsStreamingWritesEnabled) {
-      callbacks.add(new SecondaryIndexCallback(
+      this.secondaryIndexCallbackOpt = Option.of(new SecondaryIndexCallback(
           partitionPath,
           writeSchemaWithMetaFields,
           readerContext,
@@ -379,6 +422,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           keyGeneratorOpt,
           config
       ));
+      callbacks.add(this.secondaryIndexCallbackOpt.get());
+    } else {
+      this.secondaryIndexCallbackOpt = Option.empty();
     }
     return callbacks.isEmpty()
         ? Option.empty()
@@ -421,6 +467,29 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     private GenericRecord convertOutput(T record) {
       T convertedRecord = outputConverter.get().map(converter -> record == null ? null : converter.apply(record)).orElse(record);
       return convertedRecord == null ? null : readerContext.getRecordContext().convertToAvroRecord(convertedRecord, requestedSchema.get());
+    }
+  }
+
+  private static class RecordLevelIndexCallback<T> implements BaseFileUpdateCallback<T> {
+    private final Map<String, HoodieRecordUpdateState> recordUpdateStateMap = new HashMap<>();
+
+    @Override
+    public void onUpdate(String recordKey, T previousRecord, T mergedRecord) {
+      this.recordUpdateStateMap.put(recordKey, HoodieRecordUpdateState.UPDATE);
+    }
+
+    @Override
+    public void onInsert(String recordKey, T newRecord) {
+      this.recordUpdateStateMap.put(recordKey, HoodieRecordUpdateState.INSERT);
+    }
+
+    @Override
+    public void onDelete(String recordKey, T previousRecord) {
+      this.recordUpdateStateMap.put(recordKey, HoodieRecordUpdateState.DELETE);
+    }
+
+    public Map<String, HoodieRecordUpdateState> getRecordUpdateStateMap() {
+      return this.recordUpdateStateMap;
     }
   }
 
@@ -530,5 +599,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     public void onDelete(String recordKey, T previousRecord) {
       this.callbacks.forEach(callback -> callback.onDelete(recordKey, previousRecord));
     }
+  }
+
+  enum HoodieRecordUpdateState {
+    INSERT,
+    UPDATE,
+    DELETE
   }
 }
