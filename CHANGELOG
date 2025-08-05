@@ -935,3 +935,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-08-04 19:42:37] [release-v1.159.0] ---
 [ENG-30713][INTERNAL] Revert revise LP metrics definition (#1477)
 [AUDIT-1629]: Changelog for release-v1.158.0 (#1476)
+
+--- [2025-08-05 16:04:13] [release-v1.160.0] ---
+[ENG-30833][HUDI-9681] Remove mkdir in partition listing and add try catch to listStatus of partition (#1479)
+[AUDIT-1071]: Changelog for release-v1.159.0 (#1478)
