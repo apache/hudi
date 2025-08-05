@@ -431,7 +431,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   override def getSchemaEvolutionConfigs: HoodieTestDataGenerator.SchemaEvolutionConfigs = {
     new HoodieTestDataGenerator.SchemaEvolutionConfigs()
   }
-
 }
 
 object TestHoodieFileGroupReaderOnSpark {
