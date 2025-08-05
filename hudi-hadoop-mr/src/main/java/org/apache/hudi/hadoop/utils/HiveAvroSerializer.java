@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
@@ -82,6 +83,10 @@ public class HiveAvroSerializer {
   private static final Logger LOG = LoggerFactory.getLogger(HiveAvroSerializer.class);
 
   public HiveAvroSerializer(Schema schema) {
+    schema = AvroSchemaUtils.resolveNullableSchema(schema);
+    if (schema.getType() != Schema.Type.RECORD) {
+      throw new IllegalArgumentException("Expected record schema, but got: " + schema);
+    }
     this.recordSchema = schema;
     this.columnNames = schema.getFields().stream().map(Schema.Field::name).map(String::toLowerCase).collect(Collectors.toList());
     try {
@@ -147,68 +152,81 @@ public class HiveAvroSerializer {
   public Object getValueAsJava(ArrayWritable record, String fieldName) {
     String[] path = fieldName.split("\\.");
 
-    int rootIdx = recordSchema.getField(path[0]).pos();
-    if (rootIdx < 0) {
-      throw new HoodieException("Top-level field '" + path[0] + "' not found");
-    }
-    TypeInfo currentTypeInfo = this.columnTypes.get(rootIdx);
-    Object currentObject = record;
-    Schema currentSchema = recordSchema;
-    ObjectInspector currentObjectInspector = this.objectInspector;
+    FieldContext context = extractFieldFromRecord(record,
+        this.objectInspector,
+        this.columnTypes,
+        this.recordSchema,
+        path[0]);
 
-    for (int i = 0; i < path.length; i++) {
-      String field = path[i];
-      currentSchema = resolveNullableSchema(currentSchema);
-      Schema.Field schemaField = currentSchema.getField(field);
-      if (schemaField == null) {
-        throw new HoodieException("Field '" + field + "' not found in schema: " + currentSchema);
+    for (int i = 1; i < path.length; i++) {
+      if (!(context.object instanceof ArrayWritable)) {
+        throw new HoodieException("Expected ArrayWritable while resolving '" + path[i]
+            + "', but got " + context.object.getClass().getSimpleName());
       }
 
-      Schema fieldSchema = resolveNullableSchema(schemaField.schema());
-
-      if (currentTypeInfo instanceof StructTypeInfo) {
-        StructTypeInfo structTypeInfo = (StructTypeInfo) currentTypeInfo;
-        List<String> fieldNames = structTypeInfo.getAllStructFieldNames();
-        List<TypeInfo> fieldTypes = structTypeInfo.getAllStructFieldTypeInfos();
-        int fieldIdx = fieldNames.indexOf(field.toLowerCase());
-        if (fieldIdx < 0) {
-          throw new HoodieException("Field '" + field + "' not found in TypeInfo: " + structTypeInfo);
-        }
-        currentTypeInfo = fieldTypes.get(fieldIdx);
-      } else {
-        throw new HoodieException("Expected StructTypeInfo while resolving '" + field + "', but got " + currentTypeInfo.getTypeName());
+      if (context.objectInspector.getCategory() != ObjectInspector.Category.STRUCT) {
+        throw new HoodieException("Expected StructObjectInspector to access field '" + path[i]
+            + "', but found: " + context.objectInspector.getClass().getSimpleName());
       }
 
-      if (currentObjectInspector.getCategory() == ObjectInspector.Category.UNION) {
-        UnionObjectInspector unionObjectInspector = (UnionObjectInspector) currentObjectInspector;
-        byte tag = unionObjectInspector.getTag(currentObject);
-        currentObject = unionObjectInspector.getField(currentObject);
-        currentObjectInspector = unionObjectInspector.getObjectInspectors().get(tag);
+      if (!(context.typeInfo instanceof StructTypeInfo)) {
+        throw new HoodieException("Expected StructTypeInfo while resolving '" + path[i]
+            + "', but got " + context.typeInfo.getTypeName());
       }
 
-      if (currentObjectInspector.getCategory() != ObjectInspector.Category.STRUCT) {
-        throw new HoodieException("Expected STRUCT at '" + field + "', got: " + currentObjectInspector.getCategory());
+      if (!(context.schema.getType() == Schema.Type.RECORD)) {
+        throw new HoodieException("Expected RecordSchema while resolving '" + path[i]
+            + "', but got " + context.schema.getType());
       }
 
-      StructObjectInspector structObjectInspector = (StructObjectInspector) currentObjectInspector;
-      StructField structField = structObjectInspector.getStructFieldRef(field);
-      if (structField == null) {
-        throw new HoodieException("ObjectInspector field not found: " + field);
-      }
-
-      Object fieldValue = structObjectInspector.getStructFieldData(currentObject, structField);
-      ObjectInspector fieldObjectInspector = structField.getFieldObjectInspector();
-
-      if (i == path.length - 1) {
-        return serialize(currentTypeInfo, fieldObjectInspector, fieldValue, fieldSchema);
-      }
-
-      currentObject = fieldValue;
-      currentObjectInspector = fieldObjectInspector;
-      currentSchema = fieldSchema;
+      context = extractFieldFromRecord((ArrayWritable) context.object, (StructObjectInspector) context.objectInspector,
+          ((StructTypeInfo) context.typeInfo).getAllStructFieldTypeInfos(), context.schema, path[i]);
     }
 
-    return null;
+    return serialize(context.typeInfo, context.objectInspector, context.object, context.schema);
+  }
+
+  private FieldContext extractFieldFromRecord(ArrayWritable record, StructObjectInspector structObjectInspector,
+                                              List<TypeInfo> fieldTypes, Schema schema, String fieldName) {
+    Schema.Field schemaField = schema.getField(fieldName);
+    if (schemaField == null) {
+      throw new HoodieException("Field '" + fieldName + "' not found in schema: " + schema);
+    }
+
+    int fieldIdx = schemaField.pos();
+    TypeInfo fieldTypeInfo = fieldTypes.get(fieldIdx);
+    Schema fieldSchema = resolveNullableSchema(schemaField.schema());
+
+    StructField structField = structObjectInspector.getStructFieldRef(fieldName);
+    if (structField == null) {
+      throw new HoodieException("Field '" + fieldName + "' not found in ObjectInspector");
+    }
+
+    Object fieldData = structObjectInspector.getStructFieldData(record, structField);
+    ObjectInspector fieldObjectInspector = structField.getFieldObjectInspector();
+
+    if (fieldObjectInspector.getCategory() == ObjectInspector.Category.UNION) {
+      UnionObjectInspector unionObjectInspector = (UnionObjectInspector) fieldObjectInspector;
+      byte tag = unionObjectInspector.getTag(fieldData);
+      fieldData = unionObjectInspector.getField(fieldData);
+      fieldObjectInspector = unionObjectInspector.getObjectInspectors().get(tag);
+    }
+
+    return new FieldContext(fieldData, fieldObjectInspector, fieldTypeInfo, fieldSchema);
+  }
+
+  private static class FieldContext {
+    final TypeInfo typeInfo;
+    final ObjectInspector objectInspector;
+    final Object object;
+    final Schema schema;
+
+    FieldContext(Object object, ObjectInspector objectInspector, TypeInfo typeInfo,  Schema schema) {
+      this.object = object;
+      this.objectInspector = objectInspector;
+      this.typeInfo = typeInfo;
+      this.schema = schema;
+    }
   }
 
   private static final Schema STRING_SCHEMA = Schema.create(Schema.Type.STRING);
