@@ -96,7 +96,34 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig));
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), false);
+  }
+
+  /**
+   * Constructs an instance of the reader context for writer workflows
+   *
+   * @param storageConfiguration   the storage configuration to use for reading files
+   * @param tableConfig            the configuration of the Hudi table being read
+   * @param payloadClassName       the payload class for the writer
+   * @param requiresPayloadRecords indicates whether the caller expects payloads as the data in any HoodieRecord returned by this context
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      String payloadClassName,
+      boolean requiresPayloadRecords) {
+    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, requiresPayloadRecords);
+  }
+
+  private HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
+      String payloadClassName,
+      boolean requiresPayloadRecords) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName, requiresPayloadRecords));
     this.reusableFileReaders = reusableFileReaders;
   }
 
