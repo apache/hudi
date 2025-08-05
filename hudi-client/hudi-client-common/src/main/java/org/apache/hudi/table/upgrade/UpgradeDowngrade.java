@@ -151,8 +151,7 @@ public class UpgradeDowngrade {
     boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
     if (isUpgrade && !config.autoUpgrade()) {
       // if we are attempting to upgrade and auto-upgrade is disabled
-      // we set the write config table version to bounded by the current hudi table version
-      // and then exit out the upgrade process
+      // we exit out the upgrade process
       LOG.warn("AUTO_UPGRADE_VERSION was explicitly disabled, skipping table version upgrade process");
       return;
     }
