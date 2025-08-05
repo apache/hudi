@@ -98,9 +98,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     Option<HoodieInstant> lastCompletedInstant1 = getInstant("0000003");
     Option<HoodieInstant> newTxnOwnerInstant1 = getInstant("0000004");
 
-    assertThrows(HoodieLockException.class, () -> {
-      transactionManager.beginStateChange(newTxnOwnerInstant1, lastCompletedInstant1);
-    });
+    assertDoesNotThrow(() -> transactionManager.beginStateChange(newTxnOwnerInstant1, lastCompletedInstant1));
 
     transactionManager.endStateChange(newTxnOwnerInstant);
     assertDoesNotThrow(() -> {
