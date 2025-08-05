@@ -504,7 +504,7 @@ public class AvroSchemaUtils {
     return prunedDataSchema;
   }
 
-  private static Schema pruneDataSchemaInternal(Schema dataSchema, Schema requiredSchema, Set<String> MandatoryFields) {
+  private static Schema pruneDataSchemaInternal(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
     switch (requiredSchema.getType()) {
       case RECORD:
         if (dataSchema.getType() != Schema.Type.RECORD) {
@@ -521,7 +521,7 @@ public class AvroSchemaUtils {
                 dataSchemaField.defaultVal()
             );
             newFields.add(newField);
-          } else if (MandatoryFields.contains(requiredSchemaField.name())) {
+          } else if (mandatoryFields.contains(requiredSchemaField.name())) {
             newFields.add(new Schema.Field(
                 requiredSchemaField.name(),
                 requiredSchemaField.schema(),

@@ -105,25 +105,25 @@ public class HiveAvroSerializer {
       return null;
     }
     Object currentObject = record;
-    ObjectInspector currentOI = this.objectInspector;
+    ObjectInspector currentObjectInspector = this.objectInspector;
     String[] path = fieldName.split("\\.");
 
     for (int i = 0; i < path.length; i++) {
       String field = path[i];
 
-      while (currentOI.getCategory() == ObjectInspector.Category.UNION) {
-        UnionObjectInspector unionOI = (UnionObjectInspector) currentOI;
+      while (currentObjectInspector.getCategory() == ObjectInspector.Category.UNION) {
+        UnionObjectInspector unionOI = (UnionObjectInspector) currentObjectInspector;
         byte tag = unionOI.getTag(currentObject);
         currentObject = unionOI.getField(currentObject);
-        currentOI = unionOI.getObjectInspectors().get(tag);
+        currentObjectInspector = unionOI.getObjectInspectors().get(tag);
       }
 
-      if (!(currentOI instanceof ArrayWritableObjectInspector)) {
+      if (!(currentObjectInspector instanceof ArrayWritableObjectInspector)) {
         throw new HoodieException("Expected struct (ArrayWritableObjectInspector) to access field '"
-            + field + "', but found: " + currentOI.getClass().getSimpleName());
+            + field + "', but found: " + currentObjectInspector.getClass().getSimpleName());
       }
 
-      ArrayWritableObjectInspector structOI = (ArrayWritableObjectInspector) currentOI;
+      ArrayWritableObjectInspector structOI = (ArrayWritableObjectInspector) currentObjectInspector;
       StructField structFieldRef = structOI.getStructFieldRef(field);
 
       if (structFieldRef == null) {
@@ -138,7 +138,7 @@ public class HiveAvroSerializer {
       }
 
       currentObject = fieldData;
-      currentOI = structFieldRef.getFieldObjectInspector();
+      currentObjectInspector = structFieldRef.getFieldObjectInspector();
     }
 
     return null;
@@ -154,7 +154,7 @@ public class HiveAvroSerializer {
     TypeInfo currentTypeInfo = this.columnTypes.get(rootIdx);
     Object currentObject = record;
     Schema currentSchema = recordSchema;
-    ObjectInspector currentOI = this.objectInspector;
+    ObjectInspector currentObjectInspector = this.objectInspector;
 
     for (int i = 0; i < path.length; i++) {
       String field = path[i];
@@ -179,32 +179,32 @@ public class HiveAvroSerializer {
         throw new HoodieException("Expected StructTypeInfo while resolving '" + field + "', but got " + currentTypeInfo.getTypeName());
       }
 
-      if (currentOI.getCategory() == ObjectInspector.Category.UNION) {
-        UnionObjectInspector unionOI = (UnionObjectInspector) currentOI;
-        byte tag = unionOI.getTag(currentObject);
-        currentObject = unionOI.getField(currentObject);
-        currentOI = unionOI.getObjectInspectors().get(tag);
+      if (currentObjectInspector.getCategory() == ObjectInspector.Category.UNION) {
+        UnionObjectInspector unionObjectInspector = (UnionObjectInspector) currentObjectInspector;
+        byte tag = unionObjectInspector.getTag(currentObject);
+        currentObject = unionObjectInspector.getField(currentObject);
+        currentObjectInspector = unionObjectInspector.getObjectInspectors().get(tag);
       }
 
-      if (currentOI.getCategory() != ObjectInspector.Category.STRUCT) {
-        throw new HoodieException("Expected STRUCT at '" + field + "', got: " + currentOI.getCategory());
+      if (currentObjectInspector.getCategory() != ObjectInspector.Category.STRUCT) {
+        throw new HoodieException("Expected STRUCT at '" + field + "', got: " + currentObjectInspector.getCategory());
       }
 
-      StructObjectInspector structOI = (StructObjectInspector) currentOI;
-      StructField structField = structOI.getStructFieldRef(field);
+      StructObjectInspector structObjectInspector = (StructObjectInspector) currentObjectInspector;
+      StructField structField = structObjectInspector.getStructFieldRef(field);
       if (structField == null) {
         throw new HoodieException("ObjectInspector field not found: " + field);
       }
 
-      Object fieldValue = structOI.getStructFieldData(currentObject, structField);
-      ObjectInspector fieldOI = structField.getFieldObjectInspector();
+      Object fieldValue = structObjectInspector.getStructFieldData(currentObject, structField);
+      ObjectInspector fieldObjectInspector = structField.getFieldObjectInspector();
 
       if (i == path.length - 1) {
-        return serialize(currentTypeInfo, fieldOI, fieldValue, fieldSchema);
+        return serialize(currentTypeInfo, fieldObjectInspector, fieldValue, fieldSchema);
       }
 
       currentObject = fieldValue;
-      currentOI = fieldOI;
+      currentObjectInspector = fieldObjectInspector;
       currentSchema = fieldSchema;
     }
 

@@ -31,6 +31,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -511,6 +512,22 @@ public class TestAvroSchemaUtils {
   }
 
   @Test
+  void testAreSchemasProjectionEquivalentListVsString() {
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    Schema listSchema = Schema.createArray(Schema.create(Schema.Type.STRING));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalentInternal(listSchema, stringSchema));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalentInternal(stringSchema, listSchema));
+  }
+
+  @Test
+  void testAreSchemasProjectionEquivalentMapVsString() {
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    Schema mapSchema = Schema.createMap(Schema.create(Schema.Type.STRING));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalentInternal(mapSchema, stringSchema));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalentInternal(stringSchema, mapSchema));
+  }
+
+  @Test
   void testAreSchemasProjectionEquivalentEqualFixedSchemas() {
     Schema s1 = Schema.createFixed("F", null, null, 16);
     Schema s2 = Schema.createFixed("F", null, null, 16);
@@ -715,12 +732,62 @@ public class TestAvroSchemaUtils {
     Schema dataSchema = parse(dataSchemaStr);
     Schema requiredSchema = parse(requiredSchemaStr);
 
-    Set<String> excludeFields = Collections.singleton("missing");
+    Set<String> mandatoryFields = Collections.singleton("missing");
 
-    Schema pruned = AvroSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, excludeFields);
+    Schema pruned = AvroSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, mandatoryFields);
 
     assertEquals(2, pruned.getFields().size());
     assertNotNull(pruned.getField("missing"));
     assertEquals("string", pruned.getField("missing").schema().getType().getName());
+  }
+
+  @Test
+  void testPruningMandatoryFieldsOnlyApplyToTopLevel() {
+    String dataSchemaStr = "{ \"type\": \"record\", \"name\": \"Rec\", \"fields\": ["
+        + "{\"name\": \"existing\", \"type\": \"int\"},"
+        + "{\"name\": \"nestedRecord\", \"type\": {"
+        + "  \"type\": \"record\", \"name\": \"NestedRec\", \"fields\": ["
+        + "    {\"name\": \"nestedField\", \"type\": \"string\"}"
+        + "  ]"
+        + "}}"
+        + "]}";
+
+    String requiredSchemaStr = "{ \"type\": \"record\", \"name\": \"Rec\", \"fields\": ["
+        + "{\"name\": \"existing\", \"type\": \"int\"},"
+        + "{\"name\": \"topLevelMissing\", \"type\": \"string\", \"default\": \"default\"},"
+        + "{\"name\": \"nestedRecord\", \"type\": {"
+        + "  \"type\": \"record\", \"name\": \"NestedRec\", \"fields\": ["
+        + "    {\"name\": \"nestedField\", \"type\": \"string\"},"
+        + "    {\"name\": \"nestedMissing\", \"type\": \"int\", \"default\": 0}"
+        + "  ]"
+        + "}}"
+        + "]}";
+
+    Schema dataSchema = parse(dataSchemaStr);
+    Schema requiredSchema = parse(requiredSchemaStr);
+
+    // Both "topLevelMissing" and "nestedMissing" are in mandatory fields
+    // but only "topLevelMissing" should be preserved since mandatory fields
+    // only apply to top-level fields
+    Set<String> mandatoryFields = new HashSet<>(Arrays.asList("topLevelMissing", "nestedMissing"));
+
+    Schema pruned = AvroSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, mandatoryFields);
+
+    // Should have 3 top-level fields: existing, topLevelMissing, nestedRecord
+    assertEquals(3, pruned.getFields().size());
+
+    // Top-level mandatory field should be preserved even though missing from data schema
+    assertNotNull(pruned.getField("topLevelMissing"));
+    assertEquals("string", pruned.getField("topLevelMissing").schema().getType().getName());
+
+    // Nested record should exist
+    assertNotNull(pruned.getField("nestedRecord"));
+    Schema nestedSchema = pruned.getField("nestedRecord").schema();
+
+    // Nested record should only have 1 field (nestedField) - nestedMissing should NOT be preserved
+    // because mandatory fields only apply to top-level
+    assertEquals(1, nestedSchema.getFields().size());
+    assertNotNull(nestedSchema.getField("nestedField"));
+    assertNull(nestedSchema.getField("nestedMissing")); // This should be null - not preserved
   }
 }
