@@ -156,7 +156,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       Option<BufferedRecord<T>> merged = recordMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
       // NOTE: For merge mode based merging, it returns non-null.
       //       For mergers / payloads based merging, it may return null.
-      HoodieRecord<T> reducedRecord = merged.map(recordContext::constructHoodieRecord).orElse(previous);
+      HoodieRecord<T> reducedRecord = merged.map(bufferedRecord -> recordContext.constructHoodieRecord(bufferedRecord, next.getPartitionPath())).orElse(previous);
       boolean choosePrevious = merged.isEmpty();
       HoodieKey reducedKey = choosePrevious ? previous.getKey() : next.getKey();
       HoodieOperation operation = choosePrevious ? previous.getOperation() : next.getOperation();

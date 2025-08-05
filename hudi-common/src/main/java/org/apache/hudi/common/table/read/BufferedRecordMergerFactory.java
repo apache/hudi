@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -94,8 +95,15 @@ public class BufferedRecordMergerFactory {
         return new EventTimePartiaRecordMerger<>(readerContext.getRecordContext(), partialUpdateMode, props);
       default:
         if (payloadClasses.isPresent()) {
-          return new CustomPayloadRecordMerger<>(
-              readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClasses.get().getLeft(), payloadClasses.get().getRight(), readerSchema, props);
+          if (payloadClasses.get().getLeft().equals(payloadClasses.get().getRight())) {
+            return new CustomPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClasses.get().getLeft(), readerSchema, props);
+          } else {
+            // The payload classes can only be different when the expression payload is used with a Merge-Into operation.
+            ValidationUtils.checkArgument(payloadClasses.get().getRight().contains("ExpressionPayload"),
+                "The payload class for the new record must be ExpressionPayload when specifying two separate payload classes in the merger.");
+            return new ExpressionPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames,
+                payloadClasses.get().getLeft(), payloadClasses.get().getRight(), readerSchema, props);
+          }
         } else {
           return new CustomRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, readerSchema, props);
         }
@@ -403,26 +411,45 @@ public class BufferedRecordMergerFactory {
   }
 
   /**
+   * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s based on the ExpressionPayload.
+   * The delta merge expects the incoming records to both be Expression Payload, whereas the final merge expects the existing
+   * record payload to match the table's configured payload and the new record to be an Expression Payload.
+   */
+  private static class ExpressionPayloadRecordMerger<T> extends CustomPayloadRecordMerger<T> {
+    private final String basePayloadClass;
+
+    public ExpressionPayloadRecordMerger(RecordContext<T> recordContext, Option<HoodieRecordMerger> recordMerger, List<String> orderingFieldNames, String basePayloadClass, String incomingPayloadClass,
+                                         Schema readerSchema, TypedProperties props) {
+      super(recordContext, recordMerger, orderingFieldNames, incomingPayloadClass, readerSchema, props);
+      this.basePayloadClass = basePayloadClass;
+    }
+
+    @Override
+    protected Pair<HoodieRecord, HoodieRecord> getFinalMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(recordContext, olderRecord, basePayloadClass);
+      HoodieRecord newHoodieRecord = constructHoodieAvroRecord(recordContext, newerRecord, payloadClass);
+      return Pair.of(oldHoodieRecord, newHoodieRecord);
+    }
+  }
+
+  /**
    * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code CUSTOM} merge mode and a given record payload class.
    */
   private static class CustomPayloadRecordMerger<T> extends BaseCustomMerger<T> {
     private final String[] orderingFieldNames;
-    private final String basePayloadClass;
-    private final String incomingPayloadClass;
+    protected final String payloadClass;
 
     public CustomPayloadRecordMerger(
         RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         List<String> orderingFieldNames,
-        String basePayloadClass,
-        String incomingPayloadClass,
+        String payloadClass,
         Schema readerSchema,
         TypedProperties props) {
       super(recordContext, recordMerger, readerSchema, props);
       this.orderingFieldNames = orderingFieldNames.toArray(new String[0]);
-      this.basePayloadClass = basePayloadClass;
-      this.incomingPayloadClass = incomingPayloadClass;
+      this.payloadClass = payloadClass;
     }
 
     @Override
@@ -472,13 +499,22 @@ public class BufferedRecordMergerFactory {
       return new MergeResult<>(true, null);
     }
 
-    private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
-      HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(recordContext, olderRecord, isFinalMerge ? basePayloadClass : incomingPayloadClass);
-      HoodieRecord newHoodieRecord = constructHoodieAvroRecord(recordContext, newerRecord, incomingPayloadClass);
-      return recordMerger.merge(oldHoodieRecord, getSchemaForAvroPayloadMerge(olderRecord), newHoodieRecord, getSchemaForAvroPayloadMerge(newerRecord), props);
+    protected Pair<HoodieRecord, HoodieRecord> getDeltaMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(recordContext, olderRecord, payloadClass);
+      HoodieRecord newHoodieRecord = constructHoodieAvroRecord(recordContext, newerRecord, payloadClass);
+      return Pair.of(oldHoodieRecord, newHoodieRecord);
     }
 
-    private HoodieRecord constructHoodieAvroRecord(RecordContext<T> recordContext, BufferedRecord<T> bufferedRecord, String payloadClass) {
+    protected Pair<HoodieRecord, HoodieRecord> getFinalMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      return getDeltaMergeRecords(olderRecord, newerRecord);
+    }
+
+    private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
+      Pair<HoodieRecord, HoodieRecord> records = isFinalMerge ? getFinalMergeRecords(olderRecord, newerRecord) : getDeltaMergeRecords(olderRecord, newerRecord);
+      return recordMerger.merge(records.getLeft(), getSchemaForAvroPayloadMerge(olderRecord), records.getRight(), getSchemaForAvroPayloadMerge(newerRecord), props);
+    }
+
+    protected HoodieRecord constructHoodieAvroRecord(RecordContext<T> recordContext, BufferedRecord<T> bufferedRecord, String payloadClass) {
       GenericRecord record = null;
       if (!bufferedRecord.isDelete()) {
         Schema recordSchema = recordContext.getSchemaFromBufferRecord(bufferedRecord);
