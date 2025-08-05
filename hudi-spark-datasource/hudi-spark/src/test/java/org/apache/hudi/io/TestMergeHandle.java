@@ -27,7 +27,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
-import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -36,12 +36,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -64,15 +64,17 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -150,146 +152,43 @@ public class TestMergeHandle extends BaseTestHandle {
     validateSecondaryIndexStatsContent(writeStatus, numUpdates, numDeletes);
   }
 
-  @Test
-  public void testFGReaderBasedMergeHandleCommitTimeOrdering() throws IOException {
-
-    metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
-    Properties properties = new Properties();
-    properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
-    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    properties.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "timestamp");
-    initMetaClient(getTableType(), properties);
-
-    HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, new HoodieLocalEngineContext(storageConf), metaClient);
-
-    // one round per partition
-    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
-    // init some args
-    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
-    SparkRDDWriteClient client = getHoodieWriteClient(config);
-    String instantTime = client.startCommit();
-    List<HoodieRecord> records1 = dataGenerator.generateInserts(instantTime, 10);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records1, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, instantTime);
-    client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
-    HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
-    String fileId = fileGroup.getFileGroupId().getFileId();
-
-    instantTime = "001";
-    int numUpdates = 10;
-    List<HoodieRecord> newRecords = dataGenerator.generateUniqueUpdates(instantTime, numUpdates);
-    GenericRecord genericRecord1 = getGenRecord(newRecords.get(0), config);
-    GenericRecord genericRecord2 = getGenRecord(newRecords.get(1), config);
-    GenericRecord genericRecord3 = getGenRecord(newRecords.get(2), config);
-
-    genericRecord1.put(ORDERING_FIELD, 10L);
-    genericRecord2.put(ORDERING_FIELD, 10L);
-    genericRecord3.put(ORDERING_FIELD, 10L);
-
-    List<GenericRecord> toUpdate = new ArrayList<>();
-    toUpdate.add(genericRecord1);
-    toUpdate.add(genericRecord2);
-    toUpdate.add(genericRecord3);
-
-    Map<String, GenericRecord> expectedRecordsMap = toUpdate.stream()
-        .map(genRec -> Pair.of(genRec.get("_row_key"), genRec))
-        .collect(Collectors.toMap(pair -> pair.getKey().toString(), pair -> pair.getValue()));
-
-    List<HoodieRecord> recordsToUpdate = getHoodieRecords(OverwriteWithLatestAvroPayload.class.getName(), toUpdate, partitionPath);
-    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty());
-    TypedProperties typedProperties = new TypedProperties();
-    typedProperties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), "COMMIT_TIME");
-    readerContext.initRecordMerger(typedProperties);
-    readerContext.getRecordContext().updateRecordKeyExtractor(metaClient.getTableConfig(), false);
-
-    FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
-        config, instantTime, table, recordsToUpdate.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        Option.empty(), readerContext, HoodieRecord.HoodieRecordType.AVRO);
-
-    fileGroupReaderBasedMergeHandle.doMerge();
-    List<WriteStatus> writeStatuses = fileGroupReaderBasedMergeHandle.close();
-
-    // read the file and validate values.
-    String filePath = writeStatuses.get(0).getStat().getPath();
-    String fullPath = metaClient.getBasePath() +"/" + filePath;
-
-    List<GenericRecord> actualRecords = new ParquetUtils().readAvroRecords(metaClient.getStorage(), new StoragePath(fullPath));
-    Map<String, GenericRecord> actualRecordsMap = actualRecords.stream()
-        .map(genRec -> Pair.of(genRec.get("_row_key"), genRec))
-        .collect(Collectors.toMap(pair -> pair.getKey().toString(), pair -> pair.getValue()));
-
-    for (Map.Entry<String, GenericRecord> entry: expectedRecordsMap.entrySet()) {
-      assertTrue(actualRecordsMap.containsKey(entry.getKey()));
-      assertEquals(entry.getValue().get(ORDERING_FIELD), actualRecordsMap.get(entry.getKey()).get(ORDERING_FIELD));
-    }
-  }
-
   @ParameterizedTest
   @ValueSource(strings = {"EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING", "CUSTOM"})
   public void testFGReaderBasedMergeHandleInsertUpsertDelete(String mergeMode) throws IOException {
     metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
+
     Properties properties = new Properties();
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    properties.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "timestamp");
+    properties.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), ORDERING_FIELD);
     properties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergeMode);
+    String payloadClass = null;
     if (mergeMode.equals(RecordMergeMode.CUSTOM.name())) {
-      properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), RawTripTestPayload.class.getName());
+      // set payload class as part of table properties.
+      properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+      payloadClass = OverwriteNonDefaultsWithLatestAvroPayload.class.getName();
+    } else if (mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name())) {
+      payloadClass = DefaultHoodieRecordPayload.class.getName();
+    } else if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
+      payloadClass = OverwriteWithLatestAvroPayload.class.getName();
     }
     initMetaClient(getTableType(), properties);
-
     HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
-    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, new HoodieLocalEngineContext(storageConf), metaClient);
 
-    // one round per partition
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
-    // init some args
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
-    SparkRDDWriteClient client = getHoodieWriteClient(config);
-    String instantTime = client.startCommit();
-    List<HoodieRecord> records1 = dataGenerator.generateInserts(instantTime, 10);
-    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records1, 1);
-    JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, instantTime);
-    client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    // initial write
+    List<HoodieRecord> recordsBatch1 = initialWrite(config, dataGenerator, payloadClass, partitionPath);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
+    String commit1 = metaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().getInstants().get(0).requestedTime();
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
     HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
     String fileId = fileGroup.getFileGroupId().getFileId();
 
-    // Generate records to delete
-    instantTime = "001";
-    List<HoodieRecord> newRecords = dataGenerator.generateUniqueUpdates(instantTime, 5);
-    HoodieRecord record = newRecords.get(2);
-    HoodieRecord deleteRecordSameOrderingValue = dataGenerator.generateDeleteRecord(record);
-    record = newRecords.get(3);
-    HoodieRecord deleteRecordHigherOrderingValue = dataGenerator.generateDeleteRecord(record, 1);
-    record = newRecords.get(4);
-    HoodieRecord deleteRecordLowerOrderingValue = dataGenerator.generateDeleteRecord(record, -1);
-    List<HoodieRecord> recordsToDelete = new ArrayList<>();
-    recordsToDelete.add(deleteRecordSameOrderingValue);
-    recordsToDelete.add(deleteRecordLowerOrderingValue);
-    recordsToDelete.add(deleteRecordHigherOrderingValue);
+    String instantTime = "001";
+    InputAndExpectedDataSet inputAndExpectedDataSet = prepareInputFor2ndBatch(config, dataGenerator, payloadClass, partitionPath, mergeMode, recordsBatch1, instantTime);
 
-    // Generate records to update
-    GenericRecord genericRecord1 = getGenRecord(newRecords.get(0), config);
-    GenericRecord genericRecord2 = getGenRecord(newRecords.get(1), config);
-    genericRecord1.put(ORDERING_FIELD, 10);
-    genericRecord2.put(ORDERING_FIELD, -1);
-    List<GenericRecord> toUpdate = new ArrayList<>();
-    toUpdate.add(genericRecord1);
-    toUpdate.add(genericRecord2);
-    List<HoodieRecord> recordsToUpdate = getHoodieRecords(OverwriteWithLatestAvroPayload.class.getName(), toUpdate, partitionPath);
-
-    List<HoodieRecord> recordsToMerge = recordsToUpdate;
-    recordsToMerge.addAll(recordsToDelete);
-    // Generate records to insert
-    List<HoodieRecord> recordsToInsert = dataGenerator.generateInserts(instantTime, 2);
-    recordsToMerge.addAll(recordsToInsert);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty());
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergeMode);
@@ -297,7 +196,7 @@ public class TestMergeHandle extends BaseTestHandle {
     readerContext.getRecordContext().updateRecordKeyExtractor(metaClient.getTableConfig(), false);
 
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
-        config, instantTime, table, recordsToMerge.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
+        config, instantTime, table, inputAndExpectedDataSet.getRecordsToMerge().iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
         Option.empty(), readerContext, HoodieRecord.HoodieRecordType.AVRO);
 
     fileGroupReaderBasedMergeHandle.doMerge();
@@ -305,41 +204,115 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // read the file and validate values.
     String filePath = writeStatuses.get(0).getStat().getPath();
-    String fullPath = metaClient.getBasePath() +"/" + filePath;
+    String fullPath = metaClient.getBasePath() + "/" + filePath;
 
     List<GenericRecord> actualRecords = new ParquetUtils().readAvroRecords(metaClient.getStorage(), new StoragePath(fullPath));
     Map<String, GenericRecord> actualRecordsMap = actualRecords.stream()
         .map(genRec -> Pair.of(genRec.get("_row_key"), genRec))
         .collect(Collectors.toMap(pair -> pair.getKey().toString(), pair -> pair.getValue()));
 
-    Map<String, GenericRecord> expectedRecordsMap = toUpdate.stream()
-        .map(genRec -> Pair.of(genRec.get("_row_key"), genRec))
-        .collect(Collectors.toMap(pair -> pair.getKey().toString(), pair -> pair.getValue()));
-    for (Map.Entry<String, GenericRecord> entry: expectedRecordsMap.entrySet()) {
+    for (Map.Entry<String, HoodieRecord> entry : inputAndExpectedDataSet.getExpectedRecordsMap().entrySet()) {
       assertTrue(actualRecordsMap.containsKey(entry.getKey()));
-      assertEquals(entry.getValue().get(ORDERING_FIELD).toString(), actualRecordsMap.get(entry.getKey()).get(ORDERING_FIELD).toString());
+      GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) entry.getValue().getData()).getInsertValue(AVRO_SCHEMA, properties).get();
+      assertEquals(genericRecord.get(ORDERING_FIELD).toString(), actualRecordsMap.get(entry.getKey()).get(ORDERING_FIELD).toString());
     }
 
-    for (HoodieRecord rec: recordsToInsert) {
-      // validate record is inserted
-      assertTrue(actualRecordsMap.containsKey(rec.getRecordKey()));
-    }
-
-    int numDeletes = 3;
-    for (HoodieRecord rec: recordsToDelete) {
-      // validate record is deleted
-      if (rec.equals(deleteRecordLowerOrderingValue) && mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name())) {
-        numDeletes--;
-        assertTrue(actualRecordsMap.containsKey(rec.getRecordKey()));
-      } else {
-        assertFalse(actualRecordsMap.containsKey(rec.getRecordKey()));
-      }
-    }
+    // validate that deleted records are not part of actual list
+    inputAndExpectedDataSet.getValidDeletes().keySet().forEach(deletedKey -> {
+      assertTrue(!actualRecordsMap.containsKey(deletedKey));
+    });
 
     HoodieWriteStat stat = writeStatuses.get(0).getStat();
-    assertEquals(2, stat.getNumUpdateWrites());
-    assertEquals(numDeletes, stat.getNumDeletes());
+    assertEquals(inputAndExpectedDataSet.getExpectedUpdates(), stat.getNumUpdateWrites());
+    assertEquals(inputAndExpectedDataSet.getExpectedDeletes(), stat.getNumDeletes());
     assertEquals(2, stat.getNumInserts());
+
+    validateWriteStatus(writeStatuses.get(0), commit1, 10 - inputAndExpectedDataSet.getExpectedDeletes() + 2,
+        inputAndExpectedDataSet.getExpectedUpdates(), 2, inputAndExpectedDataSet.getExpectedDeletes());
+  }
+
+  private List<HoodieRecord> initialWrite(HoodieWriteConfig config, HoodieTestDataGenerator dataGenerator, String payloadClass, String partitionPath) {
+    List<HoodieRecord> insertRecords = null;
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String instantTime = client.startCommit();
+      insertRecords = dataGenerator.generateInserts(instantTime, 10);
+      insertRecords = overrideOrderingValue(insertRecords, config, payloadClass, partitionPath, 5L);
+      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(insertRecords, 1);
+      JavaRDD<WriteStatus> statuses = client.upsert(writeRecords, instantTime);
+      client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    }
+    return insertRecords;
+  }
+
+  private InputAndExpectedDataSet prepareInputFor2ndBatch(HoodieWriteConfig config, HoodieTestDataGenerator dataGenerator, String payloadClass,
+                                                          String partitionPath, String mergeMode, List<HoodieRecord> recordsBatch1,
+                                                          String instantTime) {
+    List<HoodieRecord> recordsToDelete = new ArrayList<>();
+    Map<String, HoodieRecord> validDeletes = new HashMap<>();
+    List<GenericRecord> recordsToUpdate = new ArrayList<>();
+    List<HoodieRecord> validUpdates = new ArrayList<>();
+    List<HoodieRecord> newInserts = new ArrayList<>();
+    int expectedUpdates = 0;
+    int expectedDeletes = 0;
+
+    // Generate records to delete
+    List<HoodieRecord> newRecords = dataGenerator.generateUniqueUpdates(instantTime, 5);
+    HoodieRecord deleteRecordSameOrderingValue = generateDeletes(Collections.singletonList(newRecords.get(2)), config, payloadClass, partitionPath, 10L).get(0);
+    HoodieRecord deleteRecordHigherOrderingValue = generateDeletes(Collections.singletonList(newRecords.get(3)), config, payloadClass, partitionPath, 20L).get(0);
+    HoodieRecord deleteRecordLowerOrderingValue = generateDeletes(Collections.singletonList(newRecords.get(4)), config, payloadClass, partitionPath, 2L).get(0);
+    recordsToDelete.add(deleteRecordSameOrderingValue);
+    recordsToDelete.add(deleteRecordLowerOrderingValue);
+    recordsToDelete.add(deleteRecordHigherOrderingValue);
+
+    validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
+    validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
+    expectedDeletes = 2;
+    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) { // for deletes w/ custom payload based merge, we do honor ordering value.
+      validDeletes.put(deleteRecordLowerOrderingValue.getRecordKey(), deleteRecordLowerOrderingValue);
+      expectedDeletes += 1;
+    }
+
+    // Generate records to update
+    GenericRecord genericRecord1 = getGenRecord(newRecords.get(0), config);
+    GenericRecord genericRecord2 = getGenRecord(newRecords.get(1), config);
+    genericRecord1.put(ORDERING_FIELD, 20L);
+    genericRecord2.put(ORDERING_FIELD, 2L);
+    recordsToUpdate.add(genericRecord1);
+    recordsToUpdate.add(genericRecord2);
+    List<HoodieRecord> hoodieRecordsToUpdate = getHoodieRecords(payloadClass, recordsToUpdate, partitionPath);
+    validUpdates.add(hoodieRecordsToUpdate.get(0));
+    expectedUpdates = 1;
+    if (!mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name())) {
+      validUpdates.add(hoodieRecordsToUpdate.get(1));
+      expectedUpdates += 1;
+    }
+
+    List<HoodieRecord> recordsToMerge = hoodieRecordsToUpdate;
+    recordsToMerge.addAll(recordsToDelete);
+    // Generate records to insert
+    List<HoodieRecord> recordsToInsert2 = dataGenerator.generateInserts(instantTime, 2);
+    recordsToInsert2 = overrideOrderingValue(recordsToInsert2, config, payloadClass, partitionPath, 15L);
+    recordsToMerge.addAll(recordsToInsert2);
+    newInserts.addAll(recordsToInsert2);
+
+    // let's compute the expected record list
+    Map<String, HoodieRecord> expectedRecordsMap = new HashMap<>();
+    validUpdates.forEach(rec -> {
+      expectedRecordsMap.put(rec.getRecordKey(), rec);
+    });
+    recordsBatch1.forEach(record -> {
+      // if not part of new update, if not valid delete, add records from 1st batch.
+      String recKey = record.getRecordKey();
+      if (!expectedRecordsMap.containsKey(recKey) && !validDeletes.containsKey(recKey)) {
+        expectedRecordsMap.put(recKey, record);
+      }
+    });
+    // add new inserts.
+    newInserts.forEach(record -> {
+      expectedRecordsMap.put(record.getRecordKey(), record);
+    });
+
+    return new InputAndExpectedDataSet(expectedRecordsMap, expectedUpdates, expectedDeletes, recordsToMerge, validDeletes);
   }
 
   HoodieWriteConfig.Builder getHoodieWriteConfigBuilder() {
@@ -358,9 +331,38 @@ public class TestMergeHandle extends BaseTestHandle {
         .withSchema(TRIP_EXAMPLE_SCHEMA);
   }
 
+  private List<HoodieRecord> overrideOrderingValue(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
+
+    List<GenericRecord> genericRecords = hoodieRecords.stream().map(insertRecord -> {
+      try {
+        GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) insertRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
+        genericRecord.put(ORDERING_FIELD, orderingValue);
+        return genericRecord;
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to deser ", e);
+      }
+    }).collect(Collectors.toList());
+
+    return getHoodieRecords(payloadClass, genericRecords, partitionPath);
+  }
+
+  private List<HoodieRecord> generateDeletes(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
+    List<GenericRecord> genericRecords = hoodieRecords.stream().map(deleteRecord -> {
+      try {
+        GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) deleteRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
+        genericRecord.put(ORDERING_FIELD, orderingValue);
+        genericRecord.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
+        return genericRecord;
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to deser ", e);
+      }
+    }).collect(Collectors.toList());
+    return getHoodieRecords(payloadClass, genericRecords, partitionPath);
+  }
+
   private GenericRecord getGenRecord(HoodieRecord hoodieRecord, HoodieWriteConfig config) {
     try {
-     return (GenericRecord) ((HoodieRecordPayload)hoodieRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
+      return (GenericRecord) ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deser record ", e);
     }
@@ -368,8 +370,63 @@ public class TestMergeHandle extends BaseTestHandle {
 
   private List<HoodieRecord> getHoodieRecords(String payloadClass, List<GenericRecord> genericRecords, String partitionPath) {
     return genericRecords.stream().map(genericRecord -> {
-      return (HoodieRecord)new HoodieAvroRecord<>(new HoodieKey(genericRecord.get("_row_key").toString(), partitionPath),
-          HoodieRecordUtils.loadPayload(payloadClass, genericRecord, ORDERING_FIELD));
+      return (HoodieRecord) new HoodieAvroRecord<>(new HoodieKey(genericRecord.get("_row_key").toString(), partitionPath),
+          HoodieRecordUtils.loadPayload(payloadClass, genericRecord, (Comparable) genericRecord.get(ORDERING_FIELD)));
     }).collect(Collectors.toList());
+  }
+
+  private static void validateWriteStatus(WriteStatus writeStatus, String previousCommit, long expectedTotalRecordsWritten, long expectedTotalUpdatedRecords,
+                                          long expectedTotalInsertedRecords, long expectedTotalDeletedRecords) {
+    HoodieWriteStat writeStat = writeStatus.getStat();
+    assertEquals(previousCommit, writeStat.getPrevCommit());
+    assertNotNull(writeStat.getFileId());
+    assertNotNull(writeStat.getPath());
+    assertTrue(writeStat.getFileSizeInBytes() > 0);
+    assertTrue(writeStat.getTotalWriteBytes() > 0);
+    assertTrue(writeStat.getTotalLogBlocks() == 0);
+    assertTrue(writeStat.getTotalLogSizeCompacted() == 0);
+    assertTrue(writeStat.getTotalLogFilesCompacted() == 0);
+    assertTrue(writeStat.getTotalLogRecords() == 0);
+    assertEquals(expectedTotalRecordsWritten, writeStat.getNumWrites());
+    assertEquals(expectedTotalUpdatedRecords, writeStat.getNumUpdateWrites());
+    assertEquals(expectedTotalInsertedRecords, writeStat.getNumInserts());
+    assertEquals(expectedTotalDeletedRecords, writeStat.getNumDeletes());
+  }
+
+  class InputAndExpectedDataSet {
+    private final Map<String, HoodieRecord> expectedRecordsMap;
+    private final int expectedUpdates;
+    private final int expectedDeletes;
+    private final List<HoodieRecord> recordsToMerge;
+    private final Map<String, HoodieRecord> validDeletes;
+
+    public InputAndExpectedDataSet(Map<String, HoodieRecord> expectedRecordsMap, int expectedUpdates, int expectedDeletes,
+                                   List<HoodieRecord> recordsToMerge, Map<String, HoodieRecord> validDeletes) {
+      this.expectedRecordsMap = expectedRecordsMap;
+      this.expectedUpdates = expectedUpdates;
+      this.expectedDeletes = expectedDeletes;
+      this.recordsToMerge = recordsToMerge;
+      this.validDeletes = validDeletes;
+    }
+
+    public Map<String, HoodieRecord> getExpectedRecordsMap() {
+      return expectedRecordsMap;
+    }
+
+    public int getExpectedUpdates() {
+      return expectedUpdates;
+    }
+
+    public int getExpectedDeletes() {
+      return expectedDeletes;
+    }
+
+    public List<HoodieRecord> getRecordsToMerge() {
+      return recordsToMerge;
+    }
+
+    public Map<String, HoodieRecord> getValidDeletes() {
+      return validDeletes;
+    }
   }
 }

@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.MappingIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -62,7 +61,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -103,6 +101,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.operation = Option.empty();
     this.readerContext = readerContext;
+    // with cow merge flows, incoming records may not have the meta fields populate while merging with FileGroupReader
+    this.readerContext.getRecordContext().updateRecordKeyExtractor(hoodieTable.getMetaClient().getTableConfig(), false);
     this.maxInstantTime = instantTime;
     initRecordTypeAndCdcLogger(enginRecordType);
     this.usePosition = false;
@@ -223,7 +223,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   private void populateIncomingRecordsMapIterator(Iterator<HoodieRecord<T>> newRecordsItr) {
     String[] orderingFields = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING
         ? new String[]{}
-        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).orElse(hoodieTable.getConfig().getPreCombineFields().toArray(new String[0]));
+        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).orElse(hoodieTable.getMetaClient().getTableConfig().getPreCombineFields().toArray(new String[0]));
 
     if (!isCompaction) {
       // avoid populating external spillable in base {@link HoodieWriteMergeHandle)
@@ -235,7 +235,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
             bufferedRecord = BufferedRecord.forRecordWithContext((HoodieRecord<T>) indexedRecordOpt.get(), readerContext.getSchemaHandler().getTableSchema(),
                 readerContext.getRecordContext(), props, orderingFields);
           } else {
-           bufferedRecord = BufferedRecord.forDeleteRecord(((HoodieRecord<?>) record).getRecordKey(),
+            bufferedRecord = BufferedRecord.forDeleteRecord(((HoodieRecord<?>) record).getRecordKey(),
                 ((HoodieRecord<?>) record).getOrderingValue(readerContext.getSchemaHandler().getTableSchema(), props, orderingFields));
           }
           return bufferedRecord;
@@ -298,11 +298,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
-  private HoodieFileGroupReader getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props, boolean isCompaction, Option<Stream<HoodieLogFile>> logFileStreamOpt,
-                                                   Iterator<BufferedRecord<T>> incomingRecordsItr) {
+  private HoodieFileGroupReader getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props, boolean isCompaction,
+                                                   Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<BufferedRecord<T>> incomingRecordsItr) {
     HoodieFileGroupReader.Builder fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
-        .withDataSchema(isCompaction ? writeSchemaWithMetaFields: writeSchema).withRequestedSchema(isCompaction ? writeSchemaWithMetaFields : writeSchema)
+        .withDataSchema(isCompaction ? writeSchemaWithMetaFields : writeSchema).withRequestedSchema(isCompaction ? writeSchemaWithMetaFields : writeSchema)
         .withInternalSchema(internalSchemaOption).withProps(props)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(cdcLogger.map(logger -> new CDCCallback(logger, readerContext)));
