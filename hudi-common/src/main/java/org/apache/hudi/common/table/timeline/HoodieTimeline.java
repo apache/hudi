@@ -607,12 +607,18 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   Stream<HoodieInstant> getReverseOrderedInstants();
 
   /**
+   * Get the stream of instants in reverse order by completion time. Any incomplete instants are returned as the first elements of the stream.
+   * @return a stream of sorted instants
+   */
+  Stream<HoodieInstant> getReverseOrderedInstantsByCompletionTime();
+
+  /**
    * @return the latest completion time of the instants
    */
   Option<String> getLatestCompletionTime();
 
   /**
-   * Get the stream of instants in order by completion timestamp of actions.
+   * Get the stream of completed instants in order by completion timestamp of actions.
    */
   Stream<HoodieInstant> getInstantsOrderedByCompletionTime();
 

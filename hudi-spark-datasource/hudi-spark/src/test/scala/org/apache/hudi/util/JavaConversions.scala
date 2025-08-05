@@ -19,6 +19,7 @@
 package org.apache.hudi.util
 
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.model.HoodieFileFormat
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.execution.datasources.DataSource
@@ -42,17 +43,25 @@ object JavaConversions extends SparkAdapterSupport {
   }
 
   /**
-   * Read parquet files using [[TestSparkParquetReaderFormat]]
+   * Read files using [[TestSparkParquetReaderFormat]] or [[TestSparkOrcReaderFormat]].
    *
    * @param sparkSession the spark session
-   * @param paths comma seperated list of parquet files or directories containing parquet files
+   * @param paths comma separated list of files or directories containing files
    * @return dataframe containing the data from the input paths
    */
-  def createTestDataFrame(sparkSession: SparkSession, paths: String): DataFrame = {
+  def createTestDataFrame(sparkSession: SparkSession, paths: String, fileFormat: HoodieFileFormat): DataFrame = {
+    val splitPaths = paths.split(",").toSeq
+    val className = fileFormat match {
+      case HoodieFileFormat.PARQUET => "org.apache.spark.sql.execution.datasources.parquet.TestSparkParquetReaderFormat"
+      case HoodieFileFormat.ORC => "org.apache.spark.sql.execution.datasources.orc.TestSparkOrcReaderFormat"
+      case _ =>
+        throw new IllegalArgumentException(s"Unsupported file format: $fileFormat. Supported formats are: " +
+          s"${HoodieFileFormat.PARQUET}, ${HoodieFileFormat.ORC}.")
+    }
     sparkSession.sqlContext.baseRelationToDataFrame(DataSource.apply(
       sparkSession = sparkSession,
-      className = "org.apache.spark.sql.execution.datasources.parquet.TestSparkParquetReaderFormat",
-      paths =  paths.split(",").toSeq
+      className = className,
+      paths =  splitPaths
     ).resolveRelation())
   }
 }

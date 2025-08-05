@@ -115,7 +115,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs,
         1,
         "activeModule",
-        metaClient
+        metaClient,
+        false
     );
     assertTrue(result.isEmpty());
   }
@@ -215,7 +216,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs,
         1,
         "activeModule",
-        metaClient
+        metaClient,
+        false
     );
     // Validate the result.
     List<HoodieRecord> records = result.collectAsList();
@@ -340,22 +342,25 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   @Test
   public void testGetFileGroupIndexFromFileId() {
-    String result = getFileIDForFileGroup(MetadataPartitionType.FILES, 1, "test_partition");
+    String result = getFileIDForFileGroup(MetadataPartitionType.FILES, 1, "test_partition", Option.empty());
     assertEquals("files-0001-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.COLUMN_STATS, 2, "stats_partition");
+    result = getFileIDForFileGroup(MetadataPartitionType.COLUMN_STATS, 2, "stats_partition", Option.empty());
     assertEquals("col-stats-0002-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.BLOOM_FILTERS, 3, "bloom_partition");
+    result = getFileIDForFileGroup(MetadataPartitionType.BLOOM_FILTERS, 3, "bloom_partition", Option.empty());
     assertEquals("bloom-filters-0003-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.RECORD_INDEX, 4, "record_partition");
+    result = getFileIDForFileGroup(MetadataPartitionType.RECORD_INDEX, 4, "record_partition", Option.empty());
     assertEquals("record-index-0004-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.SECONDARY_INDEX, 6, "secondary_index_idx_ts");
+    result = getFileIDForFileGroup(MetadataPartitionType.RECORD_INDEX, 12, "record_partition", Option.of("test"));
+    assertEquals("record-index-test-0012-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.SECONDARY_INDEX, 6, "secondary_index_idx_ts", Option.empty());
     assertEquals("secondary-index-idx-ts-0006-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.EXPRESSION_INDEX, 5, "expr_index_ts");
+    result = getFileIDForFileGroup(MetadataPartitionType.EXPRESSION_INDEX, 5, "expr_index_ts", Option.empty());
     assertEquals("expr-index-ts-0005-0", result);
   }
 
@@ -483,11 +488,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
-        .withColumnStatsIndexForColumns("firstname,student.lastname,student")
+        .withColumnStatsIndexForColumns("firstname,student.lastnameNested,student")
         .build();
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     expected.add("firstname");
-    expected.add("student.lastname");
+    expected.add("student.lastnameNested");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), false).keySet()));
 

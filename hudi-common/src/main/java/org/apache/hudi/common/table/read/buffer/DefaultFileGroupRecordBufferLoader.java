@@ -37,6 +37,7 @@ import java.util.List;
 
 /**
  * Default implementation of {@link FileGroupRecordBufferLoader} that initializes a buffer based on the reader parameters.
+ *
  * @param <T> the engine specific record type
  */
 class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoader implements FileGroupRecordBufferLoader<T> {
@@ -59,7 +60,6 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
                                                                             ReaderParameters readerParameters,
                                                                             HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-
     boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
@@ -78,6 +78,7 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
-    return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, recordBuffer));
+    return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props,
+        readerParameters, readStats, recordBuffer));
   }
 }

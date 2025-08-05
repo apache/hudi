@@ -195,6 +195,8 @@ import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFa
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
 import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -3292,13 +3294,28 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testGetFileGroupIndexFromFileId() {
     int index = new Random().nextInt(10000);
-    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index, FILES.getPartitionPath());
+    String fileId = getFileIDForFileGroup(FILES, index, FILES.getPartitionPath(), Option.empty());
     assertEquals(fileId.substring(0, fileId.length() - 2), HoodieTableMetadataUtil.getFileGroupPrefix(fileId));
     assertEquals(index, HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId));
 
     assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-0"), "some-file-id");
     assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id"), "some-file-id");
     assertEquals(HoodieTableMetadataUtil.getFileGroupPrefix("some-file-id-2"), "some-file-id-2");
+  }
+
+  @Test
+  public void testGetFileGroupIndexFromFileIdPartitionedRLI() {
+    assertEquals("record-index-basicName-0005-0", getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("basicName")));
+    assertEquals("basicName", getDataTablePartitionNameFromFileGroupName(getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("basicName"))));
+    assertEquals("record-index-with%5Funderscore-0005-0", getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("with_underscore")));
+    assertEquals("with_underscore", getDataTablePartitionNameFromFileGroupName(getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("with_underscore"))));
+    assertEquals("record-index-with%2Ddash-0005-0", getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("with-dash")));
+    assertEquals("with-dash", getDataTablePartitionNameFromFileGroupName(getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("with-dash"))));
+    assertEquals("record-index-with%25percent-0005-0", getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("with%percent")));
+    assertEquals("with%percent", getDataTablePartitionNameFromFileGroupName(getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("with%percent"))));
+    assertEquals("record-index-2016%2F08%2F04-0005-0", getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("2016/08/04")));
+    assertEquals("2016/08/04", getDataTablePartitionNameFromFileGroupName(getFileIDForFileGroup(RECORD_INDEX, 5, RECORD_INDEX.getPartitionPath(), Option.of("2016/08/04"))));
+
   }
 
   @Test

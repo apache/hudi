@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
@@ -107,8 +106,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String[] orderingFields = ConfigUtils.getOrderingFields(props);
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
     if (orderingFields == null) {
       return OrderingValues.getDefault();
     } else {

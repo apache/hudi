@@ -54,7 +54,7 @@ public class BufferedRecord<T> implements Serializable {
     this.isDelete = isDelete;
   }
 
-  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record, Schema schema, RecordContext<T> recordContext, Properties props) {
+  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
     HoodieKey hoodieKey = record.getKey();
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(record.getData(), schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
@@ -64,7 +64,7 @@ public class BufferedRecord<T> implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Failed to get isDelete from record.", e);
     }
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props), record.getData(), schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), record.getData(), schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
