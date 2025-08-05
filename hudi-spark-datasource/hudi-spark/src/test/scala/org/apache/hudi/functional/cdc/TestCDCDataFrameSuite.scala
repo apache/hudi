@@ -54,10 +54,16 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    * Step8: Bulk_Insert 20
    */
   @ParameterizedTest
-  @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
-  def testCOWDataSourceWrite(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {
+  @CsvSource(Array("OP_KEY_ONLY,org.apache.hudi.io.HoodieWriteMergeHandle",
+    "DATA_BEFORE,org.apache.hudi.io.HoodieWriteMergeHandle",
+    "DATA_BEFORE_AFTER,org.apache.hudi.io.HoodieWriteMergeHandle",
+    "OP_KEY_ONLY,org.apache.hudi.io.FileGroupReaderBasedMergeHandle",
+    "DATA_BEFORE,org.apache.hudi.io.FileGroupReaderBasedMergeHandle",
+    "DATA_BEFORE_AFTER,org.apache.hudi.io.FileGroupReaderBasedMergeHandle"))
+  def testCOWDataSourceWrite(loggingMode: HoodieCDCSupplementalLoggingMode, mergeHandleClassName: String): Unit = {
     val options = commonOpts ++ Map(
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name()
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode.name(),
+      HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key() -> mergeHandleClassName
     )
 
     var totalInsertedCnt = 0L
