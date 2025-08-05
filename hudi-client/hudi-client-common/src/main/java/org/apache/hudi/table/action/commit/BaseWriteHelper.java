@@ -160,9 +160,6 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       boolean choosePrevious = merged.isEmpty();
       HoodieKey reducedKey = choosePrevious ? previous.getKey() : next.getKey();
       HoodieOperation operation = choosePrevious ? previous.getOperation() : next.getOperation();
-      reducedRecord = reducedRecord.newInstance(reducedKey, operation);
-      reducedRecord.setCurrentLocation(choosePrevious ? previous.getCurrentLocation() : next.getCurrentLocation());
-      reducedRecord.setNewLocation(choosePrevious ? previous.getNewLocation() : next.getNewLocation());
       return reducedRecord.newInstance(reducedKey, operation);
     } catch (IOException e) {
       throw new HoodieException(String.format("Error to merge two records, %s, %s", previous, next), e);
