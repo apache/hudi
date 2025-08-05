@@ -122,7 +122,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
       this.jsonDataCompressed = compressData(jsonData);
       this.dataSize = jsonData.length();
       this.rowKey = jsonRecordMap.get("_row_key").toString();
-      this.partitionPath = jsonRecordMap.get("partition_path").toString();
+      this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
       this.isDeleted = false;
     } catch (IOException e) {
       throw new IllegalStateException("Fail to instantiate.", e);
