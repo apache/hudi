@@ -257,7 +257,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         try {
           Option<HoodieAvroIndexedRecord> indexedRecordOpt = ((HoodieRecord<T>) record).toIndexedRecord(readerContext.getSchemaHandler().getTableSchema(), props);
           BufferedRecord<T> bufferedRecord;
-          if (indexedRecordOpt.isPresent()) {
+          if (indexedRecordOpt.isPresent() && (!((HoodieRecord<?>) record).isDelete(readerContext.getSchemaHandler().getTableSchema(), props))) {
             bufferedRecord = BufferedRecord.forRecordWithContext((HoodieRecord<T>) indexedRecordOpt.get(), readerContext.getSchemaHandler().getTableSchema(),
                 readerContext.getRecordContext(), props, orderingFields);
           } else {
