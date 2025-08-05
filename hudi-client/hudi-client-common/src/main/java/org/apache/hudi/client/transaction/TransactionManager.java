@@ -44,7 +44,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
   protected final LockManager lockManager;
   protected final boolean isLockRequired;
   private final transient TimeGenerator timeGenerator;
-  protected boolean hasLock;
+  protected volatile boolean hasLock;
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
@@ -102,7 +102,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
    * @return the result of the action
    * @param <T> type of the result
    */
-  public synchronized <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
+  public <T> T executeStateChangeWithInstant(Option<String> providedInstantTime, Option<HoodieInstant> lastCompletedActionInstant, Function<String, T> instantTimeConsumingAction) {
     if (isLockRequired()) {
       acquireLock();
     }
@@ -126,7 +126,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
     beginStateChange(Option.empty(), Option.empty());
   }
 
-  public synchronized void beginStateChange(Option<HoodieInstant> changeActionInstant,
+  public void beginStateChange(Option<HoodieInstant> changeActionInstant,
                                             Option<HoodieInstant> lastCompletedActionInstant) {
     if (isLockRequired) {
       LOG.info("State change starting for {} with latest completed action instant {}",
@@ -142,7 +142,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
     endStateChange(Option.empty());
   }
 
-  public synchronized void endStateChange(Option<HoodieInstant> changeActionInstant) {
+  public void endStateChange(Option<HoodieInstant> changeActionInstant) {
     if (isLockRequired) {
       LOG.info("State change ending for action instant {}", changeActionInstant);
       if (reset(changeActionInstant, Option.empty(), Option.empty())) {
@@ -153,21 +153,23 @@ public class TransactionManager implements Serializable, AutoCloseable {
   }
 
   private void acquireLock() {
-    if (hasLock) {
-      LOG.debug("Lock already acquired, skipping lock acquisition.");
-      return;
-    }
     lockManager.lock();
     hasLock = true;
   }
 
   private void releaseLock() {
     if (hasLock) {
-      lockManager.unlock();
+      // set the boolean first (reverse of above); to be in a safe critical section.
       hasLock = false;
+      lockManager.unlock();
+    } else {
+      LOG.info("No lock acquired before, skipping lock release.");
     }
   }
 
+  /* this method remains `synchronized` without any deadlocks only because reset() is called
+   * after a lock acquistion, and before a release. i.e. in a critical section.
+   */
   protected synchronized boolean reset(Option<HoodieInstant> callerInstant,
                                        Option<HoodieInstant> changeActionInstant,
                                        Option<HoodieInstant> lastCompletedActionInstant) {
