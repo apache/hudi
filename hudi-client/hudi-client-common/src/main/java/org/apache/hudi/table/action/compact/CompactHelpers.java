@@ -77,26 +77,26 @@ public class CompactHelpers<T, I, K, O> {
     return metadata;
   }
 
-  public void completeInflightCompaction(HoodieTable table, String compactionCommitTime, HoodieCommitMetadata commitMetadata, String completionInstant) {
+  public void completeInflightCompaction(HoodieTable table, String compactionCommitTime, HoodieCommitMetadata commitMetadata, String completionTime) {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
       InstantGenerator instantGenerator = table.getInstantGenerator();
       // Callers should already guarantee the lock.
       activeTimeline.transitionCompactionInflightToComplete(
-          instantGenerator.getCompactionInflightInstant(compactionCommitTime), commitMetadata, completionInstant);
+          instantGenerator.getCompactionInflightInstant(compactionCommitTime), commitMetadata, completionTime);
     } catch (HoodieIOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
     }
   }
 
-  public void completeInflightLogCompaction(HoodieTable table, String logCompactionCommitTime, HoodieCommitMetadata commitMetadata, String completionInstant) {
+  public void completeInflightLogCompaction(HoodieTable table, String logCompactionCommitTime, HoodieCommitMetadata commitMetadata, String completionTime) {
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     try {
       // Callers should already guarantee the lock.
       InstantGenerator instantGenerator = table.getInstantGenerator();
       activeTimeline.transitionLogCompactionInflightToComplete(
-          instantGenerator.getLogCompactionInflightInstant(logCompactionCommitTime), commitMetadata, completionInstant);
+          instantGenerator.getLogCompactionInflightInstant(logCompactionCommitTime), commitMetadata, completionTime);
     } catch (HoodieIOException e) {
       throw new HoodieCompactionException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);
