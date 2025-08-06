@@ -50,7 +50,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELD
 public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   private static final long serialVersionUID = 1L;
   private static final AvroRecordContext AVRO_RECORD_CONTEXT = new AvroRecordContext();
-  private HoodieIndexedRecord optimizedRecord;
+  private SerializableIndexedRecord optimizedRecord;
 
   public HoodieAvroIndexedRecord(IndexedRecord data) {
     this(null, data, null, null, null);
@@ -84,8 +84,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
-    super(key, new HoodieIndexedRecord(data), operation, currentLocation, newLocation);
-    this.optimizedRecord = (HoodieIndexedRecord) this.data;
+    super(key, new SerializableIndexedRecord(data), operation, currentLocation, newLocation);
+    this.optimizedRecord = (SerializableIndexedRecord) this.data;
   }
 
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
@@ -97,17 +97,17 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       IndexedRecord data,
       HoodieOperation operation,
       Option<Map<String, String>> metaData) {
-    super(key, new HoodieIndexedRecord(data), operation, metaData);
-    this.optimizedRecord = (HoodieIndexedRecord) this.data;
+    super(key, new SerializableIndexedRecord(data), operation, metaData);
+    this.optimizedRecord = (SerializableIndexedRecord) this.data;
   }
 
   HoodieAvroIndexedRecord(HoodieRecord<IndexedRecord> record) {
     super(record);
-    this.optimizedRecord = (HoodieIndexedRecord) this.data;
+    this.optimizedRecord = (SerializableIndexedRecord) this.data;
   }
 
   public HoodieAvroIndexedRecord() {
-    this.optimizedRecord = (HoodieIndexedRecord) this.data;
+    this.optimizedRecord = (SerializableIndexedRecord) this.data;
   }
 
   @Override
@@ -117,12 +117,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieAvroIndexedRecord(key, new HoodieIndexedRecord(data), op, metaData);
+    return new HoodieAvroIndexedRecord(key, new SerializableIndexedRecord(data), op, metaData);
   }
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key) {
-    return new HoodieAvroIndexedRecord(key, new HoodieIndexedRecord(data), operation, metaData);
+    return new HoodieAvroIndexedRecord(key, new SerializableIndexedRecord(data), operation, metaData);
   }
 
   @Override
@@ -296,7 +296,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   protected final void writeRecordPayload(IndexedRecord payload, Kryo kryo, Output output) {
     // NOTE: We're leveraging Spark's default [[GenericAvroSerializer]] to serialize Avro
-    Serializer<HoodieIndexedRecord> avroSerializer = kryo.getSerializer(HoodieIndexedRecord.class);
+    Serializer<SerializableIndexedRecord> avroSerializer = kryo.getSerializer(SerializableIndexedRecord.class);
 
     kryo.writeObjectOrNull(output, payload, avroSerializer);
   }
@@ -308,7 +308,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @SuppressWarnings("unchecked")
   @Override
   protected final IndexedRecord readRecordPayload(Kryo kryo, Input input) {
-    HoodieIndexedRecord data = kryo.readObjectOrNull(input, HoodieIndexedRecord.class);
+    SerializableIndexedRecord data = kryo.readObjectOrNull(input, SerializableIndexedRecord.class);
     this.optimizedRecord = data;
     return data;
   }

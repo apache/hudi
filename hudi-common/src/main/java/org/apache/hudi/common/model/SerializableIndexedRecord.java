@@ -37,11 +37,11 @@ import java.io.IOException;
  * After deserialization, the schema can be set using {@link #setSchema(Schema)} and that will also trigger deserialization of the record.
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
-class HoodieIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializable {
+class SerializableIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializable {
   private IndexedRecord record;
   private byte[] recordBytes;
 
-  HoodieIndexedRecord(IndexedRecord record) {
+  SerializableIndexedRecord(IndexedRecord record) {
     this.record = record;
   }
 
