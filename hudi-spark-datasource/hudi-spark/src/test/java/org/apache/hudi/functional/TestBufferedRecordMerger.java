@@ -815,7 +815,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
+    public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord, String partitionPath) {
       HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
       if (bufferedRecord.isDelete()) {
         return new HoodieEmptyRecord<>(

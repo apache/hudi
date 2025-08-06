@@ -95,8 +95,9 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     int configuredBloomIndexParallelism = config.getBloomIndexParallelism();
 
     // NOTE: Target parallelism could be overridden by the config
+    // Otherwise, default to minimum of 10
     int targetParallelism =
-        configuredBloomIndexParallelism > 0 ? configuredBloomIndexParallelism : inputParallelism;
+        configuredBloomIndexParallelism > 0 ? configuredBloomIndexParallelism : Math.max(inputParallelism, 10);
 
     LOG.info("Input parallelism: {}, Index parallelism: {}", inputParallelism, targetParallelism);
 

@@ -71,7 +71,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
+  public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord, String partitionPath) {
     HoodieKey key = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(

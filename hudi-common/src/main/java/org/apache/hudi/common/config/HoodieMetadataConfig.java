@@ -576,6 +576,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "bloom filter row for the files in the metadata table. Only applies if the filter "
           + "type (" + BLOOM_FILTER_TYPE.key() + " ) is BloomFilterTypeCode.DYNAMIC_V0.");
 
+  public static final ConfigProperty<Integer> RECORD_PREPARATION_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".record.preparation.parallelism")
+      .defaultValue(0)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("when set to positive number, metadata table record preparation stages "
+          + "honor the set value for number of tasks. If not, number of write status's from data "
+          + "table writes will be used for metadata table record preparation");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -843,6 +852,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getFileCacheMaxSizeMB() {
     return getInt(METADATA_FILE_CACHE_MAX_SIZE_MB);
+  }
+
+  public int getRecordPreparationParallelism() {
+    return getIntOrDefault(RECORD_PREPARATION_PARALLELISM);
   }
 
   /**

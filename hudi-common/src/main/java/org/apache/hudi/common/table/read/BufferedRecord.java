@@ -54,9 +54,10 @@ public class BufferedRecord<T> implements Serializable {
     this.isDelete = isDelete;
   }
 
-  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord<T> record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
+  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
     HoodieKey hoodieKey = record.getKey();
-    String recordKey = hoodieKey == null ? recordContext.getRecordKey(record.getData(), schema) : hoodieKey.getRecordKey();
+    T data = recordContext.extractDataFromRecord(record, schema, props);
+    String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     boolean isDelete;
     try {
@@ -64,11 +65,17 @@ public class BufferedRecord<T> implements Serializable {
     } catch (IOException e) {
       throw new HoodieException("Failed to get isDelete from record.", e);
     }
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), record.getData(), schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
     String recordKey = recordContext.getRecordKey(record, schema);
+    Integer schemaId = recordContext.encodeAvroSchema(schema);
+    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
+  }
+
+  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);

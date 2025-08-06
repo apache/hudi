@@ -63,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -195,7 +196,7 @@ class TestFileGroupRecordBuffer {
     record.put("ts", System.currentTimeMillis());
     record.put("op", "d");
     record.put("_hoodie_is_deleted", false);
-    when(recordContext.getOrderingValue(any(), any(), any())).thenReturn(1);
+    when(recordContext.getOrderingValue(any(), any(), anyList())).thenReturn(1);
     when(recordContext.convertOrderingValueToEngineType(any())).thenReturn(1);
     BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
 
