@@ -337,6 +337,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         arguments(HoodieFileFormat.PARQUET, "parquet")
     );
   }
+  
   /**
    * Write a base file with schema A, then write a log file with schema A, then write another base file with schema B.
    */
