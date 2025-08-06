@@ -66,17 +66,17 @@ class DefaultFileGroupRecordBufferLoader<T> extends LogScanningRecordBufferLoade
     FileGroupRecordBuffer<T> recordBuffer;
     if (isSkipMerge) {
       recordBuffer = new UnmergedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, readStats);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, readerParameters.iteratorMode(), props, readStats);
     } else if (readerParameters.sortOutputs()) {
       recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, readerParameters.iteratorMode(), props, orderingFieldNames, updateProcessor);
     } else if (readerParameters.useRecordPosition() && inputSplit.getBaseFileOption().isPresent()) {
       recordBuffer = new PositionBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, inputSplit.getBaseFileOption().get().getCommitTime(), props,
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, readerParameters.iteratorMode(), inputSplit.getBaseFileOption().get().getCommitTime(), props,
           orderingFieldNames, updateProcessor);
     } else {
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, readerParameters.iteratorMode(), props, orderingFieldNames, updateProcessor);
     }
     return Pair.of(recordBuffer, scanLogFiles(readerContext, storage, inputSplit, hoodieTableMetaClient, props,
         readerParameters, readStats, recordBuffer));

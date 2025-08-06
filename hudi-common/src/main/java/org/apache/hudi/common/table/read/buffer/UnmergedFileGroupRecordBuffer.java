@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -54,9 +55,10 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       HoodieTableMetaClient hoodieTableMetaClient,
       RecordMergeMode recordMergeMode,
       PartialUpdateMode partialUpdateMode,
+      IteratorMode iteratorMode,
       TypedProperties props,
       HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, Collections.emptyList(), null);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, iteratorMode, props, Collections.emptyList(), null);
     this.readStats = readStats;
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
@@ -67,7 +69,7 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Output from base file first.
     if (baseFileIterator.hasNext()) {
-      nextRecord = readerContext.seal(baseFileIterator.next());
+      nextRecord = bufferedRecordConverter.convert(readerContext.seal(baseFileIterator.next()));
       return true;
     }
 
@@ -85,7 +87,7 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     if (recordIterator == null || !recordIterator.hasNext()) {
       return false;
     }
-    nextRecord = readerContext.seal(recordIterator.next());
+    nextRecord = bufferedRecordConverter.convert(readerContext.seal(recordIterator.next()));
     readStats.incrementNumInserts();
     return true;
   }

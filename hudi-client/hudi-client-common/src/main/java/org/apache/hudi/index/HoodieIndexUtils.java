@@ -435,8 +435,7 @@ public class HoodieIndexUtils {
       return Option.of((HoodieRecord<R>) new HoodieAvroIndexedRecord(HoodieRecord.SENTINEL));
     }
 
-    BufferedRecord<R> resultingBufferedRecord = BufferedRecord.forRecordWithContext(mergeResult.getMergedRecord(), writeSchemaWithMetaFields,
-        existingRecordContext, orderingFieldNames, existing.getRecordKey(), false);
+    BufferedRecord<R> resultingBufferedRecord = mergeResult.getMergedRecord();
 
     if (resultingBufferedRecord.getRecord().equals(HoodieRecord.SENTINEL)) {
       //the record did not match and merge case and should not be modified
@@ -495,9 +494,7 @@ public class HoodieIndexUtils {
         // the record was deleted
         return Option.empty();
       }
-      R mergedRecord = mergeResult.getMergedRecord();
-      BufferedRecord<R> resultingBufferedRecord = BufferedRecord.forRecordWithContext(mergedRecord, writeSchemaWithMetaFields, existingRecordContext,
-          orderingFieldNames, existing.getRecordKey(), mergedRecord == null);
+      BufferedRecord<R> resultingBufferedRecord = mergeResult.getMergedRecord();
       String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, resultingBufferedRecord);
       HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(resultingBufferedRecord, partitionPath);
       // the merged record needs to be converted back to the original payload

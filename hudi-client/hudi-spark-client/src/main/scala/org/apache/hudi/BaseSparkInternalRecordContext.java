@@ -80,7 +80,8 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
-    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema), false);
+    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema),
+        false, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
   }
 
   @Override

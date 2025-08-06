@@ -23,16 +23,16 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.BaseAvroPayload;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -79,22 +79,15 @@ public class BaseTestFileGroupRecordBuffer {
     return record;
   }
 
-  protected static List<BufferedRecord> convertToBufferedRecordsList(List<IndexedRecord> indexedRecords,
-                                                                     HoodieReaderContext<IndexedRecord> readerContext,
-                                                                     TypedProperties props, String[] orderingFieldNames) {
-    return indexedRecords.stream().map(rec -> {
-      HoodieAvroIndexedRecord indexedRecord = new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec, null);
-      return (BufferedRecord) BufferedRecord.forRecordWithContext(indexedRecord, readerContext.getSchemaHandler().getRequestedSchema(),
-          readerContext.getRecordContext(), props, orderingFieldNames);
-    }).collect(Collectors.toList());
+  protected static List<HoodieRecord> convertToHoodieRecordsList(List<IndexedRecord> indexedRecords,
+                                                                 HoodieReaderContext<IndexedRecord> readerContext,
+                                                                 TypedProperties props, String[] orderingFieldNames) {
+    return indexedRecords.stream().map(rec -> new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec, null)).collect(Collectors.toList());
   }
 
-  protected static List<BufferedRecord> convertToBufferedRecordsListForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
-    return indexedRecords.stream().map(rec -> {
-      return
-          (BufferedRecord) BufferedRecord.forDeleteRecord(DeleteRecord.create(new HoodieKey(rec.get(0).toString(), ""), defaultOrderingValue ? 0 : (Comparable) rec.get(2)),
-              defaultOrderingValue ? 0 : (Comparable) rec.get(2));
-    }).collect(Collectors.toList());
+  protected static List<HoodieRecord> convertToHoodieRecordsListForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
+    return indexedRecords.stream().map(rec -> new HoodieEmptyRecord<>(new HoodieKey(rec.get(0).toString(), ""),
+        HoodieOperation.DELETE, defaultOrderingValue ? 0 : (Comparable) rec.get(2), HoodieRecord.HoodieRecordType.AVRO)).collect(Collectors.toList());
   }
 
   protected static KeyBasedFileGroupRecordBuffer<IndexedRecord> buildKeyBasedFileGroupRecordBuffer(HoodieReaderContext<IndexedRecord> readerContext,
@@ -125,7 +118,7 @@ public class BaseTestFileGroupRecordBuffer {
                                                                                                  RecordMergeMode recordMergeMode,
                                                                                                  List<String> orderingFieldNames,
                                                                                                  TypedProperties props,
-                                                                                                 Option<Iterator<BufferedRecord>> fileGroupRecordBufferItrOpt) {
+                                                                                                 Option<Iterator<HoodieRecord>> fileGroupRecordBufferItrOpt) {
 
     readerContext.setRecordMerger(Option.ofNullable(recordMerger));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
@@ -150,7 +143,7 @@ public class BaseTestFileGroupRecordBuffer {
   protected static List<IndexedRecord> getActualRecords(FileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer) throws IOException {
     List<IndexedRecord> actualRecords = new ArrayList<>();
     while (fileGroupRecordBuffer.hasNext()) {
-      actualRecords.add(fileGroupRecordBuffer.next());
+      actualRecords.add(fileGroupRecordBuffer.next().getRecord());
     }
     return actualRecords;
   }

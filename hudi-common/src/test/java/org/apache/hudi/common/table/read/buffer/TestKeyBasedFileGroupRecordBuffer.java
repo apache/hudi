@@ -25,13 +25,13 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
@@ -156,9 +156,9 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
         properties);
     readerContext.setSchemaHandler(schemaHandler);
-    List<BufferedRecord> inputRecords = convertToBufferedRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
+    List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
         testRecord4EarlierUpdate, testRecord7), readerContext, properties, new String[] {"ts"});
-    inputRecords.addAll(convertToBufferedRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), false));
+    inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), false));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.EVENT_TIME_ORDERING, Collections.singletonList("ts"), properties, Option.of(inputRecords.iterator()));
 
@@ -224,9 +224,9 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
         properties);
     readerContext.setSchemaHandler(schemaHandler);
-    List<BufferedRecord> inputRecords = convertToBufferedRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
+    List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
         testRecord4EarlierUpdate, testRecord7), readerContext, properties, new String[] {});
-    inputRecords.addAll(convertToBufferedRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
+    inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, null,
         RecordMergeMode.COMMIT_TIME_ORDERING, Collections.singletonList("ts"), properties, Option.of(inputRecords.iterator()));
 
@@ -303,9 +303,9 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
         properties);
     readerContext.setSchemaHandler(schemaHandler);
-    List<BufferedRecord> inputRecords = convertToBufferedRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
+    List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
         testRecord4EarlierUpdate), readerContext, properties, new String[] {"ts"});
-    inputRecords.addAll(convertToBufferedRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
+    inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new HoodieAvroRecordMerger(),
         RecordMergeMode.CUSTOM, Collections.singletonList("ts"), properties, Option.of(inputRecords.iterator()));
 
@@ -379,9 +379,9 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
         properties);
     readerContext.setSchemaHandler(schemaHandler);
-    List<BufferedRecord> inputRecords = convertToBufferedRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
+    List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
         testRecord4EarlierUpdate), readerContext, properties, new String[] {"ts"});
-    inputRecords.addAll(convertToBufferedRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
+    inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new TestKeyBasedFileGroupRecordBuffer.CustomMerger(),
         RecordMergeMode.CUSTOM, Collections.singletonList("ts"), properties, Option.of(inputRecords.iterator()));
 

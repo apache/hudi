@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
@@ -60,16 +61,17 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     FileGroupRecordBuffer<T> recordBuffer;
     if (readerParameters.sortOutputs()) {
       recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, readerParameters.iteratorMode(), props, orderingFieldNames, updateProcessor);
     } else {
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, readerParameters.iteratorMode(), props, orderingFieldNames, updateProcessor);
     }
 
-    Iterator<BufferedRecord> recordIterator = inputSplit.getRecordIterator();
-
+    String[] orderingFields = orderingFieldNames.toArray(new String[0]);
+    Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     while (recordIterator.hasNext()) {
-      BufferedRecord bufferedRecord = recordIterator.next();
+      BufferedRecord bufferedRecord = BufferedRecord.forRecordWithContext(recordIterator.next(),
+          readerContext.getSchemaHandler().getTableSchema(), readerContext.getRecordContext(), recordBuffer.getDeleteContext(), props, orderingFields);
       try {
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {

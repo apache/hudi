@@ -80,6 +80,15 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     isDeleted = data == null;
   }
 
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, ObjectInspectorCache objectInspectorCache, HoodieOperation hoodieOperation, boolean isDelete) {
+    super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.objectInspector = objectInspectorCache.getObjectInspector(schema);
+    this.objectInspectorCache = objectInspectorCache;
+    this.schema = schema;
+    this.copy = false;
+    isDeleted = data == null;
+  }
+
   private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
                            ArrayWritableObjectInspector objectInspector, ObjectInspectorCache objectInspectorCache) {
     super(key, data, operation, Option.empty());
@@ -190,7 +199,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+  public boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
     if (null == data) {
       return true;
     }

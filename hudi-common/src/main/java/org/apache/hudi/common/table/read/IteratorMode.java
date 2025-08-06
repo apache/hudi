@@ -18,27 +18,25 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.model.HoodieRecord;
+
 /**
- * Simple object to represent the result of a merge operation.
+ * Identifies different modes of iterator returned by file group reader, which is used
+ * to achieve efficient implementation.
  */
-public class MergeResult<T> {
-  private final boolean isDelete;
-  private final BufferedRecord<T> mergedRecord;
+public enum IteratorMode {
+  /**
+   * File group reader returns an iterator of engine-specific record.
+   */
+  ENGINE_RECORD,
 
-  MergeResult(boolean isDelete, BufferedRecord<T> mergedRecord) {
-    this.isDelete = isDelete;
-    this.mergedRecord = mergedRecord;
-  }
+  /**
+   * File group reader returns an iterator of {@link HoodieRecord}.
+   */
+  HOODIE_RECORD,
 
-  public boolean isDelete() {
-    return isDelete;
-  }
-
-  public BufferedRecord<T> getMergedRecord() {
-    return mergedRecord;
-  }
-
-  public T getRecordData() {
-    return mergedRecord.getRecord();
-  }
+  /**
+   * File group reader returns an iterator of record key.
+   */
+  RECORD_KEY
 }

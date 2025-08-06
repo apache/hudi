@@ -96,7 +96,7 @@ class TestReusableKeyBasedRecordBuffer {
 
     List<TestRecord> actualRecords = new ArrayList<>();
     while (buffer.hasNext()) {
-      actualRecords.add(buffer.next());
+      actualRecords.add(buffer.next().getRecord());
     }
     assertEquals(Arrays.asList(new TestRecord("1", 10), new TestRecord("3", 3), new TestRecord("2", 2)), actualRecords);
   }

@@ -80,7 +80,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
     }
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
+    return new HoodieHiveRecord(key, writable, schema, objectInspectorCache, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
   }
 
   @Override

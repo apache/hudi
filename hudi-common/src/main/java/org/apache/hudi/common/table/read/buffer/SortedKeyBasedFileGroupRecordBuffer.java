@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -50,10 +51,11 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
                                              HoodieTableMetaClient hoodieTableMetaClient,
                                              RecordMergeMode recordMergeMode,
                                              PartialUpdateMode partialUpdateMode,
+                                             IteratorMode iteratorMode,
                                              TypedProperties props,
                                              List<String> orderingFieldNames,
                                              UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, iteratorMode, props, orderingFieldNames, updateProcessor);
   }
 
   @Override
@@ -72,7 +74,7 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
       }
       // Handle the case where the next record is only present in the log records
       BufferedRecord<T> nextLogRecord = records.remove(nextLogRecordKey);
-      nextRecord = updateProcessor.processUpdate(recordKey, null, nextLogRecord.getRecord(), nextLogRecord.isDelete());
+      nextRecord = updateProcessor.processUpdate(recordKey, null, nextLogRecord, nextLogRecord.isDelete());
       if (nextRecord != null) {
         // If the next log record does not result in a deletion, or we are emitting deletes, we can return it
         // and queue the base record, which is already read from the iterator, for the next iteration

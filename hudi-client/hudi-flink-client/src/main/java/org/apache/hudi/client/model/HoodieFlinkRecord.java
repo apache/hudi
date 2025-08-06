@@ -72,6 +72,11 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     this.orderingValue = orderingValue;
   }
 
+  public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, Comparable<?> orderingValue, RowData rowData, boolean isDelete) {
+    super(key, rowData, op, isDelete, Option.empty());
+    this.orderingValue = orderingValue;
+  }
+
   public HoodieFlinkRecord(HoodieKey key, RowData rowData) {
     super(key, rowData);
   }
@@ -223,7 +228,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) {
+  public boolean checkIsDelete(Schema recordSchema, Properties props) {
     if (data == null) {
       return true;
     }

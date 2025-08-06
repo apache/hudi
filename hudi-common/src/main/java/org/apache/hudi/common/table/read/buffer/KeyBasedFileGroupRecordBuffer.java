@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -61,7 +62,18 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
                                        TypedProperties props,
                                        List<String> orderingFieldNames,
                                        UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
+    this(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, IteratorMode.ENGINE_RECORD, props, orderingFieldNames, updateProcessor);
+  }
+
+  public KeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
+                                       HoodieTableMetaClient hoodieTableMetaClient,
+                                       RecordMergeMode recordMergeMode,
+                                       PartialUpdateMode partialUpdateMode,
+                                       IteratorMode iteratorMode,
+                                       TypedProperties props,
+                                       List<String> orderingFieldNames,
+                                       UpdateProcessor<T> updateProcessor) {
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, iteratorMode, props, orderingFieldNames, updateProcessor);
   }
 
   @Override

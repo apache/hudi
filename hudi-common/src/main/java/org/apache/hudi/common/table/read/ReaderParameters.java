@@ -36,13 +36,16 @@ public class ReaderParameters {
   // considers the log records which are inflight.
   private final boolean allowInflightInstants;
   private final boolean enableOptimizedLogBlockScan;
+  private final IteratorMode iteratorMode;
 
-  private ReaderParameters(boolean useRecordPosition, boolean emitDelete, boolean sortOutput, boolean allowInflightInstants, boolean enableOptimizedLogBlockScan) {
+  private ReaderParameters(boolean useRecordPosition, boolean emitDelete, boolean sortOutput,
+                           boolean allowInflightInstants, boolean enableOptimizedLogBlockScan, IteratorMode iteratorMode) {
     this.useRecordPosition = useRecordPosition;
     this.emitDelete = emitDelete;
     this.sortOutput = sortOutput;
     this.allowInflightInstants = allowInflightInstants;
     this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
+    this.iteratorMode = iteratorMode;
   }
 
   public boolean useRecordPosition() {
@@ -65,6 +68,10 @@ public class ReaderParameters {
     return enableOptimizedLogBlockScan;
   }
 
+  public IteratorMode iteratorMode() {
+    return iteratorMode;
+  }
+
   static Builder builder() {
     return new Builder();
   }
@@ -75,6 +82,7 @@ public class ReaderParameters {
     private boolean sortOutput = false;
     private boolean allowInflightInstants = false;
     private boolean enableOptimizedLogBlockScan = false;
+    private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
 
     public Builder shouldUseRecordPosition(boolean shouldUseRecordPosition) {
       this.shouldUseRecordPosition = shouldUseRecordPosition;
@@ -101,8 +109,13 @@ public class ReaderParameters {
       return this;
     }
 
+    public Builder iteratorMode(IteratorMode iteratorMode) {
+      this.iteratorMode = iteratorMode;
+      return this;
+    }
+
     public ReaderParameters build() {
-      return new ReaderParameters(shouldUseRecordPosition, emitDelete, sortOutput, allowInflightInstants, enableOptimizedLogBlockScan);
+      return new ReaderParameters(shouldUseRecordPosition, emitDelete, sortOutput, allowInflightInstants, enableOptimizedLogBlockScan, iteratorMode);
     }
   }
 }

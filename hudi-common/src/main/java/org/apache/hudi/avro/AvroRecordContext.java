@@ -112,9 +112,9 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     }
     if (requiresPayloadRecords) {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, (GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue());
-      return new HoodieAvroRecord<>(hoodieKey, payload);
+      return new HoodieAvroRecord<>(hoodieKey, payload, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
     }
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
+    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getHoodieOperation());
   }
 
   @Override

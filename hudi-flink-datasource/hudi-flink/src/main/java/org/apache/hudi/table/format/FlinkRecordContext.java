@@ -121,8 +121,8 @@ public class FlinkRecordContext extends RecordContext<RowData> {
       return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
     }
     RowData rowData = bufferedRecord.getRecord();
-    HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
-    return new HoodieFlinkRecord(hoodieKey, operation, bufferedRecord.getOrderingValue(), rowData);
+    // HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue()); ???
+    return new HoodieFlinkRecord(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), rowData, bufferedRecord.isDelete());
   }
 
   @Override

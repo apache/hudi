@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.RecordSerializer;
 import org.apache.hudi.common.util.SerializationUtils;
@@ -66,6 +67,8 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
           output.writeVarInt(record.getSchemaId(), true);
         }
         output.writeBoolean(record.isDelete());
+        HoodieOperation operation = record.getHoodieOperation();
+        output.writeByte(operation == null ? -1 : operation.getValue());
         kryo.writeClassAndObject(output, record.getOrderingValue());
 
         byte[] recordBytes = record.getRecord() == null ? new byte[0] : recordSerializer.serialize(record.getRecord());
@@ -84,6 +87,8 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
           schemaId = input.readVarInt(true);
         }
         boolean isDelete = input.readBoolean();
+        byte hoodieOperationValue = input.readByte();
+        HoodieOperation operation = hoodieOperationValue == -1 ? null : HoodieOperation.fromValue(hoodieOperationValue);
         Comparable orderingValue = (Comparable) kryo.readClassAndObject(input);
 
         T record;
@@ -94,7 +99,7 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
         } else {
           record = recordSerializer.deserialize(input.readBytes(recordLength), schemaId);
         }
-        return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
+        return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, operation, isDelete);
       }
     }
   }
