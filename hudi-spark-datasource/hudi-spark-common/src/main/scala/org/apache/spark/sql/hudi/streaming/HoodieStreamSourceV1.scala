@@ -162,7 +162,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
               sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
           }
-          FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
+          sparkAdapter.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         } else {
           val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
             .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
@@ -184,7 +184,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
             new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
               .build()
           }
-          FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, schema)
+          sparkAdapter.createStreamingDataFrame(sqlContext, relation, schema)
         } else {
           val rdd = tableType match {
             case HoodieTableType.COPY_ON_WRITE =>

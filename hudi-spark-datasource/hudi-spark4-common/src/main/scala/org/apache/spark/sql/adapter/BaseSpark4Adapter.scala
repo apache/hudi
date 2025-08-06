@@ -32,6 +32,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -45,6 +46,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
@@ -182,5 +184,13 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame = {
     spark.asInstanceOf[org.apache.spark.sql.classic.SparkSession].internalCreateDataFrame(rdd, schema, isStreaming)
+  }
+
+  def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame = {
+    val logicalRelation = LogicalRelation(relation, isStreaming = true)
+    val resolvedSchema = logicalRelation.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
+    org.apache.spark.sql.classic.Dataset.ofRows(sqlContext.sparkSession.asInstanceOf[org.apache.spark.sql.classic.SparkSession],
+      applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
+        relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
   }
 }

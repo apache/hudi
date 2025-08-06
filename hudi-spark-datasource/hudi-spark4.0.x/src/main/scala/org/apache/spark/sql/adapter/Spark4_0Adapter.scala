@@ -35,7 +35,8 @@ import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.orc.Spark40OrcReader
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
@@ -149,8 +150,25 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
   override def createParquetFileReader(vectorized: Boolean,
                                        sqlConf: SQLConf,
                                        options: Map[String, String],
-                                       hadoopConf: Configuration): SparkParquetReader = {
+                                       hadoopConf: Configuration): SparkColumnarFileReader = {
     Spark40ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  /**
+   * TODO
+   *
+   * @param vectorized
+   * @param sqlConf
+   * @param options
+   * @param hadoopConf
+   * @return
+   */
+  override def createOrcFileReader(vectorized: Boolean,
+                                   sqlConf: SQLConf,
+                                   options: Map[String, String],
+                                   hadoopConf: Configuration,
+                                   dataSchema: StructType): SparkColumnarFileReader = {
+    Spark40OrcReader.build(vectorized, sqlConf, options, hadoopConf, dataSchema)
   }
 
   override def getSchema(conn: Connection,

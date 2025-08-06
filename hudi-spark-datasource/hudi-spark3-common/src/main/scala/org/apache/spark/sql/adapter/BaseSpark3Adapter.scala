@@ -31,7 +31,8 @@ import org.apache.avro.Schema
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, Dataset, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -44,6 +45,7 @@ import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
@@ -178,5 +180,12 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
 
   override def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame = {
     spark.internalCreateDataFrame(rdd, schema, isStreaming)
+  }
+
+  def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame = {
+    val logicalRelation = LogicalRelation(relation, isStreaming = true)
+    val resolvedSchema = logicalRelation.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
+    Dataset.ofRows(sqlContext.sparkSession, applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
+        relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
   }
 }

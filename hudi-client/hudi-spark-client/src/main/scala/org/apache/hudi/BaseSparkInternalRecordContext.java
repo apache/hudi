@@ -107,6 +107,9 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       // To foster value comparison, if the value is of String type, e.g., from
       // the delete record, we convert it to UTF8String type.
       return UTF8String.fromString((String) value);
+      // [SPARK-46832] UTF8String doesn't support compareTo anymore
+    } else if (value instanceof UTF8String) {
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory().wrapUTF8String((UTF8String) value);
     }
     return value;
   }
@@ -116,6 +119,13 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     if (record != null) {
       return record;
     }
-    return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
+    UTF8String[] metaFields = new UTF8String[]{
+        null,
+        null,
+        UTF8String.fromString(recordKey),
+        UTF8String.fromString(partitionPath),
+        null
+    };
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, null, false);
   }
 }

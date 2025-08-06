@@ -295,4 +295,6 @@ trait SparkAdapter extends Serializable {
   def getDataFrameUtil: DataFrameUtil
 
   def internalCreateDataFrame(spark: SparkSession, rdd: RDD[InternalRow], schema: StructType, isStreaming: Boolean = false): DataFrame
+
+  def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame
 }
