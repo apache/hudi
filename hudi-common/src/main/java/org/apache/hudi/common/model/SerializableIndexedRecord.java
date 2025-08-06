@@ -109,16 +109,28 @@ class SerializableIndexedRecord implements IndexedRecord, GenericRecord, KryoSer
     if (this == o) {
       return true;
     }
-    if (o == null || getClass() != o.getClass()) {
+    if (o == null) {
       return false;
     }
-    SerializableIndexedRecord that = (SerializableIndexedRecord) o;
-    ValidationUtils.checkArgument(record != null && that.record != null, "Records must be deserialized before equality check");
-    return record.equals(that.record);
+    if (o instanceof SerializableIndexedRecord) {
+      SerializableIndexedRecord that = (SerializableIndexedRecord) o;
+      ValidationUtils.checkArgument(record != null && that.record != null, "Records must be deserialized before equality check");
+      return record.equals(that.record);
+    } else if (o instanceof IndexedRecord) {
+      // If the other object is an IndexedRecord, we can compare it directly
+      IndexedRecord that = (IndexedRecord) o;
+      return record.equals(that);
+    }
+    return false;
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(record);
+  }
+
+  @Override
+  public String toString() {
+    return record == null ? "SERIALIZED: " + new String(recordBytes) : record.toString();
   }
 }
