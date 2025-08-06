@@ -1,0 +1,86 @@
+<?xml version="1.0"?>
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+<modernizer>
+    <violation>
+        <name>java/util/concurrent/ThreadPoolExecutor."&lt;init&gt;":(IIJLjava/util/concurrent/TimeUnit;Ljava/util/concurrent/BlockingQueue;)V</name>
+        <version>1.1</version>
+        <comment>Use constructor that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/ThreadPoolExecutor."&lt;init&gt;":(IIJLjava/util/concurrent/TimeUnit;Ljava/util/concurrent/BlockingQueue;Ljava/util/concurrent/RejectedExecutionHandler;)V</name>
+        <version>1.1</version>
+        <comment>Use constructor that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/ScheduledThreadPoolExecutor."&lt;init&gt;":(I)V</name>
+        <version>1.1</version>
+        <comment>Use constructor that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/ScheduledThreadPoolExecutor."&lt;init&gt;":(ILjava/util/concurrent/RejectedExecutionHandler;)V</name>
+        <version>1.1</version>
+        <comment>Use constructor that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/Executors.newFixedThreadPool:(I)Ljava/util/concurrent/ExecutorService;</name>
+        <version>1.1</version>
+        <comment>Use factory method that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/Executors.newWorkStealingPool:()Ljava/util/concurrent/ExecutorService;</name>
+        <version>1.1</version>
+        <comment>Use factory method that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/Executors.newWorkStealingPool:(I)Ljava/util/concurrent/ExecutorService;</name>
+        <version>1.1</version>
+        <comment>Use factory method that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/Executors.newSingleThreadExecutor:()Ljava/util/concurrent/ExecutorService;</name>
+        <version>1.1</version>
+        <comment>Use factory method that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/Executors.newCachedThreadPool:()Ljava/util/concurrent/ExecutorService;</name>
+        <version>1.1</version>
+        <comment>Use factory method that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/Executors.newSingleThreadScheduledExecutor:()Ljava/util/concurrent/ScheduledExecutorService;</name>
+        <version>1.1</version>
+        <comment>Use factory method that takes ThreadFactory and name the threads</comment>
+    </violation>
+
+    <violation>
+        <name>java/util/concurrent/Executors.newScheduledThreadPool:(I)Ljava/util/concurrent/ScheduledExecutorService;</name>
+        <version>1.1</version>
+        <comment>Use factory method that takes ThreadFactory and name the threads</comment>
+    </violation>
+</modernizer>
