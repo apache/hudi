@@ -164,6 +164,55 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
+  @MethodSource("writeTableVersionTestCases")
+  public void testAutoUpgradeWithWriteTableVersionConfiguration(
+      Integer writeTableVersion, HoodieTableVersion expectedVersion, String description) throws Exception {
+    LOG.info("Testing auto-upgrade configuration: {}", description);
+    
+    // Load table version SIX fixture as starting point for all test cases
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(HoodieTableVersion.SIX);
+    assertEquals(HoodieTableVersion.SIX, originalMetaClient.getTableConfig().getTableVersion(),
+        "Fixture table should start at version SIX");
+    
+    // Create write config with specified write table version
+    HoodieWriteConfig.Builder configBuilder = HoodieWriteConfig.newBuilder()
+        .withPath(originalMetaClient.getBasePath().toString())
+        .withAutoUpgradeVersion(true);
+    
+    // Set write table version if specified (null means use default)
+    if (writeTableVersion != null) {
+      configBuilder.withWriteTableVersion(writeTableVersion);
+    }
+    
+    HoodieWriteConfig config = configBuilder.build();
+    HoodieTableVersion targetVersion = config.getWriteVersion();
+    
+    Dataset<Row> originalData = readTableData(originalMetaClient, "before " + description);
+    
+    // Run upgrade process
+    new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
+        .run(targetVersion, null);
+    
+    // Verify final table version and comprehensive validation
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(originalMetaClient.getBasePath())
+        .build();
+    
+    // table version should match expected
+    assertEquals(expectedVersion, resultMetaClient.getTableConfig().getTableVersion(),
+        description + " - Final table version should match expected version");
+
+    // do validation similar to testUpgradeDowngrade (without rollback and compaction check)
+    assertTableVersionOnDataAndMetadataTable(resultMetaClient, expectedVersion);
+    validateVersionSpecificProperties(resultMetaClient, HoodieTableVersion.SIX, expectedVersion);
+    validateDataConsistency(originalData, resultMetaClient, "after " + description);
+
+    LOG.info("Auto-upgrade test completed successfully: {} -> Expected: {}, Actual: {}", 
+        description, expectedVersion, resultMetaClient.getTableConfig().getTableVersion());
+  }
+
+  @ParameterizedTest
   @MethodSource("metadataTableCorruptionTestVersionPairs")
   public void testMetadataTableUpgradeDowngradeFailure(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
     boolean isUpgrade = fromVersion.lesserThan(toVersion);
@@ -301,6 +350,27 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX),   // V8 -> V6
         Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5
         Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4
+    );
+  }
+
+  /**
+   * Test cases for auto-upgrade with different hoodie.write.table.version configurations.
+   * Each case starts with table version SIX and tests different write table version settings.
+   * Test params are: Integer writeTableVersion, HoodieTableVersion expectedVersion, String description
+   */
+  private static Stream<Arguments> writeTableVersionTestCases() {
+    return Stream.of(
+        // Case 1: No explicit hoodie.write.table.version (uses default)
+        Arguments.of(null, HoodieTableVersion.current(), "Default version upgrade to current version NINE"),
+        
+        // Case 2: hoodie.write.table.version = 6 (same as current table version)
+        Arguments.of(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.SIX, "No upgrade when versions match"),
+        
+        // Case 3: hoodie.write.table.version = 8
+        Arguments.of(HoodieTableVersion.EIGHT.versionCode(), HoodieTableVersion.EIGHT, "Upgrade to table version EIGHT"),
+        
+        // Case 4: hoodie.write.table.version = 9
+        Arguments.of(HoodieTableVersion.NINE.versionCode(), HoodieTableVersion.NINE, "Upgrade to table version NINE")
     );
   }
 
