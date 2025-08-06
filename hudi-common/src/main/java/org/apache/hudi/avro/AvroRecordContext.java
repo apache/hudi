@@ -59,6 +59,13 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     this.requiresPayloadRecords = requiresPayloadRecords;
   }
 
+  public AvroRecordContext() {
+    super();
+    this.payloadClass = null;
+    this.requiresPayloadRecords = false;
+    this.typeConverter = new AvroJavaTypeConverter();
+  }
+
   public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       String fieldName) {
