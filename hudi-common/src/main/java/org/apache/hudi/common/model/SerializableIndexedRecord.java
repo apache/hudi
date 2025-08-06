@@ -20,6 +20,7 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -31,6 +32,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * Wrapper class for {@link IndexedRecord} that will serialize the record as bytes without the schema for efficient shuffling performance in Spark.
@@ -100,5 +102,23 @@ class SerializableIndexedRecord implements IndexedRecord, GenericRecord, KryoSer
   public Object get(String key) {
     Schema.Field field = record.getSchema().getField(key);
     return record.get(field.pos());
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    SerializableIndexedRecord that = (SerializableIndexedRecord) o;
+    ValidationUtils.checkArgument(record != null && that.record != null, "Records must be deserialized before equality check");
+    return record.equals(that.record);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(record);
   }
 }
