@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -25,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -32,7 +35,8 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,33 +46,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * A utility class for HoodieRecord.
  */
 public class HoodieRecordUtils {
-  private static final Map<String, Object> INSTANCE_CACHE = new HashMap<>();
   private static final Map<String, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
-
-  static {
-    INSTANCE_CACHE.put(HoodieAvroRecordMerger.class.getName(), HoodieAvroRecordMerger.INSTANCE);
-  }
 
   /**
    * Instantiate a given class with a record merge.
    */
   public static HoodieRecordMerger loadRecordMerger(String mergerClass) {
-    try {
-      HoodieRecordMerger recordMerger = (HoodieRecordMerger) INSTANCE_CACHE.get(mergerClass);
-      if (null == recordMerger) {
-        synchronized (HoodieRecordMerger.class) {
-          recordMerger = (HoodieRecordMerger) INSTANCE_CACHE.get(mergerClass);
-          if (null == recordMerger) {
-            recordMerger = (HoodieRecordMerger) ReflectionUtils.loadClass(mergerClass,
-                new Object[] {});
-            INSTANCE_CACHE.put(mergerClass, recordMerger);
-          }
-        }
-      }
-      return recordMerger;
-    } catch (HoodieException e) {
-      throw new HoodieException("Unable to instantiate hoodie merge class ", e);
-    }
+    return (HoodieRecordMerger) ReflectionUtils.loadClass(mergerClass, new Object[] {});
   }
 
   /**
@@ -135,5 +119,13 @@ public class HoodieRecordUtils {
       return record.getCurrentLocation().getInstantTime();
     }
     return null;
+  }
+
+  public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,
+                                                   TypedProperties props,
+                                                   HoodieTableMetaClient metaClient) {
+    return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
+        ? Collections.emptyList()
+        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElseGet(() -> metaClient.getTableConfig().getPreCombineFields());
   }
 }

@@ -110,7 +110,7 @@ public class MetadataIndexGenerator implements Serializable {
           }
         } else {
           // Delete existing index for a deleted record
-          hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey());
+          hoodieRecord = HoodieMetadataPayload.createRecordIndexDelete(recordDelegate.getRecordKey(), recordDelegate.getPartitionPath(), dataWriteConfig.isPartitionedRecordIndexEnabled());
           allRecords.add(hoodieRecord);
         }
       }

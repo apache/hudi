@@ -39,7 +39,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.datasources.FileFormat;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader;
 import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Test;
@@ -89,7 +89,7 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
         scala.collection.immutable.Map$.MODULE$.<String, String>empty()
             .$plus(new Tuple2<>(FileFormat.OPTION_RETURNING_BATCH(), Boolean.toString(true)));
     ArgumentCaptor<Configuration> configurationArgumentCaptor = ArgumentCaptor.forClass(Configuration.class);
-    SparkParquetReader sparkParquetReader = mock(SparkParquetReader.class);
+    SparkColumnarFileReader sparkParquetReader = mock(SparkColumnarFileReader.class);
     when(sparkAdapter.createParquetFileReader(eq(false), eq(context.getSqlContext().sparkSession().sessionState().conf()), eq(options), configurationArgumentCaptor.capture()))
         .thenReturn(sparkParquetReader);
 

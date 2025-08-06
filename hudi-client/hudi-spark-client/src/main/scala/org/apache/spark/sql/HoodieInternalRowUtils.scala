@@ -188,25 +188,14 @@ object HoodieInternalRowUtils {
       fieldNamesStack.push(newField.name)
 
       val (fieldWriter, prevFieldPos): (RowFieldUpdater, Int) =
-        prevStructType.getFieldIndex(newField.name) match {
+        prevStructType.getFieldIndex(lookupRenamedField(newField.name, createFullName(fieldNamesStack), renamedColumnsMap)) match {
           case Some(prevFieldPos) =>
             val prevField = prevStructType(prevFieldPos)
             (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNamesStack), prevFieldPos)
 
           case None =>
-            val newFieldQualifiedName = createFullName(fieldNamesStack)
-            val prevFieldName: String = lookupRenamedField(newFieldQualifiedName, renamedColumnsMap)
-
-            // Handle rename
-            prevStructType.getFieldIndex(prevFieldName) match {
-              case Some(prevFieldPos) =>
-                val prevField = prevStructType.fields(prevFieldPos)
-                (newWriterRenaming(prevField.dataType, newField.dataType, renamedColumnsMap, fieldNamesStack), prevFieldPos)
-
-              case None =>
-                val updater: RowFieldUpdater = (fieldUpdater, ordinal, _) => fieldUpdater.setNullAt(ordinal)
-                (updater, -1)
-            }
+            val updater: RowFieldUpdater = (fieldUpdater, ordinal, _) => fieldUpdater.setNullAt(ordinal)
+            (updater, -1)
         }
 
       fieldWriters += fieldWriter
@@ -379,7 +368,8 @@ object HoodieInternalRowUtils {
 
       case (_: DoubleType, _) =>
         prevDataType match {
-          case _: FloatType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Float].toDouble)
+          // float -> double direct cast just pads with 0. By converting to string first, we get the closest double representation
+          case _: FloatType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Float].toString.toDouble)
           case _: LongType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Long].toDouble)
           case _: IntegerType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Int].toDouble)
           case _: ShortType => (fieldUpdater, ordinal, value) => fieldUpdater.setDouble(ordinal, value.asInstanceOf[Short].toDouble)
@@ -415,9 +405,14 @@ object HoodieInternalRowUtils {
     }
   }
 
-  private def lookupRenamedField(newFieldQualifiedName: String, renamedColumnsMap: JMap[String, String]) = {
-    val prevFieldQualifiedName = renamedColumnsMap.getOrDefault(newFieldQualifiedName, "")
-    val prevFieldQualifiedNameParts = prevFieldQualifiedName.split("\\.")
+  private def lookupRenamedField(newFieldName: String,
+                                 newFieldQualifiedName: String,
+                                 renamedColumnsMap: JMap[String, String]): String = {
+    val renamed = renamedColumnsMap.get(newFieldQualifiedName)
+    if (renamed == null) {
+      return newFieldName
+    }
+    val prevFieldQualifiedNameParts = renamed.split("\\.")
     val prevFieldName = prevFieldQualifiedNameParts(prevFieldQualifiedNameParts.length - 1)
 
     prevFieldName

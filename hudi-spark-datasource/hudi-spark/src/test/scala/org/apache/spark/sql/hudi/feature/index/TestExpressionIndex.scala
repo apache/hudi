@@ -66,7 +66,12 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
 
   override protected def beforeAll(): Unit = {
     spark.sql("set hoodie.metadata.index.column.stats.enable=false")
+    spark.sparkContext.persistentRdds.foreach(rdd => rdd._2.unpersist())
     initQueryIndexConf()
+  }
+
+  override protected def afterAll(): Unit = {
+    super.afterAll()
   }
 
   test("Test Expression Index With Hive Sync Non Partitioned External Table") {

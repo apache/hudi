@@ -70,7 +70,7 @@ class TestFlinkRowDataReaderContext {
     RowData base = createBaseRow(1, "Alice", true);
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, false);
     Map<Integer, Object> updates = new HashMap<>();
-    RowData result = readerContext.mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
 
     assertEquals(1, result.getInt(0));
     assertEquals("Alice", result.getString(1).toString());
@@ -84,7 +84,7 @@ class TestFlinkRowDataReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, StringData.fromString("Bob"));
 
-    RowData result = readerContext.mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
 
     assertEquals(1, result.getInt(0)); // unchanged
     assertEquals("Bob", result.getString(1).toString()); // updated
@@ -99,7 +99,7 @@ class TestFlinkRowDataReaderContext {
     updates.put(0, 42);
     updates.put(1, StringData.fromString("Zoe"));
     updates.put(2, false);
-    RowData result = readerContext.mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
 
     assertEquals(42, result.getInt(0));
     assertEquals("Zoe", result.getString(1).toString());
@@ -112,7 +112,7 @@ class TestFlinkRowDataReaderContext {
     BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, false);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, null);
-    RowData result = readerContext.mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
+    RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
 
     assertEquals(5, result.getInt(0));
     assertTrue(result.isNullAt(1));

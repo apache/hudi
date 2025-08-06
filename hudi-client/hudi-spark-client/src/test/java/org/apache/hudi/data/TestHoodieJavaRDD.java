@@ -24,7 +24,9 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.storage.StorageLevel;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -100,5 +102,70 @@ public class TestHoodieJavaRDD extends HoodieClientTestBase {
         .collectAsList();
     assertTrue(TrackingCloseableIterator.isClosed(partition1));
     assertTrue(TrackingCloseableIterator.isClosed(partition2));
+  }
+
+  /**
+   * Test unpersistWithDependencies on a DAG with multiple branches.
+   *
+   * DAG visualization:
+   * <pre>
+   *        [baseRDD] (PERSISTED)
+   *         /      \
+   *        /        \
+   *   [branch1]   [branch2]
+   *  (PERSISTED)  (PERSISTED)
+   *        \        /
+   *         \      /
+   *        [joined]
+   *           ↑
+   *   unpersistWithDependencies() called here
+   * </pre>
+   *
+   * Given: A DAG where baseRDD has two branches (branch1 and branch2), all persisted
+   * When: unpersistWithDependencies() is called on the joined RDD
+   * Then: All persisted RDDs in the entire DAG should be unpersisted
+   */
+  @Test
+  public void testUnpersistWithDependenciesMultipleBranches() {
+    // Given: Verify no RDDs are persisted initially
+    assertTrue(jsc.sc().getPersistentRDDs().isEmpty());
+
+    // Create a more complex DAG with multiple branches
+    JavaRDD<Integer> baseRDD = jsc.parallelize(Arrays.asList(1, 2, 3, 4, 5), 2);
+    baseRDD.persist(StorageLevel.MEMORY_ONLY());
+
+    // Branch 1
+    JavaRDD<Integer> branch1 = baseRDD.map(x -> x * 2);
+    branch1.persist(StorageLevel.MEMORY_ONLY());
+
+    // Branch 2  
+    JavaRDD<Integer> branch2 = baseRDD.map(x -> x * 3);
+    branch2.persist(StorageLevel.MEMORY_ONLY());
+
+    // Join branches
+    JavaRDD<Integer> joined = branch1.union(branch2);
+    HoodieData<Integer> hoodieData = HoodieJavaRDD.of(joined);
+
+    // Verify RDDs are persisted
+    assertEquals(StorageLevel.MEMORY_ONLY(), baseRDD.getStorageLevel());
+    assertEquals(StorageLevel.MEMORY_ONLY(), branch1.getStorageLevel());
+    assertEquals(StorageLevel.MEMORY_ONLY(), branch2.getStorageLevel());
+
+    // Verify we have 3 persistent RDDs in the context
+    assertEquals(3, jsc.sc().getPersistentRDDs().size());
+    assertTrue(jsc.sc().getPersistentRDDs().contains(baseRDD.rdd().id()));
+    assertTrue(jsc.sc().getPersistentRDDs().contains(branch1.rdd().id()));
+    assertTrue(jsc.sc().getPersistentRDDs().contains(branch2.rdd().id()));
+
+    // When: Unpersist with dependencies
+    hoodieData.unpersistWithDependencies();
+
+    // Then: Verify all RDDs in the lineage are unpersisted
+    assertEquals(StorageLevel.NONE(), baseRDD.getStorageLevel());
+    assertEquals(StorageLevel.NONE(), branch1.getStorageLevel());
+    assertEquals(StorageLevel.NONE(), branch2.getStorageLevel());
+
+    // Verify no RDDs remain in the persistent RDDs list
+    assertTrue(jsc.sc().getPersistentRDDs().isEmpty());
   }
 }

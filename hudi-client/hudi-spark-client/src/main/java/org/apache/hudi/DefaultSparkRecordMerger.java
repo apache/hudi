@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
@@ -36,6 +37,8 @@ import java.io.IOException;
  */
 public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
+  private String[] orderingFields;
+
   @Override
   public String getMergingStrategy() {
     return HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
@@ -48,7 +51,10 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
       return deleteHandlingResult;
     }
 
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+    }
+    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
       return Option.of(Pair.of(older, oldSchema));
     } else {
       return Option.of(Pair.of(newer, newSchema));
@@ -62,7 +68,10 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
       return deleteHandlingResult;
     }
 
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+    }
+    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
       return Option.of(SparkRecordMergingUtils.mergePartialRecords(
           (HoodieSparkRecord) newer, newSchema, (HoodieSparkRecord) older, oldSchema, readerSchema, props));
     } else {

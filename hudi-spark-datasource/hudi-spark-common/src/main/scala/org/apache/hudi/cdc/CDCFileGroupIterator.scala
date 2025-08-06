@@ -51,7 +51,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Projection
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -67,7 +67,7 @@ import scala.collection.mutable
 class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
                            metaClient: HoodieTableMetaClient,
                            conf: StorageConfiguration[Configuration],
-                           parquetReader: SparkParquetReader,
+                           baseFileReader: SparkColumnarFileReader,
                            originTableSchema: HoodieTableSchema,
                            cdcSchema: StructType,
                            requiredCdcSchema: StructType,
@@ -101,7 +101,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private lazy val recordMerger: HoodieRecordMerger = {
-    val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(parquetReader, Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
+    val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(baseFileReader, Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
     readerContext.initRecordMerger(props)
     readerContext.getRecordMerger.get()
   }
@@ -369,7 +369,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
           val pf = sparkPartitionedFileUtils.createPartitionedFile(
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
-          recordIter = parquetReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
+          recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
             toJavaOption(originTableSchema.internalSchema), Seq.empty, conf)
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
@@ -464,16 +464,16 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private def loadFileSliceWithKeys(fileSlice: FileSlice): Iterator[(String, InternalRow)] = {
-    val readerContext = new SparkFileFormatInternalRowReaderContext(parquetReader, Seq.empty, Seq.empty,
+    val readerContext = new SparkFileFormatInternalRowReaderContext(baseFileReader, Seq.empty, Seq.empty,
       conf, metaClient.getTableConfig)
     loadFileSlice(fileSlice, readerContext).map(internalRow => {
-      val recordKey = readerContext.getRecordKey(internalRow, avroSchema)
+      val recordKey = readerContext.getRecordContext().getRecordKey(internalRow, avroSchema)
       (recordKey, internalRow)
     })
   }
 
   private def loadFileSlice(fileSlice: FileSlice): Iterator[InternalRow] = {
-    val readerContext = new SparkFileFormatInternalRowReaderContext(parquetReader, Seq.empty, Seq.empty,
+    val readerContext = new SparkFileFormatInternalRowReaderContext(baseFileReader, Seq.empty, Seq.empty,
       conf, metaClient.getTableConfig)
     loadFileSlice(fileSlice, readerContext)
   }
@@ -494,7 +494,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private def loadLogFile(logFile: HoodieLogFile, instant: String): Iterator[BufferedRecord[InternalRow]] = {
     val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, logFile.getPath.getParent)
-    val readerContext = new SparkFileFormatInternalRowReaderContext(parquetReader, Seq.empty, Seq.empty,
+    val readerContext = new SparkFileFormatInternalRowReaderContext(baseFileReader, Seq.empty, Seq.empty,
       conf, metaClient.getTableConfig)
     readerContext.setLatestCommitTime(instant)
     readerContext.setHasBootstrapBaseFile(false)

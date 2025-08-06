@@ -26,7 +26,7 @@ import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -43,7 +43,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                                       capacity: Int,
                                       returningBatch: Boolean,
                                       enableRecordFilter: Boolean,
-                                      timeZoneId: Option[String]) extends SparkParquetReader {
+                                      timeZoneId: Option[String]) extends SparkColumnarFileReader {
   /**
    * Read an individual parquet file
    *
@@ -113,5 +113,5 @@ trait SparkParquetReaderBuilder {
   def build(vectorized: Boolean,
             sqlConf: SQLConf,
             options: Map[String, String],
-            hadoopConf: Configuration): SparkParquetReader
+            hadoopConf: Configuration): SparkColumnarFileReader
 }

@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -64,7 +64,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
@@ -78,8 +77,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final Option<String> payloadClass;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
-  protected final boolean shouldCheckCustomDeleteMarker;
-  protected final boolean shouldCheckBuiltInDeleteMarker;
+  protected final DeleteContext deleteContext;
   protected ClosableIterator<T> baseFileIterator;
   protected UpdateProcessor<T> updateProcessor;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
@@ -120,12 +118,9 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
-    this.shouldCheckCustomDeleteMarker =
-        readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().isPresent();
-    this.shouldCheckBuiltInDeleteMarker =
-        readerContext.getSchemaHandler().hasBuiltInDelete();
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
+    this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
   }
 
   protected ExternalSpillableMap<Serializable, BufferedRecord<T>> initializeRecordsMap(String spillableMapBasePath) throws IOException {
@@ -136,48 +131,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     return new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
         readerContext.getRecordSizeEstimator(), diskMapType, readerContext.getRecordSerializer(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
-  }
-
-  /**
-   * Here we assume that delete marker column type is of string.
-   * This should be sufficient for most cases.
-   */
-  protected final boolean isCustomDeleteRecord(T record) {
-    if (!shouldCheckCustomDeleteMarker) {
-      return false;
-    }
-
-    Pair<String, String> markerKeyValue =
-        readerContext.getSchemaHandler().getCustomDeleteMarkerKeyValue().get();
-    Object deleteMarkerValue =
-        readerContext.getValue(record, readerSchema, markerKeyValue.getLeft());
-    return deleteMarkerValue != null
-        && markerKeyValue.getRight().equals(deleteMarkerValue.toString());
-  }
-
-  /**
-   * Check if the value of column "_hoodie_is_deleted" is true.
-   */
-  protected final boolean isBuiltInDeleteRecord(T record) {
-    if (!shouldCheckBuiltInDeleteMarker) {
-      return false;
-    }
-
-    Object columnValue = readerContext.getValue(
-        record, readerSchema, HOODIE_IS_DELETED_FIELD);
-    return columnValue != null && readerContext.getTypeConverter().castToBoolean(columnValue);
-  }
-
-  /**
-   * Returns whether the record is a DELETE marked by the '_hoodie_operation' field.
-   */
-  protected final boolean isDeleteHoodieOperation(T record) {
-    int hoodieOperationPos = readerContext.getSchemaHandler().getHoodieOperationPos();
-    if (hoodieOperationPos < 0) {
-      return false;
-    }
-    String hoodieOperation = readerContext.getMetaFieldValue(record, hoodieOperationPos);
-    return hoodieOperation != null && HoodieOperation.isDeleteRecord(hoodieOperation);
   }
 
   @Override
@@ -278,7 +231,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
-      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext, orderingFieldNames, false);
+      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext.getRecordContext(), orderingFieldNames, false);
       MergeResult<T> mergeResult = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
       nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, mergeResult.getMergedRecord(), mergeResult.isDelete());
       return nextRecord != null;
@@ -332,7 +285,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     Comparable orderingValue = deleteRecord.getOrderingValue();
     return isCommitTimeOrderingValue(orderingValue)
         ? OrderingValues.getDefault()
-        : readerContext.convertOrderingValueToEngineType(orderingValue);
+        : readerContext.getRecordContext().convertOrderingValueToEngineType(orderingValue);
   }
 
   private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {

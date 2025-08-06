@@ -47,6 +47,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -71,12 +72,12 @@ class TestReusableKeyBasedRecordBuffer {
     when(mockReaderContext.getKeyFilterOpt()).thenReturn(Option.of(keyFilter));
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
-    when(mockReaderContext.getDeleteRow(any(), any())).thenAnswer(invocation -> {
+    when(mockReaderContext.getRecordContext().getDeleteRow(any(), any())).thenAnswer(invocation -> {
       String recordKey = invocation.getArgument(1);
       return new TestRecord(recordKey, 0);
     });
-    when(mockReaderContext.getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
-    when(mockReaderContext.getOrderingValue(any(), any(), any())).thenAnswer(invocation -> {
+    when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
+    when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenAnswer(invocation -> {
       TestRecord record = invocation.getArgument(0);
       if (record.getRecordKey().equals("1")) {
         return 20; // simulate newer record in base file

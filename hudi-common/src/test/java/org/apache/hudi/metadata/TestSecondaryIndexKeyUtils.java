@@ -27,6 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.stream.Stream;
 
+import static org.apache.hudi.metadata.SecondaryIndexKeyUtils.getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -201,8 +202,10 @@ public class TestSecondaryIndexKeyUtils {
   @ParameterizedTest(name = "Key construction round-trip: secondaryKey='{0}', recordKey='{1}'")
   @MethodSource("keyConstructionRoundTripTestCases")
   public void testKeyConstructionRoundTrip(String secondaryKey, String recordKey) {
-    // Construct the key
+    // Construct the key used by the writer path
     String constructedKey = SecondaryIndexKeyUtils.constructSecondaryIndexKey(secondaryKey, recordKey);
+    // The key used by the reader path and the key used by the writer path have the following invariant.
+    assertEquals(new SecondaryIndexPrefixRawKey(secondaryKey).encode(), getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey(constructedKey));
     
     // Extract both parts
     String extractedSecondary = SecondaryIndexKeyUtils.getSecondaryKeyFromSecondaryIndexKey(constructedKey);

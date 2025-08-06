@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -42,9 +43,12 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.FlinkClientUtil;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -208,11 +212,20 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
+    return HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
+  }
+
+  @Override
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table reads are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
       return new AvroReaderContextFactory(metaClient);
     }
+    return getDefaultContextFactory(metaClient);
+  }
+
+  public ReaderContextFactory<?> getDefaultContextFactory(HoodieTableMetaClient metaClient) {
     return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);
   }
 

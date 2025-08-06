@@ -35,6 +35,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -372,6 +373,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         HoodieInMemoryHashIndex.clear()
       }
     }
+  }
+
+  /**
+   * Wraps test execution with RDD persistence validation.
+   * This ensures that no new RDDs remain persisted after test execution.
+   *
+   * @param f The test code to execute
+   */
+  protected def withRDDPersistenceValidation(f: => Unit): Unit = {
+    org.apache.hudi.testutils.SparkRDDValidationUtils.withRDDPersistenceValidation(spark, new org.apache.hudi.testutils.SparkRDDValidationUtils.ThrowingRunnable {
+      override def run(): Unit = f
+    })
   }
 }
 

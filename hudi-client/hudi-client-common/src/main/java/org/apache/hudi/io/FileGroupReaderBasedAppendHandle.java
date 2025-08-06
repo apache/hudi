@@ -90,7 +90,7 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
         // instead of using config.enableOptimizedLogBlocksScan(), we set to true as log compaction blocks only supported in scanV2
         .withEnableOptimizedLogBlockScan(true).build()) {
       recordItr = new CloseableMappingIterator<>(fileGroupReader.getLogRecordsOnly(), record -> {
-        HoodieRecord<T> hoodieRecord = readerContext.constructHoodieRecord(record);
+        HoodieRecord<T> hoodieRecord = readerContext.getRecordContext().constructHoodieRecord(record);
         hoodieRecord.setCurrentLocation(newRecordLocation);
         return hoodieRecord;
       });

@@ -25,6 +25,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE;
+import static org.apache.hudi.common.config.HoodieStorageConfig.BLOOM_FILTER_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -32,12 +36,42 @@ public class TestHoodieStorageConfig {
   @Test
   void testHoodieStorageConfig() {
     String bloomFilterType = BloomFilterTypeCode.SIMPLE.name();
-    assertNotEquals(HoodieStorageConfig.BLOOM_FILTER_TYPE.defaultValue().toUpperCase(),
+    assertNotEquals(BLOOM_FILTER_TYPE.defaultValue().toUpperCase(),
         bloomFilterType.toUpperCase());
     Properties props = new Properties();
-    props.put(HoodieStorageConfig.BLOOM_FILTER_TYPE.key(), bloomFilterType);
+    props.put(BLOOM_FILTER_TYPE.key(), bloomFilterType);
     HoodieStorageConfig config = HoodieStorageConfig.newBuilder()
         .fromProperties(props).build();
     assertEquals(bloomFilterType, config.getBloomFilterType());
+  }
+
+  @Test
+  void testBloomFilterBuilderWithAllValues() {
+    String expectedFilterType = BloomFilterTypeCode.SIMPLE.name();
+    int expectedNumEntries = 80000;
+    double expectedFpp = 0.000000005;
+    int expectedDynamicMaxEntries = 150000;
+
+    HoodieStorageConfig storageConfig = HoodieStorageConfig.newBuilder()
+        .withBloomFilterType(expectedFilterType)
+        .withBloomFilterNumEntries(expectedNumEntries)
+        .withBloomFilterFpp(expectedFpp)
+        .withBloomFilterDynamicMaxEntries(expectedDynamicMaxEntries).build();
+
+    // Verify values are set correctly
+    assertEquals(expectedFilterType, storageConfig.getString(BLOOM_FILTER_TYPE));
+    assertEquals(expectedNumEntries, storageConfig.getInt(BLOOM_FILTER_NUM_ENTRIES_VALUE));
+    assertEquals(expectedFpp, storageConfig.getDouble(BLOOM_FILTER_FPP_VALUE));
+    assertEquals(expectedDynamicMaxEntries, storageConfig.getInt(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES));
+  }
+
+  @Test
+  void testBloomFilterBuilderWithDefaultValues() {
+    HoodieStorageConfig storageConfig = HoodieStorageConfig.newBuilder().build();
+    // Verify values are set correctly
+    assertEquals(BLOOM_FILTER_TYPE.defaultValue(), storageConfig.getString(BLOOM_FILTER_TYPE));
+    assertEquals(BLOOM_FILTER_NUM_ENTRIES_VALUE.defaultValue(), storageConfig.getString(BLOOM_FILTER_NUM_ENTRIES_VALUE));
+    assertEquals(BLOOM_FILTER_FPP_VALUE.defaultValue(), storageConfig.getString(BLOOM_FILTER_FPP_VALUE));
+    assertEquals(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue(), storageConfig.getString(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES));
   }
 }

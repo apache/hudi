@@ -50,6 +50,8 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.RawTripTestPayloadKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -159,6 +161,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().fromProperties(indexBuilder.build().getProps())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
         .build();
+    KeyGeneratorType keyGeneratorType = HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(config.getProps());
+    config.setValue(HoodieWriteConfig.KEYGENERATOR_TYPE, keyGeneratorType.name());
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
   }

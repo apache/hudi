@@ -26,13 +26,13 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
 /**
- * Class used to test [[SparkParquetReader]]
+ * Class used to test [[SparkColumnarFileReader]]
  * This class should have the same functionality as [[ParquetFileFormat]]
  */
 class TestSparkParquetReaderFormat extends ParquetFileFormat with SparkAdapterSupport {

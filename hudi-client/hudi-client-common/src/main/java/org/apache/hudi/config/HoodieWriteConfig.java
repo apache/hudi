@@ -2110,6 +2110,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.isRecordIndexEnabled();
   }
 
+  public boolean isPartitionedRecordIndexEnabled() {
+    return metadataConfig.isPartitionedRecordIndexEnabled();
+  }
+
   public int getPartitionStatsIndexParallelism() {
     return metadataConfig.getPartitionStatsIndexParallelism();
   }
@@ -2201,7 +2205,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getRecordIndexInputStorageLevel() {
     return getStringOrDefault(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE);
   }
-  
+
   public boolean isUsingRemotePartitioner() {
     return getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER);
   }
@@ -2637,6 +2641,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getRecordIndexMaxFileGroupCount() {
     return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public int getPartitionedRecordIndexMinFileGroupCount() {
+    return metadataConfig.getPartitionedRecordIndexMinFileGroupCount();
+  }
+
+  public int getPartitionedRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getPartitionedRecordIndexMaxFileGroupCount();
   }
 
   public float getRecordIndexGrowthFactor() {

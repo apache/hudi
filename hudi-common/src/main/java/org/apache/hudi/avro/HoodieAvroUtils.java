@@ -33,13 +33,13 @@ import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -71,6 +71,8 @@ import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.avro.util.Utf8;
+
+import javax.annotation.Nullable;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -879,7 +881,7 @@ public class HoodieAvroUtils {
    * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
-  private static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
+  public static Object convertValueForAvroLogicalTypes(Schema fieldSchema, Object fieldValue, boolean consistentLogicalTimestampEnabled) {
     if (fieldSchema.getLogicalType() == LogicalTypes.date()) {
       return LocalDate.ofEpochDay(Long.parseLong(fieldValue.toString()));
     } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMillis() && consistentLogicalTimestampEnabled) {
@@ -1038,12 +1040,17 @@ public class HoodieAvroUtils {
    * @param oldRecord     oldRecord to be rewritten
    * @param oldAvroSchema old avro schema.
    * @param newSchema     newSchema used to rewrite oldRecord
-   * @param renameCols    a map store all rename cols, (k, v)-> (colNameFromNewSchema, colNameFromOldSchema)
+   * @param renameCols    a map store all rename cols, (k, v)-> (full.path.to.field.colNameFromNewSchema, colNameFromOldSchema)
    * @param fieldNames    track the full name of visited field when we travel new schema.
    * @return newRecord for new Schema
    */
 
-  private static Object rewriteRecordWithNewSchema(Object oldRecord, Schema oldAvroSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames, boolean validate) {
+  private static Object rewriteRecordWithNewSchema(Object oldRecord,
+                                                   Schema oldAvroSchema,
+                                                   Schema newSchema,
+                                                   Map<String, String> renameCols,
+                                                   Deque<String> fieldNames,
+                                                   boolean validate) {
     if (oldRecord == null) {
       return null;
     }
@@ -1062,45 +1069,42 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
-  private static Object rewriteRecordWithNewSchemaInternal(Object oldRecord, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames, boolean skipMetadataFields) {
+  private static Object rewriteRecordWithNewSchemaInternal(Object oldRecord,
+                                                           Schema oldSchema,
+                                                           Schema newSchema,
+                                                           Map<String, String> renameCols,
+                                                           Deque<String> fieldNames,
+                                                           boolean skipMetadataFields) {
     switch (newSchema.getType()) {
       case RECORD:
         if (!(oldRecord instanceof IndexedRecord)) {
-          throw new SchemaCompatibilityException("cannot rewrite record with different type");
+          throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as a record", oldRecord.getClass().getName()));
         }
         IndexedRecord indexedRecord = (IndexedRecord) oldRecord;
-        List<Schema.Field> fields = newSchema.getFields();
         GenericData.Record newRecord = new GenericData.Record(newSchema);
-        for (int i = 0; i < fields.size(); i++) {
-          Schema.Field field = fields.get(i);
-          String fieldName = field.name();
-          if (!skipMetadataFields || !isMetadataField(fieldName)) {
-            fieldNames.push(fieldName);
-            Schema.Field oldField = oldSchema.getField(field.name());
-            if (oldField != null && !renameCols.containsKey(field.name())) {
-              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), field.schema(), renameCols, fieldNames, false));
-            } else {
-              String fieldFullName = createFullName(fieldNames);
-              String fieldNameFromOldSchema = renameCols.get(fieldFullName);
-              // deal with rename
-              Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
-              if (oldFieldRenamed != null) {
-                // find rename
-                newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), field.schema(), renameCols, fieldNames, false));
-              } else {
-                // deal with default value
-                if (field.defaultVal() instanceof JsonProperties.Null) {
-                  newRecord.put(i, null);
-                } else {
-                  if (!isNullable(field.schema()) && field.defaultVal() == null) {
-                    throw new SchemaCompatibilityException("Field " + fieldFullName + " has no default value and is non-nullable");
-                  }
-                  newRecord.put(i, field.defaultVal());
-                }
-              }
-            }
-            fieldNames.pop();
+        // if no renaming, skip building the full name string.
+        boolean noFieldsRenaming = renameCols.isEmpty();
+        String namePrefix = createNamePredix(noFieldsRenaming, fieldNames);
+        for (int i = 0; i < newSchema.getFields().size(); i++) {
+          Schema.Field newField = newSchema.getFields().get(i);
+          String newFieldName = newField.name();
+          if (skipMetadataFields && isMetadataField(newFieldName)) {
+            continue;
           }
+          fieldNames.push(newFieldName);
+          Schema.Field oldField = noFieldsRenaming
+              ? oldSchema.getField(newFieldName)
+              : oldSchema.getField(getOldFieldNameWithRenaming(namePrefix, newFieldName, renameCols));
+          if (oldField != null) {
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), newField.schema(), renameCols, fieldNames, false));
+          } else if (newField.defaultVal() instanceof JsonProperties.Null) {
+            newRecord.put(i, null);
+          } else if (!isNullable(newField.schema()) && newField.defaultVal() == null) {
+            throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
+          } else {
+            newRecord.put(i, newField.defaultVal());
+          }
+          fieldNames.pop();
         }
         return newRecord;
       case ENUM:
@@ -1140,6 +1144,20 @@ public class HoodieAvroUtils {
       default:
         return rewritePrimaryType(oldRecord, oldSchema, newSchema);
     }
+  }
+
+  @VisibleForTesting
+  public static String createNamePredix(boolean noFieldsRenaming, Deque<String> fieldNames) {
+    return noFieldsRenaming ? null : fieldNames.isEmpty() ? null : createFullName(fieldNames);
+  }
+
+  private static String getOldFieldNameWithRenaming(String namePrefix, String newFieldName, Map<String, String> renameCols) {
+    String renamed = renameCols.get(compositeName(namePrefix, newFieldName));
+    return renamed == null ? newFieldName : renamed;
+  }
+
+  private static String compositeName(@Nullable String prefix, String name) {
+    return prefix == null ? name : prefix + "." + name;
   }
 
   public static String createFullName(Deque<String> fieldNames) {
@@ -1248,7 +1266,7 @@ public class HoodieAvroUtils {
           return String.valueOf(oldValue);
         }
         if (oldSchema.getType() == Schema.Type.BYTES) {
-          return String.valueOf(oldValue);
+          return StringUtils.fromUTF8Bytes(((ByteBuffer) oldValue).array());
         }
         if (oldSchema.getLogicalType() == LogicalTypes.date()) {
           return toJavaDate((Integer) oldValue).toString();
@@ -1391,13 +1409,10 @@ public class HoodieAvroUtils {
     }
     switch (readerSchema.getType()) {
       case RECORD:
-        Map<String, Schema.Field> writerFields = new HashMap<>();
-        for (Schema.Field field : writerSchema.getFields()) {
-          writerFields.put(field.name(), field);
-        }
         for (Schema.Field field : readerSchema.getFields()) {
-          if (writerFields.containsKey(field.name())) {
-            if (recordNeedsRewriteForExtendedAvroTypePromotion(writerFields.get(field.name()).schema(), field.schema())) {
+          Schema.Field writerField = writerSchema.getField(field.name());
+          if (writerField != null) {
+            if (recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
               return true;
             }
           }
