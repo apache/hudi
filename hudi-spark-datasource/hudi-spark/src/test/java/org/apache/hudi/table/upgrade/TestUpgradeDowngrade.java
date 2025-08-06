@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -50,11 +51,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -89,6 +92,11 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     Dataset<Row> originalData = readTableData(originalMetaClient, "before " + operation);
     
+    // Confirm that there are log files before rollback and compaction operations
+    if (isRollbackAndCompactTransition(fromVersion, toVersion)) {
+      validateLogFilesCount(originalMetaClient, operation, true);
+    }
+    
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(toVersion, null);
     
@@ -100,13 +108,15 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     assertTableVersionOnDataAndMetadataTable(resultMetaClient, toVersion);
     validateVersionSpecificProperties(resultMetaClient, fromVersion, toVersion);
     validateDataConsistency(originalData, resultMetaClient, "after " + operation);
-    
-    // Validate pending commits based on whether this transition performs rollback operations
+
+    // Validate pending commits based on whether this transition performs rollback and compaction operations
     int finalPendingCommits = resultMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
-    if (isRollbackTransition(fromVersion, toVersion)) {
+    if (isRollbackAndCompactTransition(fromVersion, toVersion)) {
       // Handlers that call rollbackFailedWritesAndCompact() clear all pending commits
       assertEquals(0, finalPendingCommits,
           "Pending commits should be cleared to 0 after " + operation);
+      // Validate no log files remain after rollback and compaction
+      validateLogFilesCount(resultMetaClient, operation, false);
     } else {
       // Other handlers may clean up some pending commits but don't necessarily clear all
       assertTrue(finalPendingCommits <= initialPendingCommits,
@@ -151,6 +161,46 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     performDataValidationOnTable(unchangedMetaClient, "after auto-upgrade disabled test");
     
     LOG.info("Auto-upgrade disabled test passed for version {}", originalVersion);
+  }
+
+  @ParameterizedTest
+  @MethodSource("metadataTableCorruptionTestVersionPairs")
+  public void testMetadataTableUpgradeDowngradeFailure(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
+    boolean isUpgrade = fromVersion.lesserThan(toVersion);
+    String operation = isUpgrade ? "upgrade" : "downgrade";
+    LOG.info("Testing metadata table failure during {} from version {} to {}", operation, fromVersion, toVersion);
+
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion);
+    assertEquals(fromVersion, originalMetaClient.getTableConfig().getTableVersion(),
+        "Fixture table should be at expected version");
+
+    HoodieWriteConfig cfg = createWriteConfig(originalMetaClient, true);
+
+    String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
+        originalMetaClient.getBasePath().toString());
+    StoragePath metadataHoodiePath = new StoragePath(metadataTablePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    StoragePath propsPath = new StoragePath(metadataHoodiePath, HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    StoragePath backupPropsPath = new StoragePath(metadataHoodiePath, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP);
+
+    String corruptedContent = "CORRUPTED_INVALID_CONTENT\n\nTHIS_IS_NOT_VALID_PROPERTIES_FORMAT";
+    try (OutputStream propsOut = originalMetaClient.getStorage().create(propsPath, true);
+         OutputStream backupOut = originalMetaClient.getStorage().create(backupPropsPath, true)) {
+      propsOut.write(corruptedContent.getBytes());
+      backupOut.write(corruptedContent.getBytes());
+    }
+
+    HoodieUpgradeDowngradeException exception = assertThrows(
+        HoodieUpgradeDowngradeException.class,
+        () -> new UpgradeDowngrade(originalMetaClient, cfg, context(), SparkUpgradeDowngradeHelper.getInstance())
+            .run(toVersion, null)
+    );
+    
+    // Verify the specific exception message for metadata table failures
+    String expectedMessage = "Upgrade/downgrade for the Hudi metadata table failed. "
+        + "Please try again. If the failure repeats for metadata table, it is recommended to disable "
+        + "the metadata table so that the upgrade and downgrade can continue for the data table.";
+    assertTrue(exception.getMessage().contains(expectedMessage),
+        "Exception message should contain metadata table failure message");
   }
 
   /**
@@ -251,6 +301,21 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX),   // V8 -> V6
         Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5
         Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4
+    );
+  }
+
+  /**
+   * Version pairs for testing metadata failure when trying to upgrade/downgrade. Note these version pairs
+   * are ones that do invoke rollbackFailedWritesAndCompact() which this method causes the metadata table to be disabled
+   */
+  private static Stream<Arguments> metadataTableCorruptionTestVersionPairs() {
+    return Stream.of(
+        // Non-rollback upgrade pairs
+        Arguments.of(HoodieTableVersion.FOUR, HoodieTableVersion.FIVE),   // V4 -> V5 (works)
+        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.SIX),    // V5 -> V6 (works)
+
+        // Non-rollback downgrade pairs  
+        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4 (works)
     );
   }
 
@@ -374,12 +439,64 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
     return metaClient.getStorage().exists(metadataTablePath);
   }
-  
+
+  /**
+   * Validate log files count based on expected scenario.
+   * This ensures proper behavior before and after rollback and compaction operations.
+   */
+  private void validateLogFilesCount(HoodieTableMetaClient metaClient, String operation, boolean expectLogFiles) {
+    String validationPhase = expectLogFiles ? "before" : "after";
+    LOG.info("Validating log files {} rollback and compaction during {}", validationPhase, operation);
+    
+    // Get the latest completed commit to ensure we're looking at a consistent state
+    org.apache.hudi.common.table.timeline.HoodieTimeline completedTimeline = 
+        metaClient.getCommitsTimeline().filterCompletedInstants();
+    String latestCommit = completedTimeline.lastInstant()
+        .map(instant -> instant.requestedTime())
+        .orElse(null);
+    
+    // Get file system view to check for log files using the latest commit state
+    try (org.apache.hudi.common.table.view.HoodieTableFileSystemView fsView = 
+        org.apache.hudi.common.table.view.HoodieTableFileSystemView.fileListingBasedFileSystemView(
+            context(), metaClient, completedTimeline)) {
+    
+      // Get all partition paths using FSUtils
+      List<String> partitionPaths = org.apache.hudi.common.fs.FSUtils.getAllPartitionPaths(
+          context(), metaClient, false);
+      
+      int totalLogFiles = 0;
+      
+      for (String partitionPath : partitionPaths) {
+        // Get latest file slices for this partition
+        Stream<org.apache.hudi.common.model.FileSlice> fileSlicesStream = latestCommit != null
+            ? fsView.getLatestFileSlicesBeforeOrOn(partitionPath, latestCommit, false)
+            : fsView.getLatestFileSlices(partitionPath);
+        
+        for (org.apache.hudi.common.model.FileSlice fileSlice : fileSlicesStream.collect(Collectors.toList())) {
+          int logFileCount = (int) fileSlice.getLogFiles().count();
+          totalLogFiles += logFileCount;
+        }
+      }
+      
+      if (expectLogFiles) {
+        assertTrue(totalLogFiles > 0, 
+            "Expected log files but found none during " + operation);
+      } else {
+        assertEquals(0, totalLogFiles, 
+            "No log files should remain after rollback and compaction during " + operation);
+      }
+      LOG.info("Log file validation passed: {} log files found (expected: {})", 
+          totalLogFiles, expectLogFiles ? ">0" : "0");
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to validate log files during " + operation, e);
+    }
+  }
+
   /**
    * Determine if a version transition performs rollback operations that clear all pending commits.
    * These handlers call rollbackFailedWritesAndCompact() which clears pending commits to 0.
    */
-  private boolean isRollbackTransition(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
+  private boolean isRollbackAndCompactTransition(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) {
     // Upgrade handlers that perform rollbacks
     if (fromVersion == HoodieTableVersion.SEVEN && toVersion == HoodieTableVersion.EIGHT) {
       return true; // SevenToEightUpgradeHandler

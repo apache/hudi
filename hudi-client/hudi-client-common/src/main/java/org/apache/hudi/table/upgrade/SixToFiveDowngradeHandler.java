@@ -20,10 +20,8 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -55,9 +53,6 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
     // Since version 6 includes a new schema field for metadata table(MDT), the MDT needs to be deleted during downgrade to avoid column drop error.
     HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
-    // The log block version has been upgraded in version six so compaction is required for downgrade.
-    UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
-        HoodieTableVersion.SIX);
     UpgradeDowngradeUtils.syncCompactionRequestedFileToAuxiliaryFolder(table);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(table.getMetaClient());
