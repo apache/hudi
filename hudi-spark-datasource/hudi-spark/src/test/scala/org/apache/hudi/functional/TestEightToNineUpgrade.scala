@@ -19,24 +19,28 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, RECORD_MERGE_IMPL_CLASSES, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
-import org.apache.hudi.common.config.{HoodieStorageConfig, RecordMergeMode}
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, RECORDKEY_FIELD, RECORD_MERGE_IMPL_CLASSES, TABLE_TYPE}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{AWSDmsAvroPayload, HoodieRecordMerger, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
-import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload
+import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, PartialUpdateMode}
 import org.apache.hudi.common.table.HoodieTableConfig.{DEBEZIUM_UNAVAILABLE_VALUE, MERGE_CUSTOM_PROPERTY_PREFIX, PARTIAL_UPDATE_CUSTOM_MARKER}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import scala.collection.Seq
+
 class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
+
   @ParameterizedTest
   @MethodSource(Array("payloadConfigs"))
   def testUpgradeDowngradeBetweenEightAndNine(tableType: HoodieTableType,
@@ -45,7 +49,7 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     val mergerClasses = "org.apache.hudi.DefaultSparkRecordMerger," +
       "org.apache.hudi.OverwriteWithLatestSparkRecordMerger," +
       "org.apache.hudi.common.model.HoodieAvroRecordMerger"
-    var hudiOpts= commonOpts ++ Map(
+    var hudiOpts = commonOpts ++ Map(
       TABLE_TYPE.key -> tableType.name(),
       PARTITIONPATH_FIELD.key -> partitionFields,
       PAYLOAD_CLASS_NAME.key -> payloadClass,
@@ -109,6 +113,91 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     checkResultForVersion8(payloadClass)
   }
 
+  @Test
+  def testUpgradeDowngradeMySqlDebeziumPayload(): Unit = {
+    val payloadClass = classOf[MySqlDebeziumAvroPayload].getName
+    var opts: Map[String, String] = Map(
+      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClass,
+      HoodieMetadataConfig.ENABLE.key() -> "false"
+    )
+    val columns = Seq("ts", "key", "rider", "driver", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME,
+      DebeziumConstants.ADDED_SEQ_COL_NAME)
+
+    // 1. Add an insert.
+    val data = Seq(
+      (10, "1", "rider-A", "driver-A", 1, 1, "1.1"),
+      (10, "2", "rider-B", "driver-B", 2, 5, "2.5"),
+      (10, "3", "rider-C", "driver-C", 3, 10, "3.10"),
+      (10, "4", "rider-D", "driver-D", 4, 8, "4.8"),
+      (10, "5", "rider-E", "driver-E", 5, 4, "5.4"))
+    val inserts = spark.createDataFrame(data).toDF(columns: _*)
+    inserts.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name()).
+      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
+      options(opts).
+      mode(SaveMode.Overwrite).
+      save(basePath)
+    checkResultForVersion8(payloadClass)
+
+    // 2. Add an update and upgrade the table to v9
+    // first two records with larger ordering values based on debezium payload
+    // last two records with smaller ordering values based on debezium payload, below updates should be rejected
+    var updateData = Seq(
+      (9, "1", "rider-X", "driver-X", 1, 2, "1.2"),
+      (9, "2", "rider-Y", "driver-Y", 3, 2, "3.2"),
+      (9, "3", "rider-C", "driver-C", 2, 10, "2.10"),
+      (9, "4", "rider-D", "driver-D", 4, 7, "4.7")
+    )
+    var update = spark.createDataFrame(updateData).toDF(columns: _*)
+    update.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      mode(SaveMode.Append).
+      save(basePath)
+    checkResultForVersion9("", payloadClass)
+
+    // Downgrade to table version 8 explicitly.
+    // Note that downgrade is NOT automatic.
+    // It has to be triggered explicitly.
+    opts = opts ++ Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8")
+    new UpgradeDowngrade(metaClient, getWriteConfig(opts), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.EIGHT, null)
+
+    // 3. Add an update after downgrade and validate the data
+    // first two records with larger ordering values based on debezium payload
+    // last two records with smaller ordering values based on debezium payload, below updates should be rejected
+    updateData = Seq(
+      (8, "1", "rider-X", "driver-X", 1, 3, "1.3"),
+      (8, "2", "rider-Y", "driver-Y", 4, 2, "4.2"),
+      (8, "3", "rider-C", "driver-C", 2, 10, "2.10"),
+      (8, "4", "rider-D", "driver-D", 4, 7, "4.7")
+    )
+    update = spark.createDataFrame(updateData).toDF(columns: _*)
+    update.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
+      mode(SaveMode.Append).
+      save(basePath)
+    checkResultForVersion8(payloadClass)
+
+    tableName = "testUpgradeDowngradeMySqlDebeziumPayload"
+    spark.sql(s"create table testUpgradeDowngradeMySqlDebeziumPayload using hudi location '$basePath'")
+    checkAnswer(s"select ts, key, rider, driver, ${DebeziumConstants.FLATTENED_FILE_COL_NAME}, ${DebeziumConstants.FLATTENED_POS_COL_NAME},"
+      + s" ${DebeziumConstants.ADDED_SEQ_COL_NAME} from default.$tableName")(
+      Seq(8, "1", "rider-X", "driver-X", 1, 3, "1.3"),
+      Seq(8, "2", "rider-Y", "driver-Y", 4, 2, "4.2"),
+      Seq(10, "3", "rider-C", "driver-C", 3, 10, "3.10"),
+      Seq(10, "4", "rider-D", "driver-D", 4, 8, "4.8"),
+      Seq(10, "5", "rider-E", "driver-E", 5, 4, "5.4")
+    )
+
+    spark.sql(s"drop table default.$tableName")
+  }
+
   def checkResultForVersion8(payloadClass: String): Unit = {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
@@ -120,6 +209,9 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     assertEquals(
       HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
       metaClient.getTableConfig.getRecordMergeStrategyId)
+    if (payloadClass.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      assertTrue(metaClient.getTableConfig.getPreCombineFieldsStr.isEmpty)
+    }
   }
 
   def checkResultForVersion9(partitionFields: String, payloadClass: String): Unit = {
@@ -159,6 +251,13 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
       assertEquals(AWSDmsAvroPayload.OP_FIELD, deleteField)
       val deleteMarker = metaClient.getTableConfig.getString(s"${MERGE_CUSTOM_PROPERTY_PREFIX}${DELETE_MARKER}")
       assertEquals(AWSDmsAvroPayload.D_VALUE, deleteMarker)
+    } else if (payloadClass.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      assertEquals(
+        HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+        metaClient.getTableConfig.getRecordMergeStrategyId)
+      assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, metaClient.getTableConfig.getRecordMergeMode)
+      assertEquals(DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME,
+        metaClient.getTableConfig.getPreCombineFieldsStr.get())
     }
   }
 }

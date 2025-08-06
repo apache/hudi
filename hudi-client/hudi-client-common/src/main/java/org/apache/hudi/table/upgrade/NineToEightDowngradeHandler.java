@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -109,6 +110,9 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
       if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         propertiesToRemove.add(
             ConfigProperty.key(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue());
+      }
+      if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+        propertiesToRemove.add(HoodieTableConfig.PRECOMBINE_FIELDS);
       }
     }
   }

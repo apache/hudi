@@ -50,6 +50,8 @@ import java.util.Set;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
@@ -211,6 +213,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
       tablePropsToAdd.put(
           ConfigProperty.key(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue(),
           DEBEZIUM_UNAVAILABLE_VALUE);
+    } else if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+      tablePropsToAdd.put(HoodieTableConfig.PRECOMBINE_FIELDS, FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
     }
   }
 
