@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
@@ -56,6 +57,7 @@ import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -70,6 +72,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -161,17 +164,23 @@ public class TestMergeHandle extends BaseTestHandle {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING", "CUSTOM"})
+  @ValueSource(strings = {"EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING", "CUSTOM", "CUSTOM_MERGER"})
   public void testFGReaderBasedMergeHandleInsertUpsertDelete(String mergeMode) throws IOException {
     metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
 
-    Properties properties = new Properties();
+    HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
+    TypedProperties properties = new TypedProperties();
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
     properties.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), ORDERING_FIELD);
     properties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergeMode);
+    if (mergeMode.equals("CUSTOM_MERGER")) {
+      config.setValue(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES, CustomMerger.class.getName());
+      properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), CustomMerger.getStrategyId());
+      properties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), "CUSTOM");
+    }
     String payloadClass = null;
-    if (mergeMode.equals(RecordMergeMode.CUSTOM.name())) {
+    if (mergeMode.equals(RecordMergeMode.CUSTOM.name()) || mergeMode.equals("CUSTOM_MERGER")) {
       // set payload class as part of table properties.
       properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
       payloadClass = OverwriteNonDefaultsWithLatestAvroPayload.class.getName();
@@ -181,7 +190,6 @@ public class TestMergeHandle extends BaseTestHandle {
       payloadClass = OverwriteWithLatestAvroPayload.class.getName();
     }
     initMetaClient(getTableType(), properties);
-    HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
@@ -214,7 +222,11 @@ public class TestMergeHandle extends BaseTestHandle {
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty());
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergeMode);
-    readerContext.initRecordMerger(typedProperties);
+    if (mergeMode.equals("CUSTOM_MERGER")) {
+      readerContext.setRecordMerger(Option.of(new CustomMerger()));
+    } else {
+      readerContext.initRecordMergerForIngestion(properties);
+    }
 
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table, inputAndExpectedDataSet.getRecordsToMerge().iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
@@ -274,6 +286,8 @@ public class TestMergeHandle extends BaseTestHandle {
         writeStatus.getIndexStats().getSecondaryIndexStats().get("secondary_index_sec-rider").size());
     for (SecondaryIndexStats secondaryIndexStat : writeStatus.getIndexStats().getSecondaryIndexStats().get("secondary_index_sec-rider")) {
       if (secondaryIndexStat.isDeleted()) {
+        // Either the record is deleted or record is updated. For updated record there are two SI entries
+        // one for older SI record deletion and another for new SI record creation
         assertTrue(inputAndExpectedDataSet.validDeletes.containsKey(secondaryIndexStat.getRecordKey())
             || inputAndExpectedDataSet.getValidUpdates().stream().anyMatch(rec -> rec.getRecordKey().equals(secondaryIndexStat.getRecordKey())));
       } else {
@@ -320,7 +334,8 @@ public class TestMergeHandle extends BaseTestHandle {
     validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
     validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
     expectedDeletes = 2;
-    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) { // for deletes w/ custom payload based merge, we do honor ordering value.
+    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
+      // for deletes w/ custom payload based merge, we do honor ordering value.
       validDeletes.put(deleteRecordLowerOrderingValue.getRecordKey(), deleteRecordLowerOrderingValue);
       expectedDeletes += 1;
     }
@@ -497,6 +512,37 @@ public class TestMergeHandle extends BaseTestHandle {
 
     public Map<String, HoodieRecord> getValidDeletes() {
       return validDeletes;
+    }
+  }
+
+  public static class CustomMerger implements HoodieRecordMerger {
+    private static final String STRATEGY_ID = UUID.randomUUID().toString();
+
+    public static String getStrategyId() {
+      return STRATEGY_ID;
+    }
+
+    @Override
+    public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+      GenericRecord olderData = (GenericRecord) older.getData();
+      GenericRecord newerData = (GenericRecord) newer.getData();
+      if (olderData.get(0).equals(newerData.get(0))) {
+        // If the timestamps are the same, we do not update
+        return Option.of(Pair.of(older, oldSchema));
+      } else {
+        // The merger behaves like a commit time ordering
+        return Option.of(Pair.of(newer, newSchema));
+      }
+    }
+
+    @Override
+    public HoodieRecord.HoodieRecordType getRecordType() {
+      return HoodieRecord.HoodieRecordType.AVRO;
+    }
+
+    @Override
+    public String getMergingStrategy() {
+      return STRATEGY_ID;
     }
   }
 }
