@@ -19,15 +19,9 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 /**
  * DowngradeHandler to assist in downgrading {@link org.apache.hudi.table.HoodieTable} from version 4 to 3.
@@ -35,12 +29,12 @@ import java.util.Map;
 public class FourToThreeDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     if (config.isMetadataTableEnabled()) {
       // Metadata Table in version 4 has a schema that is not forward compatible.
       // Hence, it is safe to delete the metadata table, which will be re-initialized in subsequent commit.
       HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
     }
-    return Pair.of(Collections.emptyMap(), Collections.emptyList());
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 }

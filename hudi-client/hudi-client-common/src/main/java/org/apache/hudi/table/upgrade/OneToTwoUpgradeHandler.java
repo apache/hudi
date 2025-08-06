@@ -33,13 +33,15 @@ import java.util.Map;
 public class OneToTwoUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> upgrade(
-      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(
+      HoodieWriteConfig config,
+      HoodieEngineContext context,
+      String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, upgradeDowngradeHelper.getPartitionColumns(config));
     tablePropsToAdd.put(HoodieTableConfig.RECORDKEY_FIELDS, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()));
     tablePropsToAdd.put(HoodieTableConfig.BASE_FILE_FORMAT, config.getString(HoodieTableConfig.BASE_FILE_FORMAT));
-    return tablePropsToAdd;
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 }

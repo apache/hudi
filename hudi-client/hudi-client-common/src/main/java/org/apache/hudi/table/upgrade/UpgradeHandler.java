@@ -18,11 +18,8 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import java.util.Map;
 
 /**
  * Interface to assist in upgrading Hoodie table.
@@ -36,9 +33,12 @@ public interface UpgradeHandler {
    * @param context                instance of {@link HoodieEngineContext} to be used.
    * @param instantTime            current instant time that should not be touched.
    * @param upgradeDowngradeHelper instance of {@link SupportsUpgradeDowngrade} to be used.
-   * @return Map of config properties and its values to be added to table properties.
+   * @return Map of config properties and its values to be added to table properties,
+   *         and a list configs to remove.
    */
-  Map<ConfigProperty, String> upgrade(
-      HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
+  UpgradeDowngrade.TableConfigChangeSet upgrade(
+      HoodieWriteConfig config,
+      HoodieEngineContext context,
+      String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper);
 }

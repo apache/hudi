@@ -99,6 +99,7 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_M
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
@@ -229,6 +230,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
+
+  public static final ConfigProperty<String> LEGACY_PAYLOAD_CLASS_NAME = ConfigProperty
+      .key("hoodie.legacy.payload.class")
+      .noDefaultValue()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The payload class previously used to populate the table is now deprecated and should be avoided in future use.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
   public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
@@ -527,7 +534,8 @@ public class HoodieTableConfig extends HoodieConfig {
     recoverIfNeeded(storage, cfgPath, backupCfgPath);
   }
 
-  private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
+  private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn,
+                             Set<String> propsToDelete) {
     StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     try {
@@ -549,6 +557,7 @@ public class HoodieTableConfig extends HoodieConfig {
       String checksum;
       try (OutputStream out = storage.create(cfgPath, true)) {
         modifyFn.accept(props, modifyProps);
+        propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
         checksum = storeProperties(props, out, cfgPath);
       }
 
@@ -582,13 +591,18 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public static void update(HoodieStorage storage, StoragePath metadataFolder,
                             Properties updatedProps) {
-    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, Collections.EMPTY_SET);
+  }
+
+  public static void updateDeleteProps(HoodieStorage storage, StoragePath metadataFolder,
+                            Properties updatedProps, Set<String> propstoDelete) {
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, propstoDelete);
   }
 
   public static void delete(HoodieStorage storage, StoragePath metadataFolder, Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties);
+    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties, Collections.EMPTY_SET);
   }
 
   /**
@@ -799,6 +813,10 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public String getPayloadClass() {
     return HoodieRecordPayload.getPayloadClassName(this);
+  }
+
+  public String getLegacyPayloadClass() {
+    return getStringOrDefault(LEGACY_PAYLOAD_CLASS_NAME, EMPTY_STRING);
   }
 
   public String getRecordMergeStrategyId() {

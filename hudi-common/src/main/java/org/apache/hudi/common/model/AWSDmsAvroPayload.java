@@ -45,6 +45,7 @@ import java.util.Properties;
 public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   public static final String OP_FIELD = "Op";
+  public static final String D_VALUE = "D";
 
   public AWSDmsAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
