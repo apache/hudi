@@ -42,7 +42,7 @@ class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
         HoodieIndexConfig.INDEX_TYPE.key -> indexType.name,
         config.key -> "true"
       )
-      MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(true)
+      MergeIntoHoodieTableCommand.useGlobalIndexAndUpdatePartitionPath(parameters) should be(true)
     }
   }
 
@@ -58,13 +58,20 @@ class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
         HoodieIndexConfig.INDEX_TYPE.key -> indexType.name,
         config.key -> "false"
       )
-      MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(false)
+      MergeIntoHoodieTableCommand.useGlobalIndexAndUpdatePartitionPath(parameters) should be(false)
     }
+  }
+
+  it should "return false for record index without setting update partition path (default false)" in {
+    val parameters = Map(
+      HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.RECORD_INDEX.name
+    )
+    MergeIntoHoodieTableCommand.useGlobalIndexAndUpdatePartitionPath(parameters) should be(false)
   }
 
   it should "return false when index type is absent" in {
     val parameters = Map.empty[String, String]
-    MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(false)
+    MergeIntoHoodieTableCommand.useGlobalIndexAndUpdatePartitionPath(parameters) should be(false)
   }
 
   it should "return false when index type is not global" in {
@@ -76,7 +83,7 @@ class TestMergeIntoHoodieTableCommand extends AnyFlatSpec with Matchers {
       HoodieIndex.IndexType.FLINK_STATE.name)
     nonGlobalIndices.foreach { indexType =>
       val parameters = Map(HoodieIndexConfig.INDEX_TYPE.key -> indexType)
-      MergeIntoHoodieTableCommand.useGlobalIndex(parameters) should be(false)
+      MergeIntoHoodieTableCommand.useGlobalIndexAndUpdatePartitionPath(parameters) should be(false)
     }
   }
 

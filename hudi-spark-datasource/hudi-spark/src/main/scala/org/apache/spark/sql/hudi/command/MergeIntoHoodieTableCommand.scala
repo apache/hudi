@@ -515,9 +515,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       // Partial update is enabled only for table version >= 8
       && (parameters.getOrElse(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.current().versionCode().toString).toInt
       >= HoodieTableVersion.EIGHT.versionCode())
-      // Partial update is disabled when global index is used.
+      // Partial update is disabled when global index is used and update partition path is enabled.
       // After HUDI-9257 is done, we can remove this limitation.
-      && !useGlobalIndex(parameters)
+      && !useGlobalIndexAndUpdatePartitionPath(parameters)
       // Partial update is disabled when custom merge mode is set.
       && !useCustomMergeMode(parameters))
   }
@@ -1092,23 +1092,18 @@ object MergeIntoHoodieTableCommand {
     }
   }
 
-  // Check if global index, e.g., GLOBAL_BLOOM, is set.
-  def useGlobalIndex(parameters: Map[String, String]): Boolean = {
+  // Check if a global index is used and update partition path is enabled.
+  def useGlobalIndexAndUpdatePartitionPath(parameters: Map[String, String]): Boolean = {
     parameters.get(HoodieIndexConfig.INDEX_TYPE.key).exists { indexType =>
-      isGlobalIndexEnabled(indexType, parameters)
+      Seq(
+        HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+        HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+        HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
+      ).collectFirst {
+        case (hoodieIndex, config) if indexType == hoodieIndex.name =>
+          parameters.getOrElse(config.key, config.defaultValue()).toBoolean
+      }.getOrElse(false)
     }
-  }
-
-  // Check if goal index is enabled for specific indexes.
-  def isGlobalIndexEnabled(indexType: String, parameters: Map[String, String]): Boolean = {
-    Seq(
-      HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
-    ).collectFirst {
-      case (hoodieIndex, config) if indexType == hoodieIndex.name =>
-        parameters.getOrElse(config.key, config.defaultValue().toString).toBoolean
-    }.getOrElse(false)
   }
 
   def useCustomMergeMode(parameters: Map[String, String]): Boolean = {
