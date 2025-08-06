@@ -336,8 +336,20 @@ public class UpgradeDowngrade {
     }
     if (requireRollbackAndCompaction) {
       LOG.info("Rolling back failed writes and compacting table before upgrade/downgrade");
-      UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(upgradeDowngradeHelper.getTable(config, context),
-              context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()), metaClient.getTableConfig().getTableVersion());
+      // For version SEVEN to EIGHT upgrade, use SIX as tableVersion to avoid hitting issue with WRITE_TABLE_VERSION,
+      // as table version SEVEN is not considered as a valid value due to being a bridge release.
+      // otherwise use current table version
+      HoodieTableVersion tableVersion = fromVersion == HoodieTableVersion.SEVEN
+          ? HoodieTableVersion.SIX 
+          : metaClient.getTableConfig().getTableVersion();
+
+      UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          upgradeDowngradeHelper.getTable(config, context),
+          context, 
+          config, 
+          upgradeDowngradeHelper, 
+          HoodieTableType.MERGE_ON_READ.equals(metaClient.getTableType()),
+          tableVersion);
     }
   }
 }
