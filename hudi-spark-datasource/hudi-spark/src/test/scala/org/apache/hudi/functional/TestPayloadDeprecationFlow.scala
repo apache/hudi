@@ -223,8 +223,6 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   }
 }
 
-// TODO: Add COPY_ON_WRITE table type tests when write path is updated accordingly.
-// TODO: Add Test for MySqlDebeziumAvroPayload.
 object TestPayloadDeprecationFlow {
   def providePayloadClassTestCases(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
