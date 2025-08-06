@@ -28,6 +28,7 @@ import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -39,11 +40,12 @@ import java.util.Objects;
  * After deserialization, the schema can be set using {@link #setSchema(Schema)} and that will also trigger deserialization of the record.
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
-class SerializableIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializable {
+class SerializableIndexedRecord extends GenericData.Record implements IndexedRecord, GenericRecord, KryoSerializable {
   private IndexedRecord record;
   private byte[] recordBytes;
 
   SerializableIndexedRecord(IndexedRecord record) {
+    super(record.getSchema());
     this.record = record;
   }
 
