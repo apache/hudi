@@ -128,11 +128,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   private ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, String[] hosts, long start, long length, Schema dataSchema,
                                                                 Schema requiredSchema, HoodieStorage storage) throws IOException {
-    // mdt file schema irregular and does not work with this logic.
-    boolean isHFile = filePath.getFileExtension().equals(HoodieFileFormat.HFILE.getFileExtension());
-    Schema avroFileSchema = isHFile ? dataSchema : HoodieIOFactory.getIOFactory(storage)
-        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
-    Schema actualRequiredSchema = isHFile ? requiredSchema : AvroSchemaUtils.pruneDataSchema(avroFileSchema, requiredSchema, Collections.emptySet());
+    // mdt file schema irregular and does not work with this logic. Also, log file evolution is handled inside the log block
+    boolean isParquetOrOrc = filePath.getFileExtension().equals(HoodieFileFormat.PARQUET.getFileExtension())
+        || filePath.getFileExtension().equals(HoodieFileFormat.ORC.getFileExtension());
+    Schema avroFileSchema = isParquetOrOrc ? HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(filePath).readAvroSchema(storage, filePath) : dataSchema;
+    Schema actualRequiredSchema = isParquetOrOrc ? AvroSchemaUtils.pruneDataSchema(avroFileSchema, requiredSchema, Collections.emptySet()) : requiredSchema;
     JobConf jobConfCopy = new JobConf(storage.getConf().unwrapAs(Configuration.class));
     if (getNeedsBootstrapMerge()) {
       // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;
