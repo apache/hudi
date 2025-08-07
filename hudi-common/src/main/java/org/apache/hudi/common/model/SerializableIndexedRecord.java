@@ -33,6 +33,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Objects;
 
 /**
@@ -41,12 +42,23 @@ import java.util.Objects;
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
 class SerializableIndexedRecord extends GenericData.Record implements IndexedRecord, GenericRecord, KryoSerializable {
+  static final SerializableIndexedRecord SENTINEL = new SerializableIndexedRecord(
+      Schema.createRecord("sentinel", null, "org.apache.hudi", false, Collections.emptyList()));
   private IndexedRecord record;
   private byte[] recordBytes;
 
-  SerializableIndexedRecord(IndexedRecord record) {
+  static SerializableIndexedRecord createInstance(IndexedRecord record) {
+    return record == HoodieRecord.SENTINEL ? SENTINEL : new SerializableIndexedRecord(record);
+  }
+
+  private SerializableIndexedRecord(IndexedRecord record) {
     super(record.getSchema());
     this.record = record;
+  }
+
+  private SerializableIndexedRecord(Schema schema) {
+    super(schema);
+    this.recordBytes = new byte[0];
   }
 
   @Override
@@ -121,7 +133,7 @@ class SerializableIndexedRecord extends GenericData.Record implements IndexedRec
     } else if (o instanceof IndexedRecord) {
       // If the other object is an IndexedRecord, we can compare it directly
       IndexedRecord that = (IndexedRecord) o;
-      return record.equals(that);
+      return record != null && record.equals(that);
     }
     return false;
   }

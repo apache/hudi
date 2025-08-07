@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{cloneUsingKryo, convertToAvroRecord, toUnsafeRow, OverwriteWithLatestAvroPayloadWithEquality}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.{HoodieInternalRowUtils, Row}
 import org.apache.spark.sql.catalyst.InternalRow
@@ -39,7 +40,7 @@ import org.junit.jupiter.api.Test
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.time.{Instant, LocalDate}
-import java.util.Objects
+import java.util.{Objects, Properties}
 
 class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
@@ -87,10 +88,13 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
 
   @Test
   def testAvroRecords(): Unit = {
-    def routine(record: HoodieRecord[_], expectedSize: Int): Unit = {
+    def routine(record: HoodieRecord[_], schema: Schema, expectedSize: Int): Unit = {
       // Step 1: Serialize/de- original [[HoodieRecord]]
       val (cloned, originalBytes) = cloneUsingKryo(record)
 
+      if (cloned.isInstanceOf[HoodieAvroIndexedRecord]) {
+        cloned.asInstanceOf[HoodieAvroIndexedRecord].toIndexedRecord(schema, new Properties())
+      }
       assertEquals(expectedSize, originalBytes.length)
       assertEquals(record, cloned)
 
@@ -110,12 +114,12 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
     avroIndexedRecord.setIgnoreIndexUpdate(true)
 
-    val expectedLagacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 537 else 531
+    val expectedLegacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 537 else 531
 
     Seq(
-      (legacyRecord, expectedLagacyRecordSize),
-      (avroIndexedRecord, 392)
-    ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
+      (legacyRecord, null, expectedLegacyRecordSize),
+      (avroIndexedRecord, avroRecord.getSchema, 56)
+    ) foreach { case (record, schema, expectedSize) => routine(record, schema, expectedSize) }
   }
 
   @Test

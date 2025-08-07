@@ -44,7 +44,7 @@ class TestSerializableIndexRecord {
         .set("field_2", 42)
         .build();
 
-    SerializableIndexedRecord serializableIndexedRecord = new SerializableIndexedRecord(record1);
+    SerializableIndexedRecord serializableIndexedRecord = SerializableIndexedRecord.createInstance(record1);
 
     assertEquals(record1, serializableIndexedRecord);
     assertEquals(serializableIndexedRecord, record1);

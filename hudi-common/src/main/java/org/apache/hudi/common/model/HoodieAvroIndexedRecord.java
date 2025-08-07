@@ -84,7 +84,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
-    super(key, new SerializableIndexedRecord(data), operation, currentLocation, newLocation);
+    super(key, SerializableIndexedRecord.createInstance(data), operation, currentLocation, newLocation);
     this.optimizedRecord = (SerializableIndexedRecord) this.data;
   }
 
@@ -97,7 +97,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       IndexedRecord data,
       HoodieOperation operation,
       Option<Map<String, String>> metaData) {
-    super(key, new SerializableIndexedRecord(data), operation, metaData);
+    super(key, SerializableIndexedRecord.createInstance(data), operation, metaData);
     this.optimizedRecord = (SerializableIndexedRecord) this.data;
   }
 
@@ -117,12 +117,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieAvroIndexedRecord(key, new SerializableIndexedRecord(data), op, metaData);
+    return new HoodieAvroIndexedRecord(key, SerializableIndexedRecord.createInstance(data), op, metaData);
   }
 
   @Override
   public HoodieRecord<IndexedRecord> newInstance(HoodieKey key) {
-    return new HoodieAvroIndexedRecord(key, new SerializableIndexedRecord(data), operation, metaData);
+    return new HoodieAvroIndexedRecord(key, SerializableIndexedRecord.createInstance(data), operation, metaData);
   }
 
   @Override
@@ -198,14 +198,17 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   protected boolean checkIsDelete(Schema recordSchema, Properties props) {
-    DeleteContext deleteContext = new DeleteContext(props, recordSchema);
+    if (data == SerializableIndexedRecord.SENTINEL) {
+      return false; // Sentinel record is not a delete
+    }
     setSchema(recordSchema);
+    DeleteContext deleteContext = new DeleteContext(props, recordSchema);
     return AVRO_RECORD_CONTEXT.isDeleteRecord(data, deleteContext);
   }
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
-    return getData().equals(SENTINEL);
+    return data == SerializableIndexedRecord.SENTINEL;
   }
 
   @Override
