@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -103,6 +104,7 @@ class TestFileGroupRecordBuffer {
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
     when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
     when(readerContext.getRecordSizeEstimator()).thenReturn(new DefaultSizeEstimator<>());
+    when(readerContext.getIteratorMode()).thenReturn(IteratorMode.ENGINE_RECORD);
   }
 
   @Test
