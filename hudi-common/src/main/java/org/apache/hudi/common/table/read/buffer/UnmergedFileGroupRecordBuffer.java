@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
-import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -55,10 +54,9 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       HoodieTableMetaClient hoodieTableMetaClient,
       RecordMergeMode recordMergeMode,
       PartialUpdateMode partialUpdateMode,
-      IteratorMode iteratorMode,
       TypedProperties props,
       HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, iteratorMode, props, Collections.emptyList(), null);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, Collections.emptyList(), null);
     this.readStats = readStats;
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }

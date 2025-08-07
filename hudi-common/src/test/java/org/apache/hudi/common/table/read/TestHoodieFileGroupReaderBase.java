@@ -821,7 +821,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .withDataSchema(avroSchema)
         .withRequestedSchema(avroSchema)
         .withProps(props)
-        .withIteratorMode(IteratorMode.HOODIE_RECORD)
         .withStart(start)
         .withLength(fileSlice.getTotalFileSize())
         .withShouldUseRecordPosition(false)

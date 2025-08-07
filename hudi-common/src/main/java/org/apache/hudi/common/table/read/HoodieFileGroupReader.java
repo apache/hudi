@@ -86,7 +86,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback;
   // The list of instant times read from the log blocks, this value is used by the log-compaction to allow optimized log-block scans
   private List<String> validBlockInstants = Collections.emptyList();
-  protected final BufferedRecordConverter<T> bufferedRecordConverter;
+  private BufferedRecordConverter<T> bufferedRecordConverter;
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, Schema dataSchema, Schema requestedSchema,
@@ -121,8 +121,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), props, hoodieTableMetaClient);
     this.readStats = new HoodieReadStats();
-    this.bufferedRecordConverter = BufferedRecordConverter.createConverter(
-        readerParameters.iteratorMode(), readerContext.getSchemaHandler().getRequiredSchema(), readerContext.getRecordContext(), orderingFieldNames);
   }
 
   /**
@@ -146,6 +144,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     if (!inputSplit.getBaseFileOption().isPresent()) {
       return new EmptyIterator<>();
     }
+    this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(),
+        readerContext.getSchemaHandler().getRequiredSchema(), readerContext.getRecordContext(), orderingFieldNames);
 
     HoodieBaseFile baseFile = inputSplit.getBaseFileOption().get();
     if (baseFile.getBootstrapBaseFile().isPresent()) {
@@ -286,6 +286,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   public ClosableIterator<T> getClosableIterator() throws IOException {
+    this.readerContext.setIteratorMode(IteratorMode.ENGINE_RECORD);
     return new CloseableMappingIterator<>(getBufferedRecordIterator(), BufferedRecord::getRecord);
   }
 
@@ -293,6 +294,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @return An iterator over the records that wraps the engine-specific record in a HoodieRecord.
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
+    this.readerContext.setIteratorMode(IteratorMode.HOODIE_RECORD);
     return new CloseableMappingIterator<>(getBufferedRecordIterator(),
         bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord));
   }
@@ -301,6 +303,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @return A record key iterator over the records.
    */
   public ClosableIterator<String> getClosableKeyIterator() throws IOException {
+    this.readerContext.setIteratorMode(IteratorMode.RECORD_KEY);
     return new CloseableMappingIterator<>(getBufferedRecordIterator(), BufferedRecord::getRecordKey);
   }
 
@@ -360,7 +363,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private TypedProperties props;
     private Option<HoodieBaseFile> baseFileOption;
     private Stream<HoodieLogFile> logFiles;
-    private IteratorMode iteratorMode;
     private String partitionPath;
     private long start = 0;
     private long length = Long.MAX_VALUE;
@@ -397,11 +399,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     public Builder<T> withLogFiles(Stream<HoodieLogFile> logFiles) {
       this.logFiles = logFiles;
-      return this;
-    }
-
-    public  Builder<T> withIteratorMode(IteratorMode iteratorMode) {
-      this.iteratorMode = iteratorMode;
       return this;
     }
 
@@ -517,17 +514,12 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         recordBufferLoader = FileGroupRecordBufferLoader.createDefault();
       }
 
-      if (iteratorMode == null) {
-        this.iteratorMode = IteratorMode.ENGINE_RECORD;
-      }
-
       ReaderParameters readerParameters = ReaderParameters.builder()
           .shouldUseRecordPosition(shouldUseRecordPosition)
           .emitDeletes(emitDelete)
           .sortOutputs(sortOutput)
           .allowInflightInstants(allowInflightInstants)
           .enableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
-          .iteratorMode(iteratorMode)
           .build();
       InputSplit inputSplit = new InputSplit(baseFileOption, recordIterator != null ? Either.right(recordIterator) : Either.left(logFiles == null ? Stream.empty() : logFiles),
           partitionPath, start, length);

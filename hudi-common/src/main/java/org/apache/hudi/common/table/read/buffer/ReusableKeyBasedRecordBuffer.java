@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -57,9 +56,9 @@ public class ReusableKeyBasedRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   ReusableKeyBasedRecordBuffer(HoodieReaderContext<T> readerContext, HoodieTableMetaClient hoodieTableMetaClient,
                                RecordMergeMode recordMergeMode, PartialUpdateMode partialUpdateMode,
-                               IteratorMode iteratorMode, TypedProperties props, List<String> orderingFieldNames,
+                               TypedProperties props, List<String> orderingFieldNames,
                                UpdateProcessor<T> updateProcessor, Map<Serializable, BufferedRecord<T>> records) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, iteratorMode, props, orderingFieldNames, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
     this.existingRecords = records;
     ValidationUtils.checkArgument(readerContext.getKeyFilterOpt().orElse(null) instanceof Predicates.In,
         () -> "Key filter should be of type Predicates.In, but found: " + readerContext.getKeyFilterOpt().map(filter -> filter.getClass().getSimpleName()).orElse("NULL"));

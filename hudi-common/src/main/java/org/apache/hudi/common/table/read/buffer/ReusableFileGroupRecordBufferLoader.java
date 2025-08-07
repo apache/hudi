@@ -68,8 +68,8 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
       cachedResults = Pair.of(initialBuffer, validInstants);
     }
     // Create a reusable buffer with the results from the initial scan
-    ReusableKeyBasedRecordBuffer<T> reusableBuffer = new ReusableKeyBasedRecordBuffer<>(readerContext, hoodieTableMetaClient, readerContext.getMergeMode(),
-        partialUpdateMode, readerParameters.iteratorMode(), props, orderingFieldNames, updateProcessor, cachedResults.getLeft().getLogRecords());
+    ReusableKeyBasedRecordBuffer<T> reusableBuffer = new ReusableKeyBasedRecordBuffer<>(
+        readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor, cachedResults.getLeft().getLogRecords());
     return Pair.of(reusableBuffer, cachedResults.getRight());
   }
 
