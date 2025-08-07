@@ -32,16 +32,21 @@ public interface BufferedRecordConverter<T> {
     switch (iteratorMode) {
       case ENGINE_RECORD:
         return new BufferedRecordConverter<T>() {
+          private BufferedRecord<T> reusedBufferedRecord = new BufferedRecord<>();
+
           @Override
           public BufferedRecord<T> convert(T record) {
-            return BufferedRecord.forRecord(record);
+            return reusedBufferedRecord.withRecord(record);
           }
         };
       case RECORD_KEY:
         return new BufferedRecordConverter<T>() {
+          private BufferedRecord<T> reusedBufferedRecord = new BufferedRecord<>();
+
           @Override
           public BufferedRecord<T> convert(T record) {
-            return BufferedRecord.forRecordKey(record, readerSchema, recordContext);
+            String recordKey = recordContext.getRecordKey(record, readerSchema);
+            return reusedBufferedRecord.withRecordKey(recordKey);
           }
         };
       default:

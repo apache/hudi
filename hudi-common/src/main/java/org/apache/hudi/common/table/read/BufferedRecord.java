@@ -40,12 +40,16 @@ import java.util.function.UnaryOperator;
  * @param <T> The type of the engine specific row.
  */
 public class BufferedRecord<T> implements Serializable {
-  private final String recordKey;
-  private final Comparable orderingValue;
+  private String recordKey;
   private T record;
+  private final Comparable orderingValue;
   private final Integer schemaId;
   private final boolean isDelete;
   private HoodieOperation hoodieOperation;
+
+  public BufferedRecord() {
+    this(null, null, null, null, false);
+  }
 
   public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
     this(recordKey, orderingValue, record, schemaId, null, isDelete);
@@ -158,6 +162,16 @@ public class BufferedRecord<T> implements Serializable {
     if (record != null) {
       this.record = converter.apply(record);
     }
+    return this;
+  }
+
+  public BufferedRecord<T> withRecord(T record) {
+    this.record = record;
+    return this;
+  }
+
+  public BufferedRecord<T> withRecordKey(String recordKey) {
+    this.recordKey = recordKey;
     return this;
   }
 
