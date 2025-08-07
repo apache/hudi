@@ -22,9 +22,9 @@ package org.apache.hudi
 import org.apache.hudi.RecordLevelIndexSupport.{filterQueryWithRecordKey, getPrunedStoragePaths}
 import org.apache.hudi.SecondaryIndexSupport.filterQueriesWithSecondaryKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.data.HoodieListData
+import org.apache.hudi.common.data.{HoodieListData, HoodiePairData}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieRecordGlobalLocation}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
@@ -33,7 +33,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
-import scala.collection.{mutable, JavaConverters}
+import scala.collection.{JavaConverters, mutable}
 import scala.collection.JavaConverters._
 
 class SecondaryIndexSupport(spark: SparkSession,
@@ -81,7 +81,7 @@ class SecondaryIndexSupport(spark: SparkSession,
   private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
     val secondaryIndexData = metadataTable.readSecondaryIndexLocationsWithKeys(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName)
-    HoodieDataUtils.withHoodieDataCleanUp(secondaryIndexData, data => {
+    HoodieDataUtils.withHoodieDataCleanUp(secondaryIndexData, (data: HoodiePairData[String, HoodieRecordGlobalLocation]) => {
       val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(data)
       val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
       val candidateFiles: mutable.Set[String] = mutable.Set.empty

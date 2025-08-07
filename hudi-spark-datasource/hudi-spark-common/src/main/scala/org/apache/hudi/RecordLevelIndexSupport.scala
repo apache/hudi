@@ -20,9 +20,9 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, TIME_TRAVEL_AS_OF_INSTANT}
 import org.apache.hudi.RecordLevelIndexSupport.getPrunedStoragePaths
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.data.HoodieListData
+import org.apache.hudi.common.data.{HoodieListData, HoodiePairData}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieRecordGlobalLocation}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -37,7 +37,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Cast, EqualTo, Expression, In, Literal}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
-import scala.collection.{mutable, JavaConverters}
+import scala.collection.{JavaConverters, mutable}
 import scala.collection.JavaConverters._
 
 class RecordLevelIndexSupport(spark: SparkSession,
@@ -77,7 +77,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
   private def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
     val recordIndexData = metadataTable.readRecordIndexLocationsWithKeys(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(recordKeys).asJava))
-    HoodieDataUtils.withHoodieDataCleanUp(recordIndexData, data => {
+    HoodieDataUtils.withHoodieDataCleanUp(recordIndexData, (data: HoodiePairData[String, HoodieRecordGlobalLocation]) => {
       val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(data)
       val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
       val candidateFiles: mutable.Set[String] = mutable.Set.empty
