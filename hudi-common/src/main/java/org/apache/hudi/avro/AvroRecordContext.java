@@ -103,10 +103,13 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
             bufferedRecord.getRecordKey(),
             partitionPath,
             bufferedRecord.getOrderingValue(),
-            payloadClass);
+            payloadClass,
+            bufferedRecord.getHoodieOperation());
       } else {
         return new HoodieEmptyRecord<>(
             hoodieKey,
+            bufferedRecord.getHoodieOperation(),
+            HoodieRecord.DEFAULT_ORDERING_VALUE,
             HoodieRecord.HoodieRecordType.AVRO);
       }
     }

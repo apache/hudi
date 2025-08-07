@@ -72,7 +72,7 @@ public interface UpdateProcessor<T> {
             mergedRecord.setHoodieOperation(HoodieOperation.DELETE);
           }
           T deleteRow = readerContext.getRecordContext().getDeleteRow(mergedRecord.getRecord(), recordKey);
-          return mergedRecord.withRecord(deleteRow);
+          return mergedRecord.replaceRecord(deleteRow);
         }
         return null;
       } else {

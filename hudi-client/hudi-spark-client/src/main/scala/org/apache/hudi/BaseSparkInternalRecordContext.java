@@ -75,6 +75,8 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(
           hoodieKey,
+          bufferedRecord.getHoodieOperation(),
+          HoodieRecord.DEFAULT_ORDERING_VALUE,
           HoodieRecord.HoodieRecordType.SPARK);
     }
 

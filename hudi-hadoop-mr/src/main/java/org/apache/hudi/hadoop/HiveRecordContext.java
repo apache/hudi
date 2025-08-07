@@ -76,6 +76,8 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(
           key,
+          bufferedRecord.getHoodieOperation(),
+          HoodieRecord.DEFAULT_ORDERING_VALUE,
           HoodieRecord.HoodieRecordType.HIVE);
     }
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);

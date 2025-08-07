@@ -100,6 +100,10 @@ public class BufferedRecord<T> implements Serializable {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
   }
 
+  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue, HoodieOperation hoodieOperation) {
+    return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, hoodieOperation, true);
+  }
+
   public String getRecordKey() {
     return recordKey;
   }
@@ -153,12 +157,12 @@ public class BufferedRecord<T> implements Serializable {
     return this;
   }
 
-  public BufferedRecord<T> withRecord(T record) {
+  public BufferedRecord<T> replaceRecord(T record) {
     this.record = record;
     return this;
   }
 
-  public BufferedRecord<T> withRecordKey(String recordKey) {
+  public BufferedRecord<T> replaceRecordKey(String recordKey) {
     this.recordKey = recordKey;
     return this;
   }

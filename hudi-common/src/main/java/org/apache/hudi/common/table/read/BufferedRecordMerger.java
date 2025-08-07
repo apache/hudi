@@ -62,7 +62,7 @@ public interface BufferedRecordMerger<T> extends Serializable {
    *
    * @param olderRecord Older record from base file
    * @param newerRecord Newer record from log file
-   * @return The merged record.
+   * @return The merged buffered record.
    */
   BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
 }

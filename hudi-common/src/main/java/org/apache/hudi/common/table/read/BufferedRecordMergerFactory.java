@@ -341,8 +341,7 @@ public class BufferedRecordMergerFactory {
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
           hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
         }
-        BufferedRecord<T> result = BufferedRecord.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
-        return result;
+        return BufferedRecord.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
       }
       return getDeleteBufferedRecord(newerRecord.getRecordKey(), recordContext);
     }
@@ -400,8 +399,7 @@ public class BufferedRecordMergerFactory {
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
           hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
         }
-        BufferedRecord<T> result = BufferedRecord.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
-        return result;
+        return BufferedRecord.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
       }
       return getDeleteBufferedRecord(newerRecord.getRecordKey(), recordContext);
     }
@@ -491,9 +489,8 @@ public class BufferedRecordMergerFactory {
         } else {
           indexedRecord = (IndexedRecord) mergedRecord.getData();
         }
-        BufferedRecord<T> result = BufferedRecord.forRecordWithContext(
+        return BufferedRecord.forRecordWithContext(
             recordContext.convertAvroRecord(indexedRecord), readerSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
-        return result;
       }
       return getDeleteBufferedRecord(newerRecord.getRecordKey(), recordContext);
     }
