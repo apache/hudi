@@ -46,10 +46,10 @@ class TestSerializableIndexRecord {
 
     SerializableIndexedRecord serializableIndexedRecord = SerializableIndexedRecord.createInstance(record1);
 
-    assertEquals(record1, serializableIndexedRecord);
+    assertEquals(record1, serializableIndexedRecord.getRecord());
     assertEquals(serializableIndexedRecord, record1);
 
-    assertNotEquals(record2, serializableIndexedRecord);
+    assertNotEquals(record2, serializableIndexedRecord.getRecord());
     assertNotEquals(serializableIndexedRecord, record2);
 
     assertNotEquals(serializableIndexedRecord, null);
