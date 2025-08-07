@@ -26,7 +26,6 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieCommonConfig.{DISK_MAP_BITCASK_COMPRESSION_ENABLED, SPILLABLE_DISK_MAP_TYPE}
 import org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH
-import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerger}
 import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
@@ -37,7 +36,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMergerFactory, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, MergeResult, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMergerFactory, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
 import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, HoodieRecordUtils, Option}
 import org.apache.hudi.common.util.collection.ExternalSpillableMap
@@ -76,19 +75,26 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   extends Iterator[InternalRow]
   with SparkAdapterSupport with AvroDeserializerSupport with Closeable {
 
-  private val readerContext = new SparkFileFormatInternalRowReaderContext(baseFileReader, Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
-  readerContext.initRecordMerger(props)
-
-  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, props, metaClient)
-
-  private lazy val payloadClass: Option[String] = if (recordMerger.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID) {
-    Option.of(metaClient.getTableConfig.getPayloadClass)
-  } else {
-    Option.empty.asInstanceOf[Option[String]]
+  private lazy val bufferedReaderContext = {
+    val readerContext = new SparkFileFormatInternalRowReaderContext(baseFileReader,
+      Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
+    readerContext.initRecordMerger(props)
+    readerContext
   }
 
-  private lazy val bufferedRecordMerger = BufferedRecordMergerFactory.create(readerContext, readerContext.getMergeMode, false, Option.of(recordMerger),
-    orderingFieldNames, payloadClass, avroSchema, props, PartialUpdateMode.NONE)
+  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(bufferedReaderContext.getMergeMode, props, metaClient)
+
+  private lazy val bufferedRecordMerger = {
+    val payloadClass: Option[String] = if (recordMerger.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID) {
+      Option.of(metaClient.getTableConfig.getPayloadClass)
+    } else {
+      Option.empty.asInstanceOf[Option[String]]
+    }
+    val partialUpdateMode: PartialUpdateMode = metaClient.getTableConfig.getPartialUpdateMode
+    BufferedRecordMergerFactory.create(bufferedReaderContext, bufferedReaderContext.getMergeMode,
+      !partialUpdateMode.equals(PartialUpdateMode.NONE), Option.of(recordMerger), orderingFieldNames,
+      payloadClass, avroSchema, props, partialUpdateMode)
+  }
 
   private lazy val storage = metaClient.getStorage
 
@@ -115,11 +121,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerProps
   }
 
-  private lazy val recordMerger: HoodieRecordMerger = {
-    val readerContext: HoodieReaderContext[InternalRow] = new SparkFileFormatInternalRowReaderContext(baseFileReader, Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
-    readerContext.initRecordMerger(props)
-    readerContext.getRecordMerger.get()
-  }
+  private lazy val recordMerger: HoodieRecordMerger = bufferedReaderContext.getRecordMerger().get()
 
   protected override val avroSchema: Schema = new Schema.Parser().parse(originTableSchema.avroSchemaStr)
 
@@ -347,19 +349,14 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       } else {
         // a existed record is updated.
         val existingRecord = existingRecordOpt.get
-        val mergeResult = merge(existingRecord, logRecord.getRecord)
-        if (!mergeResult.isDelete) {
-          val mergeRecord = mergeResult.getMergedRecord
-          if (existingRecord != mergeRecord) {
-            recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
-            recordToLoad.update(2, convertRowToJsonString(existingRecord))
-            recordToLoad.update(3, convertRowToJsonString(mergeRecord))
-            // update into beforeImageRecords
-            beforeImageRecords(logRecord.getRecordKey) = mergeRecord
-            loaded = true
-          }
-        } else {
-          throw new IllegalArgumentException(s"can not result in a deleted record after merging")
+        val mergeRecord = merge(existingRecord, logRecord)
+        if (existingRecord != mergeRecord) {
+          recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
+          recordToLoad.update(2, convertRowToJsonString(existingRecord))
+          recordToLoad.update(3, convertRowToJsonString(mergeRecord))
+          // update into beforeImageRecords
+          beforeImageRecords(logRecord.getRecordKey) = mergeRecord
+          loaded = true
         }
       }
     }
@@ -560,10 +557,17 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     convertToUTF8String(HoodieCDCUtils.recordToJson(record))
   }
 
-  private def merge(currentRecord: InternalRow, newRecord: InternalRow): MergeResult[InternalRow] = {
-    val currentBufferedRecord = BufferedRecord.forRecordWithContext(currentRecord, avroSchema, readerContext.getRecordContext, orderingFieldNames, false);
-    val newBufferedRecord = BufferedRecord.forRecordWithContext(newRecord, avroSchema, readerContext.getRecordContext, orderingFieldNames, false);
-    bufferedRecordMerger.finalMerge(currentBufferedRecord, newBufferedRecord)
+  private def merge(currentRecord: InternalRow, newRecord: BufferedRecord[InternalRow]): InternalRow = {
+    val deltaMergeResult = bufferedRecordMerger.deltaMerge(newRecord, createBufferedRecord(currentRecord))
+    if (deltaMergeResult.isEmpty) {
+      currentRecord
+    } else {
+      deltaMergeResult.get().getRecord
+    }
+  }
+
+  private def createBufferedRecord(record: InternalRow): BufferedRecord[InternalRow] = {
+    BufferedRecord.forRecordWithContext(record, avroSchema, bufferedReaderContext.getRecordContext, orderingFieldNames, false)
   }
 
   override def close(): Unit = {
