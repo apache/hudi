@@ -42,12 +42,14 @@ import java.util.Objects;
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
 class SerializableIndexedRecord extends GenericData.Record implements IndexedRecord, GenericRecord, KryoSerializable {
-  static final SerializableIndexedRecord SENTINEL = new SerializableIndexedRecord(
-      Schema.createRecord("sentinel", null, "org.apache.hudi", false, Collections.emptyList()));
+  static final SerializableIndexedRecord SENTINEL = new Sentinel();
   private IndexedRecord record;
   private byte[] recordBytes;
 
   static SerializableIndexedRecord createInstance(IndexedRecord record) {
+    if (record == null) {
+      return null;
+    }
     return record == HoodieRecord.SENTINEL ? SENTINEL : new SerializableIndexedRecord(record);
   }
 
@@ -138,6 +140,10 @@ class SerializableIndexedRecord extends GenericData.Record implements IndexedRec
     return false;
   }
 
+  IndexedRecord getRecord() {
+    return record;
+  }
+
   @Override
   public int hashCode() {
     return Objects.hash(record);
@@ -146,5 +152,22 @@ class SerializableIndexedRecord extends GenericData.Record implements IndexedRec
   @Override
   public String toString() {
     return record == null ? "SERIALIZED: " + new String(recordBytes) : record.toString();
+  }
+
+  private static class Sentinel extends SerializableIndexedRecord {
+
+    private Sentinel() {
+      super(Schema.createRecord("sentinel", null, "org.apache.hudi", false, Collections.emptyList()));
+    }
+
+    @Override
+    public String toString() {
+      return "SENTINEL";
+    }
+
+    @Override
+    IndexedRecord getRecord() {
+      return HoodieRecord.SENTINEL;
+    }
   }
 }

@@ -334,4 +334,9 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       }
     }
   }
+
+  @Override
+  public IndexedRecord getData() {
+    return optimizedRecord.getRecord();
+  }
 }
