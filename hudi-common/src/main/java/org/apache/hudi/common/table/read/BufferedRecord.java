@@ -78,28 +78,16 @@ public class BufferedRecord<T> implements Serializable {
     return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, isDelete);
   }
 
-  /**
-   * Efficient builder for BufferedRecord with only record key field initialized while null for other fields, this is only used
-   * for reading path to get record key iterator.
-   */
-  public static <T> BufferedRecord<T> forRecordKey(T record, Schema schema, RecordContext<T> recordContext) {
-    String recordKey = recordContext.getRecordKey(record, schema);
-    return new BufferedRecord<>(recordKey, null, null, null, false);
-  }
-
-  /**
-   * Efficient builder for BufferedRecord with only data field initialized while null for other fields, this is only used
-   * for reading path to get engine-specific record iterator.
-   */
-  public static <T> BufferedRecord<T> forRecord(T record) {
-    return new BufferedRecord<>(null, null, record, null, false);
-  }
-
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
+    return forRecordWithContext(record, schema, recordContext, orderingFieldNames, null, isDelete);
+  }
+
+  public static <T> BufferedRecord<T> forRecordWithContext(
+      T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation, boolean isDelete) {
     String recordKey = recordContext.getRecordKey(record, schema);
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
-    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, hoodieOperation, isDelete);
   }
 
   public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
