@@ -19,7 +19,6 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -107,9 +106,6 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       // To foster value comparison, if the value is of String type, e.g., from
       // the delete record, we convert it to UTF8String type.
       return UTF8String.fromString((String) value);
-      // [SPARK-46832] UTF8String doesn't support compareTo anymore
-    } else if (value instanceof UTF8String) {
-      return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory().wrapUTF8String((UTF8String) value);
     }
     return value;
   }
