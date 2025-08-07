@@ -28,18 +28,19 @@ import org.apache.hudi.common.config.HoodieCommonConfig.{DISK_MAP_BITCASK_COMPRE
 import org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerger, HoodieSparkRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerger}
+import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.serialization.DefaultSerializer
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, PartialUpdateMode}
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMergerFactory, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, MergeResult, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
-import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, Option}
-import org.apache.hudi.common.util.collection.{ExternalSpillableMap, ImmutablePair}
+import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, HoodieRecordUtils, Option}
+import org.apache.hudi.common.util.collection.ExternalSpillableMap
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
@@ -74,6 +75,20 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
                            props: TypedProperties)
   extends Iterator[InternalRow]
   with SparkAdapterSupport with AvroDeserializerSupport with Closeable {
+
+  private val readerContext = new SparkFileFormatInternalRowReaderContext(baseFileReader, Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
+  readerContext.initRecordMerger(props)
+
+  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, props, metaClient)
+
+  private lazy val payloadClass: Option[String] = if (recordMerger.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID) {
+    Option.of(metaClient.getTableConfig.getPayloadClass)
+  } else {
+    Option.empty.asInstanceOf[Option[String]]
+  }
+
+  private lazy val bufferedRecordMerger = BufferedRecordMergerFactory.create(readerContext, readerContext.getMergeMode, false, Option.of(recordMerger),
+    orderingFieldNames, payloadClass, avroSchema, props, PartialUpdateMode.NONE)
 
   private lazy val storage = metaClient.getStorage
 
@@ -332,14 +347,19 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       } else {
         // a existed record is updated.
         val existingRecord = existingRecordOpt.get
-        val mergeRecord = merge(existingRecord, logRecord.getRecord).getLeft.getData
-        if (existingRecord != mergeRecord) {
-          recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
-          recordToLoad.update(2, convertRowToJsonString(existingRecord))
-          recordToLoad.update(3, convertRowToJsonString(mergeRecord))
-          // update into beforeImageRecords
-          beforeImageRecords(logRecord.getRecordKey) = mergeRecord
-          loaded = true
+        val mergeResult = merge(existingRecord, logRecord.getRecord)
+        if (!mergeResult.isDelete) {
+          val mergeRecord = mergeResult.getMergedRecord
+          if (existingRecord != mergeRecord) {
+            recordToLoad.update(0, CDCRelation.CDC_OPERATION_UPDATE)
+            recordToLoad.update(2, convertRowToJsonString(existingRecord))
+            recordToLoad.update(3, convertRowToJsonString(mergeRecord))
+            // update into beforeImageRecords
+            beforeImageRecords(logRecord.getRecordKey) = mergeRecord
+            loaded = true
+          }
+        } else {
+          throw new IllegalArgumentException(s"can not result in a deleted record after merging")
         }
       }
     }
@@ -540,10 +560,10 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     convertToUTF8String(HoodieCDCUtils.recordToJson(record))
   }
 
-  private def merge(currentRecord: InternalRow, newRecord: InternalRow): ImmutablePair[HoodieSparkRecord, Schema] = {
-    recordMerger.merge(new HoodieSparkRecord(currentRecord, structTypeSchema), avroSchema,
-      new HoodieSparkRecord(newRecord, structTypeSchema), avroSchema, props)
-      .get().asInstanceOf[ImmutablePair[HoodieSparkRecord, Schema]]
+  private def merge(currentRecord: InternalRow, newRecord: InternalRow): MergeResult[InternalRow] = {
+    val currentBufferedRecord = BufferedRecord.forRecordWithContext(currentRecord, avroSchema, readerContext.getRecordContext, orderingFieldNames, false);
+    val newBufferedRecord = BufferedRecord.forRecordWithContext(newRecord, avroSchema, readerContext.getRecordContext, orderingFieldNames, false);
+    bufferedRecordMerger.finalMerge(currentBufferedRecord, newBufferedRecord)
   }
 
   override def close(): Unit = {
