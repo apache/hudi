@@ -181,7 +181,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge)).withLogFiles(logFiles)
         .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields).withInternalSchema(internalSchemaOption).withProps(props)
-        .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords()).withEmitDelete(true)
+        .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(cdcLogger.map(logger -> new CDCCallback(logger, readerContext))).withEnableOptimizedLogBlockScan(config.enableOptimizedLogBlocksScan()).build()) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
@@ -198,10 +198,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           }
           // Writes the record
           try {
-            if (!record.isDelete(writeSchemaWithMetaFields, props)) {
-              writeToFile(record.getKey(), record, writeSchemaWithMetaFields,
-                  config.getPayloadConfig().getProps(), preserveMetadata);
-            }
+            writeToFile(record.getKey(), record, writeSchemaWithMetaFields,
+                config.getPayloadConfig().getProps(), preserveMetadata);
             writeStatus.markSuccess(record, recordMetadata);
             recordsWritten++;
           } catch (Exception e) {

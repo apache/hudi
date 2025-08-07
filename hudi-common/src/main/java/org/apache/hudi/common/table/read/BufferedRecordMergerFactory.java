@@ -604,8 +604,7 @@ public class BufferedRecordMergerFactory {
   private static BufferedRecord SENTINEL = new BufferedRecord(null, null, null, null, false);
 
   private static <T> BufferedRecord<T> getDeleteBufferedRecord(String recordKey, RecordContext<T> recordContext) {
-    T deleteRow = recordContext.getDeleteRow(null, recordKey);
-    return new BufferedRecord<>(recordKey, null, deleteRow, null, true);
+    return new BufferedRecord<>(recordKey, null, null, null, true);
   }
 
   private static <T> Option<DeleteRecord> deltaMergeDeleteRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {

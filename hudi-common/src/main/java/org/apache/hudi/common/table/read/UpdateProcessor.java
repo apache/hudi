@@ -71,11 +71,12 @@ public interface UpdateProcessor<T> {
           if (!HoodieOperation.isUpdateBefore(mergedRecord.getHoodieOperation())) {
             mergedRecord.setHoodieOperation(HoodieOperation.DELETE);
           }
-          return mergedRecord;
+          T deleteRow = readerContext.getRecordContext().getDeleteRow(mergedRecord.getRecord(), recordKey);
+          return mergedRecord.withRecord(deleteRow);
         }
         return null;
       } else {
-        if (previousRecord != null && previousRecord != mergedRecord) {
+        if (previousRecord != null && previousRecord.getRecord() != mergedRecord.getRecord()) {
           mergedRecord.setHoodieOperation(HoodieOperation.UPDATE_AFTER);
           readStats.incrementNumUpdates();
         } else if (previousRecord == null) {
@@ -106,7 +107,7 @@ public interface UpdateProcessor<T> {
 
       if (isDelete) {
         callback.onDelete(recordKey, previousRecord.getRecord());
-      } else if (previousRecord != null && previousRecord != currentRecord) {
+      } else if (previousRecord != null && previousRecord.getRecord() != currentRecord.getRecord()) {
         callback.onUpdate(recordKey, previousRecord.getRecord(), currentRecord.getRecord());
       } else {
         callback.onInsert(recordKey, currentRecord.getRecord());

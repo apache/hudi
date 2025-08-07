@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -74,17 +75,23 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     RecordContext<T> recordContext = readerContext.getRecordContext();
     Schema recordSchema = readerContext.getSchemaHandler().getTableSchema();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
+    String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     while (recordIterator.hasNext()) {
       HoodieRecord hoodieRecord = recordIterator.next();
       T data = recordContext.extractDataFromRecord(hoodieRecord, recordSchema, props);
       try {
-        // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
-        // so we use recordContext#isDeleteRecord here if the data field is not null.
-        boolean isDelete = data == null ? hoodieRecord.isDelete(recordSchema, props) : recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
-        // use -U operation to identify the record should be skipped during updating index.
-        HoodieOperation hoodieOperation = hoodieRecord.getIgnoreIndexUpdate() ? HoodieOperation.UPDATE_BEFORE : hoodieRecord.getOperation();
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(data, recordSchema, recordContext, orderingFieldNames, hoodieOperation, isDelete);
-        recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
+        if (data == null) {
+          DeleteRecord deleteRecord = DeleteRecord.create(hoodieRecord.getKey(), hoodieRecord.getOrderingValue(recordSchema, props, orderingFieldsArray));
+          recordBuffer.processNextDeletedRecord(deleteRecord, deleteRecord.getRecordKey());
+        } else {
+          // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
+          // so we use recordContext#isDeleteRecord here if the data field is not null.
+          boolean isDelete = recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
+          // use -U operation to identify the record should be skipped during updating index.
+          HoodieOperation hoodieOperation = hoodieRecord.getIgnoreIndexUpdate() ? HoodieOperation.UPDATE_BEFORE : hoodieRecord.getOperation();
+          BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(data, recordSchema, recordContext, orderingFieldNames, hoodieOperation, isDelete);
+          recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
+        }
       } catch (IOException e) {
         throw new HoodieIOException("Failed to process next buffered record", e);
       }
