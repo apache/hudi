@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -81,8 +82,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
               .collect(Collectors.toList());
 
       // Get all the commits on the timeline after the provided commit's completion time unless it is the SOLO_COMMIT_TIMESTAMP which indicates there are no commits for the table
-      String completionTime = savepointToRestoreTimestamp.equals(SOLO_COMMIT_TIMESTAMP) ? savepointToRestoreTimestamp : completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
-          .orElseThrow(() -> new HoodieException("Unable to find completion time for instant: " + savepointToRestoreTimestamp));
+      String completionTime = getCompletionTime(completionTimeQueryView);
 
       Predicate<HoodieInstant> instantFilter = constructInstantFilter(completionTime);
       List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
@@ -104,6 +104,27 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
     } catch (Exception e) {
       throw new HoodieException("Unable to restore to instant: " + savepointToRestoreTimestamp, e);
     }
+  }
+
+  /**
+   * Finds the completion time for the restore action based off of the provided instant for the savepoint.
+   * During the upgrade flow, the restore timestamp will be the SOLO_COMMIT_TIMESTAMP because there are no commits to the table and therefore no completion time.
+   * In this case, we just return the input timestamp. In the case of the metadata table, it is possible that the table was deleted as part of the restore operation,
+   * and therefore we will not be able to find the completion time for the commits and in that case we also return the input timestamp.
+   * @param completionTimeQueryView
+   * @return
+   */
+  private String getCompletionTime(CompletionTimeQueryView completionTimeQueryView) {
+    if (savepointToRestoreTimestamp.equals(SOLO_COMMIT_TIMESTAMP)) {
+      return savepointToRestoreTimestamp;
+    }
+    // if the table is a metadata table and only bootstrap commits exist, then return the current time as the instant to avoid operations on the reconstructed metadata table
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    if (metaClient.isMetadataTable() && metaClient.getActiveTimeline().lastInstant().map(instant -> instant.requestedTime().startsWith(SOLO_COMMIT_TIMESTAMP)).orElse(false)) {
+      return HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
+    }
+    return completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
+        .orElseThrow(() -> new HoodieException("Unable to find completion time for instant: " + savepointToRestoreTimestamp));
   }
 
   private Predicate<HoodieInstant> constructInstantFilter(String completionTime) {
