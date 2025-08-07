@@ -600,6 +600,7 @@ public class BufferedRecordMergerFactory {
   //  Utilities
   // -------------------------------------------------------------------------
 
+  // Special handling for SENTINEL record in Expression Payload
   private static BufferedRecord SENTINEL = new BufferedRecord(null, null, null, null, false);
 
   private static <T> BufferedRecord<T> getDeleteBufferedRecord(String recordKey, RecordContext<T> recordContext) {
