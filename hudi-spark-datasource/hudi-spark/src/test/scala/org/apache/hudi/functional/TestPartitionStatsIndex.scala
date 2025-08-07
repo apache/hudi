@@ -401,13 +401,13 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
    * 2. Do two inserts and validate index initialization.
    * 3. Do a savepoint on the second commits.
    * 4. Add three more commits to trigger clean, which cleans the files from the first commit.
-   * 5. Restore, and validate partition_stats is deleted, but column_stats partition exists.
+   * 5. Restore, and validate that partition_stats is deleted, but column_stats partition exists.
    * 6. Validate that column_stats does not contain records with file names from first commit.
    */
   @Test
   def testPartitionStatsWithRestore(): Unit = {
     val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
@@ -427,7 +427,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val secondCompletedInstant = metaClient.getActiveTimeline
       .getCommitsTimeline.filterCompletedInstants().getInstants().get(1)
-    // Validate index partitions are present
+    // Validate index partitions are present.
     val initialMetadataPartitions = metaClient.getTableConfig.getMetadataPartitions
     assertTrue(initialMetadataPartitions.contains(MetadataPartitionType.FILES.getPartitionPath))
     assertTrue(initialMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath))
@@ -446,21 +446,13 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       HoodieCleanConfig.AUTO_CLEAN.key -> "true",
       HoodieCleanConfig.CLEAN_MAX_COMMITS.key -> "1",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "2")
-    // Third ingest.
-    doWriteAndValidateDataAndPartitionStats(
-      writeOpt,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    // Fourth ingest.
-    doWriteAndValidateDataAndPartitionStats(
-      writeOpt,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
-    // Fifth ingest.
-    doWriteAndValidateDataAndPartitionStats(
-      writeOpt,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
+    // Do three more ingestion to trigger clean operation.
+    for (i <- 0 until 3) {
+      doWriteAndValidateDataAndPartitionStats(
+        writeOpt,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append)
+    }
     metaClient = HoodieTableMetaClient.reload(metaClient)
     // Clean commit should be triggered.
     val cleanInstantOpt = metaClient.getActiveTimeline.getCleanerTimeline.lastInstant()

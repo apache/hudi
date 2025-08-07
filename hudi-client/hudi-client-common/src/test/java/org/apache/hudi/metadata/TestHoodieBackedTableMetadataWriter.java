@@ -151,11 +151,9 @@ class TestHoodieBackedTableMetadataWriter {
     Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
     Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
 
-    Map<String, HoodieData<HoodieRecord>> result = HoodieBackedTableMetadataWriter.convertToColumnStatsRecord(
-        partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient, metadataConfig,
-        Option.empty(), 4);
-
-    // Verify result is empty map when both inputs are empty
+    Map<String, HoodieData<HoodieRecord>> result =
+        HoodieBackedTableMetadataWriter.convertToColumnStatsRecord(
+            partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient, metadataConfig, Option.empty(), 4);
     assertTrue(result.isEmpty());
   }
 
@@ -177,8 +175,6 @@ class TestHoodieBackedTableMetadataWriter {
       Map<String, HoodieData<HoodieRecord>> result = HoodieBackedTableMetadataWriter.convertToColumnStatsRecord(
           partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient, metadataConfig,
           Option.empty(), 4);
-
-      // Verify result is empty map when no columns to index
       assertTrue(result.isEmpty());
     }
   }
@@ -220,9 +216,9 @@ class TestHoodieBackedTableMetadataWriter {
           eq(partitionFilesToAdd),
           eq(dataMetaClient),
           eq(metadataConfig),
-          eq(4), // columnStatsIndexParallelism
-          eq(1024), // maxReaderBufferSize
-          any() // columnsToIndex - order may vary due to HashMap.keySet()
+          eq(4),
+          eq(1024),
+          any()
       ));
     }
   }
@@ -261,20 +257,20 @@ class TestHoodieBackedTableMetadataWriter {
           partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient, metadataConfig,
           Option.empty(), 4);
 
-      // Verify result contains COLUMN_STATS partition
+      // Verify result contains COLUMN_STATS partition.
       assertEquals(1, result.size());
       assertTrue(result.containsKey(MetadataPartitionType.COLUMN_STATS.getPartitionPath()));
 
-      // Verify the method was called with correct parameters (using any() for the columns list since order may vary)
+      // Verify the method was called with correct parameters.
       mockedUtil.verify(() -> HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
           eq(engineContext),
           eq(partitionFilesToDelete),
           eq(partitionFilesToAdd),
           eq(dataMetaClient),
           eq(metadataConfig),
-          eq(4), // columnStatsIndexParallelism
-          eq(1024), // maxReaderBufferSize
-          any() // columnsToIndex - order may vary due to HashMap.keySet()
+          eq(4),
+          eq(1024),
+          any()
       ));
     }
   }

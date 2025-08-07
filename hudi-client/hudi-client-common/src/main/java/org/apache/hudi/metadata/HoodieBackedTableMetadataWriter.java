@@ -1611,19 +1611,20 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a new timestamp which we use for MDT clean, compaction etc.
       String syncCommitTime = createRestoreInstantTime();
-      // For Files partition.
-      Map<String, HoodieData<HoodieRecord>> partitionRecords = new HashMap<>();
-      partitionRecords.putAll(HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
-          partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
-      // For ColumnStats partition.
-      if (dataMetaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
-        partitionRecords.putAll(convertToColumnStatsRecord(
-            partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient,
-            dataWriteConfig.getMetadataConfig(), Option.of(dataWriteConfig.getRecordMerger().getRecordType()),
-            dataWriteConfig.getMetadataConfig().getColumnStatsIndexParallelism()));
-      }
-      processAndCommit(syncCommitTime, () -> partitionRecords);
-      // Close.
+      processAndCommit(syncCommitTime, () -> {
+        // For Files partition.
+        Map<String, HoodieData<HoodieRecord>> partitionRecords = new HashMap<>();
+        partitionRecords.putAll(HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
+            partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
+        // For ColumnStats partition if enabled.
+        if (dataMetaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
+          partitionRecords.putAll(convertToColumnStatsRecord(
+              partitionFilesToAdd, partitionFilesToDelete, engineContext, dataMetaClient,
+              dataWriteConfig.getMetadataConfig(), Option.of(dataWriteConfig.getRecordMerger().getRecordType()),
+              dataWriteConfig.getMetadataConfig().getColumnStatsIndexParallelism()));
+        }
+        return partitionRecords;
+      });
       closeInternal();
     } catch (IOException e) {
       throw new HoodieMetadataException("IOException during MDT restore sync", e);
