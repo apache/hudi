@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -33,6 +34,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -67,12 +70,17 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, readerParameters.iteratorMode(), props, orderingFieldNames, updateProcessor);
     }
 
-    String[] orderingFields = orderingFieldNames.toArray(new String[0]);
+    RecordContext<T> recordContext = readerContext.getRecordContext();
+    Schema recordSchema = readerContext.getSchemaHandler().getTableSchema();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     while (recordIterator.hasNext()) {
-      BufferedRecord bufferedRecord = BufferedRecord.forRecordWithContext(recordIterator.next(),
-          readerContext.getSchemaHandler().getTableSchema(), readerContext.getRecordContext(), recordBuffer.getDeleteContext(), props, orderingFields);
+      HoodieRecord hoodieRecord = recordIterator.next();
+      T data = recordContext.extractDataFromRecord(hoodieRecord, recordSchema, props);
       try {
+        // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
+        // so we use recordContext#isDeleteRecord here if the data field is not null.
+        boolean isDelete = data == null ? hoodieRecord.isDelete(recordSchema, props) : recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
+        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(data, recordSchema, recordContext, orderingFieldNames, isDelete);
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to process next buffered record", e);

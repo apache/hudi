@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -485,9 +486,13 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return rewriteRecordWithNewSchema(recordSchema, props, newSchema, Collections.emptyMap());
   }
 
-  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+  public boolean isDelete(Schema recordSchema, Properties props) {
     if (isDelete == null) {
-      isDelete = checkIsDelete(recordSchema, props);
+      try {
+        isDelete = checkIsDelete(recordSchema, props);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to check DELETE record.", e);
+      }
     }
     return isDelete;
   }
