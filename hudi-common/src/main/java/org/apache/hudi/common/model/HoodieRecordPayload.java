@@ -23,7 +23,6 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -35,6 +34,8 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 
 /**
@@ -182,16 +183,19 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   static String getPayloadClassName(Properties props) {
-    return getPayloadClassNameIfPresent(props).orElse(HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME);
+    return getPayloadClassNameIfPresent(props).orElse(DEFAULT_PAYLOAD_CLASS_NAME);
   }
 
   static Option<String> getPayloadClassNameIfPresent(Properties props) {
     String payloadClassName = null;
-    if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
+    if (props.containsKey(LEGACY_PAYLOAD_CLASS_NAME.key())) {
+      payloadClassName = props.getProperty(LEGACY_PAYLOAD_CLASS_NAME.key());
+    } else if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
       payloadClassName = props.getProperty(PAYLOAD_CLASS_NAME.key());
     } else if (props.containsKey("hoodie.datasource.write.payload.class")) {
       payloadClassName = props.getProperty("hoodie.datasource.write.payload.class");
     }
+
     // There could be tables written with payload class from com.uber.hoodie.
     // Need to transparently change to org.apache.hudi.
     return Option.ofNullable(payloadClassName).map(className -> className.replace("com.uber.hoodie", "org.apache.hudi"));
