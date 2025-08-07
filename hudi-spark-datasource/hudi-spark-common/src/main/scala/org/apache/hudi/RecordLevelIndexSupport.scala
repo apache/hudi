@@ -37,7 +37,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Cast, EqualTo, Expression, In, Literal}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
 
 class RecordLevelIndexSupport(spark: SparkSession,
