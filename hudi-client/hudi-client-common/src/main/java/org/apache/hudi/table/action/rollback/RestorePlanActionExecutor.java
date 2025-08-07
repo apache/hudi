@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
@@ -37,6 +36,7 @@ import org.apache.hudi.table.action.BaseActionExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
@@ -72,30 +72,36 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
     final HoodieInstant restoreInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     try (CompletionTimeQueryView completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
-      // Get all the commits on the timeline after the provided commit time
-      // rollback pending clustering instants first before other instants (See HUDI-3362)
-      List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline()
-              // filter only clustering related replacecommits (Not insert_overwrite related commits)
-              .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantGenerator))
-              .getReverseOrderedInstants()
-              .filter(instant -> GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp))
-              .collect(Collectors.toList());
+      List<HoodieInstantInfo> instantsToRollback;
+      if (table.getMetaClient().isMetadataTable() && isMetadataTableRecreatedDuringRestore(metaClient)) {
+        instantsToRollback = Collections.emptyList();
+      } else {
+        // Get all the commits on the timeline after the provided commit time
+        // rollback pending clustering instants first before other instants (See HUDI-3362)
+        List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline()
+            // filter only clustering related replacecommits (Not insert_overwrite related commits)
+            .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant, instantGenerator))
+            .getReverseOrderedInstants()
+            .filter(instant -> GREATER_THAN.test(instant.requestedTime(), savepointToRestoreTimestamp))
+            .collect(Collectors.toList());
 
-      // Get all the commits on the timeline after the provided commit's completion time unless it is the SOLO_COMMIT_TIMESTAMP which indicates there are no commits for the table
-      String completionTime = getCompletionTime(completionTimeQueryView);
 
-      Predicate<HoodieInstant> instantFilter = constructInstantFilter(completionTime);
-      List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
-              .getReverseOrderedInstantsByCompletionTime()
-              .filter(instantFilter)
-              .filter(instant -> !pendingClusteringInstantsToRollback.contains(instant))
-              .collect(Collectors.toList());
+        // Get all the commits on the timeline after the provided commit's completion time unless it is the SOLO_COMMIT_TIMESTAMP which indicates there are no commits for the table
+        String completionTime = savepointToRestoreTimestamp.equals(SOLO_COMMIT_TIMESTAMP) ? savepointToRestoreTimestamp : completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
+            .orElseThrow(() -> new HoodieException("Unable to find completion time for instant: " + savepointToRestoreTimestamp));
 
-      // Combine both lists - first rollback pending clustering and then rollback all other commits
-      List<HoodieInstantInfo> instantsToRollback = Stream.concat(pendingClusteringInstantsToRollback.stream(), commitInstantsToRollback.stream())
-              .map(entry -> new HoodieInstantInfo(entry.requestedTime(), entry.getAction()))
-              .collect(Collectors.toList());
+        Predicate<HoodieInstant> instantFilter = constructInstantFilter(completionTime);
+        List<HoodieInstant> commitInstantsToRollback = table.getActiveTimeline().getWriteTimeline()
+            .getReverseOrderedInstantsByCompletionTime()
+            .filter(instantFilter)
+            .filter(instant -> !pendingClusteringInstantsToRollback.contains(instant))
+            .collect(Collectors.toList());
 
+        // Combine both lists - first rollback pending clustering and then rollback all other commits
+        instantsToRollback = Stream.concat(pendingClusteringInstantsToRollback.stream(), commitInstantsToRollback.stream())
+            .map(entry -> new HoodieInstantInfo(entry.requestedTime(), entry.getAction()))
+            .collect(Collectors.toList());
+      }
       HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);
       table.getActiveTimeline().saveToRestoreRequested(restoreInstant, restorePlan);
       table.getMetaClient().reloadActiveTimeline();
@@ -106,25 +112,9 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
     }
   }
 
-  /**
-   * Finds the completion time for the restore action based off of the provided instant for the savepoint.
-   * During the upgrade flow, the restore timestamp will be the SOLO_COMMIT_TIMESTAMP because there are no commits to the table and therefore no completion time.
-   * In this case, we just return the input timestamp. In the case of the metadata table, it is possible that the table was deleted as part of the restore operation,
-   * and therefore we will not be able to find the completion time for the commits and in that case we also return the input timestamp.
-   * @param completionTimeQueryView
-   * @return
-   */
-  private String getCompletionTime(CompletionTimeQueryView completionTimeQueryView) {
-    if (savepointToRestoreTimestamp.equals(SOLO_COMMIT_TIMESTAMP)) {
-      return savepointToRestoreTimestamp;
-    }
-    // if the table is a metadata table and only bootstrap commits exist, then return the current time as the instant to avoid operations on the reconstructed metadata table
-    HoodieTableMetaClient metaClient = table.getMetaClient();
-    if (metaClient.isMetadataTable() && metaClient.getActiveTimeline().lastInstant().map(instant -> instant.requestedTime().startsWith(SOLO_COMMIT_TIMESTAMP)).orElse(false)) {
-      return HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
-    }
-    return completionTimeQueryView.getCompletionTime(savepointToRestoreTimestamp)
-        .orElseThrow(() -> new HoodieException("Unable to find completion time for instant: " + savepointToRestoreTimestamp));
+  private static boolean isMetadataTableRecreatedDuringRestore(HoodieTableMetaClient metaClient) {
+    // If the table is recreated during restore, the last instant will be a bootstrap commit which starts with SOLO_COMMIT_TIMESTAMP.
+    return metaClient.getActiveTimeline().lastInstant().map(instant -> instant.requestedTime().startsWith(SOLO_COMMIT_TIMESTAMP)).orElse(true);
   }
 
   private Predicate<HoodieInstant> constructInstantFilter(String completionTime) {
