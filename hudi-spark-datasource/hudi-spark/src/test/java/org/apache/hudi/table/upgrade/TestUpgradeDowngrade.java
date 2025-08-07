@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -56,6 +57,7 @@ import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -210,6 +212,39 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
     LOG.info("Auto-upgrade test completed successfully: {} -> Expected: {}, Actual: {}", 
         description, expectedVersion, resultMetaClient.getTableConfig().getTableVersion());
+  }
+
+  @Test
+  public void testNeedsUpgradeWithAutoUpgradeDisabledAndWriteVersionOverride() throws Exception {
+    LOG.info("Testing needsUpgrade with auto-upgrade disabled and write version override");
+    
+    // Test case: Table at version 6, write version set to 8, auto-upgrade disabled
+    // Expected: needsUpgrade should return false and set write version to match table version
+    HoodieTableMetaClient metaClient = loadFixtureTable(HoodieTableVersion.SIX);
+    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion(),
+        "Fixture table should be at version SIX");
+    
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath().toString())
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(8)
+        .build();
+    
+    // Verify initial state
+    assertEquals(HoodieTableVersion.EIGHT, config.getWriteVersion(),
+        "Initial write version should be EIGHT");
+    
+    // Call the static method directly to test our specific code path
+    boolean result = UpgradeDowngrade.needsUpgrade(metaClient, config, HoodieTableVersion.EIGHT);
+    
+    // should return false (no upgrade needed due to disabled auto-upgrade)
+    assertFalse(result, "needsUpgrade should return false when auto-upgrade is disabled");
+    
+    // write version should now match table version
+    assertEquals(HoodieTableVersion.SIX, config.getWriteVersion(), 
+        "Write version should be set to match table version when auto-upgrade is disabled");
+    
+    LOG.info("needsUpgrade test with auto-upgrade disabled passed successfully");
   }
 
   @ParameterizedTest
