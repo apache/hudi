@@ -50,7 +50,6 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -425,26 +424,24 @@ public class HoodieIndexUtils {
       String[] orderingFieldNames) throws IOException {
     BufferedRecord<R> incomingBufferedRecord = BufferedRecord.forRecordWithContext(incoming, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
     BufferedRecord<R> existingBufferedRecord = BufferedRecord.forRecordWithContext(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
-    MergeResult<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
+    BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
     if (mergeResult.isDelete()) {
       //the record was deleted
       return Option.empty();
     }
-    if (mergeResult.getMergedRecord() == null) {
+    if (mergeResult.getRecord() == null) {
       // SENTINEL case: the record did not match and merge case and should not be modified
       return Option.of((HoodieRecord<R>) new HoodieAvroIndexedRecord(HoodieRecord.SENTINEL));
     }
 
-    BufferedRecord<R> resultingBufferedRecord = mergeResult.getMergedRecord();
-
-    if (resultingBufferedRecord.getRecord().equals(HoodieRecord.SENTINEL)) {
+    if (mergeResult.getRecord().equals(HoodieRecord.SENTINEL)) {
       //the record did not match and merge case and should not be modified
-      return Option.of(existingRecordContext.constructHoodieRecord(resultingBufferedRecord, incoming.getPartitionPath()));
+      return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, incoming.getPartitionPath()));
     }
 
     //record is inserted or updated
-    String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, resultingBufferedRecord);
-    HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(resultingBufferedRecord, partitionPath);
+    String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
+    HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
         new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
     return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
@@ -488,15 +485,14 @@ public class HoodieIndexUtils {
           .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
       BufferedRecord<R> incomingBufferedRecord = BufferedRecord.forRecordWithContext(incomingPrepended, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
       BufferedRecord<R> existingBufferedRecord = BufferedRecord.forRecordWithContext(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
-      MergeResult<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
+      BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
 
       if (mergeResult.isDelete()) {
         // the record was deleted
         return Option.empty();
       }
-      BufferedRecord<R> resultingBufferedRecord = mergeResult.getMergedRecord();
-      String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, resultingBufferedRecord);
-      HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(resultingBufferedRecord, partitionPath);
+      String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
+      HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
       // the merged record needs to be converted back to the original payload
       return Option.of(result.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
           config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));

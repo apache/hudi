@@ -38,7 +38,6 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
-import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -241,19 +240,19 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
     BufferedRecord<InternalRow> newerBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, false);
-    MergeResult<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    BufferedRecord<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
     if (mergeMode == COMMIT_TIME_ORDERING) {
       if (updateMode == PartialUpdateMode.NONE) {
-        assertEquals(newRecord, finalResult.getRecordData());
+        assertEquals(newRecord, finalResult.getRecord());
       } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
-        assertEquals(20, finalResult.getRecordData().getInt(2));
-        assertEquals(500L, finalResult.getRecordData().getLong(4));
+        assertEquals(20, finalResult.getRecord().getInt(2));
+        assertEquals(500L, finalResult.getRecord().getLong(4));
       } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
-        assertEquals("Older City", finalResult.getRecordData().getString(3));
+        assertEquals("Older City", finalResult.getRecord().getString(3));
       }
     } else {
-      assertEquals(oldRecord, finalResult.getRecordData());
+      assertEquals(oldRecord, finalResult.getRecord());
     }
 
     // New record has higher ordering value.
@@ -262,12 +261,12 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
     if (updateMode == PartialUpdateMode.NONE) {
-      assertEquals(newRecord, finalResult.getRecordData());
+      assertEquals(newRecord, finalResult.getRecord());
     } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
-      assertEquals(20, finalResult.getRecordData().getInt(2));
-      assertEquals(500, finalResult.getRecordData().getLong(4));
+      assertEquals(20, finalResult.getRecord().getInt(2));
+      assertEquals(500, finalResult.getRecord().getLong(4));
     } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
-      assertEquals("Older City", finalResult.getRecordData().getString(3));
+      assertEquals("Older City", finalResult.getRecord().getString(3));
     }
 
     // New record has equal ordering value.
@@ -276,12 +275,12 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
     if (updateMode == PartialUpdateMode.NONE) {
-      assertEquals(newRecord, finalResult.getRecordData());
+      assertEquals(newRecord, finalResult.getRecord());
     } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
-      assertEquals(20, finalResult.getRecordData().getInt(2));
-      assertEquals(500, finalResult.getRecordData().getLong(4));
+      assertEquals(20, finalResult.getRecord().getInt(2));
+      assertEquals(500, finalResult.getRecord().getLong(4));
     } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
-      assertEquals("Older City", finalResult.getRecordData().getString(3));
+      assertEquals("Older City", finalResult.getRecord().getString(3));
     }
   }
 
@@ -308,14 +307,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     BufferedRecord<InternalRow> newerBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newerRecord, 2, false);
 
-    MergeResult<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    BufferedRecord<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     InternalRow expected = createFullRecordForPartial(
         (int) ORDERING_VALUE - 1, "newer_id", "Newer Name", 20, "Older City", 500L);
     assertFalse(finalResult.isDelete());
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertRowEqual(expected, finalResult.getRecordData(), READER_SCHEMA);
+      assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
     } else {
-      assertRowEqual(olderRecord, finalResult.getRecordData(), READER_SCHEMA);
+      assertRowEqual(olderRecord, finalResult.getRecord(), READER_SCHEMA);
     }
     // Case 2: new record has higher ordering value.
     newerRecord = createPartialRecord((int) ORDERING_VALUE + 1, "newer_id", "Newer Name");
@@ -323,14 +322,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE + 1, "newer_id", "Newer Name", 20, "Older City", 500L);
-    assertRowEqual(expected, finalResult.getRecordData(), READER_SCHEMA);
+    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
     // Case 3: new record has equal ordering value.
     newerRecord = createPartialRecord((int) ORDERING_VALUE, "newer_id", "Newer Name");
     newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newerRecord, 2, false);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE, "newer_id", "Newer Name", 20, "Older City", 500L);
-    assertRowEqual(expected, finalResult.getRecordData(), READER_SCHEMA);
+    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
   }
 
   private void runPartialDeltaMerge(RecordMergeMode mergeMode) throws IOException {
@@ -563,11 +562,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     BufferedRecord<InternalRow> newerBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, true);
 
-    MergeResult<InternalRow> result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    BufferedRecord<InternalRow> result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertEquals(newRecord, result.getRecordData());
+      assertEquals(newRecord, result.getRecord());
     } else {
-      assertEquals(oldRecord, result.getRecordData());
+      assertEquals(oldRecord, result.getRecord());
     }
 
     // new record has higher ordering value.
@@ -575,14 +574,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, true);
     result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertTrue(result.isDelete());
-    assertEquals(newRecord, result.getRecordData());
+    assertEquals(newRecord, result.getRecord());
 
     // new record has default ordering value.
     newerBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), newRecord, 1, true);
     result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertTrue(result.isDelete());
-    assertEquals(newRecord, result.getRecordData());
+    assertEquals(newRecord, result.getRecord());
   }
 
   // ============================================================================
