@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 
 import org.apache.avro.Schema;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +42,7 @@ import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
  * {@link BufferedRecordMergerFactory.CommitTimePartialRecordMerger} and
  * {@link BufferedRecordMergerFactory.EventTimePartialRecordMerger}.
  */
-public class PartialUpdateStrategy<T> {
+public class PartialUpdateStrategy<T> implements Serializable {
   private final RecordContext<T> recordContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;

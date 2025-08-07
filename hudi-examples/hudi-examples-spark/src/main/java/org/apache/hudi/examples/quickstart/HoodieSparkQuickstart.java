@@ -20,7 +20,6 @@ package org.apache.hudi.examples.quickstart;
 
 import org.apache.hudi.QuickstartUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
@@ -120,7 +119,6 @@ public final class HoodieSparkQuickstart {
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
-        .option("hoodie.datasource.write.table.type", HoodieTableType.MERGE_ON_READ.name())
         .mode(Overwrite)
         .save(tablePath);
     return df;
