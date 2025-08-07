@@ -81,8 +81,8 @@ class SecondaryIndexSupport(spark: SparkSession,
   private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
     val secondaryIndexData = metadataTable.readSecondaryIndexLocationsWithKeys(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName)
-    try {
-      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(secondaryIndexData)
+    HoodieDataUtils.withHoodieDataCleanUp(secondaryIndexData, data => {
+      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(data)
       val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
       val candidateFiles: mutable.Set[String] = mutable.Set.empty
       recordKeyLocationsMap.values().forEach(location => fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath))
@@ -95,10 +95,7 @@ class SecondaryIndexSupport(spark: SparkSession,
         }
       }
       candidateFiles.toSet
-    } finally {
-      // Clean up the RDD to avoid memory leaks
-      secondaryIndexData.unpersistWithDependencies()
-    }
+    })
   }
 
   /**

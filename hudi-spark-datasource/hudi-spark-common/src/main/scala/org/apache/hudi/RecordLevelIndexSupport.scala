@@ -77,8 +77,8 @@ class RecordLevelIndexSupport(spark: SparkSession,
   private def getCandidateFilesForRecordKeys(allFiles: Seq[StoragePath], recordKeys: List[String]): Set[String] = {
     val recordIndexData = metadataTable.readRecordIndexLocationsWithKeys(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(recordKeys).asJava))
-    try {
-      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData)
+    HoodieDataUtils.withHoodieDataCleanUp(recordIndexData, data => {
+      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(data)
       val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
       val candidateFiles: mutable.Set[String] = mutable.Set.empty
       for (location <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
@@ -92,10 +92,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
         }
       }
       candidateFiles.toSet
-    } finally {
-      // Clean up the RDD to avoid memory leaks
-      recordIndexData.unpersistWithDependencies()
-    }
+    })
   }
 
   /**
