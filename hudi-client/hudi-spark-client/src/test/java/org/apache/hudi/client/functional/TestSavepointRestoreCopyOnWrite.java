@@ -19,7 +19,6 @@
 package org.apache.hudi.client.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -97,7 +96,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       final int numRecords = 10;
       final int iterations = 5;
       for (int i = 1; i <= 5; i++) {
-        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+        String newCommitTime = client.createNewInstantTime();
         // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);

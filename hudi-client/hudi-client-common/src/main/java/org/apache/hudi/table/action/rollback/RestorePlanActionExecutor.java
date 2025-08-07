@@ -71,7 +71,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
   public Option<HoodieRestorePlan> execute() {
     final HoodieInstant restoreInstant = instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.RESTORE_ACTION, instantTime);
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    try (CompletionTimeQueryView completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+    try (CompletionTimeQueryView completionTimeQueryView = metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
       List<HoodieInstantInfo> instantsToRollback;
       if (table.getMetaClient().isMetadataTable() && isMetadataTableRecreatedDuringRestore(metaClient)) {
         instantsToRollback = Collections.emptyList();
