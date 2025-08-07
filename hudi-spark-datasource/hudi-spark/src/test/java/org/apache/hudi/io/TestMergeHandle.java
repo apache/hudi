@@ -331,11 +331,15 @@ public class TestMergeHandle extends BaseTestHandle {
     recordsToDelete.add(deleteRecordLowerOrderingValue);
     recordsToDelete.add(deleteRecordHigherOrderingValue);
 
-    validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
-    validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
-    expectedDeletes = 2;
-    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
+    if (!mergeMode.equals("CUSTOM_MERGER")) {
+      // Custom merger chooses record with lower ordering value
+      validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
+      validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
+      expectedDeletes = 2;
+    }
+    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name()) || mergeMode.equals("CUSTOM_MERGER")) {
       // for deletes w/ custom payload based merge, we do honor ordering value.
+      // Custom merger chooses record with lower ordering value
       validDeletes.put(deleteRecordLowerOrderingValue.getRecordKey(), deleteRecordLowerOrderingValue);
       expectedDeletes += 1;
     }
@@ -348,8 +352,11 @@ public class TestMergeHandle extends BaseTestHandle {
     recordsToUpdate.add(genericRecord1);
     recordsToUpdate.add(genericRecord2);
     List<HoodieRecord> hoodieRecordsToUpdate = getHoodieRecords(payloadClass, recordsToUpdate, partitionPath);
-    validUpdates.add(hoodieRecordsToUpdate.get(0));
-    expectedUpdates = 1;
+    if (!mergeMode.equals("CUSTOM_MERGER")) {
+      // Custom merger chooses record with lower ordering value
+      validUpdates.add(hoodieRecordsToUpdate.get(0));
+      expectedUpdates = 1;
+    }
     if (!mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name())) {
       validUpdates.add(hoodieRecordsToUpdate.get(1));
       expectedUpdates += 1;
@@ -529,8 +536,11 @@ public class TestMergeHandle extends BaseTestHandle {
       if (olderData.get(0).equals(newerData.get(0))) {
         // If the timestamps are the same, we do not update
         return Option.of(Pair.of(older, oldSchema));
+      } else if ((long) olderData.get(0) < (long) newerData.get(0)) {
+        // Custom merger chooses record with lower ordering value
+        return Option.of(Pair.of(older, oldSchema));
       } else {
-        // The merger behaves like a commit time ordering
+        // Custom merger chooses record with lower ordering value
         return Option.of(Pair.of(newer, newSchema));
       }
     }
