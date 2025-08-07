@@ -27,9 +27,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -37,11 +39,14 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,13 +54,16 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -345,6 +353,60 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         + "the metadata table so that the upgrade and downgrade can continue for the data table.";
     assertTrue(exception.getMessage().contains(expectedMessage),
         "Exception message should contain metadata table failure message");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"1","2","3","4","5","6","7","8","9","null"})
+  void testTableVersionDuringTableCreation(String targetTableVersion) {
+    SparkSession spark = spark();
+    Map<String, String> writeOptions = new HashMap<>();
+    if (!targetTableVersion.equals("null")) {
+      writeOptions.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), targetTableVersion);
+    }
+    writeOptions.put(HoodieWriteConfig.TBL_NAME.key(), "testTableCreation");
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    List<String> records = recordsToStrings(dataGen.generateInserts("001", 5));
+    Dataset<Row> inputDF = spark.read().json(jsc().parallelize(records, 2));
+
+    // Create table, and validate.
+    Set<String> failSet = new HashSet<>(Arrays.asList("1", "2", "3", "4", "5"));
+    if (failSet.contains(targetTableVersion)) {
+      // This fails at HoodieTableMetaClient.
+      assertThrows(HoodieNotSupportedException.class, () -> {
+        inputDF.write().format("org.apache.hudi")
+            .partitionBy("partition")
+            .options(writeOptions)
+            .mode(SaveMode.Append)
+            .save(basePath());
+      });
+    } else if (targetTableVersion.equals("7")) {
+      // Fails at write table version check.
+      assertThrows(IllegalArgumentException.class, () -> {
+        inputDF.write().format("org.apache.hudi")
+            .partitionBy("partition")
+            .options(writeOptions)
+            .mode(SaveMode.Append)
+            .save(basePath());
+      });
+    } else {
+      inputDF.write().format("org.apache.hudi")
+          .partitionBy("partition")
+          .options(writeOptions)
+          .mode(SaveMode.Append)
+          .save(basePath());
+      metaClient = HoodieTableMetaClient.builder().setConf(storageConf()).setBasePath(basePath()).build();
+      // If no write version is specified, use current.
+      if (!targetTableVersion.equals("null")) {
+        assertEquals(
+            Integer.valueOf(targetTableVersion),
+            metaClient.getTableConfig().getTableVersion().versionCode());
+      } else {
+        // Otherwise, the table version is the target table version.
+        assertEquals(
+            HoodieTableVersion.current(),
+            metaClient.getTableConfig().getTableVersion());
+      }
+    }
   }
 
   /**

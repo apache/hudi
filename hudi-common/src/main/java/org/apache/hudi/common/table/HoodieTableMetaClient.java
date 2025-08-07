@@ -1060,7 +1060,6 @@ public class HoodieTableMetaClient implements Serializable {
     private String tableName;
     private String tableCreateSchema;
     private HoodieTableVersion tableVersion;
-    private boolean autoUpgrade = true;
     private String recordKeyFields;
     private String secondaryKeyFields;
     private String archiveLogFolder;
@@ -1126,11 +1125,6 @@ public class HoodieTableMetaClient implements Serializable {
       this.tableVersion = tableVersion;
       // TimelineLayoutVersion is an internal setting which will be consistent with table version.
       setTimelineLayoutVersion(tableVersion.getTimelineLayoutVersion().getVersion());
-      return this;
-    }
-
-    public TableBuilder setAutoUpgrade(boolean autoUpgrade) {
-      this.autoUpgrade = autoUpgrade;
       return this;
     }
 
@@ -1596,21 +1590,16 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     HoodieTableVersion getTableVersionProperly() {
-      if (tableVersion == null
-          || tableVersion.greaterThanOrEquals(HoodieTableVersion.current())) {
+      if (tableVersion == null) {
         return HoodieTableVersion.current();
-      } else {
-        if (autoUpgrade && (tableVersion.versionCode() == 6 || tableVersion.versionCode() == 8)) {
-          String errorMessage = String.format(
-              "Table version \"%d\" is set for table creation, which is lower than "
-                  + "the highest available version \"%d\" the current Hudi binary supports. Meanwhile, "
-                  + "the auto upgrade configuration \"hoodie.write.auto.upgrade\" is enabled. A Potential risk is that "
-                  + "future commits might upgrade this table without any awareness. "
-                  + "To prevent this, please either set \"hoodie.write.auto.upgrade=false\" or unset the table version.",
-              tableVersion.versionCode(), HoodieTableVersion.current().versionCode());
-          throw new HoodieNotSupportedException(errorMessage);
-        }
+      } else if (tableVersion.greaterThanOrEquals(HoodieTableVersion.SIX)) {
         return tableVersion;
+      } else {
+        String errorMessage = String.format(
+            "Creating a table in version \"%d\" is not allowed in current Hudi binary. "
+                + "Please set \"hoodie.write.table.version\" config with a value >= 6",
+            tableVersion.versionCode());
+        throw new HoodieNotSupportedException(errorMessage);
       }
     }
 
