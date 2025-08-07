@@ -1920,6 +1920,26 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(DummyAvroPayload.class.getName(), props.get(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
+  @Test
+  public void testCustomPayloadUsageWithCOWTable() throws Exception {
+    String dataSetBasePath = basePath + "/test_dataset_cow_custom_payload";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+        true, true, DummyAvroPayload.class.getName(), null);
+    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+    assertRecordCount(1000, dataSetBasePath, sqlContext);
+
+    cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.UPSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+        true, true, DummyAvroPayload.class.getName(), null);
+    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
+
+    assertRecordCount(1450, dataSetBasePath, sqlContext);
+
+    assertEquals(450, sqlContext.read().options(hudiOpts).format("org.apache.hudi")
+        .load(dataSetBasePath).filter("driver = 'dummy_driver'").count());
+  }
+
   private static Stream<Arguments> getArgumentsForFilterDupesWithPrecombineTest() {
     return Stream.of(
         Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", EMPTY_STRING),
@@ -3448,8 +3468,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   public static class DummyAvroPayload extends OverwriteWithLatestAvroPayload {
 
+    public DummyAvroPayload(Option<GenericRecord> gr) {
+      super(gr);
+    }
+
     public DummyAvroPayload(GenericRecord gr, Comparable orderingVal) {
       super(gr, orderingVal);
+    }
+
+    @Override
+    public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+      return getInsertValue(schema).map(gr -> {
+        gr.put(schema.getField("driver").pos(), "dummy_driver");
+        return gr;
+      });
     }
   }
 
