@@ -38,7 +38,7 @@ import java.util.Objects;
 
 /**
  * Wrapper class for {@link IndexedRecord} that will serialize the record as bytes without the schema for efficient shuffling performance in Spark.
- * After deserialization, the schema can be set using {@link #setSchema(Schema)} and that will also trigger deserialization of the record.
+ * After deserialization, the schema can be set using {@link #decodeRecord(Schema)} and that will also trigger deserialization of the record.
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
 class SerializableIndexedRecord extends GenericData.Record implements IndexedRecord, GenericRecord, KryoSerializable {
@@ -78,14 +78,14 @@ class SerializableIndexedRecord extends GenericData.Record implements IndexedRec
     return record.getSchema();
   }
 
-  private byte[] getRecordBytes() {
+  private byte[] encodeRecord() {
     if (recordBytes == null) {
       recordBytes = HoodieAvroUtils.avroToBytes(record);
     }
     return recordBytes;
   }
 
-  void setSchema(Schema schema) {
+  void decodeRecord(Schema schema) {
     if (record == null) {
       try {
         record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
@@ -97,7 +97,7 @@ class SerializableIndexedRecord extends GenericData.Record implements IndexedRec
 
   @Override
   public void write(Kryo kryo, Output output) {
-    byte[] bytes = getRecordBytes();
+    byte[] bytes = encodeRecord();
     output.writeInt(bytes.length, true);
     output.writeBytes(bytes);
   }

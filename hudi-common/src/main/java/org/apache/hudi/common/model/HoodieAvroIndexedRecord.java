@@ -274,7 +274,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   private void setSchema(Schema recordSchema) {
-    optimizedRecord.setSchema(recordSchema);
+    optimizedRecord.decodeRecord(recordSchema);
   }
 
   @Override
