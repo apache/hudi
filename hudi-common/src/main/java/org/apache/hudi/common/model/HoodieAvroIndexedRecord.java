@@ -198,7 +198,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   protected boolean checkIsDelete(Schema recordSchema, Properties props) {
-    if (data == SerializableIndexedRecord.SENTINEL) {
+    if (getData().equals(SENTINEL)) {
       return false; // Sentinel record is not a delete
     }
     setSchema(recordSchema);
@@ -208,7 +208,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
-    return data == SerializableIndexedRecord.SENTINEL;
+    return getData().equals(SENTINEL);
   }
 
   @Override

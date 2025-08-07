@@ -28,12 +28,10 @@ import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Objects;
 
 /**
@@ -41,26 +39,16 @@ import java.util.Objects;
  * After deserialization, the schema can be set using {@link #decodeRecord(Schema)} and that will also trigger deserialization of the record.
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
-class SerializableIndexedRecord extends GenericData.Record implements IndexedRecord, GenericRecord, KryoSerializable {
-  static final SerializableIndexedRecord SENTINEL = new Sentinel();
+class SerializableIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializable {
   private IndexedRecord record;
   private byte[] recordBytes;
 
   static SerializableIndexedRecord createInstance(IndexedRecord record) {
-    if (record == null) {
-      return null;
-    }
-    return record == HoodieRecord.SENTINEL ? SENTINEL : new SerializableIndexedRecord(record);
+    return record == null ? null : new SerializableIndexedRecord(record);
   }
 
   private SerializableIndexedRecord(IndexedRecord record) {
-    super(record.getSchema());
     this.record = record;
-  }
-
-  private SerializableIndexedRecord(Schema schema) {
-    super(schema);
-    this.recordBytes = new byte[0];
   }
 
   @Override
@@ -152,22 +140,5 @@ class SerializableIndexedRecord extends GenericData.Record implements IndexedRec
   @Override
   public String toString() {
     return record == null ? "SERIALIZED: " + new String(recordBytes) : record.toString();
-  }
-
-  private static class Sentinel extends SerializableIndexedRecord {
-
-    private Sentinel() {
-      super(Schema.createRecord("sentinel", null, "org.apache.hudi", false, Collections.emptyList()));
-    }
-
-    @Override
-    public String toString() {
-      return "SENTINEL";
-    }
-
-    @Override
-    IndexedRecord getRecord() {
-      return HoodieRecord.SENTINEL;
-    }
   }
 }
