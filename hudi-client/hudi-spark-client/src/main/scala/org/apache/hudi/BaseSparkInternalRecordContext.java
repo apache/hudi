@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -76,7 +77,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       return new HoodieEmptyRecord<>(
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
-          HoodieRecord.DEFAULT_ORDERING_VALUE,
+          OrderingValues.getDefault(),
           HoodieRecord.HoodieRecordType.SPARK);
     }
 

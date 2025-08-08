@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -149,9 +150,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     try {
       // NOTE: The order of previous and next is uncertain within a batch in "reduceByKey".
       // If the return value is empty, it means the previous should be chosen.
-      BufferedRecord<T> newBufferedRecord = BufferedRecord.forRecordWithContext(next, schema, recordContext, props, orderingFieldNames);
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.forRecordWithContext(next, schema, recordContext, props, orderingFieldNames);
       // Construct old buffered record.
-      BufferedRecord<T> oldBufferedRecord = BufferedRecord.forRecordWithContext(previous, schema, recordContext, props, orderingFieldNames);
+      BufferedRecord<T> oldBufferedRecord = BufferedRecords.forRecordWithContext(previous, schema, recordContext, props, orderingFieldNames);
       // Run merge.
       Option<BufferedRecord<T>> merged = recordMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
       // NOTE: For merge mode based merging, it returns non-null.

@@ -66,7 +66,6 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
         if (hasSchemaId) {
           output.writeVarInt(record.getSchemaId(), true);
         }
-        output.writeBoolean(record.isDelete());
         HoodieOperation operation = record.getHoodieOperation();
         output.writeByte(operation == null ? -1 : operation.getValue());
         kryo.writeClassAndObject(output, record.getOrderingValue());
@@ -86,7 +85,6 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
         if (hasSchemaId) {
           schemaId = input.readVarInt(true);
         }
-        boolean isDelete = input.readBoolean();
         byte hoodieOperationValue = input.readByte();
         HoodieOperation operation = hoodieOperationValue == -1 ? null : HoodieOperation.fromValue(hoodieOperationValue);
         Comparable orderingValue = (Comparable) kryo.readClassAndObject(input);
@@ -99,7 +97,7 @@ public class BufferedRecordSerializer<T> implements CustomSerializer<BufferedRec
         } else {
           record = recordSerializer.deserialize(input.readBytes(recordLength), schemaId);
         }
-        return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, operation, isDelete);
+        return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, operation);
       }
     }
   }

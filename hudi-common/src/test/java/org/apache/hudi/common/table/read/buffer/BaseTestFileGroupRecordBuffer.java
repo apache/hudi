@@ -79,9 +79,7 @@ public class BaseTestFileGroupRecordBuffer {
     return record;
   }
 
-  protected static List<HoodieRecord> convertToHoodieRecordsList(List<IndexedRecord> indexedRecords,
-                                                                 HoodieReaderContext<IndexedRecord> readerContext,
-                                                                 TypedProperties props, String[] orderingFieldNames) {
+  protected static List<HoodieRecord> convertToHoodieRecordsList(List<IndexedRecord> indexedRecords) {
     return indexedRecords.stream().map(rec -> new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec, null)).collect(Collectors.toList());
   }
 

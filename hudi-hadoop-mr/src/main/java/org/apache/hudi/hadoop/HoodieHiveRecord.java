@@ -59,11 +59,6 @@ import java.util.Properties;
 public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   private boolean copy;
-  private final boolean isDeleted;
-
-  public boolean isDeleted() {
-    return isDeleted;
-  }
 
   private final ArrayWritableObjectInspector objectInspector;
 
@@ -77,7 +72,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     this.objectInspectorCache = objectInspectorCache;
     this.schema = schema;
     this.copy = false;
-    isDeleted = data == null;
+    isDelete = data == null;
   }
 
   public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, ObjectInspectorCache objectInspectorCache, HoodieOperation hoodieOperation, boolean isDelete) {
@@ -86,7 +81,6 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     this.objectInspectorCache = objectInspectorCache;
     this.schema = schema;
     this.copy = false;
-    isDeleted = data == null;
   }
 
   private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
@@ -94,7 +88,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     super(key, data, operation, Option.empty());
     this.schema = schema;
     this.copy = isCopy;
-    isDeleted = data == null;
+    isDelete = data == null;
     this.objectInspector = objectInspector;
     this.objectInspectorCache = objectInspectorCache;
   }

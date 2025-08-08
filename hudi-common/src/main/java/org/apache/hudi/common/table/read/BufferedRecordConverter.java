@@ -36,7 +36,8 @@ public interface BufferedRecordConverter<T> {
     switch (iteratorMode) {
       case ENGINE_RECORD:
         return new BufferedRecordConverter<T>() {
-          // reused BufferedRecord wrapper for engine record iterator to avoid creating that at record level.
+          // Reused BufferedRecord wrapper for engine record iterator to avoid creating that at record level.
+          // It's safe because the converter is used in single thread and the iterator does not emit the reused `BufferedRecord`.
           private final BufferedRecord<T> reusedBufferedRecord = new BufferedRecord<>();
 
           @Override
@@ -46,7 +47,8 @@ public interface BufferedRecordConverter<T> {
         };
       case RECORD_KEY:
         return new BufferedRecordConverter<T>() {
-          // reused BufferedRecord wrapper for record key iterator to avoid creating that at record level.
+          // Reused BufferedRecord wrapper for record key iterator to avoid creating that at record level.
+          // It's safe because the converter is used in single thread and the iterator does not emit the reused `BufferedRecord`.
           private final BufferedRecord<T> reusedBufferedRecord = new BufferedRecord<>();
 
           @Override
@@ -59,7 +61,7 @@ public interface BufferedRecordConverter<T> {
         return new BufferedRecordConverter<T>() {
           @Override
           public BufferedRecord<T> convert(T record) {
-            return BufferedRecord.forRecordWithContext(record, readerSchema, recordContext, orderingFieldNames, false);
+            return BufferedRecords.forRecordWithContext(record, readerSchema, recordContext, orderingFieldNames, false);
           }
         };
     }

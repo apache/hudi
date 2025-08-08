@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
@@ -85,13 +86,12 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
         BufferedRecord<T> bufferedRecord;
         if (data == null) {
           DeleteRecord deleteRecord = DeleteRecord.create(hoodieRecord.getKey(), hoodieRecord.getOrderingValue(recordSchema, props, orderingFieldsArray));
-          bufferedRecord = BufferedRecord.forDeleteRecord(deleteRecord, deleteRecord.getOrderingValue(), hoodieOperation);
+          bufferedRecord = BufferedRecords.forDeleteRecord(deleteRecord, deleteRecord.getOrderingValue(), hoodieOperation);
         } else {
           // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
           // so we use recordContext#isDeleteRecord here if the data field is not null.
           boolean isDelete = recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
-          // use -U operation to identify the record should be skipped during updating index.
-          bufferedRecord = BufferedRecord.forRecordWithContext(data, recordSchema, recordContext, orderingFieldNames, hoodieOperation, isDelete);
+          bufferedRecord = BufferedRecords.forRecordWithContext(data, recordSchema, recordContext, orderingFieldNames, hoodieOperation, isDelete);
         }
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {

@@ -19,19 +19,13 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.OrderingValues;
 
-import org.apache.avro.Schema;
+import javax.annotation.Nullable;
 
 import java.io.Serializable;
-import java.util.List;
 import java.util.Objects;
-import java.util.Properties;
 import java.util.function.UnaryOperator;
 
 /**
@@ -44,64 +38,22 @@ public class BufferedRecord<T> implements Serializable {
   private T record;
   private final Comparable orderingValue;
   private final Integer schemaId;
-  private final boolean isDelete;
-  private HoodieOperation hoodieOperation;
+  @Nullable private HoodieOperation hoodieOperation;
 
   public BufferedRecord() {
     this(null, null, null, null, false);
   }
 
   public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
-    this(recordKey, orderingValue, record, schemaId, null, isDelete);
+    this(recordKey, orderingValue, record, schemaId, isDelete ? HoodieOperation.DELETE : null);
   }
 
-  public BufferedRecord(String recordKey, Comparable orderingValue, T record,
-                        Integer schemaId, HoodieOperation hoodieOperation, boolean isDelete) {
+  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, @Nullable HoodieOperation hoodieOperation) {
     this.recordKey = recordKey;
     this.orderingValue = orderingValue;
     this.record = record;
     this.schemaId = schemaId;
-    this.isDelete = isDelete;
     this.hoodieOperation = hoodieOperation;
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
-    boolean isDelete = record.isDelete(schema, props);
-    return forRecordWithContext(record, schema, recordContext, props, orderingFields, isDelete);
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, boolean isDelete) {
-    HoodieKey hoodieKey = record.getKey();
-    T data = recordContext.extractDataFromRecord(record, schema, props);
-    String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
-    Integer schemaId = recordContext.encodeAvroSchema(schema);
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, isDelete);
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
-    return forRecordWithContext(record, schema, recordContext, orderingFieldNames, null, isDelete);
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(
-      T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation, boolean isDelete) {
-    String recordKey = recordContext.getRecordKey(record, schema);
-    Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
-    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, hoodieOperation, isDelete);
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
-    Integer schemaId = recordContext.encodeAvroSchema(schema);
-    Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
-    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
-  }
-
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue) {
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, true);
-  }
-
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue, HoodieOperation hoodieOperation) {
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, hoodieOperation, true);
   }
 
   public String getRecordKey() {
@@ -121,11 +73,11 @@ public class BufferedRecord<T> implements Serializable {
   }
 
   public boolean isDelete() {
-    return isDelete;
+    return HoodieOperation.isDelete(hoodieOperation) || HoodieOperation.isUpdateBefore(hoodieOperation);
   }
 
   public boolean isCommitTimeOrderingDelete() {
-    return isDelete && OrderingValues.isDefault(orderingValue);
+    return isDelete() && OrderingValues.isDefault(orderingValue);
   }
 
   public void setHoodieOperation(HoodieOperation hoodieOperation) {
@@ -176,12 +128,12 @@ public class BufferedRecord<T> implements Serializable {
       return false;
     }
     BufferedRecord<?> that = (BufferedRecord<?>) o;
-    return isDelete == that.isDelete && Objects.equals(recordKey, that.recordKey) && Objects.equals(orderingValue, that.orderingValue)
+    return Objects.equals(recordKey, that.recordKey) && Objects.equals(orderingValue, that.orderingValue)
         && Objects.equals(record, that.record) && Objects.equals(schemaId, that.schemaId) && hoodieOperation == that.hoodieOperation;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(recordKey, orderingValue, record, schemaId, isDelete, hoodieOperation);
+    return Objects.hash(recordKey, orderingValue, record, schemaId, hoodieOperation);
   }
 }

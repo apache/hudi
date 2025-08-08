@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 
@@ -109,7 +110,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
         return new HoodieEmptyRecord<>(
             hoodieKey,
             bufferedRecord.getHoodieOperation(),
-            HoodieRecord.DEFAULT_ORDERING_VALUE,
+            OrderingValues.getDefault(),
             HoodieRecord.HoodieRecordType.AVRO);
       }
     }

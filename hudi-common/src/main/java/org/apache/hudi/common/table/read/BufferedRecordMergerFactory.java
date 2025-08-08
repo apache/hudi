@@ -316,7 +316,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
+        return Option.of(BufferedRecords.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
@@ -341,9 +341,9 @@ public class BufferedRecordMergerFactory {
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
           hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
         }
-        return BufferedRecord.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
+        return BufferedRecords.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
       }
-      return getDeleteBufferedRecord(newerRecord.getRecordKey(), recordContext);
+      return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
   }
 
@@ -383,7 +383,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
+        return Option.of(BufferedRecords.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
@@ -399,9 +399,9 @@ public class BufferedRecordMergerFactory {
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
           hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
         }
-        return BufferedRecord.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
+        return BufferedRecords.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
       }
-      return getDeleteBufferedRecord(newerRecord.getRecordKey(), recordContext);
+      return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
   }
 
@@ -464,7 +464,7 @@ public class BufferedRecordMergerFactory {
       // If pre-combine does not return existing record, update it
       if (combinedRecordData != existingRecord.getRecord()) {
         // For pkless we need to use record key from existing record
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, mergeResultSchema, recordContext, orderingFieldNames,
+        return Option.of(BufferedRecords.forRecordWithContext(combinedRecordData, mergeResultSchema, recordContext, orderingFieldNames,
             existingRecord.getRecordKey(), mergedRecord.isDelete(mergeResultSchema, props)));
       }
       return Option.empty();
@@ -474,13 +474,13 @@ public class BufferedRecordMergerFactory {
     public BufferedRecord<T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
       Option<Pair<HoodieRecord, Schema>> mergedRecordAndSchema = getMergedRecord(olderRecord, newerRecord, true);
       if (mergedRecordAndSchema.isEmpty()) {
-        return getDeleteBufferedRecord(newerRecord.getRecordKey(), recordContext);
+        return BufferedRecords.createDelete(newerRecord.getRecordKey());
       }
       HoodieRecord mergedRecord = mergedRecordAndSchema.get().getLeft();
       Schema mergeResultSchema = mergedRecordAndSchema.get().getRight();
       // Special handling for SENTINEL record in Expression Payload
       if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
-        return SENTINEL;
+        return BufferedRecords.SENTINEL;
       }
       if (!mergedRecord.isDelete(mergeResultSchema, props)) {
         IndexedRecord indexedRecord;
@@ -489,10 +489,10 @@ public class BufferedRecordMergerFactory {
         } else {
           indexedRecord = (IndexedRecord) mergedRecord.getData();
         }
-        return BufferedRecord.forRecordWithContext(
+        return BufferedRecords.forRecordWithContext(
             recordContext.convertAvroRecord(indexedRecord), readerSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
       }
-      return getDeleteBufferedRecord(newerRecord.getRecordKey(), recordContext);
+      return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
 
     protected Pair<HoodieRecord, HoodieRecord> getDeltaMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
@@ -596,13 +596,6 @@ public class BufferedRecordMergerFactory {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-
-  // Special handling for SENTINEL record in Expression Payload
-  private static BufferedRecord SENTINEL = new BufferedRecord(null, null, null, null, false);
-
-  private static <T> BufferedRecord<T> getDeleteBufferedRecord(String recordKey, RecordContext<T> recordContext) {
-    return new BufferedRecord<>(recordKey, null, null, null, true);
-  }
 
   private static <T> Option<DeleteRecord> deltaMergeDeleteRecord(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
     if (existingRecord == null) {

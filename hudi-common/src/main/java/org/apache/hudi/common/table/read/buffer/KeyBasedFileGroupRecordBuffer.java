@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -96,7 +97,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         boolean isDelete = recordContext.isDeleteRecord(nextRecord, deleteContext);
-        BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(nextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
+        BufferedRecord<T> bufferedRecord = BufferedRecords.forRecordWithContext(nextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
     }
@@ -126,7 +127,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     Option<DeleteRecord> recordOpt = bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
     recordOpt.ifPresent(deleteRec -> {
       Comparable orderingValue = getOrderingValue(readerContext, deleteRec);
-      records.put(recordIdentifier, BufferedRecord.forDeleteRecord(deleteRec, orderingValue));
+      records.put(recordIdentifier, BufferedRecords.forDeleteRecord(deleteRec, orderingValue));
     });
   }
 

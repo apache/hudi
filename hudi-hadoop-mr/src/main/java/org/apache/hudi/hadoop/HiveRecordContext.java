@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -77,7 +78,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
       return new HoodieEmptyRecord<>(
           key,
           bufferedRecord.getHoodieOperation(),
-          HoodieRecord.DEFAULT_ORDERING_VALUE,
+          OrderingValues.getDefault(),
           HoodieRecord.HoodieRecordType.HIVE);
     }
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);

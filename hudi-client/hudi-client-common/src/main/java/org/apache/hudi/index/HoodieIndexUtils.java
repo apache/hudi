@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -422,8 +423,8 @@ public class HoodieIndexUtils {
       RecordContext<R> incomingRecordContext,
       RecordContext<R> existingRecordContext,
       String[] orderingFieldNames) throws IOException {
-    BufferedRecord<R> incomingBufferedRecord = BufferedRecord.forRecordWithContext(incoming, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
-    BufferedRecord<R> existingBufferedRecord = BufferedRecord.forRecordWithContext(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
+    BufferedRecord<R> incomingBufferedRecord = BufferedRecords.forRecordWithContext(incoming, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
+    BufferedRecord<R> existingBufferedRecord = BufferedRecords.forRecordWithContext(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
     BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
     if (mergeResult.isDelete()) {
       //the record was deleted
@@ -483,8 +484,8 @@ public class HoodieIndexUtils {
       // prepend the hoodie meta fields as the incoming record does not have them
       HoodieRecord incomingPrepended = incoming
           .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
-      BufferedRecord<R> incomingBufferedRecord = BufferedRecord.forRecordWithContext(incomingPrepended, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
-      BufferedRecord<R> existingBufferedRecord = BufferedRecord.forRecordWithContext(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
+      BufferedRecord<R> incomingBufferedRecord = BufferedRecords.forRecordWithContext(incomingPrepended, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
+      BufferedRecord<R> existingBufferedRecord = BufferedRecords.forRecordWithContext(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
       BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
 
       if (mergeResult.isDelete()) {

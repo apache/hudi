@@ -580,7 +580,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           for (T record : records) {
             String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
             //test key based
-            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
+            BufferedRecord<T> bufferedRecord = BufferedRecords.forRecordWithContext(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
             spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
 
             //test position based
