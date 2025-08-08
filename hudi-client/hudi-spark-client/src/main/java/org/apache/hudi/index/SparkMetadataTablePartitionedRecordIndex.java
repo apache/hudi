@@ -131,7 +131,7 @@ public class SparkMetadataTablePartitionedRecordIndex extends SparkMetadataTable
       // recordIndexInfo object only contains records that are present in record_index.
       assert partitionName[0] != null || keysToLookup.isEmpty();
       Map<String, HoodieRecordGlobalLocation> recordIndexInfo =
-          hoodieTable.getMetadataTable().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup), Option.ofNullable(partitionName[0]))
+          hoodieTable.getMetadataTable().readRecordIndexKeysAndLocation(HoodieListData.eager(keysToLookup), Option.ofNullable(partitionName[0]))
               .collectAsList().stream().collect(HashMap::new, (map, pair) -> map.put(pair.getKey(), pair.getValue()), HashMap::putAll);
       return recordIndexInfo.entrySet().stream()
           .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();

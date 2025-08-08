@@ -106,7 +106,7 @@ import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
-import org.apache.hudi.metadata.RawKey;
+import org.apache.hudi.metadata.MetadataRawKey;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -1193,7 +1193,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
         context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
     HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData1 = metadataReader
-        .readRecordIndexLocationsWithKeys(HoodieListData.eager(records1.stream().map(HoodieRecord::getRecordKey)
+        .readRecordIndexKeysAndLocation(HoodieListData.eager(records1.stream().map(HoodieRecord::getRecordKey)
         .collect(Collectors.toList())));
     Map<String, HoodieRecordGlobalLocation> result;
     try {
@@ -1204,7 +1204,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     
     HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData2 = metadataReader
-        .readRecordIndexLocationsWithKeys(HoodieListData.eager(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
+        .readRecordIndexKeysAndLocation(HoodieListData.eager(records2.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList())));
     try {
       result = HoodieDataUtils.dedupeAndCollectAsMap(recordIndexData2);
       assertEquals(records2.size(), result.size(), "RI should return entries in the commit.");
@@ -3034,7 +3034,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // assert entry is not present for deleted partition in metadata table
       HoodieTableMetadata tableMetadata = metadata(client, storage);
       // Create a simple RawKey implementation for the partition path
-      RawKey partitionKey = new RawKey() {
+      MetadataRawKey partitionKey = new MetadataRawKey() {
         @Override
         public String encode() {
           return HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
@@ -3648,7 +3648,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(
-          metadataReader.readRecordIndexLocationsWithKeys(
+          metadataReader.readRecordIndexKeysAndLocation(
               HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
       assertEquals(allRecords.size(), result.size(), "RI should have mapping for all the records in firstCommit");
 
@@ -3664,7 +3664,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // RI should not return mappings for deleted records
       metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
           context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      result = HoodieDataUtils.dedupeAndCollectAsMap(metadataReader.readRecordIndexLocationsWithKeys(
+      result = HoodieDataUtils.dedupeAndCollectAsMap(metadataReader.readRecordIndexKeysAndLocation(
           HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
       assertEquals(allRecords.size() - recordsToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
@@ -3685,7 +3685,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // RI should not return mappings for deleted records
       metadataReader = metaClient.getTableFormat().getMetadataFactory().create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, HoodieRecordGlobalLocation> result =
-          HoodieDataUtils.dedupeAndCollectAsMap(metadataReader.readRecordIndexLocationsWithKeys(
+          HoodieDataUtils.dedupeAndCollectAsMap(metadataReader.readRecordIndexKeysAndLocation(
               HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
       assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
 
@@ -3696,7 +3696,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // New mappings should have been created for re-inserted records and should map to the new commit time
       metadataReader = metaClient.getTableFormat().getMetadataFactory().create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
-      result = HoodieDataUtils.dedupeAndCollectAsMap(metadataReader.readRecordIndexLocationsWithKeys(
+      result = HoodieDataUtils.dedupeAndCollectAsMap(metadataReader.readRecordIndexKeysAndLocation(
           HoodieListData.eager(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()))));
       assertEquals(allRecords.size(), result.size(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
