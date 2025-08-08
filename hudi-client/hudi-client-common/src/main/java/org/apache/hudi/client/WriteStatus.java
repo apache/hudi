@@ -74,6 +74,7 @@ public class WriteStatus implements Serializable {
 
   private final double failureFraction;
   private final boolean trackSuccessRecords;
+  private boolean manuallyTrackIndexUpdates = false;
   private final transient Random random;
   private IndexStats indexStats = new IndexStats();
 
@@ -103,10 +104,18 @@ public class WriteStatus implements Serializable {
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
   public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
-    if (trackSuccessRecords) {
+    if (trackSuccessRecords && !manuallyTrackIndexUpdates) {
       indexStats.addHoodieRecordDelegate(HoodieRecordDelegate.fromHoodieRecord(record));
     }
     updateStatsForSuccess(optionalRecordMetadata);
+  }
+
+  public void manuallyTrackSuccess() {
+    this.manuallyTrackIndexUpdates = true;
+  }
+
+  public void addRecordDelegate(HoodieRecordDelegate recordDelegate) {
+    indexStats.addHoodieRecordDelegate(recordDelegate);
   }
 
   /**

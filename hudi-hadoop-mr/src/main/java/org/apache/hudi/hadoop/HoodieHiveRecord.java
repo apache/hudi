@@ -77,6 +77,15 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     this.copy = false;
   }
 
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, ObjectInspectorCache objectInspectorCache, HoodieOperation hoodieOperation, boolean isDelete) {
+    super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.objectInspector = objectInspectorCache.getObjectInspector(schema);
+    this.objectInspectorCache = objectInspectorCache;
+    this.schema = schema;
+    this.copy = false;
+    isDeleted = data == null;
+  }
+
   private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
                            HiveAvroSerializer avroSerializer) {
     super(key, data, operation, Option.empty());
