@@ -80,10 +80,12 @@ public interface UpdateProcessor<T> {
         }
         return null;
       } else {
-        if (previousRecord != null && previousRecord.getRecord() != mergedRecord.getRecord()) {
+        T prevRow = previousRecord != null ? previousRecord.getRecord() : null;
+        T mergedRow = mergedRecord.getRecord();
+        if (prevRow != null && prevRow != mergedRow) {
           mergedRecord.setHoodieOperation(HoodieOperation.UPDATE_AFTER);
           readStats.incrementNumUpdates();
-        } else if (previousRecord == null) {
+        } else if (prevRow == null) {
           mergedRecord.setHoodieOperation(HoodieOperation.INSERT);
           readStats.incrementNumInserts();
         }
@@ -106,15 +108,15 @@ public interface UpdateProcessor<T> {
     }
 
     @Override
-    public BufferedRecord<T> processUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> currentRecord, boolean isDelete) {
-      BufferedRecord<T> result = delegate.processUpdate(recordKey, previousRecord, currentRecord, isDelete);
+    public BufferedRecord<T> processUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord, boolean isDelete) {
+      BufferedRecord<T> result = delegate.processUpdate(recordKey, previousRecord, mergedRecord, isDelete);
 
       if (isDelete) {
         callback.onDelete(recordKey, previousRecord == null ? null : previousRecord.getRecord());
-      } else if (previousRecord != null && previousRecord.getRecord() != currentRecord.getRecord()) {
-        callback.onUpdate(recordKey, previousRecord.getRecord(), currentRecord.getRecord());
-      } else {
-        callback.onInsert(recordKey, currentRecord.getRecord());
+      } else if (HoodieOperation.isUpdateAfter(result.getHoodieOperation())) {
+        callback.onUpdate(recordKey, previousRecord.getRecord(), mergedRecord.getRecord());
+      } else if (HoodieOperation.isInsert(result.getHoodieOperation())) {
+        callback.onInsert(recordKey, mergedRecord.getRecord());
       }
       return result;
     }
