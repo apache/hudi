@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -55,7 +56,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   private RecordKeyToRowDataConverter recordKeyRowConverter;
 
   public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf) {
-    super(tableConfig);
+    super(tableConfig, new DefaultJavaTypeConverter());
     this.utcTimezone = storageConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(),
         FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
   }

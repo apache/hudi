@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -28,6 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.avro.Schema;
 
 import java.io.Serializable;
+import java.util.Properties;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
@@ -44,9 +44,10 @@ public class DeleteContext implements Serializable {
   private int hoodieOperationPos;
   private Schema readerSchema;
 
-  public DeleteContext(TypedProperties props, Schema tableSchema) {
+  public DeleteContext(Properties props, Schema tableSchema) {
     this.customDeleteMarkerKeyValue = getCustomDeleteMarkerKevValue(props);
     this.hasBuiltInDeleteField = hasBuiltInDeleteField(tableSchema);
+    this.hoodieOperationPos = getHoodieOperationPos(tableSchema);
   }
 
   /**
@@ -54,7 +55,7 @@ public class DeleteContext implements Serializable {
    * the field which contains the corresponding delete-marker if a record is deleted. If no delete key and marker
    * are configured, the function returns an empty option.
    */
-  private static Option<Pair<String, String>> getCustomDeleteMarkerKevValue(TypedProperties props) {
+  private static Option<Pair<String, String>> getCustomDeleteMarkerKevValue(Properties props) {
     String deleteKey = props.getProperty(DELETE_KEY);
     String deleteMarker = props.getProperty(DELETE_MARKER);
     boolean deleteKeyExists = !StringUtils.isNullOrEmpty(deleteKey);

@@ -53,10 +53,15 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   private final boolean requiresPayloadRecords;
 
   public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords) {
-    super(tableConfig);
+    super(tableConfig, new AvroJavaTypeConverter());
     this.payloadClass = payloadClass;
-    this.typeConverter = new AvroJavaTypeConverter();
     this.requiresPayloadRecords = requiresPayloadRecords;
+  }
+
+  public AvroRecordContext() {
+    super(new AvroJavaTypeConverter());
+    this.payloadClass = null;
+    this.requiresPayloadRecords = false;
   }
 
   public static Object getFieldValueFromIndexedRecord(

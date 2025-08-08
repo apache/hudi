@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.model.SerializableIndexedRecord;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -112,7 +113,8 @@ public class HoodieCommonKryoRegistrar {
         StoragePath.class,
         HoodieTableMetaClient.class,
         HoodieFileGroupId.class,
-        ArrayList.class
+        ArrayList.class,
+        SerializableIndexedRecord.class
     })
         .forEachOrdered(kryo::register);
   }
