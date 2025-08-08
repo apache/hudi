@@ -238,7 +238,7 @@ class HoodieCDCRDD(
      */
     private var afterImageRecords: mutable.Map[String, InternalRow] = mutable.Map.empty
 
-    private var internalRowToJsonStringConverter = new InternalRowToJsonStringConverter(originTableSchema)
+    private var internalRowToJsonStringConverter = new InternalRowToJsonStringConverter(originTableSchema.structTypeSchema)
 
     private def needLoadNextFile: Boolean = {
       !recordIter.hasNext &&
