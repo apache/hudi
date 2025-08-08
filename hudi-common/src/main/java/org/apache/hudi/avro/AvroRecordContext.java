@@ -152,7 +152,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
+  public IndexedRecord getDeleteRow(String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 }

@@ -87,10 +87,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData getDeleteRow(RowData record, String recordKey) {
-    if (record != null) {
-      return record;
-    }
+  public RowData getDeleteRow(String recordKey) {
     // don't need to emit record key row if primary key semantic is lost
     if (recordKeyRowConverter == null) {
       return null;

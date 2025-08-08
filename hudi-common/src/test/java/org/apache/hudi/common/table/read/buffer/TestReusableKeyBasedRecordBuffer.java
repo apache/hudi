@@ -72,8 +72,8 @@ class TestReusableKeyBasedRecordBuffer {
     when(mockReaderContext.getKeyFilterOpt()).thenReturn(Option.of(keyFilter));
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
-    when(mockReaderContext.getRecordContext().getDeleteRow(any(), any())).thenAnswer(invocation -> {
-      String recordKey = invocation.getArgument(1);
+    when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
+      String recordKey = invocation.getArgument(0);
       return new TestRecord(recordKey, 0);
     });
     when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());

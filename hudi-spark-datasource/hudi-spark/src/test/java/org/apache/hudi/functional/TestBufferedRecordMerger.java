@@ -799,7 +799,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     @Nullable
     @Override
-    public InternalRow getDeleteRow(InternalRow record, String recordKey) {
+    public InternalRow getDeleteRow(String recordKey) {
       return null;
     }
 

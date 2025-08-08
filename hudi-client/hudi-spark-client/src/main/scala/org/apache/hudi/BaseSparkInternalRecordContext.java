@@ -116,10 +116,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public InternalRow getDeleteRow(InternalRow record, String recordKey) {
-    if (record != null) {
-      return record;
-    }
+  public InternalRow getDeleteRow(String recordKey) {
     return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
   }
 }

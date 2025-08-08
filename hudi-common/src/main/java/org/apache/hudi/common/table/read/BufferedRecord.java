@@ -76,6 +76,10 @@ public class BufferedRecord<T> implements Serializable {
     return HoodieOperation.isDelete(hoodieOperation) || HoodieOperation.isUpdateBefore(hoodieOperation);
   }
 
+  public boolean isEmpty() {
+    return record == null;
+  }
+
   public boolean isCommitTimeOrderingDelete() {
     return isDelete() && OrderingValues.isDefault(orderingValue);
   }

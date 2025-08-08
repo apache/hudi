@@ -71,8 +71,12 @@ public interface UpdateProcessor<T> {
           if (!HoodieOperation.isUpdateBefore(mergedRecord.getHoodieOperation())) {
             mergedRecord.setHoodieOperation(HoodieOperation.DELETE);
           }
-          T deleteRow = readerContext.getRecordContext().getDeleteRow(mergedRecord.getRecord(), recordKey);
-          return mergedRecord.replaceRecord(deleteRow);
+          if (mergedRecord.isEmpty()) {
+            T deleteRow = readerContext.getRecordContext().getDeleteRow(recordKey);
+            return deleteRow == null ? null : mergedRecord.replaceRecord(deleteRow);
+          } else {
+            return mergedRecord;
+          }
         }
         return null;
       } else {
