@@ -190,7 +190,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     }
   }
 
-  private void assertForFSVEquality(HoodieTableFileSystemView fsv1, HoodieTableFileSystemView fsv2, boolean enableMdt) {
+  public static void assertForFSVEquality(HoodieTableFileSystemView fsv1, HoodieTableFileSystemView fsv2, boolean enableMdt) {
     List<String> allPartitionNames = Arrays.asList(DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH);
     fsv1.loadPartitions(allPartitionNames);
     if (enableMdt) {
@@ -216,7 +216,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     });
   }
 
-  private void assertBaseFileListEquality(List<HoodieBaseFile> baseFileList1, List<HoodieBaseFile> baseFileList2) {
+  static void assertBaseFileListEquality(List<HoodieBaseFile> baseFileList1, List<HoodieBaseFile> baseFileList2) {
     assertEquals(baseFileList1.size(), baseFileList2.size());
     Map<String, HoodieBaseFile> fileNameToBaseFileMap1 = new HashMap<>();
     baseFileList1.forEach(entry -> {
@@ -232,14 +232,14 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     });
   }
 
-  public void assertBaseFileEquality(HoodieBaseFile baseFile1, HoodieBaseFile baseFile2) {
+  static void assertBaseFileEquality(HoodieBaseFile baseFile1, HoodieBaseFile baseFile2) {
     assertEquals(baseFile1.getFileName(), baseFile2.getFileName());
     assertEquals(baseFile1.getFileId(), baseFile2.getFileId());
     assertEquals(baseFile1.getFileLen(), baseFile2.getFileLen());
     assertEquals(baseFile1.getFileSize(), baseFile2.getFileSize());
   }
 
-  private void assertFileSliceListEquality(List<FileSlice> fileSlices1, List<FileSlice> fileSlices2) {
+  static void assertFileSliceListEquality(List<FileSlice> fileSlices1, List<FileSlice> fileSlices2) {
     assertEquals(fileSlices1.size(), fileSlices1.size());
     Map<Pair<String, String>, FileSlice> fileNameToFileSliceMap1 = new HashMap<>();
     fileSlices1.forEach(entry -> {
@@ -255,7 +255,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     });
   }
 
-  private void assertFileSliceEquality(FileSlice fileSlice1, FileSlice fileSlice2) {
+  static void assertFileSliceEquality(FileSlice fileSlice1, FileSlice fileSlice2) {
     assertEquals(fileSlice1.getBaseFile().isPresent(), fileSlice2.getBaseFile().isPresent());
     if (fileSlice1.getBaseFile().isPresent()) {
       assertBaseFileEquality(fileSlice1.getBaseFile().get(), fileSlice2.getBaseFile().get());
@@ -270,7 +270,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
     }
   }
 
-  private void assertLogFileEquality(HoodieLogFile logFile1, HoodieLogFile logFile2) {
+  static void assertLogFileEquality(HoodieLogFile logFile1, HoodieLogFile logFile2) {
     assertEquals(logFile1.getFileName(), logFile2.getFileName());
     assertEquals(logFile1.getFileId(), logFile2.getFileId());
     assertEquals(logFile1.getLogVersion(), logFile2.getLogVersion());

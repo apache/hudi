@@ -35,7 +35,7 @@ import org.apache.spark.sql.catalyst.expressions.Cast
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isUsingHiveCatalog, isUsingPolarisCatalog}
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand.validateTableSchema
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
@@ -190,12 +190,15 @@ object CreateHoodieTableCommand {
       properties = newTblProperties
     )
 
-    // Create table in the catalog
-    val enableHive = isUsingHiveCatalog(sparkSession)
-    if (enableHive) {
-      createHiveDataSourceTable(sparkSession, newTable)
-    } else {
-      catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
+    // If polaris is not enabled, we should create the table in hive or spark session catalog
+    // otherwise if enabled, hudi will use the delegate to create the table
+    if (!isUsingPolarisCatalog(sparkSession)) {
+      val enableHive = isUsingHiveCatalog(sparkSession)
+      if (enableHive) {
+        createHiveDataSourceTable(sparkSession, newTable)
+      } else {
+        catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
+      }
     }
   }
 

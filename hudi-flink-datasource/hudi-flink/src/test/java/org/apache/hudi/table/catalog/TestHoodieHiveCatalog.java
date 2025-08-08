@@ -80,6 +80,7 @@ import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.hudi.configuration.FlinkOptions.PRECOMBINE_FIELD;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.apache.hudi.table.catalog.HoodieCatalogTestUtils.createStorageConf;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -273,6 +274,14 @@ public class TestHoodieHiveCatalog {
         createStorageConf(), hoodieCatalog.inferTablePath(nonPartitionPath, nonPartitionTable));
     keyGeneratorClassName = metaClient.getTableConfig().getKeyGeneratorClassName();
     assertEquals(keyGeneratorClassName, NonpartitionedAvroKeyGenerator.class.getName());
+
+    // validate the order of partition fields in the multi-partition table
+    List<String> multiPartitions =  Lists.newArrayList("par2", "par1");
+    ObjectPath multiPartitionsTablePath = new ObjectPath("default", "tb_mp_" + System.currentTimeMillis());
+    CatalogTable multiPartitionsTable =
+        new CatalogTableImpl(singleKeyMultiPartitionTableSchema, multiPartitions, options, "multi-partition hudi table");
+    RuntimeException exception = assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(multiPartitionsTablePath, multiPartitionsTable, false));
+    assertThat(exception.getCause().getMessage(), containsString("The order of regular fields(par1,par2) and partition fields(par2,par1) needs to be consistent"));
   }
 
   @Test

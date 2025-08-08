@@ -46,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -131,9 +130,7 @@ public class RollbackHelper implements Serializable {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
       if (!filesToBeDeleted.isEmpty()) {
         List<HoodieRollbackStat> rollbackStats = deleteFiles(metaClient, filesToBeDeleted, doDelete);
-        List<Pair<String, HoodieRollbackStat>> partitionToRollbackStats = new ArrayList<>();
-        rollbackStats.forEach(entry -> partitionToRollbackStats.add(Pair.of(entry.getPartitionPath(), entry)));
-        return partitionToRollbackStats.stream();
+        return rollbackStats.stream().map(entry -> Pair.of(entry.getPartitionPath(), entry));
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
         final StoragePath filePath;

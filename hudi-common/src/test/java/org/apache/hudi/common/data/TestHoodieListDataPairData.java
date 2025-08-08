@@ -31,6 +31,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +43,7 @@ import java.util.stream.StreamSupport;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link HoodieListPairData}.
@@ -147,6 +149,50 @@ public class TestHoodieListDataPairData {
   public void testReduceByKey(Map<Integer, List<Integer>> expected, Map<Integer, List<Integer>> original) {
     HoodiePairData<Integer, Integer> reduced = HoodieListPairData.lazy(original).reduceByKey((a, b) -> a, 1);
     assertEquals(expected, toMap(reduced));
+  }
+
+  @Test
+  void testReduceByKeyWithCloseableInput() {
+    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    HoodiePairData<Integer, Integer> data = HoodieListData.lazy(Arrays.asList(1, 1, 1))
+        .flatMapToPair(key -> {
+          CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
+          createdIterators.add(iter);
+          return iter;
+        });
+    List<Pair<Integer, Integer>> result = data.reduceByKey(Integer::sum, 1).collectAsList();
+    assertEquals(Collections.singletonList(Pair.of(1, 3)), result);
+    createdIterators.forEach(iter -> assertTrue(iter.isClosed()));
+  }
+
+  @Test
+  void testLeftOuterJoinWithCloseableInput() {
+    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    HoodiePairData<Integer, Integer> dataToJoin = HoodieListData.lazy(Arrays.asList(1, 2, 3))
+        .flatMapToPair(key -> {
+          CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
+          createdIterators.add(iter);
+          return iter;
+        });
+    HoodiePairData<Integer, Integer> data = HoodieListPairData.lazy(Arrays.asList(Pair.of(1, 1), Pair.of(4, 2)));
+    List<Pair<Integer, Pair<Integer, Option<Integer>>>> result = data.leftOuterJoin(dataToJoin).collectAsList();
+    assertEquals(2, result.size());
+    createdIterators.forEach(iter -> assertTrue(iter.isClosed()));
+  }
+
+  @Test
+  void testJoinWithCloseableInput() {
+    List<CloseValidationIterator<Pair<Integer, Integer>>> createdIterators = new ArrayList<>();
+    HoodiePairData<Integer, Integer> dataToJoin = HoodieListData.lazy(Arrays.asList(1, 2, 3))
+        .flatMapToPair(key -> {
+          CloseValidationIterator<Pair<Integer, Integer>> iter = new CloseValidationIterator<>(Collections.singletonList(Pair.of(key, 1)).iterator());
+          createdIterators.add(iter);
+          return iter;
+        });
+    HoodiePairData<Integer, Integer> data = HoodieListPairData.lazy(Arrays.asList(Pair.of(1, 1), Pair.of(4, 2)));
+    List<Pair<Integer, Pair<Integer, Integer>>> result = data.join(dataToJoin).collectAsList();
+    assertEquals(1, result.size());
+    createdIterators.forEach(iter -> assertTrue(iter.isClosed()));
   }
 
   @Test

@@ -235,10 +235,6 @@
                   <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.google.protobuf.</pattern>
-                  <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>com.uber.m3.</pattern>
                   <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
                 </relocation>

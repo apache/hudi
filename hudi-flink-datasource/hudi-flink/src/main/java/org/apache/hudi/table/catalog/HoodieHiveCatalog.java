@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -102,6 +103,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
 import static org.apache.flink.util.Preconditions.checkArgument;
@@ -603,6 +605,10 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       Pair<List<FieldSchema>, List<FieldSchema>> splitSchemas = HiveSchemaUtils.splitSchemaByPartitionKeys(allColumns, partitionKeys);
       List<FieldSchema> regularColumns = splitSchemas.getLeft();
       List<FieldSchema> partitionColumns = splitSchemas.getRight();
+
+      String hivePartitionKeys = partitionColumns.stream().map(FieldSchema::getName).collect(Collectors.joining(","));
+      ValidationUtils.checkArgument(hivePartitionKeys.equals(String.join(",", partitionKeys)),
+          String.format("The order of regular fields(%s) and partition fields(%s) needs to be consistent", hivePartitionKeys, String.join(",", partitionKeys)));
 
       sd.setCols(regularColumns);
       hiveTable.setPartitionKeys(partitionColumns);

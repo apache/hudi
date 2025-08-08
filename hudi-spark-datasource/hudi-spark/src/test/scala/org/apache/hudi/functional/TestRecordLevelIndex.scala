@@ -20,6 +20,8 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
@@ -35,7 +37,7 @@ import org.apache.hudi.util.JavaConversions
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.lit
 import org.junit.jupiter.api._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -368,6 +370,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     val lastCleanInstant = getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant()
     assertTrue(lastCleanInstant.isPresent)
+    val writeConfig = getWriteConfig(hudiOpts)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    client.savepoint("user", "note")
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -375,11 +380,10 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertTrue(getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant().get().requestedTime
       .compareTo(lastCleanInstant.get().requestedTime) > 0)
 
-    var rollbackedInstant: Option[HoodieInstant] = Option.empty
-    while (rollbackedInstant.isEmpty || rollbackedInstant.get.getAction != ActionType.clean.name()) {
-      // rollback clean instant
-      rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
-    }
+    client.restoreToSavepoint()
+    client.close()
+    // last commit is no longer present so remove it from the mergedDfList
+    mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     validateDataAndRecordIndices(hudiOpts)
   }
 
@@ -577,12 +581,28 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val function = () => doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    executeFunctionNTimes(function, 5)
+    executeFunctionNTimes(function, 3)
 
+    // create a savepoint on the data table before the metadata table clean operation
+    assertFalse(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
+    val writeConfig = getWriteConfig(hudiOpts)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    client.savepoint("user", "note")
+
+    // validate that the clean is present in the metadata table timeline
+    var iterations = 0
+    while (getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isEmpty) {
+      doWriteAndValidateDataAndRecordIndex(hudiOpts,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append)
+      iterations += 1
+    }
     assertTrue(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
-    rollbackLastInstant(hudiOpts)
-    // Rolling back clean instant from MDT
-    rollbackLastInstant(hudiOpts)
+    // restore to the savepoint to force the metadata table state to roll back to before the clean
+    client.restoreToSavepoint()
+    client.close()
+    // remove the commits that were created after the savepoint
+    mergedDfList = mergedDfList.take(mergedDfList.size - iterations)
     validateDataAndRecordIndices(hudiOpts)
   }
 

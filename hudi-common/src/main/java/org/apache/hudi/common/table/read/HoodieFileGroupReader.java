@@ -351,12 +351,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     @Override
     public void close() {
-      try {
-        reader.close();
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to close the reader", e);
-      } finally {
-        this.reader = null;
+      if (reader != null) {
+        try {
+          reader.close();
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to close the reader", e);
+        } finally {
+          this.reader = null;
+        }
       }
     }
   }
