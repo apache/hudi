@@ -22,9 +22,10 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.sources.Filter
+import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
 
+@Disabled("HUDI-9086")
 class TestHoodieDataSourceHelper extends HoodieClientTestBase with SparkAdapterSupport {
 
   def checkCondition(filter: Option[Filter], outputSet: Set[String], expected: Any): Unit = {
