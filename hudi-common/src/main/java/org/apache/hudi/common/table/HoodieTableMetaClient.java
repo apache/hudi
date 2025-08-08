@@ -90,6 +90,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForVersion9;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -1480,13 +1481,22 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setTableVersion(tableVersion);
       tableConfig.setInitialVersion(tableVersion);
 
-      Triple<RecordMergeMode, String, String> mergeConfigs =
-          HoodieTableConfig.inferCorrectMergingBehavior(
-              recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields,
-              tableVersion);
-      tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
-      tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
-      tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
+      // For table version <= 8
+      if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+        Triple<RecordMergeMode, String, String> mergeConfigs =
+            HoodieTableConfig.inferBasicMergingBehavior(
+                recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields,
+                tableVersion);
+        tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
+        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
+        tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
+      } else { // For table version >= 9
+        Map<String, String> mergeConfigs = inferMergingConfigsForVersion9(
+            recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields, tableVersion);
+        for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
+          tableConfig.setValue(config.getKey(), config.getValue());
+        }
+      }
 
       if (null != tableCreateSchema) {
         tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);

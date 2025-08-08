@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -37,7 +38,11 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -71,6 +76,7 @@ import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +100,10 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.D_VALUE;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.OP_FIELD;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
@@ -121,10 +131,34 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
   // This prefix is used to set merging related properties.
-  // A reader might need to read some merger properties to function as expected,
+  // A reader might need to read some writer properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties,
   // and produces a map of key value pairs (Key1->Value1, Key2->Value2, ...) to use.
-  public static final String MERGE_PROPERTIES_PREFIX = "hoodie.table.merge.properties.";
+  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.prefix.";
+  public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          AWSDmsAvroPayload.class.getName(),
+          DefaultHoodieRecordPayload.class.getName(),
+          EventTimeAvroPayload.class.getName(),
+          MySqlDebeziumAvroPayload.class.getName(),
+          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+          OverwriteWithLatestAvroPayload.class.getName(),
+          PartialUpdateAvroPayload.class.getName(),
+          PostgresDebeziumAvroPayload.class.getName())));
+
+  public static final Set<String> EVENT_TIME_BASED_PAYLOADS = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          DefaultHoodieRecordPayload.class.getName(),
+          EventTimeAvroPayload.class.getName(),
+          MySqlDebeziumAvroPayload.class.getName(),
+          PartialUpdateAvroPayload.class.getName(),
+          PostgresDebeziumAvroPayload.class.getName())));
+
+  public static final Set<String> COMMIT_TIME_BASED_PAYLOADS = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          AWSDmsAvroPayload.class.getName(),
+          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+          OverwriteWithLatestAvroPayload.class.getName())));
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -229,6 +263,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
+
+  public static final ConfigProperty<String> LEGACY_PAYLOAD_CLASS_NAME = ConfigProperty
+      .key("hoodie.legacy.payload.class")
+      .noDefaultValue()
+      .deprecatedAfter("1.1.0")
+      .withDocumentation("Payload class to indicate the payload class that is used to create the table and is not used anymore.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
   public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
@@ -801,19 +841,91 @@ public class HoodieTableConfig extends HoodieConfig {
     return HoodieRecordPayload.getPayloadClassName(this);
   }
 
+  public String getLegacyPayloadClass() {
+    return getStringOrDefault(LEGACY_PAYLOAD_CLASS_NAME, "");
+  }
+
   public String getRecordMergeStrategyId() {
     return getString(RECORD_MERGE_STRATEGY_ID);
   }
 
   /**
-   * Infers the merging behavior based on what the user sets (or doesn't set).
-   * Validates that the user has not set an illegal combination of configs
+   * Handle table config creation logic when creating a table for Table Version 9,
+   * which is based on the logic of table version < 9, and then tuned for version 9 logic.
+   * This approach fits the same behavior of upgrade from 8 to 9.
    */
-  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
-                                                                                    String payloadClassName,
-                                                                                    String recordMergeStrategyId,
-                                                                                    String orderingFieldNamesAsString,
-                                                                                    HoodieTableVersion tableVersion) {
+  public static Map<String, String> inferMergingConfigsForVersion9(RecordMergeMode recordMergeMode,
+                                                                   String payloadClassName,
+                                                                   String recordMergeStrategyId,
+                                                                   String orderingFieldName,
+                                                                   HoodieTableVersion tableVersion) {
+    Map<String, String> reconciledConfigs = new HashMap<>();
+    if (tableVersion.versionCode() != HoodieTableVersion.NINE.versionCode()) {
+      return reconciledConfigs;
+    }
+
+    // Step 1: Infer merging configs based on input information.
+    // This step is important since it provides the same configs before we do table upgrade.
+    // Then additional logic for table version 9 could be verified.
+    Triple<RecordMergeMode, String, String> inferredConfigs = inferBasicMergingBehavior(
+        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+    recordMergeMode = inferredConfigs.getLeft();
+    recordMergeStrategyId = inferredConfigs.getRight();
+
+    // Step 2: Handle Version 9 specific logic.
+    // CASE 1: For tables using MERGE MODE, or CUSTOM mergers.
+    //   NOTE: Payload class should NOT be set for this case.
+    if (StringUtils.isNullOrEmpty(payloadClassName)) {
+      reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+      reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
+    } else {
+      // For tables using payload classes.
+      //   CASE 2: Custom payload class. We set these properties explicitly.
+      if (!PAYLOADS_UNDER_DEPRECATION.contains(payloadClassName)) {
+        reconciledConfigs.put(RECORD_MERGE_MODE.key(), CUSTOM.toString());
+        reconciledConfigs.put(PAYLOAD_CLASS_NAME.key(), payloadClassName);
+        reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+      } else { // CASE 3: Payload classes are under deprecation.
+        // Standard merging configs.
+        // NOTE: We use LEGACY_PAYLOAD_CLASS_NAME instead of PAYLOAD_CLASS_NAME here.
+        if (EVENT_TIME_BASED_PAYLOADS.contains(payloadClassName)) {
+          reconciledConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
+          reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
+          reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+        } else {
+          reconciledConfigs.put(RECORD_MERGE_MODE.key(), COMMIT_TIME_ORDERING.name());
+          reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
+          reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+        }
+        // Partial update mode config.
+        if (payloadClassName.equals(PartialUpdateAvroPayload.class.getName())
+            || payloadClassName.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
+          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
+        } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
+          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_MARKERS.name());
+        }
+        // Additional custom properties.
+        if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
+          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER, DEBEZIUM_UNAVAILABLE_VALUE);
+        } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
+          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
+          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER, D_VALUE);
+        }
+      }
+    }
+    return reconciledConfigs;
+  }
+
+  /**
+   * Infers the merging behavior based on what the user sets (or doesn't set).
+   * Validates that the user has not set an illegal combination of configs.
+   * This function infers basic merging properties used by table version <= 8.
+   */
+  public static Triple<RecordMergeMode, String, String> inferBasicMergingBehavior(RecordMergeMode recordMergeMode,
+                                                                                  String payloadClassName,
+                                                                                  String recordMergeStrategyId,
+                                                                                  String orderingFieldNamesAsString,
+                                                                                  HoodieTableVersion tableVersion) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;
@@ -1204,7 +1316,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Map<String, String> getTableMergeProperties() {
-    return ConfigUtils.extractWithPrefix(this.props, MERGE_PROPERTIES_PREFIX);
+    return ConfigUtils.extractWithPrefix(this.props, MERGE_CUSTOM_PROPERTY_PREFIX);
   }
 
   public Map<String, String> propsMap() {
