@@ -19,14 +19,21 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.SerializationUtils;
+
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 class TestSerializableIndexRecord {
   private final Schema schema = SchemaBuilder.record("test")
@@ -53,5 +60,34 @@ class TestSerializableIndexRecord {
     assertNotEquals(serializableIndexedRecord, record2);
 
     assertNotEquals(serializableIndexedRecord, null);
+  }
+
+  @Test
+  void testEncodeDecode() throws IOException {
+    GenericRecord originalRecord = new GenericRecordBuilder(schema)
+        .set("field_1", "value1")
+        .set("field_2", 42)
+        .build();
+    SerializableIndexedRecord serializableIndexedRecord = SerializableIndexedRecord.createInstance(originalRecord);
+    byte[] encoded = serializableIndexedRecord.encodeRecord();
+
+    assertEquals(originalRecord, HoodieAvroUtils.bytesToAvro(encoded, schema));
+    byte[] reEncoded = serializableIndexedRecord.encodeRecord();
+    // encode should use existing bytes
+    assertSame(encoded, reEncoded);
+    // similarly decode should not change the underlying record if it is present
+    serializableIndexedRecord.decodeRecord(schema);
+    assertSame(originalRecord, serializableIndexedRecord.getRecord());
+
+    // serialize and deserialize the record with Kryo by using the SerializationUtils
+    byte[] serialized = SerializationUtils.serialize(serializableIndexedRecord);
+    SerializableIndexedRecord deserialized = SerializationUtils.deserialize(serialized);
+    deserialized.decodeRecord(schema);
+    IndexedRecord parsedRecord = deserialized.getRecord();
+    assertEquals(originalRecord, parsedRecord);
+
+    // decoding again should not produce a new record
+    deserialized.decodeRecord(schema);
+    assertSame(parsedRecord, deserialized.getRecord());
   }
 }

@@ -140,7 +140,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public String getRecordKey(Schema recordSchema, String keyFieldName) {
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     if (key != null) {
       return key.getRecordKey();
     }
@@ -156,20 +156,20 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     return AvroRecordContext.getFieldValueFromIndexedRecord(data, column);
   }
 
   @Override
   public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
-    setSchema(targetSchema);
+    decodeRecord(targetSchema);
     GenericRecord record = HoodieAvroUtils.stitchRecords((GenericRecord) data, (GenericRecord) other.getData(), targetSchema);
     return new HoodieAvroIndexedRecord(key, record, operation, metaData);
   }
 
   @Override
   public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
     return new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData);
@@ -177,21 +177,21 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     data.put(ordinal, value);
     return new HoodieAvroIndexedRecord(key, data, operation, metaData);
   }
 
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     GenericRecord record = HoodieAvroUtils.rewriteRecordWithNewSchema(data, newSchema, renameCols);
     return new HoodieAvroIndexedRecord(key, record, operation, metaData);
   }
 
   @Override
   public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) {
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     ((GenericRecord) data).put(keyFieldName, StringUtils.EMPTY_STRING);
     return this;
   }
@@ -201,7 +201,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     if (getData().equals(SENTINEL)) {
       return false; // Sentinel record is not a delete
     }
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     DeleteContext deleteContext = new DeleteContext(props, recordSchema);
     return AVRO_RECORD_CONTEXT.isDeleteRecord(data, deleteContext);
   }
@@ -227,14 +227,14 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       Option<Schema> schemaWithoutMetaFields) {
     String payloadClass = ConfigUtils.getPayloadClass(props);
     String[] orderingFields = ConfigUtils.getOrderingFields(props);
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, orderingFields, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema,
                                                             Properties props, Option<BaseKeyGenerator> keyGen) {
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     GenericRecord record = (GenericRecord) data;
     String key;
     String partition;
@@ -264,7 +264,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     if (orderingFields == null || orderingFields.length == 0) {
       return OrderingValues.getDefault();
     }
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
@@ -273,13 +273,13 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
         field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, consistentLogicalTimestampEnabled));
   }
 
-  private void setSchema(Schema recordSchema) {
+  private void decodeRecord(Schema recordSchema) {
     optimizedRecord.decodeRecord(recordSchema);
   }
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) {
-    setSchema(recordSchema);
+    decodeRecord(recordSchema);
     return Option.of(this);
   }
 

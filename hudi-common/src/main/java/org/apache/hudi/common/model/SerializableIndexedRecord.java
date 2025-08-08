@@ -39,7 +39,7 @@ import java.util.Objects;
  * After deserialization, the schema can be set using {@link #decodeRecord(Schema)} and that will also trigger deserialization of the record.
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
-class SerializableIndexedRecord implements GenericRecord, KryoSerializable {
+public class SerializableIndexedRecord implements GenericRecord, KryoSerializable {
   private IndexedRecord record;
   private byte[] recordBytes;
 
@@ -49,6 +49,7 @@ class SerializableIndexedRecord implements GenericRecord, KryoSerializable {
 
   private SerializableIndexedRecord(IndexedRecord record) {
     this.record = record;
+    this.recordBytes = null; // Initialize recordBytes to null, will be set when encodeRecord is called
   }
 
   @Override
@@ -66,7 +67,7 @@ class SerializableIndexedRecord implements GenericRecord, KryoSerializable {
     return record.getSchema();
   }
 
-  private byte[] encodeRecord() {
+  byte[] encodeRecord() {
     if (recordBytes == null) {
       recordBytes = HoodieAvroUtils.avroToBytes(record);
     }
