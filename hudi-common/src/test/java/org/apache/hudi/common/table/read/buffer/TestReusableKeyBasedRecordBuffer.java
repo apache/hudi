@@ -60,10 +60,10 @@ class TestReusableKeyBasedRecordBuffer {
   void testRemainingLogEntryHandling() throws IOException {
     // After all base file records are read, only log entries that match the filter should be returned
     Map<Serializable, BufferedRecord<TestRecord>> preMergedLogRecords = new HashMap<>();
-    preMergedLogRecords.put("1", new BufferedRecord<>("1", 10, new TestRecord("1", 1), 0, false));
-    preMergedLogRecords.put("2", new BufferedRecord<>("2", 10, new TestRecord("2", 2), 0, false));
-    preMergedLogRecords.put("3", new BufferedRecord<>("3", 10, new TestRecord("3", 3), 0, false));
-    preMergedLogRecords.put("4", new BufferedRecord<>("4", 10, new TestRecord("4", 4), 0, false));
+    preMergedLogRecords.put("1", new BufferedRecord<>("1", 10, new TestRecord("1", 1), 0, null));
+    preMergedLogRecords.put("2", new BufferedRecord<>("2", 10, new TestRecord("2", 2), 0, null));
+    preMergedLogRecords.put("3", new BufferedRecord<>("3", 10, new TestRecord("3", 3), 0, null));
+    preMergedLogRecords.put("4", new BufferedRecord<>("4", 10, new TestRecord("4", 4), 0, null));
     HoodieReadStats readStats = new HoodieReadStats();
     UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
 

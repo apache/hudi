@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -91,7 +92,7 @@ public class BufferedRecordMergerFactory {
         if (partialUpdateMode == PartialUpdateMode.NONE) {
           return new EventTimeRecordMerger<>();
         }
-        return new EventTimePartiaRecordMerger<>(readerContext.getRecordContext(), partialUpdateMode, props);
+        return new EventTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateMode, props);
       default:
         if (payloadClasses.isPresent()) {
           if (payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
@@ -201,13 +202,13 @@ public class BufferedRecordMergerFactory {
    * An implementation of {@link EventTimeRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code EVENT_TIME_ORDERING} merge mode and partial update mode.
    */
-  private static class EventTimePartiaRecordMerger<T> extends EventTimeRecordMerger<T> {
+  private static class EventTimePartialRecordMerger<T> extends EventTimeRecordMerger<T> {
     private final PartialUpdateStrategy<T> partialUpdateStrategy;
     private final RecordContext<T> recordContext;
 
-    public EventTimePartiaRecordMerger(RecordContext<T> recordContext,
-                                       PartialUpdateMode partialUpdateMode,
-                                       TypedProperties props) {
+    public EventTimePartialRecordMerger(RecordContext<T> recordContext,
+                                        PartialUpdateMode partialUpdateMode,
+                                        TypedProperties props) {
       this.partialUpdateStrategy = new PartialUpdateStrategy<>(recordContext, partialUpdateMode, props);
       this.recordContext = recordContext;
     }
@@ -375,7 +376,7 @@ public class BufferedRecordMergerFactory {
 
       if (!combinedRecordAndSchemaOpt.isPresent()) {
         // An empty Option indicates that the output represents a delete.
-        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, true));
+        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, HoodieOperation.DELETE));
       }
 
       Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
@@ -452,7 +453,7 @@ public class BufferedRecordMergerFactory {
       Option<Pair<HoodieRecord, Schema>> mergedRecordAndSchema = getMergedRecord(existingRecord, newRecord, false);
       if (mergedRecordAndSchema.isEmpty()) {
         // An empty Option indicates that the output represents a delete.
-        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, true));
+        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, HoodieOperation.DELETE));
       }
       HoodieRecord mergedRecord = mergedRecordAndSchema.get().getLeft();
       Schema mergeResultSchema = mergedRecordAndSchema.get().getRight();

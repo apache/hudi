@@ -41,11 +41,7 @@ public class BufferedRecord<T> implements Serializable {
   @Nullable private HoodieOperation hoodieOperation;
 
   public BufferedRecord() {
-    this(null, null, null, null, false);
-  }
-
-  public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, boolean isDelete) {
-    this(recordKey, orderingValue, record, schemaId, isDelete ? HoodieOperation.DELETE : null);
+    this(null, null, null, null, null);
   }
 
   public BufferedRecord(String recordKey, Comparable orderingValue, T record, Integer schemaId, @Nullable HoodieOperation hoodieOperation) {

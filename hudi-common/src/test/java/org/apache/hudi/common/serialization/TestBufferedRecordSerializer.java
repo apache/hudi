@@ -68,7 +68,7 @@ public class TestBufferedRecordSerializer {
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
-    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, false);
+    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, null);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
     BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
@@ -80,7 +80,7 @@ public class TestBufferedRecordSerializer {
     avroRecordSerializer = new AvroRecordSerializer(integer -> HoodieMetadataRecord.SCHEMA$);
     bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
     HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
-    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, false);
+    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, null);
     bytes = bufferedRecordSerializer.serialize(bufferedRecord);
     result = bufferedRecordSerializer.deserialize(bytes);
 

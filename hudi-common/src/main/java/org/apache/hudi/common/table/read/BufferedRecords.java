@@ -34,7 +34,7 @@ import java.util.Properties;
  */
 public class BufferedRecords {
   // Special handling for SENTINEL record in Expression Payload
-  public static final BufferedRecord SENTINEL = new BufferedRecord(null, null, null, null, false);
+  public static final BufferedRecord SENTINEL = new BufferedRecord(null, null, null, null, null);
 
   public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
     boolean isDelete = record.isDelete(schema, props);
@@ -46,26 +46,25 @@ public class BufferedRecords {
     T data = recordContext.extractDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, isDelete ? HoodieOperation.DELETE : record.getOperation());
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
-    return fromEngineRecord(record, schema, recordContext, orderingFieldNames, null, isDelete);
+    return fromEngineRecord(record, schema, recordContext, orderingFieldNames, isDelete ? HoodieOperation.DELETE : null);
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(
-      T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation, boolean isDelete) {
+      T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation) {
     String recordKey = recordContext.getRecordKey(record, schema);
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
-    hoodieOperation = HoodieOperation.isUpdateBefore(hoodieOperation) || !isDelete ? hoodieOperation : HoodieOperation.DELETE;
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, hoodieOperation);
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
-    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete ? HoodieOperation.DELETE : null);
   }
 
   public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue) {
