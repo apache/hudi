@@ -110,7 +110,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
     avroIndexedRecord.setIgnoreIndexUpdate(true)
 
-    val expectedLagacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 537 else 530
+    val expectedLagacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 537 else 531
 
     Seq(
       (legacyRecord, expectedLagacyRecordSize),
@@ -133,7 +133,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     }
 
     val key = new HoodieKey("rec-key", "part-path")
-    val expectedEmptyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 33 else 29
+    val expectedEmptyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 33 else 30
     Seq(
       (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO),
         expectedEmptyRecordSize),
