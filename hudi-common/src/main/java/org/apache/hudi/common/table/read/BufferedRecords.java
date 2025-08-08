@@ -46,7 +46,7 @@ public class BufferedRecords {
     T data = recordContext.extractDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, isDelete ? HoodieOperation.DELETE : record.getOperation());
+    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, inferOperation(isDelete, record.getOperation()));
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
@@ -78,5 +78,18 @@ public class BufferedRecords {
 
   public static <T> BufferedRecord<T> createDelete(String recordKey) {
     return new BufferedRecord<>(recordKey, null, null, null, HoodieOperation.DELETE);
+  }
+
+  /**
+   * When creating buffered record from hoodie record, hoodie operation and isDelete are all there,
+   * use this method as much as possible to keep the hoodie operation. For e.g, a -U record with isDelete as false.
+   *
+   * <p>This is useful for deduplication scenarios in write path, the -U is kept as best effort.
+   * For FG reader output view for write path, the -U record can be ignored by both RLI metadata update and data write,
+   * while regular D record is need for RLI metadata update but ignored by data write, setting up the -U correctly is critical to
+   * distinguish these two different cases.
+   */
+  public static HoodieOperation inferOperation(boolean isDelete, HoodieOperation operation) {
+    return isDelete ? HoodieOperation.isUpdateBefore(operation) ? operation : HoodieOperation.DELETE : operation;
   }
 }
