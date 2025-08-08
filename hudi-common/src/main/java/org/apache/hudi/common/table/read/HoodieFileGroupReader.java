@@ -280,9 +280,15 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  public ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator() throws IOException {
+  // don't make this public because caller is expected to set the iterator mode
+  private ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator() throws IOException {
     initRecordIterators();
     return new HoodieFileGroupReaderIterator<>(this);
+  }
+
+  public ClosableIterator<BufferedRecord<T>> getClosableBufferedRecordIterator() throws IOException {
+    this.readerContext.setIteratorMode(IteratorMode.HOODIE_RECORD);
+    return getBufferedRecordIterator();
   }
 
   public ClosableIterator<T> getClosableIterator() throws IOException {

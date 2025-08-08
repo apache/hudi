@@ -36,7 +36,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
 import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, HoodieRecordUtils, Option}
 import org.apache.hudi.common.util.collection.ExternalSpillableMap
@@ -500,7 +500,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
       .build()
-    CloseableIteratorListener.addListener(fileGroupReader.getBufferedRecordIterator).asScala
+    CloseableIteratorListener.addListener(fileGroupReader.getClosableBufferedRecordIterator).asScala
   }
 
   private def loadLogFile(logFile: HoodieLogFile, instant: String): Iterator[BufferedRecord[InternalRow]] = {
