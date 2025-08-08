@@ -52,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -571,6 +572,87 @@ class TestStorageBasedLockProvider {
     verify(mockLockService, atLeastOnce()).close();
     verify(mockHeartbeatManager, atLeastOnce()).close();
     assertNull(lockProvider.getLock());
+  }
+
+  @Test
+  void testShutdownHookFiresDuringTryLockWithTimeout() throws Exception {
+    // This test simulates the scenario where the shutdown hook fires while tryLock(long time, TimeUnit unit) 
+    // is in progress, and expects that HoodieLockException is thrown when tryLock is called after shutdown.
+
+    // Setup mocks to simulate lock being held by another owner (to keep tryLock looping)
+    StorageLockData otherOwnerData = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, "other-owner");
+    StorageLockFile otherOwnerLock = new StorageLockFile(otherOwnerData, "v1");
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.SUCCESS, Option.of(otherOwnerLock)));
+
+    CountDownLatch tryLockStarted = new CountDownLatch(1);
+    CountDownLatch proceedWithShutdown = new CountDownLatch(1);
+    CountDownLatch shutdownCompleted = new CountDownLatch(1);
+    CountDownLatch tryLockCompleted = new CountDownLatch(1);
+    CountDownLatch exceptionThrown = new CountDownLatch(1);
+
+    // Spy on the real tryLock to know when it's been called and coordinate with shutdown
+    AtomicInteger tryLockCallCount = new AtomicInteger(0);
+    doAnswer(inv -> {
+      int count = tryLockCallCount.incrementAndGet();
+      if (count == 1) {
+        // First call - signal that tryLock has started
+        tryLockStarted.countDown();
+        // Wait for shutdown to be triggered
+        assertTrue(proceedWithShutdown.await(2, TimeUnit.SECONDS));
+      } else {
+        // Subsequent calls - wait briefly for shutdown to complete
+        assertTrue(shutdownCompleted.await(100, TimeUnit.MILLISECONDS));
+      }
+      // Call the real method
+      return inv.callRealMethod();
+    }).when(lockProvider).tryLock();
+
+    // Start a thread that will call tryLock with timeout
+    Thread tryLockThread = new Thread(() -> {
+      try {
+        lockProvider.tryLock(2, TimeUnit.SECONDS);
+        // Should not reach here - exception should be thrown after shutdown
+        fail("Should have thrown HoodieLockException after shutdown");
+      } catch (HoodieLockException e) {
+        // Expected - tryLock should throw exception after shutdown
+        exceptionThrown.countDown();
+      } finally {
+        tryLockCompleted.countDown();
+      }
+    });
+
+    tryLockThread.start();
+
+    // Wait for tryLock to start
+    assertTrue(tryLockStarted.await(2, TimeUnit.SECONDS), "tryLock should have started");
+
+    // Now invoke the shutdown hook while tryLock is in progress
+    Method shutdownMethod = lockProvider.getClass().getDeclaredMethod("shutdown", boolean.class);
+    shutdownMethod.setAccessible(true);
+
+    // Invoke shutdown in a separate thread to simulate shutdown hook
+    Thread shutdownThread = new Thread(() -> {
+      try {
+        proceedWithShutdown.countDown();  // Signal tryLock to proceed
+        shutdownMethod.invoke(lockProvider, true);
+        shutdownCompleted.countDown();  // Signal that shutdown is complete
+      } catch (Exception ignored) {
+        // do nothing
+      }
+    });
+    shutdownThread.start();
+
+    // Wait for both operations to complete
+    assertTrue(tryLockCompleted.await(5, TimeUnit.SECONDS), "tryLock should complete");
+    assertTrue(exceptionThrown.await(1, TimeUnit.SECONDS), "HoodieLockException should have been thrown");
+    shutdownThread.join(2000);
+
+    // Verify the state after shutdown
+    // The lock should be null after shutdown
+    assertNull(lockProvider.getLock(), "Lock should be null after shutdown hook fires");
+
+    // Verify that tryLock was called at least once
+    verify(lockProvider, atLeastOnce()).tryLock();
   }
 
   public static class StubStorageLockClient implements StorageLockClient {
