@@ -174,9 +174,9 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   @Override
   public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
     try {
-      GenericRecord oldRecord = (GenericRecord) getData().getInsertValue(recordSchema, props).get();
-      GenericRecord rewriteRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols);
-      return new HoodieAvroIndexedRecord(getKey(), rewriteRecord, getOperation(), this.currentLocation, this.newLocation);
+      Option<GenericRecord> oldRecordOpt = getData().getInsertValue(recordSchema, props);
+      Option<GenericRecord> rewriteRecord = oldRecordOpt.map(oldRecord -> HoodieAvroUtils.rewriteRecordWithNewSchema(oldRecord, newSchema, renameCols));
+      return new HoodieAvroIndexedRecord(getKey(), rewriteRecord.orElse(null), getOperation(), this.currentLocation, this.newLocation);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deserialize record!", e);
     }

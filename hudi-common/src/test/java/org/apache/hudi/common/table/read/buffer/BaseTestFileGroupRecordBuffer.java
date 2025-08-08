@@ -127,7 +127,7 @@ public class BaseTestFileGroupRecordBuffer {
       return new KeyBasedFileGroupRecordBuffer<>(
           readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, orderingFieldNames, updateProcessor);
     } else {
-      FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
+      FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader(SCHEMA);
       InputSplit inputSplit = mock(InputSplit.class);
       when(inputSplit.hasNoRecordsToMerge()).thenReturn(false);
       when(inputSplit.getRecordIterator()).thenReturn(fileGroupRecordBufferItrOpt.get());

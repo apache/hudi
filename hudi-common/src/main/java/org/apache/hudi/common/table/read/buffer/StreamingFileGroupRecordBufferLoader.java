@@ -51,10 +51,10 @@ import java.util.List;
  * @param <T> Engine native presentation of the record.
  */
 public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordBufferLoader<T> {
-  private static final StreamingFileGroupRecordBufferLoader INSTANCE = new StreamingFileGroupRecordBufferLoader<>();
+  private final Schema recordSchema;
 
-  static <T> StreamingFileGroupRecordBufferLoader<T> getInstance() {
-    return INSTANCE;
+  StreamingFileGroupRecordBufferLoader(Schema recordSchema) {
+    this.recordSchema = recordSchema;
   }
 
   @Override
@@ -74,7 +74,6 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     }
 
     RecordContext<T> recordContext = readerContext.getRecordContext();
-    Schema recordSchema = readerContext.getSchemaHandler().getTableSchema();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     while (recordIterator.hasNext()) {

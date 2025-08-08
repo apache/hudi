@@ -237,12 +237,12 @@ public class SecondaryIndexStreamingTracker {
    * @param oldRecord                 The old record
    * @param isDelete                  Whether the record is a DELETE
    * @param writeStatus               The Write status
-   * @param writeSchemaWithMetaFields The write schema with metadata fields
-   * @param newSchemaSupplier         The schema supplier for the new record
+   * @param existingSchema            The schema of existing records in the table
+   * @param newSchema                 The schema for updated records
    * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
    */
   static <T> void trackSecondaryIndexStats(HoodieKey hoodieKey, Option<T> combinedRecordOpt, @Nullable T oldRecord, boolean isDelete,
-                                           WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
+                                           WriteStatus writeStatus, Schema existingSchema, Schema newSchema,
                                            List<HoodieIndexDefinition> secondaryIndexDefns, RecordContext<T> recordContext) {
 
     secondaryIndexDefns.forEach(def -> {
@@ -257,7 +257,7 @@ public class SecondaryIndexStreamingTracker {
       Object oldSecondaryKey = null;
 
       if (hasOldValue) {
-        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord, writeSchemaWithMetaFields, secondaryIndexSourceField));
+        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord, existingSchema, secondaryIndexSourceField));
       }
 
       // For new/combined record
@@ -265,7 +265,6 @@ public class SecondaryIndexStreamingTracker {
       Object newSecondaryKey = null;
 
       if (combinedRecordOpt.isPresent() && !isDelete) {
-        Schema newSchema = newSchemaSupplier.get();
         newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get(), newSchema, secondaryIndexSourceField));
         hasNewValue = true;
       }
