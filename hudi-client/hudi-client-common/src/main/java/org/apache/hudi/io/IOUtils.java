@@ -119,6 +119,9 @@ public class IOUtils {
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
       mergeHandle.doMerge();
+      if (mergeHandle instanceof FileGroupReaderBasedMergeHandle) {
+        mergeHandle.close();
+      }
     }
 
     // TODO(vc): This needs to be revisited
