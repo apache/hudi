@@ -112,11 +112,11 @@ public interface UpdateProcessor<T> {
       BufferedRecord<T> result = delegate.processUpdate(recordKey, previousRecord, mergedRecord, isDelete);
 
       if (isDelete) {
-        callback.onDelete(recordKey, previousRecord == null ? null : previousRecord.getRecord());
+        callback.onDelete(recordKey, previousRecord, mergedRecord.getHoodieOperation());
       } else if (HoodieOperation.isUpdateAfter(result.getHoodieOperation())) {
-        callback.onUpdate(recordKey, previousRecord.getRecord(), mergedRecord.getRecord());
+        callback.onUpdate(recordKey, previousRecord, mergedRecord);
       } else if (HoodieOperation.isInsert(result.getHoodieOperation())) {
-        callback.onInsert(recordKey, mergedRecord.getRecord());
+        callback.onInsert(recordKey, mergedRecord);
       }
       return result;
     }
