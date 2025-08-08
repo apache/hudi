@@ -211,7 +211,7 @@ class TestHoodieAvroReaderContext {
     Schema schema = getSkeletonSchema();
     IndexedRecord engineRecord = createSkeletonRecord("String1", "String2", 1);
     BufferedRecord<IndexedRecord> baseRecord =
-        new BufferedRecord<>("key1", 1, engineRecord, 0, false);
+        new BufferedRecord<>("key1", 1, engineRecord, 0, null);
     Map<Integer, Object> updates = new HashMap<>();
     IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema, updates, baseRecord);
     assertEquals("String1", output.get(0));
@@ -225,7 +225,7 @@ class TestHoodieAvroReaderContext {
     Schema schema = getSkeletonSchema();
     IndexedRecord engineRecord = createSkeletonRecord("String1", "String2", 1);
     BufferedRecord<IndexedRecord> baseRecord =
-        new BufferedRecord<>("key1", 1, engineRecord, 0, false);
+        new BufferedRecord<>("key1", 1, engineRecord, 0, null);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(0, "String1_0");
     updates.put(2, 2);

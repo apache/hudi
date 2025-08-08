@@ -322,7 +322,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String getDeleteRow(String record, String recordKey) {
+        public String getDeleteRow(String recordKey) {
           return "";
         }
 
