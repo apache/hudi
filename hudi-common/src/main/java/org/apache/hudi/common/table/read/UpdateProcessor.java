@@ -110,7 +110,7 @@ public interface UpdateProcessor<T> {
       BufferedRecord<T> result = delegate.processUpdate(recordKey, previousRecord, currentRecord, isDelete);
 
       if (isDelete) {
-        callback.onDelete(recordKey, previousRecord.getRecord());
+        callback.onDelete(recordKey, previousRecord == null ? null : previousRecord.getRecord());
       } else if (previousRecord != null && previousRecord.getRecord() != currentRecord.getRecord()) {
         callback.onUpdate(recordKey, previousRecord.getRecord(), currentRecord.getRecord());
       } else {
