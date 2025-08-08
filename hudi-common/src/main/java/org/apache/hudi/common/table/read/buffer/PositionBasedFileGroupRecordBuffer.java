@@ -147,7 +147,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
         long recordPosition = recordPositions.get(recordIndex++);
         T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         boolean isDelete = readerContext.getRecordContext().isDeleteRecord(evolvedNextRecord, deleteContext);
-        BufferedRecord<T> bufferedRecord = BufferedRecords.forRecordWithContext(evolvedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
+        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(evolvedNextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, recordPosition);
       }
     }
@@ -203,7 +203,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
           // and these keys would be deleted no matter whether there are following-up inserts/updates.
           DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
-          BufferedRecord<T> record = BufferedRecords.forDeleteRecord(deleteRecord, deleteRecord.getOrderingValue());
+          BufferedRecord<T> record = BufferedRecords.fromDeleteRecord(deleteRecord, deleteRecord.getOrderingValue());
           records.put(recordPosition, record);
         }
         return;

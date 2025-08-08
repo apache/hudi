@@ -86,12 +86,12 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
         BufferedRecord<T> bufferedRecord;
         if (data == null) {
           DeleteRecord deleteRecord = DeleteRecord.create(hoodieRecord.getKey(), hoodieRecord.getOrderingValue(recordSchema, props, orderingFieldsArray));
-          bufferedRecord = BufferedRecords.forDeleteRecord(deleteRecord, deleteRecord.getOrderingValue(), hoodieOperation);
+          bufferedRecord = BufferedRecords.fromDeleteRecord(deleteRecord, deleteRecord.getOrderingValue(), hoodieOperation);
         } else {
           // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
           // so we use recordContext#isDeleteRecord here if the data field is not null.
           boolean isDelete = recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
-          bufferedRecord = BufferedRecords.forRecordWithContext(data, recordSchema, recordContext, orderingFieldNames, hoodieOperation, isDelete);
+          bufferedRecord = BufferedRecords.fromEngineRecord(data, recordSchema, recordContext, orderingFieldNames, hoodieOperation, isDelete);
         }
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {

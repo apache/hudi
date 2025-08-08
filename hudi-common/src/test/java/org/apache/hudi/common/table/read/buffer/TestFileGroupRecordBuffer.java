@@ -201,7 +201,7 @@ class TestFileGroupRecordBuffer {
     record.put("_hoodie_is_deleted", false);
     when(recordContext.getOrderingValue(any(), any(), anyList())).thenReturn(1);
     when(recordContext.convertOrderingValueToEngineType(any())).thenReturn(1);
-    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecords.forRecordWithContext(record, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
+    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecords.fromEngineRecord(record, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "12345");
     Map<Serializable, BufferedRecord<GenericRecord>> records = keyBasedBuffer.getLogRecords();
@@ -216,7 +216,7 @@ class TestFileGroupRecordBuffer {
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");
     anotherRecord.put("_hoodie_is_deleted", true);
-    bufferedRecord = BufferedRecords.forRecordWithContext(anotherRecord, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
+    bufferedRecord = BufferedRecords.fromEngineRecord(anotherRecord, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "54321");
     records = keyBasedBuffer.getLogRecords();

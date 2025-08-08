@@ -61,7 +61,7 @@ public interface BufferedRecordConverter<T> {
         return new BufferedRecordConverter<T>() {
           @Override
           public BufferedRecord<T> convert(T record) {
-            return BufferedRecords.forRecordWithContext(record, readerSchema, recordContext, orderingFieldNames, false);
+            return BufferedRecords.fromEngineRecord(record, readerSchema, recordContext, orderingFieldNames, false);
           }
         };
     }

@@ -256,7 +256,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public boolean checkIsDelete(Schema recordSchema, Properties props) {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
     if (null == data) {
       return true;
     }

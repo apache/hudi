@@ -36,16 +36,12 @@ public class BufferedRecords {
   // Special handling for SENTINEL record in Expression Payload
   public static final BufferedRecord SENTINEL = new BufferedRecord(null, null, null, null, false);
 
-  public static <T> BufferedRecord<T> createDelete(String recordKey) {
-    return new BufferedRecord<>(recordKey, null, null, null, HoodieOperation.DELETE);
-  }
-
-  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
+  public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
     boolean isDelete = record.isDelete(schema, props);
-    return forRecordWithContext(record, schema, recordContext, props, orderingFields, isDelete);
+    return fromHoodieRecord(record, schema, recordContext, props, orderingFields, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forRecordWithContext(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, boolean isDelete) {
+  public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields, boolean isDelete) {
     HoodieKey hoodieKey = record.getKey();
     T data = recordContext.extractDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
@@ -53,11 +49,11 @@ public class BufferedRecords {
     return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
-    return forRecordWithContext(record, schema, recordContext, orderingFieldNames, null, isDelete);
+  public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
+    return fromEngineRecord(record, schema, recordContext, orderingFieldNames, null, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forRecordWithContext(
+  public static <T> BufferedRecord<T> fromEngineRecord(
       T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation, boolean isDelete) {
     String recordKey = recordContext.getRecordKey(record, schema);
     Integer schemaId = recordContext.encodeAvroSchema(schema);
@@ -66,18 +62,22 @@ public class BufferedRecords {
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, hoodieOperation);
   }
 
-  public static <T> BufferedRecord<T> forRecordWithContext(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
+  public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, String[] orderingFieldNames, String recordKey, boolean isDelete) {
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete);
   }
 
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue) {
+  public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue) {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, HoodieOperation.DELETE);
   }
 
-  public static <T> BufferedRecord<T> forDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue, HoodieOperation hoodieOperation) {
+  public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, Comparable orderingValue, HoodieOperation hoodieOperation) {
     hoodieOperation = HoodieOperation.isUpdateBefore(hoodieOperation) ? HoodieOperation.UPDATE_BEFORE : HoodieOperation.DELETE;
     return new BufferedRecord<>(deleteRecord.getRecordKey(), orderingValue, null, null, hoodieOperation);
+  }
+
+  public static <T> BufferedRecord<T> createDelete(String recordKey) {
+    return new BufferedRecord<>(recordKey, null, null, null, HoodieOperation.DELETE);
   }
 }

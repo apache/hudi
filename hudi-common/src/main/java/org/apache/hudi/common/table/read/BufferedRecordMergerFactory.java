@@ -316,7 +316,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecords.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
+        return Option.of(BufferedRecords.fromHoodieRecord(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
@@ -341,7 +341,7 @@ public class BufferedRecordMergerFactory {
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
           hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
         }
-        return BufferedRecords.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
+        return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
       }
       return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
@@ -383,7 +383,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecords.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
+        return Option.of(BufferedRecords.fromHoodieRecord(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
@@ -399,7 +399,7 @@ public class BufferedRecordMergerFactory {
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
           hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
         }
-        return BufferedRecords.forRecordWithContext(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
+        return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
       }
       return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
@@ -464,7 +464,7 @@ public class BufferedRecordMergerFactory {
       // If pre-combine does not return existing record, update it
       if (combinedRecordData != existingRecord.getRecord()) {
         // For pkless we need to use record key from existing record
-        return Option.of(BufferedRecords.forRecordWithContext(combinedRecordData, mergeResultSchema, recordContext, orderingFieldNames,
+        return Option.of(BufferedRecords.fromEngineRecord(combinedRecordData, mergeResultSchema, recordContext, orderingFieldNames,
             existingRecord.getRecordKey(), mergedRecord.isDelete(mergeResultSchema, props)));
       }
       return Option.empty();
@@ -489,7 +489,7 @@ public class BufferedRecordMergerFactory {
         } else {
           indexedRecord = (IndexedRecord) mergedRecord.getData();
         }
-        return BufferedRecords.forRecordWithContext(
+        return BufferedRecords.fromEngineRecord(
             recordContext.convertAvroRecord(indexedRecord), readerSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
       }
       return BufferedRecords.createDelete(newerRecord.getRecordKey());

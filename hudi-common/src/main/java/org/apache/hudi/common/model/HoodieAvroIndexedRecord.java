@@ -161,7 +161,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public boolean checkIsDelete(Schema recordSchema, Properties props) {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
     return false;
   }
 

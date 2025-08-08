@@ -150,9 +150,9 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     try {
       // NOTE: The order of previous and next is uncertain within a batch in "reduceByKey".
       // If the return value is empty, it means the previous should be chosen.
-      BufferedRecord<T> newBufferedRecord = BufferedRecords.forRecordWithContext(next, schema, recordContext, props, orderingFieldNames);
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(next, schema, recordContext, props, orderingFieldNames);
       // Construct old buffered record.
-      BufferedRecord<T> oldBufferedRecord = BufferedRecords.forRecordWithContext(previous, schema, recordContext, props, orderingFieldNames);
+      BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(previous, schema, recordContext, props, orderingFieldNames);
       // Run merge.
       Option<BufferedRecord<T>> merged = recordMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
       // NOTE: For merge mode based merging, it returns non-null.

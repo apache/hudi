@@ -190,7 +190,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
     if (HoodieOperation.isDelete(getOperation())) {
       return true;
     }

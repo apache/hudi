@@ -124,7 +124,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
     return true;
   }
 

@@ -228,7 +228,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public boolean checkIsDelete(Schema recordSchema, Properties props) {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
     if (data == null) {
       return true;
     }

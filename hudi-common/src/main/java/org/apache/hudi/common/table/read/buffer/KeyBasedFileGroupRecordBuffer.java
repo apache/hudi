@@ -97,7 +97,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
         boolean isDelete = recordContext.isDeleteRecord(nextRecord, deleteContext);
-        BufferedRecord<T> bufferedRecord = BufferedRecords.forRecordWithContext(nextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
+        BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(nextRecord, schema, readerContext.getRecordContext(), orderingFieldNames, isDelete);
         processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       }
     }
@@ -127,7 +127,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     Option<DeleteRecord> recordOpt = bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
     recordOpt.ifPresent(deleteRec -> {
       Comparable orderingValue = getOrderingValue(readerContext, deleteRec);
-      records.put(recordIdentifier, BufferedRecords.forDeleteRecord(deleteRec, orderingValue));
+      records.put(recordIdentifier, BufferedRecords.fromDeleteRecord(deleteRec, orderingValue));
     });
   }
 

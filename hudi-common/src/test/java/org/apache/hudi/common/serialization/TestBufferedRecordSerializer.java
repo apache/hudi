@@ -101,7 +101,7 @@ public class TestBufferedRecordSerializer {
   void testDeleteRecordSerAndDe(HoodieOperation hoodieOperation) throws IOException {
     Schema schema = SchemaTestUtil.getSimpleSchema();
     DeleteRecord record = DeleteRecord.create("id", "partition", 100);
-    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.forDeleteRecord(record, 100);
+    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.fromDeleteRecord(record, 100);
     bufferedRecord.setHoodieOperation(hoodieOperation);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
