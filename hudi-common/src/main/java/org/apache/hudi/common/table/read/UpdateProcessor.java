@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.util.Option;
 
 /**
@@ -35,7 +36,7 @@ public interface UpdateProcessor<T> {
    * @param isDelete a flag indicating whether the merge resulted in a delete operation
    * @return the processed record, or null if the record should not be returned to the caller
    */
-  T processUpdate(String recordKey, T previousRecord, T mergedRecord, boolean isDelete);
+  BufferedRecord<T> processUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord, boolean isDelete);
 
   static <T> UpdateProcessor<T> create(HoodieReadStats readStats, HoodieReaderContext<T> readerContext,
                                        boolean emitDeletes, Option<BaseFileUpdateCallback<T>> updateCallback) {
@@ -63,20 +64,32 @@ public interface UpdateProcessor<T> {
     }
 
     @Override
-    public T processUpdate(String recordKey, T previousRecord, T mergedRecord, boolean isDelete) {
+    public BufferedRecord<T> processUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord, boolean isDelete) {
       if (isDelete) {
         readStats.incrementNumDeletes();
         if (emitDeletes) {
-          return readerContext.getRecordContext().getDeleteRow(mergedRecord, recordKey);
+          if (!HoodieOperation.isUpdateBefore(mergedRecord.getHoodieOperation())) {
+            mergedRecord.setHoodieOperation(HoodieOperation.DELETE);
+          }
+          if (mergedRecord.isEmpty()) {
+            T deleteRow = readerContext.getRecordContext().getDeleteRow(recordKey);
+            return deleteRow == null ? null : mergedRecord.replaceRecord(deleteRow);
+          } else {
+            return mergedRecord;
+          }
         }
         return null;
       } else {
-        if (previousRecord != null && previousRecord != mergedRecord) {
+        T prevRow = previousRecord != null ? previousRecord.getRecord() : null;
+        T mergedRow = mergedRecord.getRecord();
+        if (prevRow != null && prevRow != mergedRow) {
+          mergedRecord.setHoodieOperation(HoodieOperation.UPDATE_AFTER);
           readStats.incrementNumUpdates();
-        } else if (previousRecord == null) {
+        } else if (prevRow == null) {
+          mergedRecord.setHoodieOperation(HoodieOperation.INSERT);
           readStats.incrementNumInserts();
         }
-        return readerContext.seal(mergedRecord);
+        return mergedRecord.seal(readerContext);
       }
     }
   }
@@ -95,15 +108,15 @@ public interface UpdateProcessor<T> {
     }
 
     @Override
-    public T processUpdate(String recordKey, T previousRecord, T currentRecord, boolean isDelete) {
-      T result = delegate.processUpdate(recordKey, previousRecord, currentRecord, isDelete);
+    public BufferedRecord<T> processUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord, boolean isDelete) {
+      BufferedRecord<T> result = delegate.processUpdate(recordKey, previousRecord, mergedRecord, isDelete);
 
       if (isDelete) {
-        callback.onDelete(recordKey, previousRecord);
-      } else if (previousRecord != null && previousRecord != currentRecord) {
-        callback.onUpdate(recordKey, previousRecord, currentRecord);
-      } else {
-        callback.onInsert(recordKey, currentRecord);
+        callback.onDelete(recordKey, previousRecord == null ? null : previousRecord.getRecord());
+      } else if (HoodieOperation.isUpdateAfter(result.getHoodieOperation())) {
+        callback.onUpdate(recordKey, previousRecord.getRecord(), mergedRecord.getRecord());
+      } else if (HoodieOperation.isInsert(result.getHoodieOperation())) {
+        callback.onInsert(recordKey, mergedRecord.getRecord());
       }
       return result;
     }

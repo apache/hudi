@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
@@ -40,7 +41,7 @@ import java.util.stream.Stream;
 public class InputSplit {
   private final Option<HoodieBaseFile> baseFileOption;
   private final List<HoodieLogFile> logFiles;
-  private final Option<Iterator<BufferedRecord>> recordIterator;
+  private final Option<Iterator<HoodieRecord>> recordIterator;
   private final String partitionPath;
   // Byte offset to start reading from the base file
   private final long start;
@@ -48,7 +49,7 @@ public class InputSplit {
   private final long length;
 
   InputSplit(Option<HoodieBaseFile> baseFileOption,
-             Either<Stream<HoodieLogFile>, Iterator<BufferedRecord>> recordsToMerge,
+             Either<Stream<HoodieLogFile>, Iterator<HoodieRecord>> recordsToMerge,
              String partitionPath, long start, long length) {
     this.baseFileOption = baseFileOption;
     if (recordsToMerge.isLeft()) {
@@ -94,7 +95,7 @@ public class InputSplit {
     return this.logFiles.isEmpty() && recordIterator.isEmpty();
   }
 
-  public Iterator<BufferedRecord> getRecordIterator() {
+  public Iterator<HoodieRecord> getRecordIterator() {
     return this.recordIterator.orElseThrow(() -> new IllegalStateException("The record iterator has not been setup"));
   }
 }

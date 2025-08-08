@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 
@@ -103,18 +104,21 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
             bufferedRecord.getRecordKey(),
             partitionPath,
             bufferedRecord.getOrderingValue(),
-            payloadClass);
+            payloadClass,
+            bufferedRecord.getHoodieOperation());
       } else {
         return new HoodieEmptyRecord<>(
             hoodieKey,
+            bufferedRecord.getHoodieOperation(),
+            OrderingValues.getDefault(),
             HoodieRecord.HoodieRecordType.AVRO);
       }
     }
     if (requiresPayloadRecords) {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, (GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue());
-      return new HoodieAvroRecord<>(hoodieKey, payload);
+      return new HoodieAvroRecord<>(hoodieKey, payload, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
     }
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord());
+    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getHoodieOperation());
   }
 
   @Override
@@ -148,7 +152,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord getDeleteRow(IndexedRecord record, String recordKey) {
+  public IndexedRecord getDeleteRow(String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 }

@@ -32,9 +32,11 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -87,6 +89,8 @@ public abstract class HoodieReaderContext<T> {
   private RecordMergeMode mergeMode;
   protected RecordContext<T> recordContext;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
+  // the default iterator mode is engine-specific record mode
+  private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig,
@@ -108,6 +112,15 @@ public abstract class HoodieReaderContext<T> {
 
   public void setSchemaHandler(FileGroupReaderSchemaHandler<T> schemaHandler) {
     this.schemaHandler = schemaHandler;
+  }
+
+  public void setIteratorMode(IteratorMode iteratorMode) {
+    this.iteratorMode = iteratorMode;
+  }
+
+  public IteratorMode getIteratorMode() {
+    ValidationUtils.checkArgument(iteratorMode != null, "iterator mode should not be null!");
+    return this.iteratorMode;
   }
 
   public String getTablePath() {
