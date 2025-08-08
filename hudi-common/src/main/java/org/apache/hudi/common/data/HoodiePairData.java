@@ -35,6 +35,10 @@ import java.util.Map;
  * An abstraction for pairs of key in type K and value in type V to store the reference
  * and do transformation.
  *
+ * For all HoodiePairData, make sure you wrap it with either
+ * - withHoodiePairDataCleanUp to clean it up in a finally clause.
+ * - or use HoodiePairDataCleanupManager to track the HoodiePairData and clean it up only on exception.
+ *
  * @param <K> type of key.
  * @param <V> type of value.
  */
