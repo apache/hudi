@@ -293,6 +293,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     });
   }
 
+  public ClosableIterator<BufferedRecord<T>> getClosableBufferedRecordIterator() throws IOException {
+    return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> BufferedRecord.forRecordWithContext(nextRecord,
+        readerContext.getSchemaHandler().getRequestedSchema(), readerContext.getRecordContext(), orderingFieldNames, false));
+  }
+
   /**
    * @return A record key iterator over the records.
    */
