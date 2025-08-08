@@ -875,7 +875,13 @@ public class HoodieTableConfig extends HoodieConfig {
     // Step 2: Handle Version 9 specific logic.
     // CASE 1: For tables using MERGE MODE, or CUSTOM mergers.
     //   NOTE: Payload class should NOT be set for this case.
-    if (StringUtils.isNullOrEmpty(payloadClassName)) {
+    if (!recordMergeStrategyId.equals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID)
+        && !recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
+        && !recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)
+        && !recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
+      reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+      reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
+    } else if (StringUtils.isNullOrEmpty(payloadClassName)) {
       reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
       reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
     } else {
