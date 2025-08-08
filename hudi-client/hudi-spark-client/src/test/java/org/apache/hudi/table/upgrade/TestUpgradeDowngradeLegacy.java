@@ -680,6 +680,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
     when(writeConfig.autoUpgrade()).thenReturn(true);
+    when(writeConfig.getWriteVersion()).thenReturn(HoodieTableVersion.EIGHT);
 
     // assert no downgrade for table version 7 from table version 8
     boolean shouldDowngrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
@@ -709,10 +710,11 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     assertTrue(shouldUpgrade);
 
     // assert upgrade for table version 8 from table version 6 with auto upgrade set to false
+    // should return false
     when(writeConfig.autoUpgrade()).thenReturn(false);
     shouldUpgrade = new UpgradeDowngrade(metaClient, writeConfig, context, null)
         .needsUpgrade(HoodieTableVersion.EIGHT);
-    assertTrue(shouldUpgrade);
+    assertFalse(shouldUpgrade);
   }
 
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists) throws IOException {

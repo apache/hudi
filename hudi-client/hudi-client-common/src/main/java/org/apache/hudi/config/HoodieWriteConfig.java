@@ -1359,6 +1359,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieTableVersion.fromVersionCode(getIntOrDefault(WRITE_TABLE_VERSION));
   }
 
+  public void setWriteVersion(HoodieTableVersion version) {
+    setValue(WRITE_TABLE_VERSION, String.valueOf(version.versionCode()));
+  }
+
   public boolean autoUpgrade() {
     return getBoolean(AUTO_UPGRADE_VERSION);
   }
