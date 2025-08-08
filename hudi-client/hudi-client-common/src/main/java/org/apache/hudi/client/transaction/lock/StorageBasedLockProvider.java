@@ -242,7 +242,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       if (!isClosed && actuallyHoldsLock()) {
         tryExpireCurrentLock(true);
       }
-      // Do not execute any further actions
+      // Do not execute any further actions, mark closed
+      this.isClosed = true;
       return;
     } else {
       try {
@@ -431,7 +432,6 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
 
   private void assertUnclosed() {
     if (this.isClosed) {
-      hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockProviderFatalErrorMetric);
       throw new HoodieLockException("Lock provider already closed");
     }
   }
