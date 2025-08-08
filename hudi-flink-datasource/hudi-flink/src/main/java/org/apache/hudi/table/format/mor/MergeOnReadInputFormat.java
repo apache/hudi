@@ -123,12 +123,12 @@ public class MergeOnReadInputFormat
   /**
    * The table metadata client
    */
-  private transient HoodieTableMetaClient metaClient;
+  protected transient HoodieTableMetaClient metaClient;
 
   /**
    * The hoodie write configuration.
    */
-  private transient HoodieWriteConfig writeConfig;
+  protected transient HoodieWriteConfig writeConfig;
 
   protected MergeOnReadInputFormat(
       Configuration conf,
