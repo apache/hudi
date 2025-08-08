@@ -235,10 +235,10 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       MergeResult<T> mergeResult = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
       nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, mergeResult.getMergedRecord(), mergeResult.isDelete());
       return nextRecord != null;
+    } else {
+      // a record copied over from prev base file as is, as there are no updates.
+      nextRecord = readerContext.seal(baseRecord);
     }
-
-    // Inserts
-    nextRecord = readerContext.seal(baseRecord);
     return true;
   }
 
