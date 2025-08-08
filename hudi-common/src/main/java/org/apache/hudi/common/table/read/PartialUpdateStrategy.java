@@ -125,7 +125,7 @@ public class PartialUpdateStrategy<T> {
         newRecord.getOrderingValue(),
         engineRecord,
         newRecord.getSchemaId(),
-        newRecord.isDelete());
+        newRecord.getHoodieOperation());
   }
 
   BufferedRecord<T> reconcileMarkerValues(BufferedRecord<T> newRecord,
@@ -156,7 +156,7 @@ public class PartialUpdateStrategy<T> {
         newRecord.getOrderingValue(),
         engineRecord,
         newRecord.getSchemaId(),
-        newRecord.isDelete());
+        newRecord.getHoodieOperation());
   }
 
   static boolean isStringTyped(Schema.Field field) {

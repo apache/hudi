@@ -490,14 +490,10 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   }
 
   private static void populateValidAndDeletedSecondaryIndexRecords(HoodieRecord record, List<HoodieRecord> deletedSecondaryIndexRecords, List<HoodieRecord> validSecondaryIndexRecords) {
-    try {
-      if (record.isDelete(HoodieMetadataRecord.getClassSchema(), new Properties())) {
-        deletedSecondaryIndexRecords.add(record);
-      } else {
-        validSecondaryIndexRecords.add(record);
-      }
-    } catch (IOException e) {
-      fail("Failed to check if record is deleted.", e);
+    if (record.isDelete(HoodieMetadataRecord.getClassSchema(), new Properties())) {
+      deletedSecondaryIndexRecords.add(record);
+    } else {
+      validSecondaryIndexRecords.add(record);
     }
   }
 
