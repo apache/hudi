@@ -60,6 +60,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -1473,10 +1474,7 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
 
-      if (null == tableVersion) {
-        tableVersion = HoodieTableVersion.current();
-      }
-
+      tableVersion = getTableVersionProperly();
       tableConfig.setTableVersion(tableVersion);
       tableConfig.setInitialVersion(tableVersion);
 
@@ -1589,6 +1587,20 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.TABLE_FORMAT, tableFormat);
       }
       return tableConfig.getProps();
+    }
+
+    HoodieTableVersion getTableVersionProperly() {
+      if (tableVersion == null) {
+        return HoodieTableVersion.current();
+      } else if (tableVersion.greaterThanOrEquals(HoodieTableVersion.SIX)) {
+        return tableVersion;
+      } else {
+        String errorMessage = String.format(
+            "Creating a table in version \"%d\" is not allowed in current Hudi binary. "
+                + "Please set \"hoodie.write.table.version\" config with a value >= 6",
+            tableVersion.versionCode());
+        throw new HoodieNotSupportedException(errorMessage);
+      }
     }
 
     public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath) throws IOException {
