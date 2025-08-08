@@ -384,7 +384,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
   }
 
   @Override
-  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String user, String comment) {
+  public HoodieSavepointMetadata savepoint(HoodieEngineContext context, String instantToSavepoint, String completionTime, String user, String comment) {
     throw new HoodieNotSupportedException("Savepoint is not supported yet");
   }
 
