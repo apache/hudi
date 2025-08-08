@@ -165,6 +165,7 @@ public class HoodieMergeHandleFactory {
   static Pair<String, String> getMergeHandleClassesWrite(WriteOperationType operationType, HoodieWriteConfig writeConfig, HoodieTable table) {
     String mergeHandleClass;
     String fallbackMergeHandleClass = null;
+
     // Overwrite to a different implementation for {@link HoodieWriteMergeHandle} if sorting or CDC is enabled.
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
@@ -178,7 +179,14 @@ public class HoodieMergeHandleFactory {
         fallbackMergeHandleClass = HoodieWriteConfig.CONCAT_HANDLE_CLASS_NAME.defaultValue();
       }
     } else if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
-      mergeHandleClass = HoodieMergeHandleWithChangeLog.class.getName();
+      if (writeConfig.getMergeHandleClassName().equals(FileGroupReaderBasedMergeHandle.class.getName())) {
+        mergeHandleClass = writeConfig.getMergeHandleClassName();
+        if (!mergeHandleClass.equals(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue())) {
+          fallbackMergeHandleClass = HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue();
+        }
+      } else {
+        mergeHandleClass = HoodieMergeHandleWithChangeLog.class.getName();
+      }
     } else {
       mergeHandleClass = writeConfig.getMergeHandleClassName();
       if (!mergeHandleClass.equals(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue())) {

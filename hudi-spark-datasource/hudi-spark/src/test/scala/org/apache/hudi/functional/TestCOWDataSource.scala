@@ -696,6 +696,59 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(snapshotDF2.count(), 80)
   }
 
+  @Test
+  def testCopyOnWriteUpserts(): Unit = {
+    val recordType = HoodieRecordType.AVRO
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    assertEquals(100, snapshotDF1.count())
+
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 20)).asScala.toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+
+    inputDF2.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option("hoodie.write.merge.handle.class", "org.apache.hudi.io.FileGroupReaderBasedMergeHandle")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshotDF2 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+    .drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
+    snapshotDF2.cache()
+    assertEquals(snapshotDF2.count(), 100)
+
+    assertEquals(0, inputDF2.except(snapshotDF2).count())
+
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("001", 5)).asScala.toList
+    val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 1))
+    inputDF3.cache()
+
+    inputDF3.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+      .option("hoodie.write.merge.handle.class", "org.apache.hudi.io.FileGroupReaderBasedMergeHandle")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshotDF3 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
+      .drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
+    snapshotDF3.cache()
+    assertEquals(snapshotDF3.count(), 95)
+    assertEquals(inputDF3.count(), inputDF3.except(snapshotDF3).count()) // none of the deleted records should be part of snapshot read
+  }
+
   /**
    * Test retries on conflict failures.
    */
