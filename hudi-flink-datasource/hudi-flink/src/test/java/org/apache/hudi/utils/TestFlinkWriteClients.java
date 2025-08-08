@@ -106,8 +106,7 @@ public class TestFlinkWriteClients {
 
     assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
     assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getPayloadClass(), is(""));
-    assertThat(tableConfig.getLegacyPayloadClass(), is(EventTimeAvroPayload.class.getName()));
+    assertThat(tableConfig.getPayloadClass(), is(EventTimeAvroPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
@@ -127,8 +126,7 @@ public class TestFlinkWriteClients {
 
     assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.COMMIT_TIME_ORDERING));
     assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getLegacyPayloadClass(), is(OverwriteWithLatestAvroPayload.class.getName()));
-    assertThat(tableConfig.getPayloadClass(), is(""));
+    assertThat(tableConfig.getPayloadClass(), is(OverwriteWithLatestAvroPayload.class.getName()));
 
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
@@ -150,10 +148,9 @@ public class TestFlinkWriteClients {
     HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
 
-    assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
-    assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getLegacyPayloadClass(), is(PartialUpdateAvroPayload.class.getName()));
-    assertThat(tableConfig.getPayloadClass(), is(""));
+    assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.CUSTOM));
+    assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID));
+    assertThat(tableConfig.getPayloadClass(), is(PartialUpdateAvroPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
