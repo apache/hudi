@@ -133,9 +133,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("tableVersions")
-  public void testAutoUpgradeDisabled(HoodieTableVersion originalVersion) throws Exception {
-    LOG.info("Testing auto-upgrade disabled for version {}", originalVersion);
+  @MethodSource("versionsBelowSix")
+  public void testAutoUpgradeDisabledForVersionsBelowSix(HoodieTableVersion originalVersion) throws Exception {
+    LOG.info("Testing auto-upgrade disabled for version {} (below SIX)", originalVersion);
     
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
     
@@ -148,7 +148,38 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
     
-    // Attempt upgrade with auto-upgrade disabled
+    // For versions below SIX with autoUpgrade disabled, expect exception
+    HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
+            () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(targetVersion, null),
+            "Expected HoodieUpgradeDowngradeException for version " + originalVersion + " with autoUpgrade disabled"
+    );
+    
+    // Validate exception message
+    assertTrue(exception.getMessage().contains("Please upgrade table from version " + originalVersion), 
+               "Exception message should mention upgrading from " + originalVersion);
+    assertTrue(exception.getMessage().contains("to " + HoodieTableVersion.SIX.versionCode()), 
+               "Exception message should mention upgrading to SIX");
+    
+    LOG.info("Auto-upgrade disabled test passed for version {} (expected exception thrown)", originalVersion);
+  }
+
+  @ParameterizedTest
+  @MethodSource("versionsSixAndAbove")
+  public void testAutoUpgradeDisabledForVersionsSixAndAbove(HoodieTableVersion originalVersion) throws Exception {
+    LOG.info("Testing auto-upgrade disabled for version {} (SIX and above)", originalVersion);
+    
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
+    
+    Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
+    if (!targetVersionOpt.isPresent()) {
+      LOG.info("Skipping auto-upgrade test for version {} (no higher version available)", originalVersion);
+      return;
+    }
+    HoodieTableVersion targetVersion = targetVersionOpt.get();
+    
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
+    
+    // For versions SIX and above, the original behavior should work
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(targetVersion, null);
     
@@ -366,6 +397,21 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of(HoodieTableVersion.FOUR),   // Hudi 0.11.1
         Arguments.of(HoodieTableVersion.FIVE),   // Hudi 0.12.2
+        Arguments.of(HoodieTableVersion.SIX),    // Hudi 0.14
+        Arguments.of(HoodieTableVersion.EIGHT),  // Hudi 1.0.2
+        Arguments.of(HoodieTableVersion.NINE)    // Hudi 1.1
+    );
+  }
+
+  private static Stream<Arguments> versionsBelowSix() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.FOUR),   // Hudi 0.11.1
+        Arguments.of(HoodieTableVersion.FIVE)    // Hudi 0.12.2
+    );
+  }
+
+  private static Stream<Arguments> versionsSixAndAbove() {
+    return Stream.of(
         Arguments.of(HoodieTableVersion.SIX),    // Hudi 0.14
         Arguments.of(HoodieTableVersion.EIGHT),  // Hudi 1.0.2
         Arguments.of(HoodieTableVersion.NINE)    // Hudi 1.1
