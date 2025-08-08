@@ -36,7 +36,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
 import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
 import org.apache.hudi.common.util.{DefaultSizeEstimator, FileIOUtils, HoodieRecordUtils, Option}
 import org.apache.hudi.common.util.collection.ExternalSpillableMap
@@ -392,7 +392,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
           recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
             toJavaOption(originTableSchema.internalSchema), Seq.empty, conf)
-            .map(record => BufferedRecord.forRecordWithContext(record, avroSchema, readerContext.getRecordContext, orderingFieldNames, false))
+            .map(record => BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
           recordIter = loadFileSlice(currentCDCFileSplit.getBeforeFileSlice.get)
@@ -500,7 +500,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
       .build()
-    CloseableIteratorListener.addListener(fileGroupReader.getClosableBufferedRecordIterator).asScala
+    CloseableIteratorListener.addListener(fileGroupReader.getBufferedRecordIterator).asScala
   }
 
   private def loadLogFile(logFile: HoodieLogFile, instant: String): Iterator[BufferedRecord[InternalRow]] = {

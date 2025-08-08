@@ -280,7 +280,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  private ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator() throws IOException {
+  public ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator() throws IOException {
     initRecordIterators();
     return new HoodieFileGroupReaderIterator<>(this);
   }
@@ -297,11 +297,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.readerContext.setIteratorMode(IteratorMode.HOODIE_RECORD);
     return new CloseableMappingIterator<>(getBufferedRecordIterator(),
         bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord));
-  }
-
-  public ClosableIterator<BufferedRecord<T>> getClosableBufferedRecordIterator() throws IOException {
-    return new CloseableMappingIterator<>(getClosableIterator(), nextRecord -> BufferedRecord.forRecordWithContext(nextRecord,
-        readerContext.getSchemaHandler().getRequestedSchema(), readerContext.getRecordContext(), orderingFieldNames, false));
   }
 
   /**
