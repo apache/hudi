@@ -155,4 +155,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     // Handle records solely from log files.
     return hasNextLogRecord();
   }
+
+  public boolean isPartialMergingEnabled() {
+    return enablePartialMerging;
+  }
 }
