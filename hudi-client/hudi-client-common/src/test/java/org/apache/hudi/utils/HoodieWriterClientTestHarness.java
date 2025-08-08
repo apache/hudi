@@ -550,7 +550,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     int dedupParallelism = records.getNumPartitions() + additionalParallelism;
     BaseHoodieWriteClient writeClient = getHoodieWriteClient(writeConfig);
     HoodieReaderContext readerContext = writeClient.getEngineContext()
-        .getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, writeConfig.getProps()).getContext();
+        .getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, writeConfig.getProps(), true).getContext();
     List<String> orderingFieldNames = getOrderingFieldNames(
         readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
     BufferedRecordMerger<HoodieRecord> recordMerger = BufferedRecordMergerFactory.create(

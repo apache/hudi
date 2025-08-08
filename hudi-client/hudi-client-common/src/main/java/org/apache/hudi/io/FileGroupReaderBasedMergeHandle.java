@@ -68,7 +68,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
@@ -104,7 +103,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.operation = Option.empty();
     this.readerContext = (HoodieReaderContext<T>) hoodieTable.getContext().getReaderContextFactoryForWrite(hoodieTable.getMetaClient(),
-        config.getRecordMerger().getRecordType(), config.getProps()).getContext();
+        config.getRecordMerger().getRecordType(), config.getProps(), false).getContext();
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.readerContext.initRecordMerger(properties);
@@ -255,9 +254,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     Option<Stream<HoodieLogFile>> logFilesStreamOpt = operation.map(op -> op.getDeltaFileNames().stream().map(logFileName ->
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
             config.getBasePath(), op.getPartitionPath()), logFileName))));
-    Schema recordSchema = getNewSchema();
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, recordSchema, internalSchemaOption, props, isCompaction, logFilesStreamOpt, incomingRecordsItr)) {
+    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, internalSchemaOption, props, isCompaction, logFilesStreamOpt, incomingRecordsItr)) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
@@ -271,8 +269,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           }
           // Writes the record
           try {
-            // TODO should we read all the records in with metadata for the pass through records?
-            writeToFile(record.getKey(), record, recordSchema, config.getPayloadConfig().getProps(), preserveMetadata);
+            // if the record is not being updated and is not a new insert for the file group, we must preserve the existing record metadata.
+            boolean shouldPreserveRecordMetadata = preserveMetadata || record.getOperation() == null;
+            writeToFile(record.getKey(), record, shouldPreserveRecordMetadata ? writeSchemaWithMetaFields : writeSchema,
+                config.getPayloadConfig().getProps(), shouldPreserveRecordMetadata);
             writeStatus.markSuccess(record, recordMetadata);
             recordsWritten++;
           } catch (Exception e) {
@@ -293,11 +293,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
-  private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Schema schemaToUse, Option<InternalSchema> internalSchemaOption, TypedProperties props, boolean isCompaction,
+  private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props, boolean isCompaction,
                                                       Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord> incomingRecordsItr) {
     HoodieFileGroupReader.Builder<T> fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
-        .withDataSchema(schemaToUse).withRequestedSchema(schemaToUse)
+        .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
         .withInternalSchema(internalSchemaOption).withProps(props)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(createCallback());
@@ -305,7 +305,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     if (isCompaction) {
       fileGroupBuilder.withLogFiles(logFileStreamOpt.get());
     } else {
-      fileGroupBuilder.withRecordIterator(incomingRecordsItr);
+      fileGroupBuilder.withRecordIterator(incomingRecordsItr, writeSchema);
     }
     return fileGroupBuilder.build();
   }
@@ -357,7 +357,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           partitionPath,
           writeSchemaWithMetaFields,
           readerContext,
-          () -> getNewSchema(),
+          getNewSchema(),
           writeStatus,
           secondaryIndexDefns
       ));
@@ -437,20 +437,20 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     private final String partitionPath;
     private final Schema writeSchemaWithMetaFields;
     private final HoodieReaderContext<T> readerContext;
-    private final Supplier<Schema> newSchemaSupplier;
+    private final Schema newSchema;
     private final WriteStatus writeStatus;
     private final List<HoodieIndexDefinition> secondaryIndexDefns;
 
     public SecondaryIndexCallback(String partitionPath,
                                   Schema writeSchemaWithMetaFields,
                                   HoodieReaderContext<T> readerContext,
-                                  Supplier<Schema> newSchemaSupplier,
+                                  Schema newSchema,
                                   WriteStatus writeStatus,
                                   List<HoodieIndexDefinition> secondaryIndexDefns) {
       this.partitionPath = partitionPath;
       this.writeSchemaWithMetaFields = writeSchemaWithMetaFields;
       this.readerContext = readerContext;
-      this.newSchemaSupplier = newSchemaSupplier;
+      this.newSchema = newSchema;
       this.secondaryIndexDefns = secondaryIndexDefns;
       this.writeStatus = writeStatus;
     }
@@ -465,7 +465,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           false,
           writeStatus,
           writeSchemaWithMetaFields,
-          newSchemaSupplier,
+          newSchema,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }
@@ -480,7 +480,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           false,
           writeStatus,
           writeSchemaWithMetaFields,
-          newSchemaSupplier,
+          newSchema,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }
@@ -495,7 +495,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           true,
           writeStatus,
           writeSchemaWithMetaFields,
-          newSchemaSupplier,
+          newSchema,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }

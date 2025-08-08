@@ -135,7 +135,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
     when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
 
-    FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
+    FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader(SCHEMA);
     InputSplit inputSplit = mock(InputSplit.class);
     when(inputSplit.hasNoRecordsToMerge()).thenReturn(false);
     when(inputSplit.getRecordIterator()).thenReturn(inputRecords.iterator());

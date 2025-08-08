@@ -404,9 +404,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withRecordIterator(Iterator<HoodieRecord> recordIterator) {
+    public Builder<T> withRecordIterator(Iterator<HoodieRecord> recordIterator, Schema recordSchema) {
       this.recordIterator = recordIterator;
-      this.recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
+      this.recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader(recordSchema);
       return this;
     }
 
