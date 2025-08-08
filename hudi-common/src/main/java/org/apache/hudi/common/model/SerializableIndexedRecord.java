@@ -39,7 +39,7 @@ import java.util.Objects;
  * After deserialization, the schema can be set using {@link #decodeRecord(Schema)} and that will also trigger deserialization of the record.
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
-class SerializableIndexedRecord implements IndexedRecord, GenericRecord, KryoSerializable {
+class SerializableIndexedRecord implements GenericRecord, KryoSerializable {
   private IndexedRecord record;
   private byte[] recordBytes;
 
@@ -129,6 +129,7 @@ class SerializableIndexedRecord implements IndexedRecord, GenericRecord, KryoSer
   }
 
   IndexedRecord getRecord() {
+    ValidationUtils.checkArgument(record != null, "Record must be deserialized before accessing");
     return record;
   }
 
