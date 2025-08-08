@@ -20,6 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
@@ -29,6 +30,8 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.slf4j.Logger;
@@ -38,6 +41,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -374,6 +378,180 @@ public class AvroSchemaUtils {
     }
     newSchema.setFields(fields);
     return newSchema;
+  }
+
+  /**
+   * If schemas are projection equivalent, then a record with schema1 does not need to be projected to schema2
+   * because the projection will be the identity.
+   *
+   *  Two schemas are considered projection equivalent if the field names and types are equivalent.
+   *  The names of records, namespaces, or docs do not need to match. Nullability is ignored.
+   */
+  public static boolean areSchemasProjectionEquivalent(Schema schema1, Schema schema2) {
+    if (Objects.equals(schema1, schema2)) {
+      return true;
+    }
+    if (schema1 == null || schema2 == null) {
+      return false;
+    }
+    return areSchemasProjectionEquivalentInternal(resolveNullableSchema(schema1), resolveNullableSchema(schema2));
+  }
+
+  @VisibleForTesting
+  static boolean areSchemasProjectionEquivalentInternal(Schema schema1, Schema schema2) {
+    if (Objects.equals(schema1, schema2)) {
+      return true;
+    }
+    switch (schema1.getType()) {
+      case RECORD:
+        if (schema2.getType() != Schema.Type.RECORD) {
+          return false;
+        }
+        List<Schema.Field> fields1 = schema1.getFields();
+        List<Schema.Field> fields2 = schema2.getFields();
+        if (fields1.size() != fields2.size()) {
+          return false;
+        }
+        for (int i = 0; i < fields1.size(); i++) {
+          if (!fields1.get(i).name().equalsIgnoreCase(fields2.get(i).name())) {
+            return false;
+          }
+          if (!areSchemasProjectionEquivalent(fields1.get(i).schema(), fields2.get(i).schema())) {
+            return false;
+          }
+        }
+        return true;
+
+      case ARRAY:
+        if (schema2.getType() != Schema.Type.ARRAY) {
+          return false;
+        }
+        return areSchemasProjectionEquivalent(schema1.getElementType(), schema2.getElementType());
+
+      case MAP:
+        if (schema2.getType() != Schema.Type.MAP) {
+          return false;
+        }
+        return areSchemasProjectionEquivalent(schema1.getValueType(), schema2.getValueType());
+      case UNION:
+        throw new IllegalArgumentException("Union schemas are not supported besides nullable");
+      default:
+        return areSchemaPrimitivesProjectionEquivalent(schema1, schema2);
+    }
+  }
+
+  @VisibleForTesting
+  static boolean areSchemaPrimitivesProjectionEquivalent(Schema schema1, Schema schema2) {
+    if (!areLogicalTypesProjectionEquivalent(schema1.getLogicalType(), schema2.getLogicalType())) {
+      return false;
+    }
+    if (Objects.requireNonNull(schema1.getType()) == Schema.Type.FIXED) {
+      return schema2.getType() == Schema.Type.FIXED
+          && schema1.getFixedSize() == schema2.getFixedSize();
+    }
+    if (Objects.requireNonNull(schema1.getType()) == Schema.Type.ENUM) {
+      return schema2.getType() == Schema.Type.ENUM
+          && areEnumSymbolsProjectionEquivalent(schema1.getEnumSymbols(), schema2.getEnumSymbols());
+    }
+    return Objects.equals(schema1.getType(), schema2.getType());
+  }
+
+  private static boolean areEnumSymbolsProjectionEquivalent(List<String> enumSymbols1, List<String> enumSymbols2) {
+    Set<String> set1 = new HashSet<>(enumSymbols1);
+    Set<String> set2 = new HashSet<>(enumSymbols2);
+    return set2.containsAll(set1);
+  }
+
+  private static boolean areLogicalTypesProjectionEquivalent(LogicalType logicalType1, LogicalType logicalType2) {
+    if (Objects.equals(logicalType1, logicalType2)) {
+      return true;
+    }
+    if (logicalType1 == null || logicalType2 == null) {
+      return false;
+    }
+    if (logicalType1 instanceof LogicalTypes.Decimal && logicalType2 instanceof LogicalTypes.Decimal) {
+      return ((LogicalTypes.Decimal) logicalType1).getScale() == ((LogicalTypes.Decimal) logicalType2).getScale()
+          && ((LogicalTypes.Decimal) logicalType1).getPrecision() == ((LogicalTypes.Decimal) logicalType2).getPrecision();
+    }
+    return false;
+  }
+
+  /**
+   * Prunes a data schema to match the structure of a required schema while preserving
+   * original metadata where possible.
+   *
+   * <p>This method recursively traverses both schemas and creates a new schema that:
+   * <ul>
+   *   <li>Contains only fields present in the required schema</li>
+   *   <li>Preserves field metadata (type, documentation, default values) from the data schema</li>
+   *   <li>Optionally includes fields from the required schema that are marked for exclusion</li>
+   * </ul>
+   *
+   * @param dataSchema the source schema containing the original data structure and metadata
+   * @param requiredSchema the target schema that defines the desired structure and field requirements
+   * @param mandatoryFields a set of top level field names that should be included from the required schema
+   *                     even if they don't exist in the data schema. This allows for fields like cdc operation
+   *                     don't exist in the data schema
+   *
+   * @return a new pruned schema that matches the required schema structure while preserving
+   *         data schema metadata where possible
+   */
+  public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
+    Schema prunedDataSchema = pruneDataSchemaInternal(resolveNullableSchema(dataSchema), resolveNullableSchema(requiredSchema), mandatoryFields);
+    if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
+      return createNullableSchema(prunedDataSchema);
+    }
+    return prunedDataSchema;
+  }
+
+  private static Schema pruneDataSchemaInternal(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
+    switch (requiredSchema.getType()) {
+      case RECORD:
+        if (dataSchema.getType() != Schema.Type.RECORD) {
+          throw new IllegalArgumentException("Data schema is not a record");
+        }
+        List<Schema.Field> newFields = new ArrayList<>();
+        for (Schema.Field requiredSchemaField : requiredSchema.getFields()) {
+          Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
+          if (dataSchemaField != null) {
+            Schema.Field newField = new Schema.Field(
+                dataSchemaField.name(),
+                pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
+                dataSchemaField.doc(),
+                dataSchemaField.defaultVal()
+            );
+            newFields.add(newField);
+          } else if (mandatoryFields.contains(requiredSchemaField.name())) {
+            newFields.add(new Schema.Field(
+                requiredSchemaField.name(),
+                requiredSchemaField.schema(),
+                requiredSchemaField.doc(),
+                requiredSchemaField.defaultVal()
+            ));
+          }
+        }
+        Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), false);
+        newRecord.setFields(newFields);
+        return newRecord;
+
+      case ARRAY:
+        if (dataSchema.getType() != Schema.Type.ARRAY) {
+          throw new IllegalArgumentException("Data schema is not an array");
+        }
+        return Schema.createArray(pruneDataSchema(dataSchema.getElementType(), requiredSchema.getElementType(), Collections.emptySet()));
+
+      case MAP:
+        if (dataSchema.getType() != Schema.Type.MAP) {
+          throw new IllegalArgumentException("Data schema is not a map");
+        }
+        return Schema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
+
+      case UNION:
+        throw new IllegalArgumentException("Data schema is a union");
+
+      default:
+        return dataSchema;
+    }
   }
 
   /**

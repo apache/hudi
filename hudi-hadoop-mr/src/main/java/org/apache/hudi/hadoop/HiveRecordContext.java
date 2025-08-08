@@ -25,11 +25,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -45,24 +43,24 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
-  private final ObjectInspectorCache objectInspectorCache;
+  private final Map<Schema, HiveAvroSerializer> serializerCache = new ConcurrentHashMap<>();
 
-  public HiveRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf, ObjectInspectorCache objectInspectorCache) {
-    super(tableConfig);
-    this.typeConverter = new HiveJavaTypeConverter();
-    this.objectInspectorCache = objectInspectorCache;
+  private HiveAvroSerializer getHiveAvroSerializer(Schema schema) {
+    return serializerCache.computeIfAbsent(schema, HiveAvroSerializer::new);
   }
 
-  public static Object getFieldValueFromArrayWritable(ArrayWritable record, Schema schema, String fieldName, ObjectInspectorCache objectInspectorCache) {
-    return StringUtils.isNullOrEmpty(fieldName) ? null : objectInspectorCache.getValue(record, schema, fieldName);
+  public HiveRecordContext(HoodieTableConfig tableConfig) {
+    super(tableConfig);
+    this.typeConverter = new HiveJavaTypeConverter();
   }
 
   @Override
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
-    return getFieldValueFromArrayWritable(record, schema, fieldName, objectInspectorCache);
+    return getHiveAvroSerializer(schema).getValue(record, fieldName);
   }
 
   @Override
@@ -80,7 +78,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
     }
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
+    return new HoodieHiveRecord(key, writable, schema, getHiveAvroSerializer(schema));
   }
 
   @Override
@@ -125,7 +123,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
   @Override
   public GenericRecord convertToAvroRecord(ArrayWritable record, Schema schema) {
-    return objectInspectorCache.serialize(record, schema);
+    return getHiveAvroSerializer(schema).serialize(record);
   }
 
   @Override
