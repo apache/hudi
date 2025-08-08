@@ -1689,6 +1689,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP);
   }
 
+  public boolean shouldArchiveKeepCleanPlanRetainInstant() {
+    return getBoolean(HoodieArchivalConfig.ARCHIVE_KEEP_CLEAN_PLAN_RETAIN_INSTANT);
+  }
+
   public int getTimelineCompactionBatchSize() {
     return getInt(HoodieArchivalConfig.TIMELINE_COMPACTION_BATCH_SIZE);
   }
