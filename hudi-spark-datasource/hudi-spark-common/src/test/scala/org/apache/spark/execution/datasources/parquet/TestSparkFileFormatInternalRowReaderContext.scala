@@ -24,8 +24,6 @@ import org.apache.hudi.SparkFileFormatInternalRowReaderContext.filterIsSafeForBo
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
-import org.apache.hudi.keygen.CustomKeyGenerator
-import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
@@ -90,6 +88,6 @@ class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalT
     assertEquals(1.1f, sparkReaderContext.getRecordContext().convertValueToEngineType(1.1f))
     assertEquals(1.1d, sparkReaderContext.getRecordContext().convertValueToEngineType(1.1d))
     assertEquals(UTF8String.fromString(stringValue),
-      sparkReaderContext.getRecordContext().convertValueToEngineType(stringValue))
+      sparkReaderContext.getRecordContext().convertPartitionValueToEngineType(stringValue))
   }
 }

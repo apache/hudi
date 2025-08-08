@@ -105,6 +105,20 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       // Spark reads String field values as UTF8String.
       // To foster value comparison, if the value is of String type, e.g., from
       // the delete record, we convert it to UTF8String type.
+      // [SPARK-46832] UTF8String doesn't support compareTo anymore
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory().wrapUTF8String(UTF8String.fromString((String) value));
+    } else if (value instanceof UTF8String) {
+      return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory().wrapUTF8String((UTF8String) value);
+    }
+    return value;
+  }
+
+  @Override
+  public Comparable convertPartitionValueToEngineType(Comparable value) {
+    if (value instanceof String) {
+      // Spark reads String field values as UTF8String.
+      // To foster value comparison, if the value is of String type, e.g., from
+      // the delete record, we convert it to UTF8String type.
       return UTF8String.fromString((String) value);
     }
     return value;
