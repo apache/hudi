@@ -103,12 +103,12 @@ public class UpgradeDowngrade {
     }
     if (!config.autoUpgrade()) {
       if (fromTableVersion.versionCode() < HoodieTableVersion.SIX.versionCode()) {
-        // throw an expcetion saying autoUpgrade is disabled, and table version is less than SIX
-        // need to upgrade to SIX and set to autoUpgrade to true
+        // throw an exception as autoUpgrade is disabled, and table version is less than SIX
+        // need to upgrade to SIX and set to autoUpgrade to true, otherwise the setting the write config value to a value lower than six will fail
         throw new HoodieUpgradeDowngradeException(
-                String.format("Please upgrade table from version %s to %s before upgrading to version %s.", fromTableVersion, HoodieTableVersion.SIX.versionCode(), toWriteVersion));
+                String.format("AUTO_UPGRADE_VERSION was disabled, Please upgrade table to version %s by setting AUTO_UPGRADE_VERSION to true.", HoodieTableVersion.SIX.versionCode()));
       }
-      // if autoUpgrade is disabled, then we must ensure the write version is set to the table version.
+      // if autoUpgrade is disabled and table version is greater than SIX, then we must ensure the write version is set to the table version.
       // and skip the upgrade
       config.setWriteVersion(fromTableVersion);
       LOG.warn("AUTO_UPGRADE_VERSION was disabled. Table version {} does not match write version {}. "

@@ -138,14 +138,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     LOG.info("Testing auto-upgrade disabled for version {} (below SIX)", originalVersion);
     
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
-    
-    Option<HoodieTableVersion> targetVersionOpt = getNextVersion(originalVersion);
-    if (!targetVersionOpt.isPresent()) {
-      LOG.info("Skipping auto-upgrade test for version {} (no higher version available)", originalVersion);
-      return;
-    }
-    HoodieTableVersion targetVersion = targetVersionOpt.get();
-    
+
+    HoodieTableVersion targetVersion = getNextVersion(originalVersion).get();
+
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
     
     // For versions below SIX with autoUpgrade disabled, expect exception
@@ -155,10 +150,10 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     );
     
     // Validate exception message
-    assertTrue(exception.getMessage().contains("Please upgrade table from version " + originalVersion), 
-               "Exception message should mention upgrading from " + originalVersion);
-    assertTrue(exception.getMessage().contains("to " + HoodieTableVersion.SIX.versionCode()), 
-               "Exception message should mention upgrading to SIX");
+    String expectedMessage = String.format("AUTO_UPGRADE_VERSION was disabled, Please upgrade table to version %s by setting AUTO_UPGRADE_VERSION to true.",
+        HoodieTableVersion.SIX.versionCode());
+    assertEquals(expectedMessage, exception.getMessage(),
+        "Exception message should match expected format");
     
     LOG.info("Auto-upgrade disabled test passed for version {} (expected exception thrown)", originalVersion);
   }
