@@ -188,7 +188,7 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   public Comparable convertPartitionValueToEngineType(Comparable value) {
-    return value;
+    return convertValueToEngineType(value);
   }
 
   /**
