@@ -44,7 +44,7 @@ public class DefaultHiveRecordMerger extends HoodieHiveRecordMerger {
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.HIVE);
     if (newer instanceof HoodieHiveRecord) {
       HoodieHiveRecord newHiveRecord = (HoodieHiveRecord) newer;
-      if (newHiveRecord.isDeleted()) {
+      if (newHiveRecord.isDelete(newSchema, props)) {
         return Option.empty();
       }
     } else if (newer.getData() == null) {
@@ -53,7 +53,7 @@ public class DefaultHiveRecordMerger extends HoodieHiveRecordMerger {
 
     if (older instanceof HoodieHiveRecord) {
       HoodieHiveRecord oldHiveRecord = (HoodieHiveRecord) older;
-      if (oldHiveRecord.isDeleted()) {
+      if (oldHiveRecord.isDelete(oldSchema, props)) {
         return Option.of(Pair.of(newer, newSchema));
       }
     } else if (older.getData() == null) {

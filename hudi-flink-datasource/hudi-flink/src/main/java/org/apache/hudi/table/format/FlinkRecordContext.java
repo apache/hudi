@@ -87,10 +87,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData getDeleteRow(RowData record, String recordKey) {
-    if (record != null) {
-      return record;
-    }
+  public RowData getDeleteRow(String recordKey) {
     // don't need to emit record key row if primary key semantic is lost
     if (recordKeyRowConverter == null) {
       return null;
@@ -118,11 +115,10 @@ public class FlinkRecordContext extends RecordContext<RowData> {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     // delete record
     if (bufferedRecord.isDelete()) {
-      return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
+      return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
     }
     RowData rowData = bufferedRecord.getRecord();
-    HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
-    return new HoodieFlinkRecord(hoodieKey, operation, bufferedRecord.getOrderingValue(), rowData);
+    return new HoodieFlinkRecord(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), rowData, bufferedRecord.isDelete());
   }
 
   @Override

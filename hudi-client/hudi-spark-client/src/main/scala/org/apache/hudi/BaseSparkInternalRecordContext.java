@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -74,12 +75,15 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(
           hoodieKey,
+          bufferedRecord.getHoodieOperation(),
+          OrderingValues.getDefault(),
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
-    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema), false);
+    return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema),
+        false, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
   }
 
   @Override
@@ -125,10 +129,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public InternalRow getDeleteRow(InternalRow record, String recordKey) {
-    if (record != null) {
-      return record;
-    }
+  public InternalRow getDeleteRow(String recordKey) {
     UTF8String[] metaFields = new UTF8String[]{
         null,
         null,

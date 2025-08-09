@@ -56,8 +56,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     super(key, data);
   }
 
-  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
-    super(key, data, null, currentLocation, null);
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation hoodieOperation) {
+    super(key, data, hoodieOperation, Option.empty());
+  }
+
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation hoodieOperation, HoodieRecordLocation currentLocation) {
+    super(key, data, hoodieOperation, currentLocation, null);
   }
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
@@ -157,7 +161,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
     return false;
   }
 
