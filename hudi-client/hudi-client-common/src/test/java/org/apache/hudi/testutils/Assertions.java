@@ -27,10 +27,12 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.testutils.CheckedFunction;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.jupiter.api.function.Executable;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -42,6 +44,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -148,5 +151,18 @@ public class Assertions {
     for (Pair<String, String> entry : expectedPartitionPathRecKeyPairs) {
       assertTrue(actualPartitionPathRecKeyPairs.contains(entry));
     }
+  }
+
+  public static void assertComplexKeyGeneratorValidationThrows(Executable writeOperation) {
+    HoodieException exception = assertThrows(HoodieException.class, writeOperation);
+    assertEquals("This table uses the complex key generator with a single record "
+            + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
+            + "release before, the table may potentially contain duplicates due to a breaking "
+            + "change in the key encoding in the _hoodie_record_key meta field (HUDI-7001) which "
+            + "is crucial for upserts. Please take action based on the mitigation guide before "
+            + "resuming the ingestion to the this table. If you're certain that the table is not "
+            + "affected by the key encoding change, set "
+            + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.",
+        exception.getMessage());
   }
 }

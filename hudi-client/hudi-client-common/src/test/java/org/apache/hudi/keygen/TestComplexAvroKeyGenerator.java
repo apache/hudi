@@ -25,11 +25,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import static junit.framework.TestCase.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestComplexAvroKeyGenerator {
 
@@ -61,11 +60,18 @@ public class TestComplexAvroKeyGenerator {
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
   }
 
-  @Test
-  public void testMultipleValueKeyGenerator() {
+  @ParameterizedTest
+  @CsvSource(value = {"false,true", "true,false", "true,true"})
+  void testMultipleValueKeyGenerator(boolean setEncodeSingleKeyFieldNameConfig,
+                                     boolean encodeSingleKeyFieldName) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
+    if (setEncodeSingleKeyFieldNameConfig) {
+      properties.setProperty(
+          HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(),
+          String.valueOf(encodeSingleKeyFieldName));
+    }
     ComplexAvroKeyGenerator compositeKeyGenerator = new ComplexAvroKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 2);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 2);
@@ -80,11 +86,18 @@ public class TestComplexAvroKeyGenerator {
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
   }
 
-  @Test
-  public void testMultipleValueKeyGeneratorNonPartitioned() {
+  @ParameterizedTest
+  @CsvSource(value = {"false,true", "true,false", "true,true"})
+  void testMultipleValueKeyGeneratorNonPartitioned(boolean setEncodeSingleKeyFieldNameConfig,
+                                                   boolean encodeSingleKeyFieldName) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
+    if (setEncodeSingleKeyFieldNameConfig) {
+      properties.setProperty(
+          HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(),
+          String.valueOf(encodeSingleKeyFieldName));
+    }
     ComplexAvroKeyGenerator compositeKeyGenerator = new ComplexAvroKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFieldNames().size(), 2);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 0);
