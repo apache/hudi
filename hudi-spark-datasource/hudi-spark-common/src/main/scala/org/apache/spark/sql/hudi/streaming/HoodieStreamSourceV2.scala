@@ -121,7 +121,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
     endOffset = HoodieSourceOffset(translateCheckpoint(endOffset.offsetCommitTime))
 
     if (startOffset == endOffset) {
-      sqlContext.internalCreateDataFrame(
+      sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession,
         sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
     } else {
       val (startCompletionTime, rangeType) = getStartCompletionTimeAndRangeType(startOffset)
@@ -138,13 +138,12 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
             new HoodieMergeOnReadCDCHadoopFsRelationFactory(
               sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable, rangeType).build()
           }
-          FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
+          sparkAdapter.createStreamingDataFrame(sqlContext, relation, CDCRelation.FULL_CDC_SPARK_SCHEMA)
         } else {
           val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions, rangeType)
             .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
 
-          sqlContext.sparkSession.internalCreateDataFrame(rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)
-        }
+          sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession, rdd, CDCRelation.FULL_CDC_SPARK_SCHEMA, isStreaming = true)}
       } else {
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
@@ -161,7 +160,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
             new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable, rangeType)
               .build()
           }
-          FileFormatUtilsForFileGroupReader.createStreamingDataFrame(sqlContext, relation, schema)
+          sparkAdapter.createStreamingDataFrame(sqlContext, relation, schema)
         } else {
           val rdd = tableType match {
             case HoodieTableType.COPY_ON_WRITE =>
@@ -176,8 +175,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
                 .asInstanceOf[RDD[InternalRow]]
             case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
           }
-          sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
-        }
+          sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession, rdd, schema, isStreaming = true)}
       }
     }
   }
