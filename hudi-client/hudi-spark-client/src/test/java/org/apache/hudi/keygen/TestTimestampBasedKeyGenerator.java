@@ -19,7 +19,6 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
@@ -34,7 +33,9 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
+import org.apache.spark.sql.types.DecimalType;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,8 +44,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.math.BigDecimal;
 
-import scala.Function1;
-
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_TIMEZONE_FORMAT;
@@ -52,6 +51,9 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.spark.sql.types.DataTypes.LongType;
+import static org.apache.spark.sql.types.DataTypes.StringType;
+import static org.apache.spark.sql.types.DataTypes.TimestampType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -68,7 +70,12 @@ class TestTimestampBasedKeyGenerator {
   @BeforeEach
   void initialize() throws IOException {
     schema = SchemaTestUtil.getTimestampEvolvedSchema();
-    structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    structType = new StructType(new StructField[] {
+        new StructField("field1", StringType, true, Metadata.empty()),
+        new StructField("createTime", LongType, true, Metadata.empty()),
+        new StructField("createTimeString", StringType, true, Metadata.empty()),
+        new StructField("createTimeDecimal", new DecimalType(20, 4), true, Metadata.empty())
+    });
     baseRecord = SchemaTestUtil
         .generateAvroRecordFromJson(schema, 1, "001", "f1");
     baseRow = genericRecordToRow(baseRecord);
@@ -80,29 +87,22 @@ class TestTimestampBasedKeyGenerator {
   }
 
   private Row genericRecordToRow(GenericRecord baseRecord) {
-    Function1<GenericRecord, Row> convertor = AvroConversionUtils.createConverterToRow(baseRecord.getSchema(), structType);
-    Row row = convertor.apply(baseRecord);
-    int fieldCount = structType.fieldNames().length;
-    Object[] values = new Object[fieldCount];
-    for (int i = 0; i < fieldCount; i++) {
-      values[i] = row.get(i);
-    }
-    return new GenericRowWithSchema(values, structType);
+    return KeyGeneratorTestUtilities.genericRecordToRow(baseRecord, structType);
   }
 
   private TypedProperties getBaseKeyConfig(String partitionPathField, String timestampType, String dateFormat, String timezone, String scalarType) {
-    TypedProperties properties = TypedProperties.copy(this.properties);
+    TypedProperties newProperties = TypedProperties.copy(this.properties);
 
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
-    properties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
-    properties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), dateFormat);
-    properties.setProperty(TIMESTAMP_TIMEZONE_FORMAT.key(), timezone);
+    newProperties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
+    newProperties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
+    newProperties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), dateFormat);
+    newProperties.setProperty(TIMESTAMP_TIMEZONE_FORMAT.key(), timezone);
 
     if (scalarType != null) {
-      properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
+      newProperties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
     }
 
-    return properties;
+    return newProperties;
   }
 
   private TypedProperties getBaseKeyConfig(String partitionPathField,
@@ -112,29 +112,29 @@ class TestTimestampBasedKeyGenerator {
                                            String inputTimezone,
                                            String outputFormat,
                                            String outputTimezone) {
-    TypedProperties properties = TypedProperties.copy(this.properties);
+    TypedProperties newProperties = TypedProperties.copy(this.properties);
 
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
+    newProperties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
 
     if (timestampType != null) {
-      properties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
+      newProperties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
     }
     if (inputFormatList != null) {
-      properties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT.key(), inputFormatList);
+      newProperties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT.key(), inputFormatList);
     }
     if (inputFormatDelimiterRegex != null) {
-      properties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key(), inputFormatDelimiterRegex);
+      newProperties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key(), inputFormatDelimiterRegex);
     }
     if (inputTimezone != null) {
-      properties.setProperty(TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(), inputTimezone);
+      newProperties.setProperty(TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(), inputTimezone);
     }
     if (outputFormat != null) {
-      properties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), outputFormat);
+      newProperties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), outputFormat);
     }
     if (outputTimezone != null) {
-      properties.setProperty(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), outputTimezone);
+      newProperties.setProperty(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), outputTimezone);
     }
-    return properties;
+    return newProperties;
   }
 
   @Test
@@ -281,7 +281,10 @@ class TestTimestampBasedKeyGenerator {
   @Test
   void testScalarWithLogicalType() throws IOException {
     schema = SchemaTestUtil.getTimestampWithLogicalTypeSchema();
-    structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    structType = new StructType(new StructField[] {
+        new StructField("field1", StringType, true, Metadata.empty()),
+        new StructField("createTime", TimestampType, true, Metadata.empty())
+    });
     baseRecord = SchemaTestUtil.generateAvroRecordFromJson(schema, 1, "001", "f1");
     baseRecord.put("createTime", 1638513806000000L);
 
