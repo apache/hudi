@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
@@ -26,7 +27,6 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PA
 import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
-import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.testutils.SparkDatasetTestUtils
 
 import org.apache.avro.Schema
