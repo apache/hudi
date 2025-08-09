@@ -22,6 +22,7 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -70,6 +71,7 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
     when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
     when(metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants()).thenReturn(timeline);
     when(metaClient.getTimelineLayout().getInstantFileNameGenerator()).thenReturn(fileNameGenerator);
+    when(metaClient.getTableConfig()).thenReturn(new HoodieTableConfig());
 
     InstantGeneratorV2 instantGen = new InstantGeneratorV2();
     Types.RecordType record = Types.RecordType.get(Collections.singletonList(
