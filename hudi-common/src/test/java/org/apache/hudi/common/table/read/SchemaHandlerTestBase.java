@@ -89,6 +89,7 @@ public abstract class SchemaHandlerTestBase {
                       boolean hasBuiltInDelete) throws IOException {
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
+    when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     setupMORTable(mergeMode, hasPrecombine, hoodieTableConfig);
     HoodieRecordMerger merger = mockRecordMerger(isProjectionCompatible,
         isProjectionCompatible ? new String[] {"begin_lat", "begin_lon", "_hoodie_record_key", "timestamp"} : new String[] {"begin_lat", "begin_lon", "timestamp"});
@@ -130,6 +131,7 @@ public abstract class SchemaHandlerTestBase {
                                boolean hasBuiltInDelete) throws IOException {
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
     HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
+    when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     setupMORTable(mergeMode, hasPrecombine, hoodieTableConfig);
     HoodieRecordMerger merger = mockRecordMerger(isProjectionCompatible, new String[] {"begin_lat", "begin_lon", "timestamp"});
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, supportsParquetRowIndex, true, true, mergeUseRecordPosition, merger);

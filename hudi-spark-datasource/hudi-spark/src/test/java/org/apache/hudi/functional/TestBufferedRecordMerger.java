@@ -125,7 +125,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   void testRegularMerging(RecordMergeMode mergeMode, PartialUpdateMode updateMode, MergeStage stage) throws IOException {
     if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
       props.put(
-          HoodieTableConfig.MERGE_PROPERTIES_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER,
+          HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER,
           IGNORE_MARKERS_VALUE);
     }
 
