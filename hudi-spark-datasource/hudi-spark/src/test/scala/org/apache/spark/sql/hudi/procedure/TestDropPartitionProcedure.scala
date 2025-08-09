@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -218,10 +219,12 @@ class TestDropPartitionProcedure extends HoodieSparkProcedureTestBase {
   }
 
   private def insertData(tableName: String): Unit = {
-    spark.sql(s"""insert into $tableName values (1, 'n1', 1, 1, '2019', '08', '31')""")
-    spark.sql(s"""insert into $tableName values (2, 'n2', 2, 2, '2019', '08', '30')""")
-    spark.sql(s"""insert into $tableName values (3, 'n3', 3, 3, '2019', '08', '29')""")
-    spark.sql(s"""insert into $tableName values (4, 'n4', 4, 4, '2019', '07', '31')""")
+    withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+      spark.sql(s"""insert into $tableName values (1, 'n1', 1, 1, '2019', '08', '31')""")
+      spark.sql(s"""insert into $tableName values (2, 'n2', 2, 2, '2019', '08', '30')""")
+      spark.sql(s"""insert into $tableName values (3, 'n3', 3, 3, '2019', '08', '29')""")
+      spark.sql(s"""insert into $tableName values (4, 'n4', 4, 4, '2019', '07', '31')""")
+    }
   }
 
   private def getTableMetaClient(tablePath: String): HoodieTableMetaClient = {

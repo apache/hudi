@@ -208,23 +208,25 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       spark.sql("set spark.sql.shuffle.partitions = 11")
 
-      spark.sql(
-        s"""
-           |insert into ${targetTable}
-           |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
-           |""".stripMargin)
+      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+        spark.sql(
+          s"""
+             |insert into ${targetTable}
+             |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
+             |""".stripMargin)
 
-      spark.sql(
-        s"""
-           |merge into ${targetTable} as target
-           |using (
-           |select '2' as id, 'bb' as name, 456L as dt, '2024-02-19' as `day`, 10 as `hour`
-           |) as source
-           |on target.id = source.id
-           |when matched then update set *
-           |when not matched then insert *
-           |""".stripMargin
-      )
+        spark.sql(
+          s"""
+             |merge into ${targetTable} as target
+             |using (
+             |select '2' as id, 'bb' as name, 456L as dt, '2024-02-19' as `day`, 10 as `hour`
+             |) as source
+             |on target.id = source.id
+             |when matched then update set *
+             |when not matched then insert *
+             |""".stripMargin
+        )
+      }
 
       // check result after insert and merge data into target table
       checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
@@ -1502,6 +1504,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         .option(RECORDKEY_FIELD.key, "id")
         .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
         .option(PARTITIONPATH_FIELD.key, "day,hh")
+        .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
         .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
         .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
         .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
@@ -2583,6 +2586,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |""".stripMargin)
       spark.sql(
         s"""
+           |ALTER TABLE $targetTable
+           |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+           |""".stripMargin)
+      spark.sql(
+        s"""
            |insert into ${targetTable}
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 10 as `hour`
            |union
@@ -2877,6 +2885,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       spark.sql(s"set ${INSERT_DROP_DUPS.key}=false")
       spark.sql(s"set ${INSERT_DUP_POLICY.key}=$NONE_INSERT_DUP_POLICY")
 
+      spark.sql(
+        s"""
+           |ALTER TABLE $tableName
+           |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+           |""".stripMargin)
       // Insert data into partitioned table
       spark.sql(
         s"""
@@ -3321,6 +3334,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | partitioned by (dt, pt)
              | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
+        spark.sql(
+          s"""
+             |ALTER TABLE $tableName
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+             |""".stripMargin)
         //Insert data and check the same
         spark.sql(
           s"""insert into $tableName  values
@@ -3335,6 +3353,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  // TODO(yihua): check failed test
   test("Test table with insert dup policy") {
     withTempDir { tmp =>
       Seq(
@@ -3365,6 +3384,11 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            location '${tablePath}'
            """.stripMargin)
 
+        spark.sql(
+          s"""
+             |ALTER TABLE $targetTable
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+             |""".stripMargin)
         spark.sql("set spark.sql.shuffle.partitions = 11")
         spark.sql(
           s"""

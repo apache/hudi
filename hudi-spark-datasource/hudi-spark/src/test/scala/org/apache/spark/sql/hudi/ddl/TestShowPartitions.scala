@@ -199,7 +199,9 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table $tableName drop partition(year='2023', month='06', day='06')")
           checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
           // rewrite data to the dropped partition
-          spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, '2023', '06', '06')")
+          withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+            spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, '2023', '06', '06')")
+          }
           checkAnswer(s"show partitions $tableName")(
             Seq("year=2023/month=06/day=06")
           )
