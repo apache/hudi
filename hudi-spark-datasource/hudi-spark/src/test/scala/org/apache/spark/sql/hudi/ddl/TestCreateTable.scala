@@ -1671,7 +1671,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |    state STRING
              |) using hudi
              | options(
-             |    primaryKey ='id'
+             |    primaryKey = 'id'
              |)
              |PARTITIONED BY (state, city)
              |location '$tablePath';
@@ -1690,13 +1690,15 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |    state STRING
            |) using hudi
            | options(
-           |    primaryKey ='id'
+           |    primaryKey = 'id'
            |)
            |PARTITIONED BY (city, state)
            |location '$tablePath';
        """.stripMargin)
       // insert and validate
-      spark.sql(s"insert into $tableName values(1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas')")
+      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+        spark.sql(s"insert into $tableName values(1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas')")
+      }
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName")(
         Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas")
       )

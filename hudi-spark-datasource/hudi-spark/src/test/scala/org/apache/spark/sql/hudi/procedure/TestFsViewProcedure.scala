@@ -244,11 +244,13 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
         result1.length
       }
 
-      spark.sql(s"insert into $tableName select 1, 'a1', 1001, 'd1', 'h1'")
-      spark.sql(s"insert into $tableName select 1, 'a2', 1002, 'd1', 'h1'")
-      spark.sql(s"insert into $tableName select 2, 'a3', 1003, 'd1', 'h2'")
-      spark.sql(s"insert into $tableName select 3, 'a4', 1004, 'd1', 'h2'")
-      spark.sql(s"insert into $tableName select 4, 'a5', 1005, 'd2', 'h1'")
+      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+        spark.sql(s"insert into $tableName select 1, 'a1', 1001, 'd1', 'h1'")
+        spark.sql(s"insert into $tableName select 1, 'a2', 1002, 'd1', 'h1'")
+        spark.sql(s"insert into $tableName select 2, 'a3', 1003, 'd1', 'h2'")
+        spark.sql(s"insert into $tableName select 3, 'a4', 1004, 'd1', 'h2'")
+        spark.sql(s"insert into $tableName select 4, 'a5', 1005, 'd2', 'h1'")
+      }
 
       val result2 = spark.sql(
         s"call show_fsview_latest(table => '$tableName')").collect()
