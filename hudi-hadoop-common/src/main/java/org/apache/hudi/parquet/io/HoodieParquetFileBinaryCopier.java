@@ -100,6 +100,12 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
                          List<StoragePath> outputFilePath,
                          MessageType writeSchema,
                          Properties props) throws IOException {
+    // Check if schema evolution is enabled from properties
+    if (props != null && props.containsKey("hoodie.file.stitching.binary.copy.schema.evolution.enable")) {
+      boolean schemaEvolutionEnabled = Boolean.parseBoolean(props.getProperty("hoodie.file.stitching.binary.copy.schema.evolution.enable", "true"));
+      setSchemaEvolutionEnabled(schemaEvolutionEnabled);
+    }
+    
     openInputFiles(inputFilePaths, conf);
     initFileWriter(new Path(outputFilePath.get(0).toUri()), codecName, writeSchema);
     initNextReader();

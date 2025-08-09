@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.util.HoodieFileMetadataMerger;
 import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -63,6 +64,26 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
   protected long recordsWritten = 0;
   protected long insertRecordsWritten = 0;
 
+  private MessageType getWriteSchema(HoodieWriteConfig config, List<StoragePath> inputFiles, Configuration conf, HoodieTable<?, ?, ?, ?> table) {
+    if (!config.isFileStitchingBinaryCopySchemaEvolutionEnabled() && !inputFiles.isEmpty()) {
+      // When schema evolution is disabled, use the schema from the first input file
+      // All files should have the same schema in this case
+      try {
+        ParquetUtils parquetUtils = new ParquetUtils();
+        MessageType fileSchema = parquetUtils.readSchema(table.getStorage(), inputFiles.get(0));
+        LOG.info("Binary copy schema evolution disabled. Using schema from input file: " + inputFiles.get(0));
+        return fileSchema;
+      } catch (Exception e) {
+        LOG.error("Failed to read schema from input file", e);
+        throw new HoodieIOException("Failed to read schema from input file when schema evolution is disabled: " + inputFiles.get(0), 
+            e instanceof IOException ? (IOException) e : new IOException(e));
+      }
+    } else {
+      // Default behavior: use the table's write schema for evolution
+      return new AvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
+    }
+  }
+
   public HoodieBinaryCopyHandle(
       HoodieWriteConfig config,
       String instantTime,
@@ -74,7 +95,9 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
     this.inputFiles = inputFilePaths;
     this.conf = hoodieTable.getStorageConf().unwrapAs(Configuration.class);
-    this.writeScheMessageType = new AvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
+    // When schema evolution is disabled, use the schema from one of the input files
+    // Otherwise, use the table's write schema
+    this.writeScheMessageType = getWriteSchema(config, inputFilePaths, conf, hoodieTable);
     HoodieFileMetadataMerger fileMetadataMerger = new HoodieFileMetadataMerger();
     this.path = makeNewPath(partitionPath);
     writeStatus.setFileId(fileId);
