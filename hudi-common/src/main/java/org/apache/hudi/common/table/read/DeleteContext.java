@@ -47,7 +47,6 @@ public class DeleteContext implements Serializable {
   public DeleteContext(Properties props, Schema tableSchema) {
     this.customDeleteMarkerKeyValue = getCustomDeleteMarkerKevValue(props);
     this.hasBuiltInDeleteField = hasBuiltInDeleteField(tableSchema);
-    this.hoodieOperationPos = getHoodieOperationPos(tableSchema);
   }
 
   /**
