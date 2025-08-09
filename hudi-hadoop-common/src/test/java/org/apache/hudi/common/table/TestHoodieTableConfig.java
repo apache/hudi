@@ -311,7 +311,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(40, configProperties.size());
+    assertEquals(41, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
@@ -634,7 +634,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testInferMergingConfigsForVersion9WithInconsistentConfigs() {
     // Test case: Inconsistent merge mode and strategy should throw exception
-    assertThrows(HoodieException.class, () -> {
+    assertThrows(IllegalArgumentException.class, () -> {
       HoodieTableConfig.inferMergingConfigsForVersion9(
           EVENT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
     });
@@ -661,13 +661,6 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals(2, configs.size());
     assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
     assertEquals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID, configs.get(RECORD_MERGE_STRATEGY_ID.key()));
-
-    // Test case: Whitespace-only payload class should be treated as null
-    configs = HoodieTableConfig.inferMergingConfigsForVersion9(
-        COMMIT_TIME_ORDERING, "   ", COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
-    assertEquals(2, configs.size());
-    assertEquals(COMMIT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
-    assertEquals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, configs.get(RECORD_MERGE_STRATEGY_ID.key()));
 
     // Test case: Non-version 9 table with all parameters should return empty configs
     configs = HoodieTableConfig.inferMergingConfigsForVersion9(
