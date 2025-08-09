@@ -22,7 +22,7 @@ import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMeta
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
+import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -431,9 +431,17 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
         ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
-        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
-        }
+        spark.sql(
+          s"""
+             |ALTER TABLE $tableName
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+             |""".stripMargin)
+        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        spark.sql(
+          s"""
+             |ALTER TABLE $tableName
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'true')
+             |""".stripMargin)
 
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
@@ -449,11 +457,19 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         })
         assertTrue(totalDeletedFiles > 0)
 
-        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-          // insert data
-          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
-        }
-
+        spark.sql(
+          s"""
+             |ALTER TABLE $tableName
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+             |""".stripMargin)
+        // insert data
+        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        spark.sql(
+          s"""
+             |ALTER TABLE $tableName
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'true')
+             |""".stripMargin)
+        
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
         )

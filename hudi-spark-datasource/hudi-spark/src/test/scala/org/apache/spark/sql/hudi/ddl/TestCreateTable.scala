@@ -987,7 +987,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val query = s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id"
         // Test insert into
         writeAndValidateWithComplexKeyGenerator(
-          spark, s"insert into $tableName values(2, 'a2', 10, 1000, '$day', 12)", query
+          spark, tableName, s"insert into $tableName values(2, 'a2', 10, 1000, '$day', 12)", query
         )(
           Seq("id:1", s"$escapedPathPart/12", 1, "a1", 10, 1000, day, 12)
         )(
@@ -997,7 +997,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
         // Test merge into
         writeAndValidateWithComplexKeyGenerator(
-          spark,
+          spark, tableName,
           s"""
              |merge into $tableName h0
              |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '$day' as day, 12 as hh) s0
@@ -1015,7 +1015,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
         // Test update
         writeAndValidateWithComplexKeyGenerator(
-          spark, s"update $tableName set value = value + 1 where id = 2", query
+          spark, tableName, s"update $tableName set value = value + 1 where id = 2", query
         )(
           Seq("id:1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
           Seq("id:2", s"$escapedPathPart/12", 2, "a2", 10, 1000, day, 12)
@@ -1025,8 +1025,8 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         )
 
         // Test delete
-        writeAndValidateWithComplexKeyGenerator(spark,
-          s"delete from $tableName where id = 1", query
+        writeAndValidateWithComplexKeyGenerator(
+          spark, tableName, s"delete from $tableName where id = 1", query
         )(
           Seq("id:1", s"$escapedPathPart/12", 1, "a1", 11, 1001, day, 12),
           Seq("id:2", s"$escapedPathPart/12", 2, "a2", 11, 1000, day, 12)
@@ -1040,98 +1040,99 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   test("Test Create Table with Complex Key Generator and Key Encoding") {
     withTempDir { tmp =>
       Seq(false, true).foreach { encodeSingleKeyFieldName =>
-        withSparkSqlSessionConfig(
-          HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key
-            -> encodeSingleKeyFieldName.toString) {
-          val tableName = generateTableName
-          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-          import spark.implicits._
-          val keyPrefix = if (encodeSingleKeyFieldName) "id:" else ""
-          val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
-          // Write a table by spark dataframe.
-          df.write.format("hudi")
-            .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-            .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
-            .option(RECORDKEY_FIELD.key, "id")
-            .option(PRECOMBINE_FIELD.key, "ts")
-            .option(PARTITIONPATH_FIELD.key, "day,hh")
-            .option(URL_ENCODE_PARTITIONING.key, "true")
-            .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-            .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-            .option(
-              HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key,
-              encodeSingleKeyFieldName.toString)
-            .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
-            .mode(SaveMode.Overwrite)
-            .save(tablePath)
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        import spark.implicits._
+        val keyPrefix = if (encodeSingleKeyFieldName) "id:" else ""
+        val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
+        // Write a table by spark dataframe.
+        df.write.format("hudi")
+          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
+          .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "day,hh")
+          .option(URL_ENCODE_PARTITIONING.key, "true")
+          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
+          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
+          .option(
+            HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key,
+            encodeSingleKeyFieldName.toString)
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
+          .mode(SaveMode.Overwrite)
+          .save(tablePath)
 
-          // Create a table over the existing table.
-          spark.sql(
-            s"""
-               |create table $tableName using hudi
-               |location '$tablePath'
-               |""".stripMargin)
-          checkAnswer(s"select _hoodie_record_key, id, name, value, ts, day, hh from $tableName")(
-            Seq(keyPrefix + "1", 1, "a1", 10, 1000, "2025-07-29", 12)
-          )
-          // Check the missing properties for spark sql
-          val metaClient = createMetaClient(spark, tablePath)
-          val properties = metaClient.getTableConfig.getProps.asScala.toMap
-          assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
-          assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
-          assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+        // Create a table over the existing table.
+        spark.sql(
+          s"""
+             |create table $tableName using hudi
+             |location '$tablePath'
+             |""".stripMargin)
+        checkAnswer(s"select _hoodie_record_key, id, name, value, ts, day, hh from $tableName")(
+          Seq(keyPrefix + "1", 1, "a1", 10, 1000, "2025-07-29", 12)
+        )
+        spark.sql(
+          s"""
+             |ALTER TABLE $tableName
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.encode.single.record.key.field.name = '$encodeSingleKeyFieldName')
+             |""".stripMargin)
+        // Check the missing properties for spark sql
+        val metaClient = createMetaClient(spark, tablePath)
+        val properties = metaClient.getTableConfig.getProps.asScala.toMap
+        assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
+        assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
+        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
 
-          val query = s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id"
+        val query = s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id"
 
-          // Test insert into
-          writeAndValidateWithComplexKeyGenerator(
-            spark, s"insert into $tableName values(2, 'a2', 10, 1000, '2025-07-29', 12)", query
-          )(
-            Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 10, 1000, "2025-07-29", 12)
-          )(
-            Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 10, 1000, "2025-07-29", 12),
-            Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 10, 1000, "2025-07-29", 12)
-          )
+        // Test insert into
+        writeAndValidateWithComplexKeyGenerator(
+          spark, tableName, s"insert into $tableName values(2, 'a2', 10, 1000, '2025-07-29', 12)", query
+        )(
+          Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 10, 1000, "2025-07-29", 12)
+        )(
+          Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 10, 1000, "2025-07-29", 12),
+          Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 10, 1000, "2025-07-29", 12)
+        )
 
-          // Test merge into
-          writeAndValidateWithComplexKeyGenerator(
-            spark,
-            s"""
-               |merge into $tableName h0
-               |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh) s0
-               |on h0.id = s0.id
-               |when matched then update set *
-               |""".stripMargin,
-            query
-          )(
-            Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 10, 1000, "2025-07-29", 12),
-            Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 10, 1000, "2025-07-29", 12)
-          )(
-            Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
-            Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 10, 1000, "2025-07-29", 12)
-          )
+        // Test merge into
+        writeAndValidateWithComplexKeyGenerator(
+          spark, tableName,
+          s"""
+             |merge into $tableName h0
+             |using (select 1 as id, 'a1' as name, 11 as value, 1001 as ts, '2025-07-29' as day, 12 as hh) s0
+             |on h0.id = s0.id
+             |when matched then update set *
+             |""".stripMargin,
+          query
+        )(
+          Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 10, 1000, "2025-07-29", 12),
+          Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 10, 1000, "2025-07-29", 12)
+        )(
+          Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
+          Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 10, 1000, "2025-07-29", 12)
+        )
 
-          // Test update
-          writeAndValidateWithComplexKeyGenerator(
-            spark, s"update $tableName set value = value + 1 where id = 2", query
-          )(
-            Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
-            Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 10, 1000, "2025-07-29", 12)
-          )(
-            Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
-            Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 11, 1000, "2025-07-29", 12)
-          )
+        // Test update
+        writeAndValidateWithComplexKeyGenerator(
+          spark, tableName, s"update $tableName set value = value + 1 where id = 2", query
+        )(
+          Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
+          Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 10, 1000, "2025-07-29", 12)
+        )(
+          Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
+          Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 11, 1000, "2025-07-29", 12)
+        )
 
-          // Test delete
-          writeAndValidateWithComplexKeyGenerator(
-            spark, s"delete from $tableName where id = 1", query
-          )(
-            Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
-            Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 11, 1000, "2025-07-29", 12)
-          )(
-            Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 11, 1000, "2025-07-29", 12)
-          )
-        }
+        // Test delete
+        writeAndValidateWithComplexKeyGenerator(
+          spark, tableName, s"delete from $tableName where id = 1", query
+        )(
+          Seq(keyPrefix + "1", "2025-07-29/12", 1, "a1", 11, 1001, "2025-07-29", 12),
+          Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 11, 1000, "2025-07-29", 12)
+        )(
+          Seq(keyPrefix + "2", "2025-07-29/12", 2, "a2", 11, 1000, "2025-07-29", 12)
+        )
       }
     }
   }
@@ -1695,10 +1696,13 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |PARTITIONED BY (city, state)
            |location '$tablePath';
        """.stripMargin)
+      spark.sql(
+        s"""
+           |ALTER TABLE $tableName
+           |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+           |""".stripMargin)
       // insert and validate
-      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-        spark.sql(s"insert into $tableName values(1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas')")
-      }
+      spark.sql(s"insert into $tableName values(1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas')")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName")(
         Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas")
       )
@@ -1852,6 +1856,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   }
 
   def writeAndValidateWithComplexKeyGenerator(spark: SparkSession,
+                                              tableName: String,
                                               dmlToWrite: String,
                                               query: String)(
                                                expectedRowsBefore: Seq[Any]*)(expectedRowsAfter: Seq[Any]*): Unit = {
@@ -1860,9 +1865,17 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     // Query should still succeed
     checkAnswer(query)(expectedRowsBefore: _*)
     // Disabling the complex key generator validation should let write succeed
-    spark.sql("SET hoodie.write.complex.keygen.validation.enable=false")
+    spark.sql(
+      s"""
+         |ALTER TABLE $tableName
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+         |""".stripMargin)
     spark.sql(dmlToWrite)
+    spark.sql(
+      s"""
+         |ALTER TABLE $tableName
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'true')
+         |""".stripMargin)
     checkAnswer(query)(expectedRowsAfter: _*)
-    spark.sql("RESET hoodie.write.complex.keygen.validation.enable")
   }
 }

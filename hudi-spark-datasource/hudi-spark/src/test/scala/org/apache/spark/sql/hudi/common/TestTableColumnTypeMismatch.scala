@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.{DataSourceWriteOptions, ScalaAssertionSupport}
-import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.ErrorMessageChecker.isIncompatibleDataException
@@ -600,8 +599,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
 
     // Run test cases
     testCases.foreach { testCase =>
-      withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false",
-        HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+      withSparkSqlSessionConfig(s"${DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}" -> "false") {
         withTempDir { tmp =>
           val targetTable = generateTableName
 
@@ -615,6 +613,12 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             testCase.tableType,
             s"${tmp.getCanonicalPath}/$targetTable"
           )
+
+          spark.sql(
+            s"""
+               |ALTER TABLE $targetTable
+               |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
+               |""".stripMargin)
 
           // Insert sample data into target table
           spark.sql(
