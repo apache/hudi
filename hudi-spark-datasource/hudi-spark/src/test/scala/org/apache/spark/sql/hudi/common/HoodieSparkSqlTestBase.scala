@@ -35,7 +35,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -470,6 +469,26 @@ object HoodieSparkSqlTestBase {
     })
     nonExistentConfigs.foreach(e => assertFalse(
       tableConfig.contains(e), s"$e should not be present in the table config"))
+  }
+
+  def enableComplexKeygenValidation(spark: SparkSession,
+                                    tableName: String): Unit = {
+    setComplexKeygenValidation(spark, tableName, value = true)
+  }
+
+  def disableComplexKeygenValidation(spark: SparkSession,
+                                     tableName: String): Unit = {
+    setComplexKeygenValidation(spark, tableName, value = false)
+  }
+
+  private def setComplexKeygenValidation(spark: SparkSession,
+                                         tableName: String,
+                                         value: Boolean): Unit = {
+    spark.sql(
+      s"""
+         |ALTER TABLE $tableName
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = '$value')
+         |""".stripMargin)
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =
