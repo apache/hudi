@@ -271,8 +271,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           try {
             // if the record is not being updated and is not a new insert for the file group, we must preserve the existing record metadata.
             boolean shouldPreserveRecordMetadata = preserveMetadata || record.getOperation() == null;
-            writeToFile(record.getKey(), record, shouldPreserveRecordMetadata ? writeSchemaWithMetaFields : writeSchema,
-                config.getPayloadConfig().getProps(), shouldPreserveRecordMetadata);
+            writeToFile(record.getKey(), record, writeSchemaWithMetaFields, config.getPayloadConfig().getProps(), shouldPreserveRecordMetadata);
             writeStatus.markSuccess(record, recordMetadata);
             recordsWritten++;
           } catch (Exception e) {
@@ -465,7 +464,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           false,
           writeStatus,
           writeSchemaWithMetaFields,
-          newSchema,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }
@@ -480,7 +478,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           false,
           writeStatus,
           writeSchemaWithMetaFields,
-          newSchema,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }
@@ -495,7 +492,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           true,
           writeStatus,
           writeSchemaWithMetaFields,
-          newSchema,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }

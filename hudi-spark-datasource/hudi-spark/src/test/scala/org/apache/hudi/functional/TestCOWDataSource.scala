@@ -794,6 +794,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val counts = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
       .groupBy("_hoodie_commit_time").count().orderBy("_hoodie_commit_time").collect()
     // validate the commit time metadata is not updated for the update operation
+    assertEquals(2, counts.length)
     assertEquals(firstCommit.requestedTime(), counts.apply(0).getAs[String](0))
     assertEquals(secondCommit.requestedTime(), counts.apply(1).getAs[String](0))
     assertTrue(counts.apply(0).getAs[Long](1) > counts.apply(1).getAs[Long](1))

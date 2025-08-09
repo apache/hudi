@@ -237,13 +237,11 @@ public class SecondaryIndexStreamingTracker {
    * @param oldRecord                 The old record
    * @param isDelete                  Whether the record is a DELETE
    * @param writeStatus               The Write status
-   * @param existingSchema            The schema of existing records in the table
-   * @param newSchema                 The schema for updated records
+   * @param schema                    The schema of the records
    * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
    */
   static <T> void trackSecondaryIndexStats(HoodieKey hoodieKey, Option<T> combinedRecordOpt, @Nullable T oldRecord, boolean isDelete,
-                                           WriteStatus writeStatus, Schema existingSchema, Schema newSchema,
-                                           List<HoodieIndexDefinition> secondaryIndexDefns, RecordContext<T> recordContext) {
+                                           WriteStatus writeStatus, Schema schema, List<HoodieIndexDefinition> secondaryIndexDefns, RecordContext<T> recordContext) {
 
     secondaryIndexDefns.forEach(def -> {
       String secondaryIndexSourceField = def.getSourceFieldsKey();
@@ -257,7 +255,7 @@ public class SecondaryIndexStreamingTracker {
       Object oldSecondaryKey = null;
 
       if (hasOldValue) {
-        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord, existingSchema, secondaryIndexSourceField));
+        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord, schema, secondaryIndexSourceField));
       }
 
       // For new/combined record
@@ -265,7 +263,7 @@ public class SecondaryIndexStreamingTracker {
       Object newSecondaryKey = null;
 
       if (combinedRecordOpt.isPresent() && !isDelete) {
-        newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get(), newSchema, secondaryIndexSourceField));
+        newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get(), schema, secondaryIndexSourceField));
         hasNewValue = true;
       }
 

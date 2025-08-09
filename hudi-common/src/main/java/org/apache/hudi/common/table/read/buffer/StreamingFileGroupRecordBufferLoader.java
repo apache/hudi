@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 /**
  * Records based {@link FileGroupRecordBuffer} which takes in a map of records to be merged with a base file of interest.
@@ -73,6 +74,8 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
 
+    UnaryOperator<T> projection = readerContext.projectRecord(recordSchema, readerContext.getSchemaHandler().getRequiredSchema());
+
     RecordContext<T> recordContext = readerContext.getRecordContext();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
@@ -90,7 +93,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
           // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
           // so we use recordContext#isDeleteRecord here if the data field is not null.
           boolean isDelete = recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
-          bufferedRecord = BufferedRecords.fromEngineRecord(data, recordSchema, recordContext, orderingFieldNames, BufferedRecords.inferOperation(isDelete, hoodieOperation));
+          bufferedRecord = BufferedRecords.fromEngineRecord(projection.apply(data), recordSchema, recordContext, orderingFieldNames, BufferedRecords.inferOperation(isDelete, hoodieOperation));
         }
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {
