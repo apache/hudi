@@ -27,7 +27,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.DataType;
@@ -39,8 +38,6 @@ import org.apache.spark.sql.types.StringType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
@@ -138,18 +135,6 @@ class KeyGeneratorTestUtilities {
     List<Object> values = IntStream.range(0, row.schema().fieldNames().length)
         .mapToObj(row::get).collect(Collectors.toList());
     return InternalRow.apply(JavaScalaConverters.convertJavaListToScalaList(values));
-  }
-
-  public static InternalRow getInternalRow(Row row, ExpressionEncoder<Row> encoder) throws ClassNotFoundException, InvocationTargetException, IllegalAccessException, NoSuchMethodException {
-    return serializeRow(encoder, row);
-  }
-
-  private static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
-      throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, ClassNotFoundException {
-    Class<?> serializerClass = Class.forName("org.apache.spark.sql.catalyst.encoders.ExpressionEncoder$Serializer");
-    Object serializer = encoder.getClass().getMethod("createSerializer").invoke(encoder);
-    Method aboveSpark2method = serializerClass.getMethod("apply", Object.class);
-    return (InternalRow) aboveSpark2method.invoke(serializer, row);
   }
 
   /**
