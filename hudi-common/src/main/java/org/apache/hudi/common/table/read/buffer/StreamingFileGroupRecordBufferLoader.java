@@ -76,7 +76,8 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
 
-    UnaryOperator<T> projection = readerContext.projectRecord(recordSchema, readerContext.getSchemaHandler().getRequiredSchema());
+    Schema requiredSchema = readerContext.getSchemaHandler().getRequiredSchema();
+    UnaryOperator<T> projection = readerContext.projectRecord(recordSchema, requiredSchema);
 
     RecordContext<T> recordContext = readerContext.getRecordContext();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
@@ -95,7 +96,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
           // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
           // so we use recordContext#isDeleteRecord here if the data field is not null.
           boolean isDelete = recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
-          bufferedRecord = BufferedRecords.fromEngineRecord(projection.apply(data), hoodieRecord.getRecordKey(), recordSchema, recordContext, orderingFieldNames,
+          bufferedRecord = BufferedRecords.fromEngineRecord(projection.apply(data), hoodieRecord.getRecordKey(), requiredSchema, recordContext, orderingFieldNames,
               BufferedRecords.inferOperation(isDelete, hoodieOperation));
         }
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
