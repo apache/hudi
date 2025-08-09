@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PA
 import org.apache.hudi.config.{HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
-import org.apache.hudi.testutils.KeyGeneratorTestUtilities
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
