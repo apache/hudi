@@ -186,12 +186,14 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     return getPayloadClassNameIfPresent(props).orElse(DEFAULT_PAYLOAD_CLASS_NAME);
   }
 
+  // NOTE: PAYLOAD_CLASS_NAME is before LEGACY_PAYLOAD_CLASS_NAME to make sure
+  // some temporary payload class setting is respect.
   static Option<String> getPayloadClassNameIfPresent(Properties props) {
     String payloadClassName = null;
-    if (props.containsKey(LEGACY_PAYLOAD_CLASS_NAME.key())) {
-      payloadClassName = props.getProperty(LEGACY_PAYLOAD_CLASS_NAME.key());
-    } else if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
+    if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
       payloadClassName = props.getProperty(PAYLOAD_CLASS_NAME.key());
+    } else if (props.containsKey(LEGACY_PAYLOAD_CLASS_NAME.key())) {
+      payloadClassName = props.getProperty(LEGACY_PAYLOAD_CLASS_NAME.key());
     } else if (props.containsKey("hoodie.datasource.write.payload.class")) {
       payloadClassName = props.getProperty("hoodie.datasource.write.payload.class");
     }
