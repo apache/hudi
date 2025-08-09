@@ -99,11 +99,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                         TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+                                         TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieReaderContext<T> readerContext) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.operation = Option.empty();
-    this.readerContext = (HoodieReaderContext<T>) hoodieTable.getContext().getReaderContextFactoryForWrite(hoodieTable.getMetaClient(),
-        config.getRecordMerger().getRecordType(), config.getProps(), false).getContext();
+    this.readerContext = readerContext;
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.readerContext.initRecordMerger(properties);

@@ -902,7 +902,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
       final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Arrays.asList(1))
           .map(x -> (Iterator<List<WriteStatus>>)
-              actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator()))
+              actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator(),
+                  context().getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, cfg.getProps(), false)))
           .map(Transformations::flatten).collect();
 
       // Verify there are  errors because records are from multiple partitions (but handleUpdate is invoked for

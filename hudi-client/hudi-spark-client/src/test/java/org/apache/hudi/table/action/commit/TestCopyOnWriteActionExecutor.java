@@ -499,7 +499,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
             instantTime, context.parallelize(updates));
     final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1))
         .map(x -> (Iterator<List<WriteStatus>>)
-            newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator()))
+            newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator(),
+                context.getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, config.getProps(), false)))
         .map(Transformations::flatten).collect();
     assertEquals(updates.size() - numRecordsInPartition,
         updateStatus.get(0).get(0).getTotalErrorRecords());

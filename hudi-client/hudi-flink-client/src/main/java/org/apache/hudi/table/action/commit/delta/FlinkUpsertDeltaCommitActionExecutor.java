@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit.delta;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -54,7 +55,7 @@ public class FlinkUpsertDeltaCommitActionExecutor<T> extends BaseFlinkCommitActi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, ReaderContextFactory<T> readerContextFactory) {
     return handleWrite();
   }
 

@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -32,8 +33,8 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieCreateHandle;
-import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -121,7 +122,8 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         partitionPath,
         fileId,
         bucketType,
-        recordItr)
+        recordItr,
+        (ReaderContextFactory<T>) context.getReaderContextFactoryForWrite(table.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps(), false))
         .forEachRemaining(writeStatuses::addAll);
     setUpWriteMetadata(writeStatuses, result);
     return result;
@@ -156,7 +158,8 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       String partitionPath,
       String fileIdHint,
       BucketType bucketType,
-      Iterator recordItr) {
+      Iterator recordItr,
+      ReaderContextFactory<T> readerContextFactory) {
     try {
       if (this.writeHandle instanceof HoodieCreateHandle) {
         // During one checkpoint interval, an insert record could also be updated,
@@ -168,13 +171,13 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         // and append instead of UPDATE.
         return handleInsert(fileIdHint, recordItr);
       } else if (this.writeHandle instanceof HoodieWriteMergeHandle) {
-        return handleUpdate(partitionPath, fileIdHint, recordItr);
+        return handleUpdate(partitionPath, fileIdHint, recordItr, readerContextFactory);
       } else {
         switch (bucketType) {
           case INSERT:
             return handleInsert(fileIdHint, recordItr);
           case UPDATE:
-            return handleUpdate(partitionPath, fileIdHint, recordItr);
+            return handleUpdate(partitionPath, fileIdHint, recordItr, readerContextFactory);
           default:
             throw new AssertionError();
         }
@@ -188,13 +191,14 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr)
+                                                  Iterator<HoodieRecord<T>> recordItr,
+                                                  ReaderContextFactory<T> readerContextFactory)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     HoodieWriteMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieWriteMergeHandle<?, ?, ?, ?>) this.writeHandle;
     if (upsertHandle.isEmptyNewRecords() && !recordItr.hasNext()) {
       LOG.info("Empty partition with fileId => {}.", fileId);
-      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+      return Collections.singletonList(Collections.<WriteStatus>emptyList()).iterator();
     }
     // these are updates
     return IOUtils.runMerge(upsertHandle, instantTime, fileId);

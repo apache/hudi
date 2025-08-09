@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
@@ -71,12 +72,13 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-      Iterator<HoodieRecord<T>> recordItr) throws IOException {
+                                                  Iterator<HoodieRecord<T>> recordItr,
+                                                  ReaderContextFactory<T> readerContextFactory) throws IOException {
     LOG.info("Merging updates for commit {} for file {}", instantTime, fileId);
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
       LOG.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
-      return super.handleUpdate(partitionPath, fileId, recordItr);
+      return super.handleUpdate(partitionPath, fileId, recordItr, readerContextFactory);
     } else {
       HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
           partitionPath, fileId, recordItr, taskContextSupplier);

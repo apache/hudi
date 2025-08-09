@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -102,7 +103,8 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   }
 
   @Override
-  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr, Broadcast<SparkBucketInfoGetter> bucketInfoGetter) {
+  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr, Broadcast<SparkBucketInfoGetter> bucketInfoGetter,
+                                                              ReaderContextFactory<T> readerContextFactory) {
     BucketInfo binfo = bucketInfoGetter.getValue().getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     switch (btype) {
