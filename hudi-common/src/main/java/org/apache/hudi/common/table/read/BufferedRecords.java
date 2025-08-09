@@ -50,12 +50,12 @@ public class BufferedRecords {
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {
-    return fromEngineRecord(record, schema, recordContext, orderingFieldNames, isDelete ? HoodieOperation.DELETE : null);
+    String recordKey = recordContext.getRecordKey(record, schema);
+    return fromEngineRecord(record, recordKey, schema, recordContext, orderingFieldNames, isDelete ? HoodieOperation.DELETE : null);
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(
-      T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation) {
-    String recordKey = recordContext.getRecordKey(record, schema);
+      T record, String recordKey, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, HoodieOperation hoodieOperation) {
     Integer schemaId = recordContext.encodeAvroSchema(schema);
     Comparable orderingValue = recordContext.getOrderingValue(record, schema, orderingFieldNames);
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, hoodieOperation);

@@ -376,7 +376,7 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   private SerializableBiFunction<T, Schema, String> metadataKeyExtractor() {
-    return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
+    return (record, schema) -> typeConverter.castToString(getValue(record, schema, RECORD_KEY_METADATA_FIELD));
   }
 
   private SerializableBiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {

@@ -107,8 +107,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.readerContext.initRecordMerger(properties);
-    // with cow merge flows, incoming records may not have the meta fields populate while merging with FileGroupReader
-    this.readerContext.getRecordContext().updateRecordKeyExtractor(hoodieTable.getMetaClient().getTableConfig(), false);
     this.maxInstantTime = instantTime;
     initRecordTypeAndCdcLogger(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.props = TypedProperties.copy(config.getProps());
