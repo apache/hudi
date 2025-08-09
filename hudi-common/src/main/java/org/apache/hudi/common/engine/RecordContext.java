@@ -57,7 +57,7 @@ public abstract class RecordContext<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private SerializableBiFunction<T, Schema, String> recordKeyExtractor;
+  private final SerializableBiFunction<T, Schema, String> recordKeyExtractor;
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
@@ -66,11 +66,7 @@ public abstract class RecordContext<T> implements Serializable {
 
   protected RecordContext(HoodieTableConfig tableConfig) {
     this.typeConverter = new DefaultJavaTypeConverter();
-    updateRecordKeyExtractor(tableConfig, tableConfig.populateMetaFields());
-  }
-
-  public void updateRecordKeyExtractor(HoodieTableConfig tableConfig, boolean shouldUseMetadataFields) {
-    this.recordKeyExtractor = shouldUseMetadataFields ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
+    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
   }
 
@@ -335,7 +331,7 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   private SerializableBiFunction<T, Schema, String> metadataKeyExtractor() {
-    return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
+    return (record, schema) -> typeConverter.castToString(getValue(record, schema, RECORD_KEY_METADATA_FIELD));
   }
 
   private SerializableBiFunction<T, Schema, String> virtualKeyExtractor(String[] recordKeyFields) {

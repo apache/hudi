@@ -442,9 +442,10 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     //TODO : Find race condition that causes the timeline sometime to reflect 000.commit and sometimes not
     final HoodieJavaCopyOnWriteTable reloadedTable = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, HoodieTableMetaClient.reload(metaClient));
 
-    final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
-
     String partitionPath = writeStatus.getPartitionPath();
+    final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts)
+        .stream().filter(record -> record.getPartitionPath().equals(partitionPath)).collect(Collectors.toList());
+
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
     BaseJavaCommitActionExecutor newActionExecutor = new JavaUpsertCommitActionExecutor(context, config, reloadedTable,
         instantTime, updates);
