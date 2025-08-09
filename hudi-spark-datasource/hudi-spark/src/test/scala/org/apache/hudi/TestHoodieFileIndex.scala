@@ -31,15 +31,14 @@ import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord, HoodieTableTy
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
-import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -164,6 +163,11 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
     if (isNullOrEmpty(keyGenerator)) {
       writer.save(basePath)
+    } else if (classOf[ComplexKeyGenerator].getCanonicalName.equals(keyGenerator)) {
+      writer.option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
+        // Disable complex key generator validation so that the writer can succeed
+        .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
+        .save(basePath)
     } else {
       writer.option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
         .save(basePath)
@@ -355,6 +359,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
       PARTITIONPATH_FIELD.key -> "dt,hh",
+      // Disable complex key generator validation so that the writer can succeed
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false",
       HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
     )
 
@@ -498,6 +504,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
       PARTITIONPATH_FIELD.key -> partitionNames.mkString(","),
+      // Disable complex key generator validation so that the writer can succeed
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false",
       HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
     )
 
@@ -552,7 +560,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
         RECORDKEY_FIELD.key -> "id",
         PRECOMBINE_FIELD.key -> "version",
-        PARTITIONPATH_FIELD.key -> "dt,hh"
+        PARTITIONPATH_FIELD.key -> "dt,hh",
+        // Disable complex key generator validation so that the writer can succeed
+        HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false"
       )
 
       val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -613,7 +623,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
       RECORDKEY_FIELD.key -> "id",
       PARTITIONPATH_FIELD.key -> "region_code,dt",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "price"
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "price",
+      // Disable complex key generator validation so that the writer can succeed
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(

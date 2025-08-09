@@ -7,25 +7,24 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
@@ -34,17 +33,16 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
+import org.apache.spark.sql.types.DecimalType;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-
-import scala.Function1;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX;
@@ -53,9 +51,13 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.spark.sql.types.DataTypes.LongType;
+import static org.apache.spark.sql.types.DataTypes.StringType;
+import static org.apache.spark.sql.types.DataTypes.TimestampType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestTimestampBasedKeyGenerator {
+class TestTimestampBasedKeyGenerator {
 
   private GenericRecord baseRecord;
   private TypedProperties properties = new TypedProperties();
@@ -66,9 +68,14 @@ public class TestTimestampBasedKeyGenerator {
   private InternalRow internalRow;
 
   @BeforeEach
-  public void initialize() throws IOException {
+  void initialize() throws IOException {
     schema = SchemaTestUtil.getTimestampEvolvedSchema();
-    structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    structType = new StructType(new StructField[] {
+        new StructField("field1", StringType, true, Metadata.empty()),
+        new StructField("createTime", LongType, true, Metadata.empty()),
+        new StructField("createTimeString", StringType, true, Metadata.empty()),
+        new StructField("createTimeDecimal", new DecimalType(20, 4), true, Metadata.empty())
+    });
     baseRecord = SchemaTestUtil
         .generateAvroRecordFromJson(schema, 1, "001", "f1");
     baseRow = genericRecordToRow(baseRecord);
@@ -80,29 +87,22 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   private Row genericRecordToRow(GenericRecord baseRecord) {
-    Function1<GenericRecord, Row> convertor = AvroConversionUtils.createConverterToRow(baseRecord.getSchema(), structType);
-    Row row = convertor.apply(baseRecord);
-    int fieldCount = structType.fieldNames().length;
-    Object[] values = new Object[fieldCount];
-    for (int i = 0; i < fieldCount; i++) {
-      values[i] = row.get(i);
-    }
-    return new GenericRowWithSchema(values, structType);
+    return KeyGeneratorTestUtilities.genericRecordToRow(baseRecord, structType);
   }
 
   private TypedProperties getBaseKeyConfig(String partitionPathField, String timestampType, String dateFormat, String timezone, String scalarType) {
-    TypedProperties properties = TypedProperties.copy(this.properties);
+    TypedProperties newProperties = TypedProperties.copy(this.properties);
 
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
-    properties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
-    properties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), dateFormat);
-    properties.setProperty(TIMESTAMP_TIMEZONE_FORMAT.key(), timezone);
+    newProperties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
+    newProperties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
+    newProperties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), dateFormat);
+    newProperties.setProperty(TIMESTAMP_TIMEZONE_FORMAT.key(), timezone);
 
     if (scalarType != null) {
-      properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
+      newProperties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
     }
 
-    return properties;
+    return newProperties;
   }
 
   private TypedProperties getBaseKeyConfig(String partitionPathField,
@@ -112,33 +112,33 @@ public class TestTimestampBasedKeyGenerator {
                                            String inputTimezone,
                                            String outputFormat,
                                            String outputTimezone) {
-    TypedProperties properties = TypedProperties.copy(this.properties);
+    TypedProperties newProperties = TypedProperties.copy(this.properties);
 
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
+    newProperties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathField);
 
     if (timestampType != null) {
-      properties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
+      newProperties.setProperty(TIMESTAMP_TYPE_FIELD.key(), timestampType);
     }
     if (inputFormatList != null) {
-      properties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT.key(), inputFormatList);
+      newProperties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT.key(), inputFormatList);
     }
     if (inputFormatDelimiterRegex != null) {
-      properties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key(), inputFormatDelimiterRegex);
+      newProperties.setProperty(TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX.key(), inputFormatDelimiterRegex);
     }
     if (inputTimezone != null) {
-      properties.setProperty(TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(), inputTimezone);
+      newProperties.setProperty(TIMESTAMP_INPUT_TIMEZONE_FORMAT.key(), inputTimezone);
     }
     if (outputFormat != null) {
-      properties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), outputFormat);
+      newProperties.setProperty(TIMESTAMP_OUTPUT_DATE_FORMAT.key(), outputFormat);
     }
     if (outputTimezone != null) {
-      properties.setProperty(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), outputTimezone);
+      newProperties.setProperty(TIMESTAMP_OUTPUT_TIMEZONE_FORMAT.key(), outputTimezone);
     }
-    return properties;
+    return newProperties;
   }
 
   @Test
-  public void testTimestampBasedKeyGenerator() throws IOException {
+  void testTimestampBasedKeyGenerator() throws IOException {
     // timezone is GMT+8:00
     baseRecord.put("createTime", 1578283932000L);
     properties = getBaseKeyConfig("createTime", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
@@ -237,7 +237,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void testScalar() throws IOException {
+  void testScalar() throws IOException {
     // timezone is GMT+8:00
     baseRecord.put("createTime", 20000L);
 
@@ -245,7 +245,7 @@ public class TestTimestampBasedKeyGenerator {
     properties = getBaseKeyConfig("createTime", "SCALAR", "yyyy-MM-dd hh", "GMT", "days");
     TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    assertEquals(hk1.getPartitionPath(), "2024-10-04 12");
+    assertEquals("2024-10-04 12", hk1.getPartitionPath());
 
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
@@ -279,9 +279,12 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void testScalarWithLogicalType() throws IOException {
+  void testScalarWithLogicalType() throws IOException {
     schema = SchemaTestUtil.getTimestampWithLogicalTypeSchema();
-    structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    structType = new StructType(new StructField[] {
+        new StructField("field1", StringType, true, Metadata.empty()),
+        new StructField("createTime", TimestampType, true, Metadata.empty())
+    });
     baseRecord = SchemaTestUtil.generateAvroRecordFromJson(schema, 1, "001", "f1");
     baseRecord.put("createTime", 1638513806000000L);
 
@@ -313,7 +316,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_SingleInputFormat_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
+  void test_ExpectsMatch_SingleInputFormat_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTimeString", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -325,14 +328,14 @@ public class TestTimestampBasedKeyGenerator {
         "GMT");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    Assertions.assertEquals("2020040113", hk1.getPartitionPath());
+    assertEquals("2020040113", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020040113", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
-  public void test_ExpectsMatch_SingleInputFormats_ISO8601WithMsZ_OutputTimezoneAsInputDateTimeZone() throws IOException {
+  void test_ExpectsMatch_SingleInputFormats_ISO8601WithMsZ_OutputTimezoneAsInputDateTimeZone() throws IOException {
     baseRecord.put("createTimeString", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -344,14 +347,14 @@ public class TestTimestampBasedKeyGenerator {
         "");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    Assertions.assertEquals("2020040113", hk1.getPartitionPath());
+    assertEquals("2020040113", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020040113", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
+  void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTimeString", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -363,14 +366,14 @@ public class TestTimestampBasedKeyGenerator {
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    Assertions.assertEquals("2020040113", hk1.getPartitionPath());
+    assertEquals("2020040113", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020040113", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601NoMsZ_OutputTimezoneAsUTC() throws IOException {
+  void test_ExpectsMatch_MultipleInputFormats_ISO8601NoMsZ_OutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTimeString", "2020-04-01T13:01:33Z");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -382,14 +385,14 @@ public class TestTimestampBasedKeyGenerator {
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    Assertions.assertEquals("2020040113", hk1.getPartitionPath());
+    assertEquals("2020040113", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020040113", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601NoMsWithOffset_OutputTimezoneAsUTC() throws IOException {
+  void test_ExpectsMatch_MultipleInputFormats_ISO8601NoMsWithOffset_OutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTimeString", "2020-04-01T13:01:33-05:00");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -401,14 +404,14 @@ public class TestTimestampBasedKeyGenerator {
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    Assertions.assertEquals("2020040118", hk1.getPartitionPath());
+    assertEquals("2020040118", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020040118", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsWithOffset_OutputTimezoneAsUTC() throws IOException {
+  void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsWithOffset_OutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTimeString", "2020-04-01T13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -420,14 +423,14 @@ public class TestTimestampBasedKeyGenerator {
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    Assertions.assertEquals("2020040118", hk1.getPartitionPath());
+    assertEquals("2020040118", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020040118", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsZ_OutputTimezoneAsEST() throws IOException {
+  void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsZ_OutputTimezoneAsEST() throws IOException {
     baseRecord.put("createTimeString", "2020-04-01T13:01:33.123Z");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -439,14 +442,14 @@ public class TestTimestampBasedKeyGenerator {
         "EST");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    Assertions.assertEquals("2020040109", hk1.getPartitionPath());
+    assertEquals("2020040109", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2020040109", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
-  public void test_Throws_MultipleInputFormats_InputDateNotMatchingFormats() throws IOException {
+  void test_Throws_MultipleInputFormats_InputDateNotMatchingFormats() throws IOException {
     baseRecord.put("createTimeString", "2020-04-01 13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -457,14 +460,14 @@ public class TestTimestampBasedKeyGenerator {
         "yyyyMMddHH",
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
-    Assertions.assertThrows(HoodieKeyGeneratorException.class, () -> keyGen.getKey(baseRecord));
+    assertThrows(HoodieKeyGeneratorException.class, () -> keyGen.getKey(baseRecord));
 
     baseRow = genericRecordToRow(baseRecord);
-    Assertions.assertThrows(HoodieKeyGeneratorException.class, () -> keyGen.getPartitionPath(baseRow));
+    assertThrows(HoodieKeyGeneratorException.class, () -> keyGen.getPartitionPath(baseRow));
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ShortDate_OutputCustomDate() throws IOException {
+  void test_ExpectsMatch_MultipleInputFormats_ShortDate_OutputCustomDate() throws IOException {
     baseRecord.put("createTimeString", "20200401");
     properties = this.getBaseKeyConfig(
         "createTimeString",
@@ -476,7 +479,7 @@ public class TestTimestampBasedKeyGenerator {
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
-    Assertions.assertEquals("04/01/2020", hk1.getPartitionPath());
+    assertEquals("04/01/2020", hk1.getPartitionPath());
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("04/01/2020", keyGen.getPartitionPath(baseRow));

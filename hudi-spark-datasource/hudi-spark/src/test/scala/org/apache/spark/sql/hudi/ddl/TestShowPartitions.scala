@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
+import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -122,21 +123,23 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
     // Empty partitions
     checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
 
-    // Insert into dynamic partition
-    spark.sql(
-      s"""
-         | insert into $tableName
-         | values
-         |   (1, 'a1', 10, 1000, '2021', '01', '01'),
-         |   (2, 'a2', 10, 1000, '2021', '01', '02'),
-         |   (3, 'a3', 10, 1000, '2021', '02', '01'),
-         |   (4, 'a4', 10, 1000, '2021', '02', null),
-         |   (5, 'a5', 10, 1000, '2021', null, '01'),
-         |   (6, 'a6', 10, 1000, null, '01', '02'),
-         |   (7, 'a6', 10, 1000, '2022', null, null),
-         |   (8, 'a6', 10, 1000, null, '01', null),
-         |   (9, 'a6', 10, 1000, null, null, '01')
+    withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+      // Insert into dynamic partition
+      spark.sql(
+        s"""
+           | insert into $tableName
+           | values
+           |   (1, 'a1', 10, 1000, '2021', '01', '01'),
+           |   (2, 'a2', 10, 1000, '2021', '01', '02'),
+           |   (3, 'a3', 10, 1000, '2021', '02', '01'),
+           |   (4, 'a4', 10, 1000, '2021', '02', null),
+           |   (5, 'a5', 10, 1000, '2021', null, '01'),
+           |   (6, 'a6', 10, 1000, null, '01', '02'),
+           |   (7, 'a6', 10, 1000, '2022', null, null),
+           |   (8, 'a6', 10, 1000, null, '01', null),
+           |   (9, 'a6', 10, 1000, null, null, '01')
         """.stripMargin)
+    }
 
     // check all partitions
     checkAnswer(s"show partitions $tableName")(
@@ -225,33 +228,35 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
            | )
          """.stripMargin)
 
-      // Insert into dynamic partition
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | values
-           |   (1, 'a1', 10, 1000, '2023', '12', '01'),
-           |   (2, 'a2', 10, 1000, '2023', '12', '02'),
-           |   (3, 'a3', 10, 1000, '2023', '12', '03')
+      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+        // Insert into dynamic partition
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | values
+             |   (1, 'a1', 10, 1000, '2023', '12', '01'),
+             |   (2, 'a2', 10, 1000, '2023', '12', '02'),
+             |   (3, 'a3', 10, 1000, '2023', '12', '03')
         """.stripMargin)
-      checkAnswer(s"show partitions $tableName")(
-        Seq("year=2023/month=12/day=01"),
-        Seq("year=2023/month=12/day=02"),
-        Seq("year=2023/month=12/day=03")
-      )
+        checkAnswer(s"show partitions $tableName")(
+          Seq("year=2023/month=12/day=01"),
+          Seq("year=2023/month=12/day=02"),
+          Seq("year=2023/month=12/day=03")
+        )
 
-      // Insert overwrite table
-      spark.sql(
-        s"""
-           | insert overwrite table $tableName
-           | values
-           |   (4, 'a4', 10, 1000, '2023', '12', '01'),
-           |   (2, 'a2', 10, 1000, '2023', '12', '04')
+        // Insert overwrite table
+        spark.sql(
+          s"""
+             | insert overwrite table $tableName
+             | values
+             |   (4, 'a4', 10, 1000, '2023', '12', '01'),
+             |   (2, 'a2', 10, 1000, '2023', '12', '04')
         """.stripMargin)
-      checkAnswer(s"show partitions $tableName")(
-        Seq("year=2023/month=12/day=01"),
-        Seq("year=2023/month=12/day=04")
-      )
+        checkAnswer(s"show partitions $tableName")(
+          Seq("year=2023/month=12/day=01"),
+          Seq("year=2023/month=12/day=04")
+        )
+      }
     }
   }
 
