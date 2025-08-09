@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
+import org.apache.hudi.config.HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION
 import org.apache.hudi.functional.PartitionStatsIndexTestBase.checkIfOverlapped
 
 import org.apache.spark.sql.{Column, DataFrame, SaveMode}
@@ -48,7 +49,8 @@ class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
   )
   val commonOpts: Map[String, String] = Map(
     PARTITIONPATH_FIELD.key -> "partition,trip_type",
-    HIVE_STYLE_PARTITIONING.key -> "true"
+    HIVE_STYLE_PARTITIONING.key -> "true",
+    ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false"
   ) ++ baseOpts ++ metadataOpts
 
   override def createJoinCondition(prevDf: DataFrame, latestBatchDf: DataFrame): Column = {
