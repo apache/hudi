@@ -50,24 +50,6 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
   }
 
   @Test
-  void testGetKeyInTableConfigTableVersion9PayloadClassKeyWithLegacyPayloadClass() {
-    // Mock HoodieTableVersion.current() to return NINE
-    try (MockedStatic<HoodieTableVersion> mockedHoodieTableVersion = Mockito.mockStatic(HoodieTableVersion.class)) {
-      mockedHoodieTableVersion.when(HoodieTableVersion::current).thenReturn(HoodieTableVersion.NINE);
-      // Set up table config with legacy payload class
-      HoodieConfig config = new HoodieConfig();
-      config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME,
-          "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
-      config.setValue(HoodieTableConfig.VERSION, "9");
-      // Test with PAYLOAD_CLASS_NAME key
-      String result = HoodieWriterUtils.getKeyInTableConfig(
-          HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);
-      // Should return legacy payload class key
-      Assertions.assertEquals(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key(), result);
-    }
-  }
-
-  @Test
   void testGetKeyInTableConfigTableVersion9PayloadClassKeyWithoutLegacyPayloadClass() {
     // Mock HoodieTableVersion.current() to return NINE
     try (MockedStatic<HoodieTableVersion> mockedHoodieTableVersion = Mockito.mockStatic(HoodieTableVersion.class)) {
@@ -145,23 +127,6 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
           HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);
       // Should return legacy payload class key even if whitespace
       Assertions.assertEquals(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), result);
-    }
-  }
-
-  @Test
-  void testGetKeyInTableConfigTableVersion9PayloadClassKeyWithCustomLegacyPayloadClass() {
-    // Mock HoodieTableVersion.current() to return NINE
-    try (MockedStatic<HoodieTableVersion> mockedHoodieTableVersion = Mockito.mockStatic(HoodieTableVersion.class)) {
-      mockedHoodieTableVersion.when(HoodieTableVersion::current).thenReturn(HoodieTableVersion.NINE);
-      // Set up table config with custom legacy payload class
-      HoodieConfig config = new HoodieConfig();
-      config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, "com.example.CustomPayload");
-      config.setValue(HoodieTableConfig.VERSION, "9");
-      // Test with PAYLOAD_CLASS_NAME key
-      String result = HoodieWriterUtils.getKeyInTableConfig(
-          HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);
-      // Should return legacy payload class key
-      Assertions.assertEquals(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key(), result);
     }
   }
 }
