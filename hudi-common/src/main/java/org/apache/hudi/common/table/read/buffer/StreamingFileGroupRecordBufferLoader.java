@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
@@ -44,6 +45,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 /**
  * Records based {@link FileGroupRecordBuffer} which takes in a map of records to be merged with a base file of interest.
@@ -51,10 +53,10 @@ import java.util.List;
  * @param <T> Engine native presentation of the record.
  */
 public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordBufferLoader<T> {
-  private static final StreamingFileGroupRecordBufferLoader INSTANCE = new StreamingFileGroupRecordBufferLoader<>();
+  private final Schema recordSchema;
 
-  static <T> StreamingFileGroupRecordBufferLoader<T> getInstance() {
-    return INSTANCE;
+  StreamingFileGroupRecordBufferLoader(Schema recordSchema) {
+    this.recordSchema = recordSchema;
   }
 
   @Override
@@ -62,7 +64,8 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             List<String> orderingFieldNames, HoodieTableMetaClient hoodieTableMetaClient,
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
+    HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
+    PartialUpdateMode partialUpdateMode = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
     FileGroupRecordBuffer<T> recordBuffer;
     if (readerParameters.sortOutputs()) {
@@ -73,8 +76,10 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
           readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
     }
 
+    Schema requiredSchema = readerContext.getSchemaHandler().getRequiredSchema();
+    UnaryOperator<T> projection = readerContext.projectRecord(recordSchema, requiredSchema);
+
     RecordContext<T> recordContext = readerContext.getRecordContext();
-    Schema recordSchema = readerContext.getSchemaHandler().getTableSchema();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
     while (recordIterator.hasNext()) {
@@ -91,7 +96,8 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
           // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
           // so we use recordContext#isDeleteRecord here if the data field is not null.
           boolean isDelete = recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
-          bufferedRecord = BufferedRecords.fromEngineRecord(data, recordSchema, recordContext, orderingFieldNames, BufferedRecords.inferOperation(isDelete, hoodieOperation));
+          bufferedRecord = BufferedRecords.fromEngineRecord(projection.apply(data), hoodieRecord.getRecordKey(), requiredSchema, recordContext, orderingFieldNames,
+              BufferedRecords.inferOperation(isDelete, hoodieOperation));
         }
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {

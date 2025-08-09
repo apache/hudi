@@ -115,6 +115,20 @@ public class TestHoodieMergeHandleFactory {
     propsWithDups.setProperty(HoodieWriteConfig.CONCAT_HANDLE_CLASS_NAME.key(), CUSTOM_MERGE_HANDLE);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.INSERT, getWriterConfig(propsWithDups), mockHoodieTable);
     validateMergeClasses(mergeHandleClasses, CUSTOM_MERGE_HANDLE, HoodieConcatHandle.class.getName());
+
+    // Filegroup reader based merge handle class
+    when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(false);
+    properties.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), FileGroupReaderBasedMergeHandle.class.getName());
+    propsWithDups.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), CUSTOM_MERGE_HANDLE);
+    mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
+    validateMergeClasses(mergeHandleClasses, FileGroupReaderBasedMergeHandle.class.getName(), HoodieWriteMergeHandle.class.getName());
+
+    // even if CDC is enabled, its the same FG reader based merge handle class.
+    when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(true);
+    properties.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), FileGroupReaderBasedMergeHandle.class.getName());
+    propsWithDups.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), CUSTOM_MERGE_HANDLE);
+    mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
+    validateMergeClasses(mergeHandleClasses, FileGroupReaderBasedMergeHandle.class.getName(), HoodieWriteMergeHandle.class.getName());
   }
 
   @Test
