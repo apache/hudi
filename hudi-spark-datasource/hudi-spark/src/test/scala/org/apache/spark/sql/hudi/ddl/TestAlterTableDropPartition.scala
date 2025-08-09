@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
+import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -308,6 +308,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          // Disable complex key generator validation so that the writer can succeed
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -333,6 +335,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          // Disable complex key generator validation so that the writer can succeed
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Append)
@@ -388,6 +392,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          // Disable complex key generator validation so that the writer can succeed
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -413,6 +419,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
+          // Disable complex key generator validation so that the writer can succeed
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Append)
@@ -422,7 +430,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
         ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        }
 
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
@@ -438,8 +448,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         })
         assertTrue(totalDeletedFiles > 0)
 
-        // insert data
-        spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+          // insert data
+          spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
+        }
 
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
