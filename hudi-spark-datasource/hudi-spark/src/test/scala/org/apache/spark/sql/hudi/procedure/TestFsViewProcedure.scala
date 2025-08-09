@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.config.HoodieWriteConfig
+
 class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_fsview_all Procedure") {
     withTempDir { tmp =>
@@ -117,9 +119,11 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            |  orderingFields = 'ts'
            | )
        """.stripMargin)
-      // insert data to table
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 'f11', 'f21', 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 'f12', 'f22', 1500")
+      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+        // insert data to table
+        spark.sql(s"insert into $tableName select 1, 'a1', 10, 'f11', 'f21', 1000")
+        spark.sql(s"insert into $tableName select 2, 'a2', 20, 'f12', 'f22', 1500")
+      }
 
       // Check required fields
       checkExceptionContain(s"""call show_fsview_all(limit => 10)""")(

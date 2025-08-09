@@ -118,6 +118,7 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
           .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "year,month,day")
           .option(HIVE_STYLE_PARTITIONING.key, hiveStyle)
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)

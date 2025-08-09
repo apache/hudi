@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.ddl
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 
 import org.apache.spark.sql.SaveMode
@@ -88,12 +89,15 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt,hh")
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
           .mode(SaveMode.Append)
           .save(basePath)
 
         assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
-        spark.sql(s"msck repair table $tableName")
+        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+          spark.sql(s"msck repair table $tableName")
+        }
         assertResult(Seq("dt=2022-10-06/hh=11", "dt=2022-10-06/hh=12"))(
           spark.sessionState.catalog.listPartitionNames(table))
       }
@@ -114,6 +118,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
           .option(RECORDKEY_FIELD.key, "id")
           .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt,hh")
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
           .mode(SaveMode.Append)
           .save(basePath)
@@ -127,7 +132,9 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
         val table = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
 
         assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
-        spark.sql(s"msck repair table $tableName")
+        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+          spark.sql(s"msck repair table $tableName")
+        }
         assertResult(Seq("dt=2022-10-06/hh=11", "dt=2022-10-06/hh=12"))(
           spark.sessionState.catalog.listPartitionNames(table))
       }

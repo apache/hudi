@@ -39,7 +39,6 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{DoubleType, FloatType, IntegerType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
 
-import scala.Seq
 import scala.collection.JavaConverters._
 
 class TestSpark3DDL extends HoodieSparkSqlTestBase {
@@ -1157,43 +1156,45 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   test("Test extract partition values from path when schema evolution is enabled") {
-    Seq("cow", "mor").foreach { tableType =>
-      withTable(generateTableName) { tableName =>
-        spark.sql(
-          s"""
-             |create table $tableName (
-             | id int,
-             | name string,
-             | ts bigint,
-             | region string,
-             | dt date
-             |) using hudi
-             |tblproperties (
-             | primaryKey = 'id',
-             | type = '$tableType',
-             | orderingFields = 'ts'
-             |)
-             |partitioned by (region, dt)""".stripMargin)
+    withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+      Seq("cow", "mor").foreach { tableType =>
+        withTable(generateTableName) { tableName =>
+          spark.sql(
+            s"""
+               |create table $tableName (
+               | id int,
+               | name string,
+               | ts bigint,
+               | region string,
+               | dt date
+               |) using hudi
+               |tblproperties (
+               | primaryKey = 'id',
+               | type = '$tableType',
+               | orderingFields = 'ts'
+               |)
+               |partitioned by (region, dt)""".stripMargin)
 
-        withSQLConf("hoodie.datasource.read.extract.partition.values.from.path" -> "true",
-          "hoodie.schema.on.read.enable" -> "true") {
-          spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-10-01') " +
-            s"select 1, 'name1', 1000")
-          checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName where region='reg1'")(
-            Seq(1, "name1", 1000, "reg1", "2023-10-01")
-          )
+          withSQLConf("hoodie.datasource.read.extract.partition.values.from.path" -> "true",
+            "hoodie.schema.on.read.enable" -> "true") {
+            spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-10-01') " +
+              s"select 1, 'name1', 1000")
+            checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName where region='reg1'")(
+              Seq(1, "name1", 1000, "reg1", "2023-10-01")
+            )
 
-          // apply schema evolution and perform a read again
-          spark.sql(s"alter table $tableName add columns(price double)")
-          checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName where region='reg1'")(
-            Seq(1, "name1", 1000, "reg1", "2023-10-01")
-          )
+            // apply schema evolution and perform a read again
+            spark.sql(s"alter table $tableName add columns(price double)")
+            checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName where region='reg1'")(
+              Seq(1, "name1", 1000, "reg1", "2023-10-01")
+            )
 
-          // ensure this won't be broken in the future
-          // BooleanSimplification is always applied when calling HoodieDataSourceHelper#getNonPartitionFilters
-          checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName where not(region='reg2' or id=2)")(
-            Seq(1, "name1", 1000, "reg1", "2023-10-01")
-          )
+            // ensure this won't be broken in the future
+            // BooleanSimplification is always applied when calling HoodieDataSourceHelper#getNonPartitionFilters
+            checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName where not(region='reg2' or id=2)")(
+              Seq(1, "name1", 1000, "reg1", "2023-10-01")
+            )
+          }
         }
       }
     }
