@@ -49,8 +49,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELD
  */
 public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   private static final long serialVersionUID = 1L;
-  private static final AvroRecordContext AVRO_RECORD_CONTEXT = new AvroRecordContext();
-  private SerializableIndexedRecord optimizedRecord;
+  private SerializableIndexedRecord binaryRecord;
 
   public HoodieAvroIndexedRecord(IndexedRecord data) {
     this(null, data, null, null, null);
@@ -85,7 +84,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieOperation operation, HoodieRecordLocation currentLocation, HoodieRecordLocation newLocation) {
     super(key, SerializableIndexedRecord.createInstance(data), operation, currentLocation, newLocation);
-    this.optimizedRecord = (SerializableIndexedRecord) this.data;
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
   }
 
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
@@ -98,16 +97,16 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       HoodieOperation operation,
       Option<Map<String, String>> metaData) {
     super(key, SerializableIndexedRecord.createInstance(data), operation, metaData);
-    this.optimizedRecord = (SerializableIndexedRecord) this.data;
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
   }
 
   HoodieAvroIndexedRecord(HoodieRecord<IndexedRecord> record) {
     super(record);
-    this.optimizedRecord = (SerializableIndexedRecord) this.data;
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
   }
 
   public HoodieAvroIndexedRecord() {
-    this.optimizedRecord = (SerializableIndexedRecord) this.data;
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
   }
 
   @Override
@@ -203,7 +202,8 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     }
     decodeRecord(recordSchema);
     DeleteContext deleteContext = new DeleteContext(props, recordSchema);
-    return AVRO_RECORD_CONTEXT.isDeleteRecord(data, deleteContext);
+    deleteContext.withReaderSchema(recordSchema);
+    return AvroRecordContext.getFieldAccessorInstance().isDeleteRecord(data, deleteContext);
   }
 
   @Override
@@ -274,7 +274,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   }
 
   private void decodeRecord(Schema recordSchema) {
-    optimizedRecord.decodeRecord(recordSchema);
+    binaryRecord.decodeRecord(recordSchema);
   }
 
   @Override
@@ -309,7 +309,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
   @Override
   protected final IndexedRecord readRecordPayload(Kryo kryo, Input input) {
     SerializableIndexedRecord data = kryo.readObjectOrNull(input, SerializableIndexedRecord.class);
-    this.optimizedRecord = data;
+    this.binaryRecord = data;
     return data;
   }
 
@@ -337,6 +337,6 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   public IndexedRecord getData() {
-    return optimizedRecord.getRecord();
+    return binaryRecord.getRecord();
   }
 }

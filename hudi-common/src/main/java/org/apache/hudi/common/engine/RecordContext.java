@@ -238,7 +238,7 @@ public abstract class RecordContext<T> implements Serializable {
    * Check if the value of column "_hoodie_is_deleted" is true.
    */
   private boolean isBuiltInDeleteRecord(T record, DeleteContext deleteContext) {
-    if (!deleteContext.getCustomDeleteMarkerKeyValue().isPresent()) {
+    if (!deleteContext.hasBuiltInDeleteField()) {
       return false;
     }
     Object columnValue = getValue(record, deleteContext.getReaderSchema(), HOODIE_IS_DELETED_FIELD);

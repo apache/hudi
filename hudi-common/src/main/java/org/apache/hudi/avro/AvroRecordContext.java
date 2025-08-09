@@ -46,6 +46,11 @@ import java.util.Properties;
  * Record context for reading and transforming avro indexed records.
  */
 public class AvroRecordContext extends RecordContext<IndexedRecord> {
+  private static final AvroRecordContext FIELD_ACCESSOR_INSTANCE = new AvroRecordContext();
+
+  public static AvroRecordContext getFieldAccessorInstance() {
+    return FIELD_ACCESSOR_INSTANCE;
+  }
 
   private final String payloadClass;
   // This boolean indicates whether the caller requires payloads in the HoodieRecord conversion.
