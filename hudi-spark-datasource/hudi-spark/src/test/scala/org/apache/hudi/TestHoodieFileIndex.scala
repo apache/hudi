@@ -560,7 +560,9 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
         RECORDKEY_FIELD.key -> "id",
         HoodieTableConfig.ORDERING_FIELDS.key() -> "version",
-        PARTITIONPATH_FIELD.key -> "dt,hh"
+        PARTITIONPATH_FIELD.key -> "dt,hh",
+        // Disable complex key generator validation so that the writer can succeed
+        HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false"
       )
 
       val readerOpts: Map[String, String] = queryOpts ++ Map(
