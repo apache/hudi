@@ -22,7 +22,7 @@ import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMeta
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Option => HOption}
+import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
