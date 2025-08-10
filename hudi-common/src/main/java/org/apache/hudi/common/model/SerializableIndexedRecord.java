@@ -78,6 +78,7 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
     if (record == null) {
       try {
         record = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+        recordBytes = null;
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse record into provided schema", e);
       }
