@@ -42,34 +42,40 @@ import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.function.BiFunction;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
+/**
+ * Record context provides the APIs for record related operations. Record context is associated with
+ * a corresponding {@link HoodieReaderContext} and is used for getting field values from a record,
+ * transforming a record etc.
+ */
 public abstract class RecordContext<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  private SerializableBiFunction<T, Schema, String> recordKeyExtractor;
+  private final SerializableBiFunction<T, Schema, String> recordKeyExtractor;
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
   protected JavaTypeConverter typeConverter;
   protected String partitionPath;
 
-  public RecordContext(HoodieTableConfig tableConfig) {
+  protected RecordContext(HoodieTableConfig tableConfig) {
     this.typeConverter = new DefaultJavaTypeConverter();
-    updateRecordKeyExtractor(tableConfig, tableConfig.populateMetaFields());
-  }
-
-  public void updateRecordKeyExtractor(HoodieTableConfig tableConfig, boolean shouldUseMetadataFields) {
-    this.recordKeyExtractor = shouldUseMetadataFields ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
+    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
   }
 
   public void setPartitionPath(String partitionPath) {
     this.partitionPath = partitionPath;
+  }
+
+  public T extractDataFromRecord(HoodieRecord record, Schema schema, Properties properties) {
+    return (T) record.getData();
   }
 
   /**
@@ -99,12 +105,24 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
-   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
+   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord} and the provided partition path.
+   * Use this method when the partition path is not consistent for all usages of the RecordContext instance.
    *
-   * @param bufferedRecord  The {@link BufferedRecord} object with engine-specific row
+   * @param bufferedRecord The {@link BufferedRecord} object with engine-specific row
+   * @param partitionPath The partition path of the record
    * @return A new instance of {@link HoodieRecord}.
    */
-  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord);
+  public abstract HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord, String partitionPath);
+
+  /**
+   * Constructs a new {@link HoodieRecord} based on the given buffered record {@link BufferedRecord}.
+   *
+   * @param bufferedRecord The {@link BufferedRecord} object with engine-specific row
+   * @return A new instance of {@link HoodieRecord}.
+   */
+  public HoodieRecord<T> constructHoodieRecord(BufferedRecord<T> bufferedRecord) {
+    return constructHoodieRecord(bufferedRecord, partitionPath);
+  }
 
   /**
    * Constructs a new Engine based record based on a given schema, base record and update values.
@@ -189,21 +207,18 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
 
   /**
-   * There are two cases to handle:
-   * 1). Return the delete record if it's not null;
-   * 2). otherwise fills an empty row with record key fields and returns.
+   * Fills an empty row with record key fields and returns.
    *
-   * <p>For case2, when `emitDelete` is true for FileGroup reader and payload for DELETE record is empty,
+   * <p>When `emitDelete` is true for FileGroup reader and payload for DELETE record is empty,
    * a record key row is emitted to downstream to delete data from storage by record key with the best effort.
    * Returns null if the primary key semantics been lost: the requested schema does not include all the record key fields.
    *
-   * @param record    delete record
    * @param recordKey record key
    *
    * @return Engine specific row which contains record key fields.
    */
   @Nullable
-  public abstract T getDeleteRow(T record, String recordKey);
+  public abstract T getDeleteRow(String recordKey);
 
   public boolean isDeleteRecord(T record, DeleteContext deleteContext) {
     return isBuiltInDeleteRecord(record, deleteContext) || isDeleteHoodieOperation(record, deleteContext)
@@ -262,6 +277,28 @@ public abstract class RecordContext<T> implements Serializable {
                                      Schema schema,
                                      List<String> orderingFieldNames) {
     if (orderingFieldNames.isEmpty()) {
+      return OrderingValues.getDefault();
+    }
+
+    return OrderingValues.create(orderingFieldNames, field -> {
+      Object value = getValue(record, schema, field);
+      // API getDefaultOrderingValue is only used inside Comparables constructor
+      return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
+    });
+  }
+
+  /**
+   * Gets the ordering value in particular type.
+   *
+   * @param record             An option of record.
+   * @param schema             The Avro schema of the record.
+   * @param orderingFieldNames names of the ordering fields
+   * @return The ordering value.
+   */
+  public Comparable getOrderingValue(T record,
+                                     Schema schema,
+                                     String[] orderingFieldNames) {
+    if (orderingFieldNames.length == 0) {
       return OrderingValues.getDefault();
     }
 

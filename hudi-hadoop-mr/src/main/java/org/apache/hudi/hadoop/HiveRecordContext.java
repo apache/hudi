@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -71,16 +72,18 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord) {
+  public HoodieRecord<ArrayWritable> constructHoodieRecord(BufferedRecord<ArrayWritable> bufferedRecord, String partitionPath) {
     HoodieKey key = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(
           key,
+          bufferedRecord.getHoodieOperation(),
+          OrderingValues.getDefault(),
           HoodieRecord.HoodieRecordType.HIVE);
     }
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema, objectInspectorCache);
+    return new HoodieHiveRecord(key, writable, schema, objectInspectorCache, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
   }
 
   @Override
@@ -129,7 +132,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public ArrayWritable getDeleteRow(ArrayWritable record, String recordKey) {
+  public ArrayWritable getDeleteRow(String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
   }
 }

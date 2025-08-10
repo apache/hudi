@@ -60,7 +60,6 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailed
  * The main downgrade logic:
  *   for all tables:
  *     remove hoodie.table.partial.update.mode from table_configs
- *     remove hoodie.table.merge.properties from table_configs
  *   for table with payload class defined in RFC-97,
  *     remove hoodie.legacy.payload.class from table_configs
  *     set hoodie.compaction.payload.class=payload

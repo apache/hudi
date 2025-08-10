@@ -29,9 +29,11 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -63,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -102,6 +105,7 @@ class TestFileGroupRecordBuffer {
     when(readerContext.getRecordMerger()).thenReturn(Option.empty());
     when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
     when(readerContext.getRecordSizeEstimator()).thenReturn(new DefaultSizeEstimator<>());
+    when(readerContext.getIteratorMode()).thenReturn(IteratorMode.ENGINE_RECORD);
   }
 
   @Test
@@ -195,9 +199,9 @@ class TestFileGroupRecordBuffer {
     record.put("ts", System.currentTimeMillis());
     record.put("op", "d");
     record.put("_hoodie_is_deleted", false);
-    when(recordContext.getOrderingValue(any(), any(), any())).thenReturn(1);
+    when(recordContext.getOrderingValue(any(), any(), anyList())).thenReturn(1);
     when(recordContext.convertOrderingValueToEngineType(any())).thenReturn(1);
-    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecord.forRecordWithContext(record, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
+    BufferedRecord<GenericRecord> bufferedRecord = BufferedRecords.fromEngineRecord(record, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "12345");
     Map<Serializable, BufferedRecord<GenericRecord>> records = keyBasedBuffer.getLogRecords();
@@ -212,7 +216,7 @@ class TestFileGroupRecordBuffer {
     anotherRecord.put("ts", System.currentTimeMillis());
     anotherRecord.put("op", "i");
     anotherRecord.put("_hoodie_is_deleted", true);
-    bufferedRecord = BufferedRecord.forRecordWithContext(anotherRecord, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
+    bufferedRecord = BufferedRecords.fromEngineRecord(anotherRecord, schema, readerContext.getRecordContext(), Collections.singletonList("ts"), true);
 
     keyBasedBuffer.processNextDataRecord(bufferedRecord, "54321");
     records = keyBasedBuffer.getLogRecords();

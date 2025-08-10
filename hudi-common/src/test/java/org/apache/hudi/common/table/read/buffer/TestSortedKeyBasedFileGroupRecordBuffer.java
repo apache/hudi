@@ -25,13 +25,13 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
-import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
@@ -56,6 +56,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -126,10 +127,9 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
         properties);
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.initRecordMerger(properties);
-    List<BufferedRecord> inputRecords =
-        convertToBufferedRecordsList(Arrays.asList(testIndexedRecord6Update, testIndexedRecord4LowerOrdering, testIndexedRecord1, testIndexedRecord2Update), readerContext, properties,
-            new String[]{"ts"});
-    inputRecords.addAll(convertToBufferedRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker), false));
+    List<HoodieRecord> inputRecords =
+        convertToHoodieRecordsList(Arrays.asList(testIndexedRecord6Update, testIndexedRecord4LowerOrdering, testIndexedRecord1, testIndexedRecord2Update));
+    inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker), false));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
@@ -189,12 +189,12 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
   private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
-    when(mockReaderContext.getRecordContext().getDeleteRow(any(), any())).thenAnswer(invocation -> {
-      String recordKey = invocation.getArgument(1);
+    when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
+      String recordKey = invocation.getArgument(0);
       return new TestRecord(recordKey, 0);
     });
     when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
-    when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), any())).thenReturn(0);
+    when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenReturn(0);
     when(mockReaderContext.toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
     when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
@@ -209,7 +209,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
   private static <T> List<T> getActualRecordsForSortedKeyBased(SortedKeyBasedFileGroupRecordBuffer<T> fileGroupRecordBuffer) throws IOException {
     List<T> actualRecords = new ArrayList<>();
     while (fileGroupRecordBuffer.hasNext()) {
-      actualRecords.add(fileGroupRecordBuffer.next());
+      actualRecords.add(fileGroupRecordBuffer.next().getRecord());
     }
     return actualRecords;
   }

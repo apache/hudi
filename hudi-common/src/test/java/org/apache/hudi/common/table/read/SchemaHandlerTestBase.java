@@ -322,7 +322,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public String getDeleteRow(String record, String recordKey) {
+        public String getDeleteRow(String recordKey) {
           return "";
         }
 
@@ -337,7 +337,7 @@ public abstract class SchemaHandlerTestBase {
         }
 
         @Override
-        public HoodieRecord<String> constructHoodieRecord(BufferedRecord<String> bufferedRecord) {
+        public HoodieRecord<String> constructHoodieRecord(BufferedRecord<String> bufferedRecord, String partitionPath) {
           return null;
         }
 

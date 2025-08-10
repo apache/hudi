@@ -118,9 +118,9 @@ public interface HoodieFileGroupRecordBuffer<T> {
 
   /**
    *
-   * @return output the next merged record.
+   * @return output the next merged buffered record.
    */
-  T next();
+  BufferedRecord<T> next();
 
   void close();
 }

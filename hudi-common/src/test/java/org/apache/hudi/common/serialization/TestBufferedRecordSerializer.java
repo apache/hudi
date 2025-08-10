@@ -21,8 +21,10 @@ package org.apache.hudi.common.serialization;
 import org.apache.hudi.avro.AvroRecordSerializer;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 
 import org.apache.avro.Schema;
@@ -31,6 +33,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -64,7 +68,7 @@ public class TestBufferedRecordSerializer {
     record.put("name", "lily");
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
-    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, false);
+    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, null);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
     BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
@@ -76,7 +80,7 @@ public class TestBufferedRecordSerializer {
     avroRecordSerializer = new AvroRecordSerializer(integer -> HoodieMetadataRecord.SCHEMA$);
     bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
     HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
-    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, false);
+    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, null);
     bytes = bufferedRecordSerializer.serialize(bufferedRecord);
     result = bufferedRecordSerializer.deserialize(bytes);
 
@@ -84,6 +88,7 @@ public class TestBufferedRecordSerializer {
     Assertions.assertEquals(bufferedRecord.getOrderingValue(), result.getOrderingValue());
     Assertions.assertEquals(bufferedRecord.getSchemaId(), result.getSchemaId());
     Assertions.assertEquals(bufferedRecord.isDelete(), result.isDelete());
+    Assertions.assertEquals(bufferedRecord.getHoodieOperation(), result.getHoodieOperation());
     for (int i = 0; i < metadataRecord.getSchema().getFields().size(); i++) {
       Assertions.assertEquals(metadataRecord.get(i), result.getRecord().get(i));
     }
@@ -91,11 +96,13 @@ public class TestBufferedRecordSerializer {
     Assertions.assertEquals(bufferedRecord.getRecord().toString(), result.getRecord().toString());
   }
 
-  @Test
-  void testDeleteRecordSerAndDe() throws IOException {
+  @ParameterizedTest
+  @EnumSource(value = HoodieOperation.class,  names = {"UPDATE_BEFORE", "DELETE"})
+  void testDeleteRecordSerAndDe(HoodieOperation hoodieOperation) throws IOException {
     Schema schema = SchemaTestUtil.getSimpleSchema();
     DeleteRecord record = DeleteRecord.create("id", "partition", 100);
-    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecord.forDeleteRecord(record, 100);
+    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.fromDeleteRecord(record, 100);
+    bufferedRecord.setHoodieOperation(hoodieOperation);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);
     BufferedRecordSerializer<IndexedRecord> bufferedRecordSerializer = new BufferedRecordSerializer<>(avroRecordSerializer);
@@ -107,6 +114,7 @@ public class TestBufferedRecordSerializer {
     Assertions.assertEquals(bufferedRecord.getOrderingValue(), result.getOrderingValue());
     Assertions.assertEquals(bufferedRecord.getSchemaId(), result.getSchemaId());
     Assertions.assertEquals(bufferedRecord.isDelete(), result.isDelete());
+    Assertions.assertEquals(bufferedRecord.getHoodieOperation(), result.getHoodieOperation());
     Assertions.assertNull(result.getRecord());
   }
 }

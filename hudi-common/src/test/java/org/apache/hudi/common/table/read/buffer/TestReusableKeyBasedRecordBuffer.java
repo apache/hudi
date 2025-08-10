@@ -47,6 +47,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -59,10 +60,10 @@ class TestReusableKeyBasedRecordBuffer {
   void testRemainingLogEntryHandling() throws IOException {
     // After all base file records are read, only log entries that match the filter should be returned
     Map<Serializable, BufferedRecord<TestRecord>> preMergedLogRecords = new HashMap<>();
-    preMergedLogRecords.put("1", new BufferedRecord<>("1", 10, new TestRecord("1", 1), 0, false));
-    preMergedLogRecords.put("2", new BufferedRecord<>("2", 10, new TestRecord("2", 2), 0, false));
-    preMergedLogRecords.put("3", new BufferedRecord<>("3", 10, new TestRecord("3", 3), 0, false));
-    preMergedLogRecords.put("4", new BufferedRecord<>("4", 10, new TestRecord("4", 4), 0, false));
+    preMergedLogRecords.put("1", new BufferedRecord<>("1", 10, new TestRecord("1", 1), 0, null));
+    preMergedLogRecords.put("2", new BufferedRecord<>("2", 10, new TestRecord("2", 2), 0, null));
+    preMergedLogRecords.put("3", new BufferedRecord<>("3", 10, new TestRecord("3", 3), 0, null));
+    preMergedLogRecords.put("4", new BufferedRecord<>("4", 10, new TestRecord("4", 4), 0, null));
     HoodieReadStats readStats = new HoodieReadStats();
     UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
 
@@ -71,12 +72,12 @@ class TestReusableKeyBasedRecordBuffer {
     when(mockReaderContext.getKeyFilterOpt()).thenReturn(Option.of(keyFilter));
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.AVRO_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
-    when(mockReaderContext.getRecordContext().getDeleteRow(any(), any())).thenAnswer(invocation -> {
-      String recordKey = invocation.getArgument(1);
+    when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
+      String recordKey = invocation.getArgument(0);
       return new TestRecord(recordKey, 0);
     });
     when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
-    when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), any())).thenAnswer(invocation -> {
+    when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenAnswer(invocation -> {
       TestRecord record = invocation.getArgument(0);
       if (record.getRecordKey().equals("1")) {
         return 20; // simulate newer record in base file
@@ -95,7 +96,7 @@ class TestReusableKeyBasedRecordBuffer {
 
     List<TestRecord> actualRecords = new ArrayList<>();
     while (buffer.hasNext()) {
-      actualRecords.add(buffer.next());
+      actualRecords.add(buffer.next().getRecord());
     }
     assertEquals(Arrays.asList(new TestRecord("1", 10), new TestRecord("3", 3), new TestRecord("2", 2)), actualRecords);
   }

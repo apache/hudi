@@ -19,11 +19,14 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Properties;
 
@@ -97,5 +100,12 @@ public abstract class BaseAvroPayload implements Serializable {
 
   public byte[] getRecordBytes() {
     return recordBytes;
+  }
+
+  public Option<IndexedRecord> getIndexedRecord(Schema schema, Properties properties) throws IOException {
+    if (recordBytes.length == 0) {
+      return Option.empty();
+    }
+    return Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
   }
 }

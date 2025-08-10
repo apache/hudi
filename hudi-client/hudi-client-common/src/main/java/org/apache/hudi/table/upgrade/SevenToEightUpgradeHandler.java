@@ -72,7 +72,6 @@ import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYO
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.SIX_TO_EIGHT_TIMELINE_ACTION_MAP;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
@@ -100,8 +99,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
     checkAndHandleMetadataTable(context, table, config, metaClient, true);
 
-    // Rollback and run compaction in one step
-    rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()), HoodieTableVersion.SIX);
     try {
       HoodieTableMetaClient.createTableLayoutOnStorage(context.getStorageConf(), new StoragePath(config.getBasePath()), config.getProps(), TimelineLayoutVersion.VERSION_2, false);
     } catch (IOException e) {

@@ -54,6 +54,10 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     super(key, data);
   }
 
+  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation hoodieOperation, boolean isDelete) {
+    super(key, data, hoodieOperation, isDelete, Option.empty());
+  }
+
   public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation operation) {
     super(key, data, operation, Option.empty());
   }
@@ -186,7 +190,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
     if (HoodieOperation.isDelete(getOperation())) {
       return true;
     }
@@ -244,7 +248,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
-    Option<IndexedRecord> avroData = getData().getInsertValue(recordSchema, props);
+    Option<IndexedRecord> avroData = getData().getIndexedRecord(recordSchema, props);
     if (avroData.isPresent()) {
       HoodieAvroIndexedRecord record =
           new HoodieAvroIndexedRecord(key, avroData.get(), operation, getData().getMetadata());
