@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, SparkDatasetMixin}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, ScalaAssertionSupport, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -45,7 +45,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
@@ -59,7 +59,7 @@ import scala.collection.JavaConverters._
 /**
  * Tests on Spark DataSource for MOR table.
  */
-class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin {
+class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin with ScalaAssertionSupport {
 
   var spark: SparkSession = null
   val commonOpts = Map(
@@ -1878,12 +1878,12 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
         case "EXCEPTION" =>
           // Should throw HoodieUpgradeDowngradeException
-          val exception = assertThrows(classOf[HoodieUpgradeDowngradeException], () => {
+          val exception = assertThrows(classOf[HoodieUpgradeDowngradeException]) {
             inputDF.write.format("hudi")
               .options(testWriteOpts)
               .mode(SaveMode.Append)
               .save(testBasePath)
-          }, s"Expected HoodieUpgradeDowngradeException for table=${tableVersionStr}, write=${writeVersionStr}, autoUpgrade=${autoUpgrade}")
+          }
 
           // Verify exception message contains expected content
           val expectedMessageFragment = if (tableVersion.versionCode() < HoodieTableVersion.SIX.versionCode() && writeVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {

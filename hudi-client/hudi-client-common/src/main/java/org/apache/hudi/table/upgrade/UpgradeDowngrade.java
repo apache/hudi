@@ -90,13 +90,11 @@ public class UpgradeDowngrade {
 
   public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
-    if (fromTableVersion.versionCode() >= toWriteVersion.versionCode()) {
-      // if the table version is greater than or equal to the write version, then this is not an upgrade
+    if (fromTableVersion.greaterThanOrEquals(toWriteVersion)) {
       LOG.warn("Table version {} is greater than or equal to write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
       return false;
     }
     if (fromTableVersion.versionCode() < HoodieTableVersion.SIX.versionCode() && toWriteVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
-      // if the table's current version is less than SIX and the write version is greater than or equal to EIGHT,
       // we require the user to upgrade to SIX before upgrading to versions greater than or equal to EIGHT
       throw new HoodieUpgradeDowngradeException(
               String.format("Please upgrade table from version %s to %s before upgrading to version %s.", fromTableVersion, HoodieTableVersion.SIX.versionCode(), toWriteVersion));
@@ -106,7 +104,7 @@ public class UpgradeDowngrade {
         // throw an exception as autoUpgrade is disabled, and table version is less than SIX
         // need to upgrade to SIX and set to autoUpgrade to true, otherwise the setting the write config value to a value lower than six will fail
         throw new HoodieUpgradeDowngradeException(
-                String.format("AUTO_UPGRADE_VERSION was disabled, Please upgrade table to version %s by setting AUTO_UPGRADE_VERSION to true.", HoodieTableVersion.SIX.versionCode()));
+                String.format("hoodie.write.auto.upgrade was disabled, Please upgrade table to version %s by setting hoodie.write.auto.upgrade to true.", HoodieTableVersion.SIX.versionCode()));
       }
       // if autoUpgrade is disabled and table version is greater than SIX, then we must ensure the write version is set to the table version.
       // and skip the upgrade

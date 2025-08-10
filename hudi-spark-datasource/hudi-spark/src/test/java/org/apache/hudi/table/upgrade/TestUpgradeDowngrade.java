@@ -191,10 +191,31 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     LOG.info("Auto-upgrade disabled test passed for version {}", originalVersion);
   }
 
+  /**
+   * Test cases for auto-upgrade with different hoodie.write.table.version configurations.
+   * Each case starts with table version SIX and tests different write table version settings.
+   * Test params are: Integer writeTableVersion, HoodieTableVersion expectedVersion, String description
+   */
+  private static Stream<Arguments> writeTableVersionTestCases() {
+    return Stream.of(
+            // Case 1: No explicit hoodie.write.table.version (uses default)
+            Arguments.of(Option.empty(), HoodieTableVersion.current(), "Default version upgrade to current version NINE"),
+
+            // Case 2: hoodie.write.table.version = 6 (same as current table version)
+            Arguments.of(Option.of(HoodieTableVersion.SIX), HoodieTableVersion.SIX, HoodieTableVersion.SIX, "No upgrade when versions match"),
+
+            // Case 3: hoodie.write.table.version = 8
+            Arguments.of(Option.of(HoodieTableVersion.EIGHT), HoodieTableVersion.EIGHT, HoodieTableVersion.EIGHT, "Upgrade to table version EIGHT"),
+
+            // Case 4: hoodie.write.table.version = 9
+            Arguments.of(Option.of(HoodieTableVersion.NINE), HoodieTableVersion.NINE, HoodieTableVersion.NINE, "Upgrade to table version NINE")
+    );
+  }
+
   @ParameterizedTest
   @MethodSource("writeTableVersionTestCases")
   public void testAutoUpgradeWithWriteTableVersionConfiguration(
-      Integer writeTableVersion, HoodieTableVersion expectedVersion, String description) throws Exception {
+      Option<HoodieTableVersion> writeTableVersion, HoodieTableVersion expectedVersion, String description) throws Exception {
     LOG.info("Testing auto-upgrade configuration: {}", description);
     
     // Load table version SIX fixture as starting point for all test cases
@@ -208,8 +229,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .withAutoUpgradeVersion(true);
     
     // Set write table version if specified (null means use default)
-    if (writeTableVersion != null) {
-      configBuilder.withWriteTableVersion(writeTableVersion);
+    if (writeTableVersion.isPresent()) {
+      configBuilder.withWriteTableVersion(writeTableVersion.get().versionCode());
     }
     
     HoodieWriteConfig config = configBuilder.build();
@@ -426,27 +447,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX),   // V8 -> V6
         Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5
         Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4
-    );
-  }
-
-  /**
-   * Test cases for auto-upgrade with different hoodie.write.table.version configurations.
-   * Each case starts with table version SIX and tests different write table version settings.
-   * Test params are: Integer writeTableVersion, HoodieTableVersion expectedVersion, String description
-   */
-  private static Stream<Arguments> writeTableVersionTestCases() {
-    return Stream.of(
-        // Case 1: No explicit hoodie.write.table.version (uses default)
-        Arguments.of(null, HoodieTableVersion.current(), "Default version upgrade to current version NINE"),
-        
-        // Case 2: hoodie.write.table.version = 6 (same as current table version)
-        Arguments.of(HoodieTableVersion.SIX.versionCode(), HoodieTableVersion.SIX, "No upgrade when versions match"),
-        
-        // Case 3: hoodie.write.table.version = 8
-        Arguments.of(HoodieTableVersion.EIGHT.versionCode(), HoodieTableVersion.EIGHT, "Upgrade to table version EIGHT"),
-        
-        // Case 4: hoodie.write.table.version = 9
-        Arguments.of(HoodieTableVersion.NINE.versionCode(), HoodieTableVersion.NINE, "Upgrade to table version NINE")
     );
   }
 
