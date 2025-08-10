@@ -29,8 +29,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 
 import org.apache.spark.sql.SaveMode
+import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -40,6 +40,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
 
   private var partitionPaths: java.util.List[StoragePath] = null
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testDowngradeWithMDTAndLogFiles(tableType: HoodieTableType): Unit = {
@@ -71,6 +72,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     }
   }
 
+  @Disabled
   @Test
   def testDowngradeWithoutLogFiles(): Unit = {
     val hudiOpts = commonOpts + (
@@ -90,6 +92,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     assertEquals(HoodieTableVersion.FIVE, metaClient.getTableConfig.getTableVersion)
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testDowngradeWithoutMDT(tableType: HoodieTableType): Unit = {

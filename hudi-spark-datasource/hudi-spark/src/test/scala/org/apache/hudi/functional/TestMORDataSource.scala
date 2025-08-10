@@ -1782,8 +1782,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @CsvSource(Array(
     "6,8,true,UPGRADE",           // Normal upgrade: table=6, write=8, autoUpgrade=true → should upgrade
     "6,8,false,VERSION_ADJUST",   // Auto-upgrade disabled: table=6, write=8, autoUpgrade=false → adjust version
-    "4,8,false,EXCEPTION",       // Auto-upgrade disabled + version < 6: table=4, write=8, autoUpgrade=false → exception
-    "4,8,true,EXCEPTION"         // Step upgrade required: table=4, write=8, autoUpgrade=true → exception (need to go through 6)
+    "4,8,true,EXCEPTION",         // Auto-upgrade enabled: Should throw exception since table version is less than 6
+    "4,8,false,EXCEPTION"         // Auto-upgrade disabled: Should throw exception since table version is less than 6
   ))
   def testBaseHoodieWriteClientUpgradeDecisionLogic(
     tableVersionStr: String,
@@ -1886,15 +1886,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
           }
 
           // Verify exception message contains expected content
-          val expectedMessageFragment = if (tableVersion.versionCode() < HoodieTableVersion.SIX.versionCode() && writeVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
-            // Special case: step upgrade required (table < 6 AND write >= 8)
-            s"Please upgrade table from version ${tableVersion} to ${HoodieTableVersion.SIX.versionCode()} before upgrading to version ${writeVersion}"
-          } else if (tableVersion.versionCode() < HoodieTableVersion.SIX.versionCode()) {
-            if (autoUpgrade) {
-              s"Please upgrade table from version ${tableVersion} to ${HoodieTableVersion.SIX.versionCode()}"
-            } else {
-              s"AUTO_UPGRADE_VERSION was disabled, Please upgrade table to version ${HoodieTableVersion.SIX.versionCode()}"
-            }
+          val expectedMessageFragment = if (tableVersion.versionCode() < HoodieTableVersion.SIX.versionCode()) {
+            // For Hudi 1.1.0: any table version < 6 throws exception with this message
+            "1.1.0 only supports table version greater then version SIX or above"
           } else {
             "upgrade"
           }
