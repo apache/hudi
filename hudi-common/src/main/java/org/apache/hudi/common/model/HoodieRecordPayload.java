@@ -37,6 +37,7 @@ import java.util.Properties;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 
 /**
  * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which depend on record specific logic.
@@ -183,7 +184,18 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   static String getPayloadClassName(Properties props) {
-    return getPayloadClassNameIfPresent(props).orElse(DEFAULT_PAYLOAD_CLASS_NAME);
+    Option<String> payloadOpt = getPayloadClassNameIfPresent(props);
+    if (payloadOpt.isPresent()) {
+      return payloadOpt.get();
+    }
+    // Note: starting from version 9, payload class is not necessary set, but
+    //       merge mode must exist. Therefore, we use merge mode to infer
+    //       the payload class for certain corner cases, like for MIT command.
+    if (props.containsKey(RECORD_MERGE_MODE.key())
+        && props.getProperty(RECORD_MERGE_MODE.key()).equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
+      return OverwriteWithLatestAvroPayload.class.getName();
+    }
+    return DEFAULT_PAYLOAD_CLASS_NAME;
   }
 
   // NOTE: PAYLOAD_CLASS_NAME is before LEGACY_PAYLOAD_CLASS_NAME to make sure

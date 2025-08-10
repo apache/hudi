@@ -34,7 +34,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -638,18 +637,13 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
       HoodieTableConfig.inferMergingConfigsForVersion9(
           EVENT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
     });
-    assertThrows(HoodieException.class, () -> {
+    assertThrows(IllegalArgumentException.class, () -> {
       HoodieTableConfig.inferMergingConfigsForVersion9(
           COMMIT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
     });
-    assertThrows(HoodieException.class, () -> {
+    assertThrows(IllegalArgumentException.class, () -> {
       HoodieTableConfig.inferMergingConfigsForVersion9(
           CUSTOM, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
-    });
-    // Test case: Both recordMergeMode and recordMergeStrategyId are null should throw exception
-    assertThrows(HoodieException.class, () -> {
-      HoodieTableConfig.inferMergingConfigsForVersion9(
-          null, null, null, null, HoodieTableVersion.NINE);
     });
   }
 

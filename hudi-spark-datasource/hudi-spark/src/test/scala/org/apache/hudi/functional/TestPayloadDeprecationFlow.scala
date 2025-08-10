@@ -109,7 +109,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
           option(OPERATION.key(), "upsert").
           option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
           option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
-          option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(),
+          option(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(),
             classOf[MySqlDebeziumAvroPayload].getName). // Position is important.
           mode(SaveMode.Append).
           save(basePath)
@@ -153,7 +153,6 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 object TestPayloadDeprecationFlow {
   def providePayloadClassTestCases(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
-      // Test case 1: DefaultHoodieRecordPayload (event time based)
       Arguments.of(
         "MERGE_ON_READ",
         classOf[DefaultHoodieRecordPayload].getName,
@@ -161,7 +160,6 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)),
-      // Test case 2: OverwriteWithLatestAvroPayload (commit time based)
       Arguments.of(
         "MERGE_ON_READ",
         classOf[OverwriteWithLatestAvroPayload].getName,
@@ -171,7 +169,6 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
         )
       ),
-      // Test case 3: PartialUpdateAvroPayload (should set partial update mode)
       Arguments.of(
         "MERGE_ON_READ",
         classOf[PartialUpdateAvroPayload].getName,
@@ -180,7 +177,6 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"),
-      // Test case 4: PostgresDebeziumAvroPayload (should set partial update mode and custom properties)
       Arguments.of(
         "MERGE_ON_READ",
         classOf[PostgresDebeziumAvroPayload].getName,
@@ -206,7 +202,26 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID))
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)),
+      Arguments.of(
+        "MERGE_ON_READ",
+        classOf[EventTimeAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[EventTimeAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
+        )
+      ),
+      Arguments.of(
+        "MERGE_ON_READ",
+        classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"
+        )
+      )
     )
   }
 }
