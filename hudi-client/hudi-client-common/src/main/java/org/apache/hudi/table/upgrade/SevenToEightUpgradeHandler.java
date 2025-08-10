@@ -89,11 +89,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    // If auto upgrade is disabled, set writer version to 6 and return
-    if (!config.autoUpgrade()) {
-      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
-      return tablePropsToAdd;
-    }
+
 
     // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
     if (!table.isMetadataTable() && config.isMetadataTableEnabled() && isMetadataTableBehindDataTable(config, metaClient)) {

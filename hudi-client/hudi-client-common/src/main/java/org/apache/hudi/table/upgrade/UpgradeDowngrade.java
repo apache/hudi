@@ -239,12 +239,8 @@ public class UpgradeDowngrade {
     for (ConfigProperty configProperty : tablePropsToRemove) {
       metaClient.getTableConfig().clearValue(configProperty);
     }
-    // user could have disabled auto upgrade (probably to deploy the new binary only),
-    // in which case, we should not update the table version
-    if (config.autoUpgrade()) {
-      metaClient.getTableConfig().setTableVersion(toVersion);
-    }
 
+    metaClient.getTableConfig().setTableVersion(toVersion);
     HoodieTableConfig.update(metaClient.getStorage(),
         metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
 
