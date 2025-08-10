@@ -52,6 +52,10 @@ public interface FileGroupRecordBufferLoader<T> {
     return DefaultFileGroupRecordBufferLoader.getInstance();
   }
 
+  static <T> FileGroupRecordBufferLoader<T> createStreamingRecordsBufferLoader() {
+    return StreamingFileGroupRecordBufferLoader.getInstance();
+  }
+
   static <T> ReusableFileGroupRecordBufferLoader<T> createReusable(HoodieReaderContext<T> readerContextWithoutFilters) {
     return new ReusableFileGroupRecordBufferLoader<>(readerContextWithoutFilters);
   }

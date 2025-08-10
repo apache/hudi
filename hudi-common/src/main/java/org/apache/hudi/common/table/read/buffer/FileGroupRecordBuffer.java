@@ -24,16 +24,18 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordConverter;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
-import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -78,10 +80,11 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
   protected final DeleteContext deleteContext;
+  protected final BufferedRecordConverter<T> bufferedRecordConverter;
   protected ClosableIterator<T> baseFileIterator;
   protected UpdateProcessor<T> updateProcessor;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
-  protected T nextRecord;
+  protected BufferedRecord<T> nextRecord;
   protected boolean enablePartialMerging = false;
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
@@ -121,6 +124,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
     this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
+    this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema, readerContext.getRecordContext(), orderingFieldNames);
   }
 
   protected ExternalSpillableMap<Serializable, BufferedRecord<T>> initializeRecordsMap(String spillableMapBasePath) throws IOException {
@@ -138,6 +142,10 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     this.baseFileIterator = baseFileIterator;
   }
 
+  public DeleteContext getDeleteContext() {
+    return deleteContext;
+  }
+
   /**
    * This allows hasNext() to be called multiple times without incrementing the iterator by more than 1
    * record. It does come with the caveat that hasNext() must be called every time before next(). But
@@ -151,8 +159,8 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   }
 
   @Override
-  public final T next() {
-    T record = nextRecord;
+  public final BufferedRecord<T> next() {
+    BufferedRecord<T> record = nextRecord;
     nextRecord = null;
     return record;
   }
@@ -231,14 +239,15 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
-      BufferedRecord<T> baseRecordInfo = BufferedRecord.forRecordWithContext(baseRecord, readerSchema, readerContext.getRecordContext(), orderingFieldNames, false);
-      MergeResult<T> mergeResult = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
-      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecord, mergeResult.getMergedRecord(), mergeResult.isDelete());
+      BufferedRecord<T> baseRecordInfo = BufferedRecords.fromEngineRecord(baseRecord, readerSchema, readerContext.getRecordContext(), orderingFieldNames, false);
+      BufferedRecord<T> mergeResult = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
+      nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecordInfo, mergeResult, mergeResult.isDelete());
       return nextRecord != null;
     }
 
     // Inserts
-    nextRecord = readerContext.seal(baseRecord);
+    nextRecord = bufferedRecordConverter.convert(readerContext.seal(baseRecord));
+    nextRecord.setHoodieOperation(HoodieOperation.INSERT);
     return true;
   }
 
@@ -253,7 +262,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
-      nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo.getRecord(), nextRecordInfo.isDelete());
+      nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo, nextRecordInfo.isDelete());
       if (nextRecord != null) {
         return true;
       }

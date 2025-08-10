@@ -71,8 +71,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UncheckedIOException;
@@ -90,8 +88,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
@@ -298,8 +294,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     Map<String, String> writeConfigs = new HashMap<>(
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
     HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
+    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
     if (fileFormat == HoodieFileFormat.ORC) {
       // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToDoubleSupport = false;
       schemaEvolutionConfigs.floatToStringSupport = false;
     }
 
@@ -351,6 +349,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
     if (fileFormat == HoodieFileFormat.ORC) {
       // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToDoubleSupport = false;
       schemaEvolutionConfigs.floatToStringSupport = false;
     }
 
@@ -404,6 +403,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
     if (fileFormat == HoodieFileFormat.ORC) {
       // ORC can support reading float as string, but it converts float to double to string causing differences in precision
+      schemaEvolutionConfigs.floatToDoubleSupport = false;
       schemaEvolutionConfigs.floatToStringSupport = false;
     }
 
@@ -549,7 +549,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @Test
   public void testReadFileGroupInBootstrapMergeOnReadTable() throws Exception {
     Path zipOutput = Paths.get(new URI(getBasePath()));
-    extract(zipOutput);
+    HoodieTestUtils.extractZipToDirectory("file-group-reader/bootstrap_data.zip", zipOutput, getClass());
     ObjectMapper objectMapper = new ObjectMapper();
     Path basePath = zipOutput.resolve("bootstrap_data");
     List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = new ArrayList<>();
@@ -589,7 +589,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           for (T record : records) {
             String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
             //test key based
-            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
+            BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
             spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
 
             //test position based
@@ -963,25 +963,4 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return partitionPath;
   }
 
-  private void extract(Path target) throws IOException {
-    try (ZipInputStream zip = new ZipInputStream(this.getClass().getClassLoader().getResourceAsStream("file-group-reader/bootstrap_data.zip"))) {
-      ZipEntry entry;
-
-      while ((entry = zip.getNextEntry()) != null) {
-        File file = target.resolve(entry.getName()).toFile();
-        if (entry.isDirectory()) {
-          file.mkdirs();
-          continue;
-        }
-        byte[] buffer = new byte[10000];
-        file.getParentFile().mkdirs();
-        try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(file.toPath()))) {
-          int count;
-          while ((count = zip.read(buffer)) != -1) {
-            out.write(buffer, 0, count);
-          }
-        }
-      }
-    }
-  }
 }

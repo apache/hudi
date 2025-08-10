@@ -57,11 +57,6 @@ import java.util.Properties;
 public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   private boolean copy;
-  private final boolean isDeleted;
-
-  public boolean isDeleted() {
-    return isDeleted;
-  }
 
   private final HiveAvroSerializer avroSerializer;
 
@@ -72,7 +67,14 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     this.avroSerializer = avroSerializer;
     this.schema = schema;
     this.copy = false;
-    isDeleted = data == null;
+    isDelete = data == null;
+  }
+
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, boolean isDelete) {
+    super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.avroSerializer = avroSerializer;
+    this.schema = schema;
+    this.copy = false;
   }
 
   private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
@@ -80,7 +82,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     super(key, data, operation, Option.empty());
     this.schema = schema;
     this.copy = isCopy;
-    isDeleted = data == null;
+    isDelete = data == null;
     this.avroSerializer = avroSerializer;
   }
 
@@ -184,7 +186,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+  public boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
     if (null == data) {
       return true;
     }

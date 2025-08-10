@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
@@ -38,7 +39,6 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
-import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -146,9 +146,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // CASE 1: New record has lower ordering value.
     BufferedRecord<InternalRow> oldBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
     BufferedRecord<InternalRow> newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, null);
     Option<BufferedRecord<InternalRow>> deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
       assertTrue(deltaResult.isPresent());
@@ -170,8 +170,8 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     // CASE 2: New record has higher ordering value.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
-    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, false);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
+    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, null);
     deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     assertTrue(deltaResult.isPresent());
     if (updateMode == PartialUpdateMode.NONE) {
@@ -184,8 +184,8 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     // CASE 3: New record and old record have the same ordering value.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
-    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, false);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
+    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, null);
     deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     assertTrue(deltaResult.isPresent());
     if (updateMode == PartialUpdateMode.NONE) {
@@ -206,7 +206,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // CASE 1: New record has lower ordering value.
     BufferedRecord<InternalRow> oldBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
     DeleteRecord deleteRecord = DeleteRecord.create(RECORD_KEY, "anyPath", ORDERING_VALUE - 1);
     Option<DeleteRecord> deltaResult = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
@@ -238,50 +238,50 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // New record has lower ordering value.
     BufferedRecord<InternalRow> olderBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
     BufferedRecord<InternalRow> newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, false);
-    MergeResult<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, null);
+    BufferedRecord<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
     if (mergeMode == COMMIT_TIME_ORDERING) {
       if (updateMode == PartialUpdateMode.NONE) {
-        assertEquals(newRecord, finalResult.getMergedRecord());
+        assertEquals(newRecord, finalResult.getRecord());
       } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
-        assertEquals(20, finalResult.getMergedRecord().getInt(2));
-        assertEquals(500L, finalResult.getMergedRecord().getLong(4));
+        assertEquals(20, finalResult.getRecord().getInt(2));
+        assertEquals(500L, finalResult.getRecord().getLong(4));
       } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
-        assertEquals("Older City", finalResult.getMergedRecord().getString(3));
+        assertEquals("Older City", finalResult.getRecord().getString(3));
       }
     } else {
-      assertEquals(oldRecord, finalResult.getMergedRecord());
+      assertEquals(oldRecord, finalResult.getRecord());
     }
 
     // New record has higher ordering value.
-    olderBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
-    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, false);
+    olderBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
+    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, null);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
     if (updateMode == PartialUpdateMode.NONE) {
-      assertEquals(newRecord, finalResult.getMergedRecord());
+      assertEquals(newRecord, finalResult.getRecord());
     } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
-      assertEquals(20, finalResult.getMergedRecord().getInt(2));
-      assertEquals(500, finalResult.getMergedRecord().getLong(4));
+      assertEquals(20, finalResult.getRecord().getInt(2));
+      assertEquals(500, finalResult.getRecord().getLong(4));
     } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
-      assertEquals("Older City", finalResult.getMergedRecord().getString(3));
+      assertEquals("Older City", finalResult.getRecord().getString(3));
     }
 
     // New record has equal ordering value.
-    olderBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
-    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, false);
+    olderBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
+    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, null);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
     if (updateMode == PartialUpdateMode.NONE) {
-      assertEquals(newRecord, finalResult.getMergedRecord());
+      assertEquals(newRecord, finalResult.getRecord());
     } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
-      assertEquals(20, finalResult.getMergedRecord().getInt(2));
-      assertEquals(500, finalResult.getMergedRecord().getLong(4));
+      assertEquals(20, finalResult.getRecord().getInt(2));
+      assertEquals(500, finalResult.getRecord().getLong(4));
     } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
-      assertEquals("Older City", finalResult.getMergedRecord().getString(3));
+      assertEquals("Older City", finalResult.getRecord().getString(3));
     }
   }
 
@@ -304,33 +304,33 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     InternalRow newerRecord = createPartialRecord(
         (int) ORDERING_VALUE - 1, "newer_id", "Newer Name");
     BufferedRecord<InternalRow> olderBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecord, 6, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, olderRecord, 6, null);
     BufferedRecord<InternalRow> newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newerRecord, 2, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newerRecord, 2, null);
 
-    MergeResult<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    BufferedRecord<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     InternalRow expected = createFullRecordForPartial(
         (int) ORDERING_VALUE - 1, "newer_id", "Newer Name", 20, "Older City", 500L);
     assertFalse(finalResult.isDelete());
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertRowEqual(expected, finalResult.getMergedRecord(), READER_SCHEMA);
+      assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
     } else {
-      assertRowEqual(olderRecord, finalResult.getMergedRecord(), READER_SCHEMA);
+      assertRowEqual(olderRecord, finalResult.getRecord(), READER_SCHEMA);
     }
     // Case 2: new record has higher ordering value.
     newerRecord = createPartialRecord((int) ORDERING_VALUE + 1, "newer_id", "Newer Name");
-    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecord, 2, false);
+    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newerRecord, 2, null);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE + 1, "newer_id", "Newer Name", 20, "Older City", 500L);
-    assertRowEqual(expected, finalResult.getMergedRecord(), READER_SCHEMA);
+    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
     // Case 3: new record has equal ordering value.
     newerRecord = createPartialRecord((int) ORDERING_VALUE, "newer_id", "Newer Name");
-    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newerRecord, 2, false);
+    newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newerRecord, 2, null);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE, "newer_id", "Newer Name", 20, "Older City", 500L);
-    assertRowEqual(expected, finalResult.getMergedRecord(), READER_SCHEMA);
+    assertRowEqual(expected, finalResult.getRecord(), READER_SCHEMA);
   }
 
   private void runPartialDeltaMerge(RecordMergeMode mergeMode) throws IOException {
@@ -341,9 +341,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     InternalRow oldRecord = createFullRecordForPartial((int) ORDERING_VALUE, "old_id", "Old Name", 25, "Old City", 1000L);
     InternalRow newRecord = createPartialRecord((int) ORDERING_VALUE - 1, "new_id", "New Name");
     BufferedRecord<InternalRow> oldBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 6, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 6, null);
     BufferedRecord<InternalRow> newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 2, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 2, null);
     Option<BufferedRecord<InternalRow>> deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     assertTrue(deltaResult.isPresent());
     BufferedRecord<InternalRow> mergedRecord = deltaResult.get();
@@ -356,7 +356,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
     // Test 2: New record has higher columns ordering value.
     newRecord = createPartialRecord((int) ORDERING_VALUE + 1, "new_id", "New Name");
-    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 2, false);
+    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 2, null);
     deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     expected = createFullRecordForPartial(
         (int) ORDERING_VALUE + 1, "new_id", "New Name", 25, "Old City", 1000L);
@@ -364,7 +364,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     assertEquals(expected, deltaResult.get().getRecord());
     // Test 3: New record has equal ordering value.
     newRecord = createPartialRecord((int) ORDERING_VALUE, "new_id", "New Name");
-    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 2, false);
+    newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 2, null);
     deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     assertTrue(deltaResult.isPresent());
     expected = createFullRecordForPartial(
@@ -388,9 +388,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     InternalRow newRecordWithDefaults = createFullRecordWithCompany(
         "new_id", "New Name", 0, null, 0L, "abc", "treecity");
     BufferedRecord<InternalRow> oldBufferedRecordWithDefaults =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecordWithDefaults, 5, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecordWithDefaults, 5, null);
     BufferedRecord<InternalRow> newBufferedRecordWithDefaults =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecordWithDefaults, 5, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecordWithDefaults, 5, null);
 
     Option<BufferedRecord<InternalRow>> deltaResultDefaults =
         ignoreDefaultsMerger.deltaMerge(newBufferedRecordWithDefaults, oldBufferedRecordWithDefaults);
@@ -417,7 +417,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     InternalRow newRecord = createFullRecord(
         "new_id", "New Name", 30, "New City", 2000L);
     BufferedRecord<InternalRow> newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, null);
     Option<BufferedRecord<InternalRow>> result =
         merger.deltaMerge(newBufferedRecord, null);
     assertTrue(result.isPresent());
@@ -426,14 +426,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // New record is delete with 100 ordering value.
     newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, true);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, HoodieOperation.DELETE);
     result = merger.deltaMerge(newBufferedRecord, null);
     assertTrue(result.isPresent());
     assertEquals(newRecord, result.get().getRecord());
 
     // New record is delete with default ordering value.
     newBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), newRecord, 1, true);
+        new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), newRecord, 1, HoodieOperation.DELETE);
     result = merger.deltaMerge(newBufferedRecord, null);
     assertTrue(result.isPresent());
     assertEquals(newRecord, result.get().getRecord());
@@ -453,7 +453,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     // Delete record has null ordering value.
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
     BufferedRecord<InternalRow> oldBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
     DeleteRecord deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH);
     Option<DeleteRecord> result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
@@ -477,13 +477,13 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // Existing record is delete.
     // Delete record has null ordering value.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, HoodieOperation.DELETE);
     deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
 
     // Delete record has lower ordering value.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, HoodieOperation.DELETE);
     deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH, ORDERING_VALUE - 1);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
@@ -493,13 +493,13 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     // Delete record has higher ordering value.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, HoodieOperation.DELETE);
     deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH, ORDERING_VALUE + 1);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
 
     // Old record is delete record.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, HoodieOperation.DELETE);
     deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
@@ -523,13 +523,13 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // Existing record is delete.
     // Delete record has null ordering value.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, HoodieOperation.DELETE);
     deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
 
     // Delete record has lower ordering value.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, HoodieOperation.DELETE);
     deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH, ORDERING_VALUE - 1);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
@@ -539,7 +539,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     // Delete record has higher ordering value.
-    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, true);
+    oldBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, HoodieOperation.DELETE);
     deleteRecord = DeleteRecord.create(RECORD_KEY, PARTITION_PATH, ORDERING_VALUE + 1);
     result = merger.deltaMerge(deleteRecord, oldBufferedRecord);
     assertTrue(result.isPresent());
@@ -559,30 +559,30 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     // new record has lower ordering value.
     BufferedRecord<InternalRow> olderBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, false);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, oldRecord, 1, null);
     BufferedRecord<InternalRow> newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, true);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 1, HoodieOperation.DELETE);
 
-    MergeResult<InternalRow> result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
+    BufferedRecord<InternalRow> result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertEquals(newRecord, result.getMergedRecord());
+      assertEquals(newRecord, result.getRecord());
     } else {
-      assertEquals(oldRecord, result.getMergedRecord());
+      assertEquals(oldRecord, result.getRecord());
     }
 
     // new record has higher ordering value.
     newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, true);
+        new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, HoodieOperation.DELETE);
     result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertTrue(result.isDelete());
-    assertEquals(newRecord, result.getMergedRecord());
+    assertEquals(newRecord, result.getRecord());
 
     // new record has default ordering value.
     newerBufferedRecord =
-        new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), newRecord, 1, true);
+        new BufferedRecord<>(RECORD_KEY, OrderingValues.getDefault(), newRecord, 1, HoodieOperation.DELETE);
     result = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertTrue(result.isDelete());
-    assertEquals(newRecord, result.getMergedRecord());
+    assertEquals(newRecord, result.getRecord());
   }
 
   // ============================================================================
@@ -800,7 +800,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     @Nullable
     @Override
-    public InternalRow getDeleteRow(InternalRow record, String recordKey) {
+    public InternalRow getDeleteRow(String recordKey) {
       return null;
     }
 
@@ -815,7 +815,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord) {
+    public HoodieRecord<InternalRow> constructHoodieRecord(BufferedRecord<InternalRow> bufferedRecord, String partitionPath) {
       HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
       if (bufferedRecord.isDelete()) {
         return new HoodieEmptyRecord<>(

@@ -45,6 +45,7 @@ github:
   collaborators:
     - ad1happy2go
     - rangareddy
+    - deepakpanda93
 notifications:
   commits:      commits@hudi.apache.org
   issues:       commits@hudi.apache.org

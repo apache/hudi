@@ -438,11 +438,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     }
 
     private boolean isDelete(HoodieRecord<RowData> record) {
-      try {
-        return record.isDelete(tableSchema, CollectionUtils.emptyProps());
-      } catch (IOException e) {
-        throw new HoodieException("Exception happened during calling isDelete.", e);
-      }
+      return record.isDelete(tableSchema, CollectionUtils.emptyProps());
     }
   }
 

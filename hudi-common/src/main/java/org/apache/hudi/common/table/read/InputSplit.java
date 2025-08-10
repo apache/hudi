@@ -19,13 +19,17 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -37,25 +41,29 @@ import java.util.stream.Stream;
 public class InputSplit {
   private final Option<HoodieBaseFile> baseFileOption;
   private final List<HoodieLogFile> logFiles;
+  private final Option<Iterator<HoodieRecord>> recordIterator;
   private final String partitionPath;
   // Byte offset to start reading from the base file
   private final long start;
   // Length of bytes to read from the base file
   private final long length;
 
-  InputSplit(Option<HoodieBaseFile> baseFileOption, Stream<HoodieLogFile> logFiles, String partitionPath, long start, long length) {
+  InputSplit(Option<HoodieBaseFile> baseFileOption,
+             Either<Stream<HoodieLogFile>, Iterator<HoodieRecord>> recordsToMerge,
+             String partitionPath, long start, long length) {
     this.baseFileOption = baseFileOption;
-    this.logFiles = logFiles.sorted(HoodieLogFile.getLogFileComparator())
-        .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-        .collect(Collectors.toList());
+    if (recordsToMerge.isLeft()) {
+      this.logFiles = recordsToMerge.asLeft().sorted(HoodieLogFile.getLogFileComparator())
+          .filter(logFile -> !logFile.getFileName().endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+          .collect(Collectors.toList());
+      this.recordIterator = Option.empty();
+    } else {
+      this.logFiles = Collections.emptyList();
+      this.recordIterator = Option.of(recordsToMerge.asRight());
+    }
     this.partitionPath = partitionPath;
     this.start = start;
     this.length = length;
-  }
-
-  static InputSplit fromFileSlice(FileSlice fileSlice, long start, long length) {
-    return new InputSplit(fileSlice.getBaseFile(), fileSlice.getLogFiles(), fileSlice.getPartitionPath(),
-        start, length);
   }
 
   public Option<HoodieBaseFile> getBaseFileOption() {
@@ -63,6 +71,7 @@ public class InputSplit {
   }
 
   public List<HoodieLogFile> getLogFiles() {
+    ValidationUtils.checkArgument(recordIterator.isEmpty(), "Log files are not initialized");
     return logFiles;
   }
 
@@ -80,5 +89,13 @@ public class InputSplit {
 
   public boolean isParquetBaseFile() {
     return baseFileOption.map(baseFile -> HoodieFileFormat.fromFileExtension(baseFile.getStoragePath().getFileExtension()) == HoodieFileFormat.PARQUET).orElse(false);
+  }
+
+  public boolean hasNoRecordsToMerge() {
+    return this.logFiles.isEmpty() && recordIterator.isEmpty();
+  }
+
+  public Iterator<HoodieRecord> getRecordIterator() {
+    return this.recordIterator.orElseThrow(() -> new IllegalStateException("The record iterator has not been setup"));
   }
 }
