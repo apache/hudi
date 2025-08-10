@@ -280,7 +280,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
   // TODO: should this be moved to the update processor and limited to merge into operations?
   boolean shouldProcessLogRecord(BufferedRecord<T> nextRecord) {
-    if (recordMergeMode == RecordMergeMode.CUSTOM && !nextRecord.isDelete() && !payloadClasses.get().getLeft().equals(HoodieMetadataPayload.class.getName())) {
+    if (recordMergeMode == RecordMergeMode.CUSTOM && !nextRecord.isDelete() && payloadClasses.isPresent() && !payloadClasses.get().getLeft().equals(HoodieMetadataPayload.class.getName())) {
       try {
         GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(nextRecord.getRecord(), readerSchema);
         HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClasses.get().getRight(), record, nextRecord.getOrderingValue()));
