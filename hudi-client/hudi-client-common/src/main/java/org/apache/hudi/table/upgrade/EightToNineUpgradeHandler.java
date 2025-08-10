@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -51,6 +50,10 @@ import java.util.Set;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
@@ -91,6 +94,12 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   private static final Set<String> PAYLOADS_UPGRADE_TO_COMMIT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
       AWSDmsAvroPayload.class.getName(),
       OverwriteNonDefaultsWithLatestAvroPayload.class.getName()));
+  public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
+          CUSTOM_MERGE_STRATEGY_UUID,
+          EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          PAYLOAD_BASED_MERGE_STRATEGY_UUID)));
 
   @Override
   public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
@@ -127,30 +136,34 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         table, context, config, upgradeDowngradeHelper,
         HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
         HoodieTableVersion.EIGHT);
-    // Handle merge mode config.
-    reconcileMergeModeConfig(tablePropsToAdd, tableConfig);
-    // Handle partial update mode config.
-    reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
-    // Handle merge properties config.
-    reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig);
-    // Handle payload class configs.
     List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
-    reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
+    // TODO: make it work for COW after write path is ready.
+    if (tableConfig.getTableType() == HoodieTableType.MERGE_ON_READ) {
+      // Handle merge mode config.
+      reconcileMergeModeConfig(tablePropsToAdd, tableConfig);
+      // Handle partial update mode config.
+      reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
+      // Handle merge properties config.
+      reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig);
+      // Handle payload class configs.
+      reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
+    }
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 
   private void reconcileMergeModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                         HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
-    if (StringUtils.isNullOrEmpty(payloadClass)) {
+    String mergeStrategy = tableConfig.getRecordMergeStrategyId();
+    if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
     if (PAYLOADS_UPGRADE_TO_COMMIT_TIME_MERGE_MODE.contains(payloadClass)) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
-      tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+      tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
     } else if (PAYLOADS_UPGRADE_TO_EVENT_TIME_MERGE_MODE.contains(payloadClass)) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
-      tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+      tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
     }
     // else: No op, which means merge strategy id and merge mode are not changed.
   }
@@ -159,7 +172,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
                                            List<ConfigProperty> tablePropsToRemove,
                                            HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
-    if (StringUtils.isNullOrEmpty(payloadClass)) {
+    String mergeStrategy = tableConfig.getRecordMergeStrategyId();
+    if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
     if (PAYLOAD_CLASSES_TO_HANDLE.contains(payloadClass)) {
@@ -174,7 +188,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name());
 
     String payloadClass = tableConfig.getPayloadClass();
-    if (StringUtils.isNullOrEmpty(payloadClass)) {
+    String mergeStrategy = tableConfig.getRecordMergeStrategyId();
+    if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
     if (payloadClass.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())
@@ -190,7 +205,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                               HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
-    if (StringUtils.isNullOrEmpty(payloadClass)) {
+    String mergeStrategy = tableConfig.getRecordMergeStrategyId();
+    if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
     if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {

@@ -69,9 +69,9 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailed
 public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
   public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config,
-                                                                           HoodieEngineContext context,
-                                                                           String instantTime,
-                                                                           SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+                                                         HoodieEngineContext context,
+                                                         String instantTime,
+                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     // handle metadata table
@@ -86,9 +86,20 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");
     // Update table properties.
     List<ConfigProperty> propertiesToRemove = new ArrayList<>();
+    Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
+    // TODO: handle COW table after write path is done.
+    if (metaClient.getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ) {
+      updateMergeRelatedConfigs(propertiesToAdd, propertiesToRemove, metaClient);
+    }
+    return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
+  }
+
+  private void updateMergeRelatedConfigs(Map<ConfigProperty, String> propertiesToAdd,
+                                         List<ConfigProperty> propertiesToRemove,
+                                         HoodieTableMetaClient metaClient) {
+    // Update table properties.
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
     // For specified payload classes, add strategy id and custom merge mode.
-    Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     String payloadClass = tableConfig.getLegacyPayloadClass();
     if (!StringUtils.isNullOrEmpty(payloadClass) && (PAYLOAD_CLASSES_TO_HANDLE.contains(payloadClass))) {
@@ -110,6 +121,5 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
             ConfigProperty.key(MERGE_PROPERTIES_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue());
       }
     }
-    return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
   }
 }
