@@ -344,10 +344,7 @@ public abstract class HoodieReaderContext<T> {
   public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
     return getRecordMerger().map(merger -> {
       if (merger.getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-        String incomingPayloadClass = tableConfig.getPayloadClass();
-        if (props.containsKey("hoodie.datasource.write.payload.class")) {
-          incomingPayloadClass = props.getString("hoodie.datasource.write.payload.class");
-        }
+        String incomingPayloadClass = HoodieRecordPayload.getWriterPayloadOverride(props).orElseGet(tableConfig::getPayloadClass);
         return Pair.of(tableConfig.getPayloadClass(), incomingPayloadClass);
       }
       return null;

@@ -218,6 +218,11 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     return Option.ofNullable(payloadClassName).map(className -> className.replace("com.uber.hoodie", "org.apache.hudi"));
   }
 
+  /**
+   * Returns the writer payload override class if present in the properties.
+   * @param properties the properties to inspect
+   * @return an Option containing the writer payload override class name if present, otherwise an empty Option
+   */
   static Option<String> getWriterPayloadOverride(Properties properties) {
     if (properties.containsKey("hoodie.datasource.write.payload.class")) {
       return Option.of(properties.getProperty("hoodie.datasource.write.payload.class")).map(className -> className.replace("com.uber.hoodie", "org.apache.hudi"));
