@@ -430,14 +430,9 @@ public class HoodieIndexUtils {
       //the record was deleted
       return Option.empty();
     }
-    if (mergeResult.getRecord() == null) {
-      // SENTINEL case: the record did not match and merge case and should not be modified
+    if (mergeResult.getRecord() == null || mergeResult == existingBufferedRecord) {
+      // SENTINEL case: the record did not match the merge case and should not be modified or there is no update to the record
       return Option.of((HoodieRecord<R>) new HoodieAvroIndexedRecord(HoodieRecord.SENTINEL));
-    }
-
-    if (mergeResult.getRecord().equals(HoodieRecord.SENTINEL)) {
-      //the record did not match and merge case and should not be modified
-      return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, incoming.getPartitionPath()));
     }
 
     //record is inserted or updated
