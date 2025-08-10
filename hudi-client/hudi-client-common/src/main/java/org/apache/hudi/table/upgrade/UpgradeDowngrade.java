@@ -85,20 +85,24 @@ public class UpgradeDowngrade {
 
   public static boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+    return needsUpgrade(metaClient, config, toWriteVersion) || needsDowngrade(fromTableVersion, toWriteVersion);
+  }
+
+  public static boolean needsDowngrade(HoodieTableVersion fromTableVersion, HoodieTableVersion toWriteVersion) {
     if (toWriteVersion.lesserThan(HoodieTableVersion.SIX)) {
       // for 1.1 we will do not allow downgrades to below SIX
       // user will have to downgrade the table using a prior hudi version.
       throw new HoodieUpgradeDowngradeException(
               String.format("1.1.0 only supports table version greater then version SIX or above."
-                      + "Please downgrade table from version %s to %s using a hudi version prior to 1.1.0", fromTableVersion, toWriteVersion));
+                      + " Please downgrade table from version %s to %s using a hudi version prior to 1.1.0", fromTableVersion, toWriteVersion));
     }
-    return needsUpgrade(metaClient, config, toWriteVersion) || toWriteVersion.versionCode() < fromTableVersion.versionCode();
+    return toWriteVersion.lesserThan(fromTableVersion);
   }
 
   public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
     if (fromTableVersion.greaterThanOrEquals(toWriteVersion)) {
-      LOG.warn("Table version {} is greater than or equal to write version {}. No upgrade needed", fromTableVersion.versionCode(), toWriteVersion.versionCode());
+      LOG.warn("Table version {} is greater than or equal to write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
       return false;
     }
     if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
@@ -106,13 +110,13 @@ public class UpgradeDowngrade {
       // user will have to upgrade the table to SIX by using a prior hudi version.
       throw new HoodieUpgradeDowngradeException(
               String.format("1.1.0 only supports table version greater then version SIX or above."
-                      + "Please upgrade table from version %s to %s using a hudi version prior to 1.1.0", fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
+                      + " Please upgrade table from version %s to %s using a hudi version prior to 1.1.0", fromTableVersion, HoodieTableVersion.SIX));
     }
     if (!config.autoUpgrade()) {
       // if autoUpgrade is disabled and table version is greater than SIX, then we must ensure the write version is set to the table version.
       // and skip the upgrade
       config.setWriteVersion(fromTableVersion);
-      LOG.warn("AUTO_UPGRADE_VERSION was disabled. Table version {} does not match write version {}. "
+      LOG.warn("hoodie.write.auto.upgrade was disabled. Table version {} does not match write version {}. "
                       + "Setting hoodie.write.table.version={} to match hoodie.table.version, and skipping upgrade",
               fromTableVersion.versionCode(), toWriteVersion.versionCode(), fromTableVersion.versionCode());
       return false;

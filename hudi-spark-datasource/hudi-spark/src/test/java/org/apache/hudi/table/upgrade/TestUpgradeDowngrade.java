@@ -133,10 +133,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     LOG.info("Successfully completed {} test for version {} -> {}", operation, fromVersion, toVersion);
   }
 
-  @Disabled
   @ParameterizedTest
   @MethodSource("versionsBelowSix")
-  public void testAutoUpgradeDisabledForVersionsBelowSix(HoodieTableVersion originalVersion) throws Exception {
+  public void testUpgradeForVersionsStartingBelowSixBlocked(HoodieTableVersion originalVersion) throws Exception {
     LOG.info("Testing auto-upgrade disabled for version {} (below SIX)", originalVersion);
     
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
@@ -152,8 +151,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     );
     
     // Validate exception message
-    String expectedMessage = String.format("AUTO_UPGRADE_VERSION was disabled, Please upgrade table to version %s by setting AUTO_UPGRADE_VERSION to true.",
-        HoodieTableVersion.SIX.versionCode());
+    String expectedMessage = String.format("1.1.0 only supports table version greater then version SIX or above. Please upgrade table from version %s to %s using a hudi version prior to 1.1.0",
+        originalVersion, HoodieTableVersion.SIX);
     assertEquals(expectedMessage, exception.getMessage(),
         "Exception message should match expected format");
     
@@ -294,6 +293,32 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         "Write version should be set to match table version when auto-upgrade is disabled");
     
     LOG.info("needsUpgrade test with auto-upgrade disabled passed successfully");
+  }
+
+  @ParameterizedTest
+  @MethodSource("blockedDowngradeVersionPairs")
+  public void testDowngradeToVersionsBelowSixBlocked(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
+    LOG.info("Testing blocked downgrade from version {} to {} (below SIX)", fromVersion, toVersion);
+    
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion);
+    assertEquals(fromVersion, originalMetaClient.getTableConfig().getTableVersion(),
+        "Fixture table should be at expected fromVersion");
+    
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
+    
+    // Attempt downgrade to version below SIX - should throw exception
+    HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
+            () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
+            "Expected HoodieUpgradeDowngradeException for downgrade from " + fromVersion + " to " + toVersion
+    );
+    
+    // Validate exception message contains the expected blocked downgrade message
+    String expectedMessage = String.format("1.1.0 only supports table version greater then version SIX or above. Please downgrade table from version %s to %s using a hudi version prior to 1.1.0",
+        fromVersion, toVersion);
+    assertEquals(expectedMessage, exception.getMessage(),
+        "Exception message should match expected blocked downgrade format");
+    
+    LOG.info("Blocked downgrade test passed for {} -> {} (expected exception thrown)", fromVersion, toVersion);
   }
 
   @Disabled
@@ -461,6 +486,19 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
         // Non-rollback downgrade pairs  
         Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4 (works)
+    );
+  }
+
+  /**
+   * Version pairs for testing blocked downgrades to versions below SIX.
+   * These test cases should trigger exceptions in the needsDowngrade method.
+   */
+  private static Stream<Arguments> blockedDowngradeVersionPairs() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5 (blocked)
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FOUR),    // V6 -> V4 (blocked)  
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.FIVE),  // V8 -> V5 (blocked)
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.FOUR)    // V9 -> V4 (blocked)
     );
   }
 
