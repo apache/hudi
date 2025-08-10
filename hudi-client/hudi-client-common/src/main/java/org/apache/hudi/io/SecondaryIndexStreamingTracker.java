@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -237,11 +238,10 @@ public class SecondaryIndexStreamingTracker {
    * @param oldRecord                 The old record
    * @param isDelete                  Whether the record is a DELETE
    * @param writeStatus               The Write status
-   * @param schema                    The schema of the records
    * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
    */
-  static <T> void trackSecondaryIndexStats(HoodieKey hoodieKey, Option<T> combinedRecordOpt, @Nullable T oldRecord, boolean isDelete,
-                                           WriteStatus writeStatus, Schema schema, List<HoodieIndexDefinition> secondaryIndexDefns, RecordContext<T> recordContext) {
+  static <T> void trackSecondaryIndexStats(HoodieKey hoodieKey, Option<BufferedRecord<T>> combinedRecordOpt, @Nullable BufferedRecord<T> oldRecord, boolean isDelete,
+                                           WriteStatus writeStatus, List<HoodieIndexDefinition> secondaryIndexDefns, RecordContext<T> recordContext) {
 
     secondaryIndexDefns.forEach(def -> {
       String secondaryIndexSourceField = def.getSourceFieldsKey();
@@ -255,7 +255,8 @@ public class SecondaryIndexStreamingTracker {
       Object oldSecondaryKey = null;
 
       if (hasOldValue) {
-        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord, schema, secondaryIndexSourceField));
+        Schema schema = recordContext.decodeAvroSchema(oldRecord.getSchemaId());
+        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord.getRecord(), schema, secondaryIndexSourceField));
       }
 
       // For new/combined record
@@ -263,7 +264,8 @@ public class SecondaryIndexStreamingTracker {
       Object newSecondaryKey = null;
 
       if (combinedRecordOpt.isPresent() && !isDelete) {
-        newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get(), schema, secondaryIndexSourceField));
+        Schema schema = recordContext.decodeAvroSchema(combinedRecordOpt.get().getSchemaId());
+        newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get().getRecord(), schema, secondaryIndexSourceField));
         hasNewValue = true;
       }
 

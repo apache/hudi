@@ -33,8 +33,6 @@ import java.util.Properties;
  * Factory to create {@link BufferedRecord}.
  */
 public class BufferedRecords {
-  // Special handling for SENTINEL record in Expression Payload
-  public static final BufferedRecord SENTINEL = new BufferedRecord(null, null, null, null, null);
 
   public static <T> BufferedRecord<T> fromHoodieRecord(HoodieRecord record, Schema schema, RecordContext<T> recordContext, Properties props, String[] orderingFields) {
     boolean isDelete = record.isDelete(schema, props);

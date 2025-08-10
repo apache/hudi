@@ -97,6 +97,19 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   private final TypedProperties props;
   private Iterator<HoodieRecord> incomingRecordsItr;
 
+  /**
+   * Constructor for Copy-On-Write (COW) merge path.
+   * Takes in a base path and an iterator of records to be merged with that file.
+   * @param config instance of {@link HoodieWriteConfig} to use.
+   * @param instantTime instant time of the current commit.
+   * @param hoodieTable instance of {@link HoodieTable} being updated.
+   * @param recordItr iterator of records to be merged with the file.
+   * @param partitionPath partition path of the base file.
+   * @param fileId file ID of the base file.
+   * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
+   * @param keyGeneratorOpt optional instance of {@link BaseKeyGenerator} to use for extracting keys from records.
+   * @param readerContext instance of {@link HoodieReaderContext} to use while merging for accessing fields and transforming records.
+   */
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                          TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieReaderContext<T> readerContext) {
@@ -105,7 +118,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     this.readerContext = readerContext;
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
-    this.readerContext.initRecordMerger(properties);
+    this.readerContext.initRecordMergerForIngestion(properties);
     this.maxInstantTime = instantTime;
     initRecordTypeAndCdcLogger(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.props = TypedProperties.copy(config.getProps());
@@ -268,7 +281,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           try {
             // if the record is not being updated and is not a new insert for the file group, we must preserve the existing record metadata.
             boolean shouldPreserveRecordMetadata = preserveMetadata || record.getOperation() == null;
-            writeToFile(record.getKey(), record, writeSchemaWithMetaFields, config.getPayloadConfig().getProps(), shouldPreserveRecordMetadata);
+            Schema recordSchema = shouldPreserveRecordMetadata ? writeSchemaWithMetaFields : writeSchema;
+            writeToFile(record.getKey(), record, recordSchema, config.getPayloadConfig().getProps(), shouldPreserveRecordMetadata);
             writeStatus.markSuccess(record, recordMetadata);
             recordsWritten++;
           } catch (Exception e) {
@@ -452,11 +466,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
       SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
           hoodieKey,
-          Option.of(mergedRecord.getRecord()),
-          previousRecord.getRecord(),
+          Option.of(mergedRecord),
+          previousRecord,
           false,
           writeStatus,
-          writeSchemaWithMetaFields,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }
@@ -466,11 +479,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       HoodieKey hoodieKey = new HoodieKey(recordKey, partitionPath);
       SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
           hoodieKey,
-          Option.of(newRecord.getRecord()),
+          Option.of(newRecord),
           null,
           false,
           writeStatus,
-          writeSchemaWithMetaFields,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }
@@ -481,10 +493,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       SecondaryIndexStreamingTracker.trackSecondaryIndexStats(
           hoodieKey,
           Option.empty(),
-          previousRecord.getRecord(),
+          previousRecord,
           true,
           writeStatus,
-          writeSchemaWithMetaFields,
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }

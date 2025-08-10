@@ -265,13 +265,17 @@ public abstract class HoodieReaderContext<T> {
    * @param isIngestion indicates if the context is used in ingestion path.
    */
   private void initRecordMerger(TypedProperties properties, boolean isIngestion) {
-    Option<String> providedPayloadClass = HoodieRecordPayload.getPayloadClassNameIfPresent(properties);
+    if (recordMerger != null && mergeMode != null) {
+      // already initialized
+      return;
+    }
+    Option<String> writerPayloadClass = HoodieRecordPayload.getWriterPayloadOverride(properties);
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
     HoodieTableVersion tableVersion = tableConfig.getTableVersion();
     // If the provided payload class differs from the table's payload class, we need to infer the correct merging behavior.
-    if (isIngestion && providedPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferMergingConfigsForWrites(null, providedPayloadClass.get(), null,
+    if (isIngestion && writerPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
+      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferMergingConfigsForWrites(null, writerPayloadClass.get(), null,
           tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
       recordMergeMode = triple.getLeft();
       mergeStrategyId = triple.getRight();

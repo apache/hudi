@@ -121,8 +121,8 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           true,
           recordMerger,
           orderingFieldNames,
-          payloadClass,
           readerSchema,
+          payloadClasses,
           props,
           partialUpdateMode);
     }

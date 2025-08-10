@@ -481,7 +481,7 @@ public class BufferedRecordMergerFactory {
       Schema mergeResultSchema = mergedRecordAndSchema.get().getRight();
       // Special handling for SENTINEL record in Expression Payload
       if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
-        return BufferedRecords.SENTINEL;
+        return olderRecord;
       }
       if (!mergedRecord.isDelete(mergeResultSchema, props)) {
         IndexedRecord indexedRecord;

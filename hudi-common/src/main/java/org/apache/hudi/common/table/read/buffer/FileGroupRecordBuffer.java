@@ -75,7 +75,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final RecordMergeMode recordMergeMode;
   protected final PartialUpdateMode partialUpdateMode;
   protected final Option<HoodieRecordMerger> recordMerger;
-  protected final Option<String> payloadClass;
+  protected final Option<Pair<String, String>> payloadClasses;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
   protected final DeleteContext deleteContext;
@@ -104,9 +104,13 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     this.partialUpdateMode = partialUpdateMode;
     this.recordMerger = readerContext.getRecordMerger();
     if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-      this.payloadClass = Option.of(hoodieTableMetaClient.getTableConfig().getPayloadClass());
+      String incomingPayloadClass = hoodieTableMetaClient.getTableConfig().getPayloadClass();
+      if (props.containsKey("hoodie.datasource.write.payload.class")) {
+        incomingPayloadClass = props.getString("hoodie.datasource.write.payload.class");
+      }
+      this.payloadClasses = Option.of(Pair.of(hoodieTableMetaClient.getTableConfig().getPayloadClass(), incomingPayloadClass));
     } else {
-      this.payloadClass = Option.empty();
+      this.payloadClasses = Option.empty();
     }
     this.orderingFieldNames = orderingFieldNames;
     // Ensure that ordering field is populated for mergers and legacy payloads
@@ -121,7 +125,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, readerSchema, payloadClasses, props, partialUpdateMode);
     this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
     this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema, readerContext.getRecordContext(), orderingFieldNames);
   }
