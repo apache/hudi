@@ -39,7 +39,7 @@ import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation, getLastCommitMetadata}
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.File
@@ -208,26 +208,25 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
       spark.sql("set spark.sql.shuffle.partitions = 11")
 
-      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-        spark.sql(
-          s"""
-             |insert into ${targetTable}
-             |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
-             |""".stripMargin)
+      disableComplexKeygenValidation(spark, targetTable)
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |""".stripMargin)
 
-        spark.sql(
-          s"""
-             |merge into ${targetTable} as target
-             |using (
-             |select '2' as id, 'bb' as name, 456L as dt, '2024-02-19' as `day`, 10 as `hour`
-             |) as source
-             |on target.id = source.id
-             |when matched then update set *
-             |when not matched then insert *
-             |""".stripMargin
-        )
-      }
-
+      spark.sql(
+        s"""
+           |merge into ${targetTable} as target
+           |using (
+           |select '2' as id, 'bb' as name, 456L as dt, '2024-02-19' as `day`, 10 as `hour`
+           |) as source
+           |on target.id = source.id
+           |when matched then update set *
+           |when not matched then insert *
+           |""".stripMargin
+      )
+      enableComplexKeygenValidation(spark, targetTable)
       // check result after insert and merge data into target table
       checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
         Seq("1", "aa", 123, "2024-02-19", 10),
@@ -377,59 +376,58 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Into with multi partition") {
-    withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-      Seq("cow", "mor").foreach { tableType =>
-        withRecordType()(withTempDir { tmp =>
-          val tableName = generateTableName
-          // Create a partitioned table
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  dt string,
-               |  name string,
-               |  price double,
-               |  ht string,
-               |  ts long
-               |) using hudi
-               | tblproperties (primaryKey = 'id', type = '$tableType')
-               | partitioned by (dt, ht)
-               | location '${tmp.getCanonicalPath}'
+    Seq("cow", "mor").foreach { tableType =>
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ht string,
+             |  ts long
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+             | partitioned by (dt, ht)
+             | location '${tmp.getCanonicalPath}'
        """.stripMargin)
-          spark.sql(
-            s"""
-               | insert into $tableName partition(dt, ht)
-               | select 1 as id, 'a1' as name, 10 as price,'20210101' as dt, 1000 as ts, '01' as ht
+        disableComplexKeygenValidation(spark, tableName)
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt, ht)
+             | select 1 as id, 'a1' as name, 10 as price,'20210101' as dt, 1000 as ts, '01' as ht
               """.stripMargin)
 
-          // Insert into static partition and dynamic partition
-          spark.sql(
-            s"""
-               | insert into $tableName partition(dt = '20210102', ht)
-               | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '02' as ht
+        // Insert into static partition and dynamic partition
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '20210102', ht)
+             | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '02' as ht
               """.stripMargin)
 
-          spark.sql(
-            s"""
-               | insert into $tableName partition(dt, ht = '03')
-               | select 3 as id, 'a3' as name, 30 as price, 3000 as ts, '20210103' as dt
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt, ht = '03')
+             | select 3 as id, 'a3' as name, 30 as price, 3000 as ts, '20210103' as dt
               """.stripMargin)
 
-          // Note: Do not write the field alias, the partition field must be placed last.
-          spark.sql(
-            s"""
-               | insert into $tableName
-               | select 4, 'a4', 40, 4000, '20210104', '04'
+        // Note: Do not write the field alias, the partition field must be placed last.
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | select 4, 'a4', 40, 4000, '20210104', '04'
         """.stripMargin)
 
-          checkAnswer(s"select id, name, price, ts, dt, ht from $tableName")(
-            Seq(1, "a1", 10.0, 1000, "20210101", "01"),
-            Seq(2, "a2", 20.0, 2000, "20210102", "02"),
-            Seq(3, "a3", 30.0, 3000, "20210103", "03"),
-            Seq(4, "a4", 40.0, 4000, "20210104", "04")
-          )
-        })
-      }
+        checkAnswer(s"select id, name, price, ts, dt, ht from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "20210101", "01"),
+          Seq(2, "a2", 20.0, 2000, "20210102", "02"),
+          Seq(3, "a3", 30.0, 3000, "20210103", "03"),
+          Seq(4, "a4", 40.0, 4000, "20210104", "04")
+        )
+      })
     }
   }
 
@@ -722,25 +720,21 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                | partitioned by (dt, hh)
           """.stripMargin
           )
-
-          withSparkSqlSessionConfig(
-            HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-            spark.sql(
-              s"""
-                 | insert into table $tableName values
-                 | (0, 'a0', 10, 1000, '2023-12-05', '00'),
-                 | (1, 'a1', 10, 1000, '2023-12-06', '00'),
-                 | (2, 'a2', 10, 1000, '2023-12-06', '01')
+          disableComplexKeygenValidation(spark, tableName)
+          spark.sql(
+            s"""
+               | insert into table $tableName values
+               | (0, 'a0', 10, 1000, '2023-12-05', '00'),
+               | (1, 'a1', 10, 1000, '2023-12-06', '00'),
+               | (2, 'a2', 10, 1000, '2023-12-06', '01')
           """.stripMargin)
-            checkAnswer(s"select id, name, price, ts, dt, hh from $tableName")(
-              Seq(0, "a0", 10.0, 1000, "2023-12-05", "00"),
-              Seq(1, "a1", 10.0, 1000, "2023-12-06", "00"),
-              Seq(2, "a2", 10.0, 1000, "2023-12-06", "01")
-            )
-          }
+          checkAnswer(s"select id, name, price, ts, dt, hh from $tableName")(
+            Seq(0, "a0", 10.0, 1000, "2023-12-05", "00"),
+            Seq(1, "a1", 10.0, 1000, "2023-12-06", "00"),
+            Seq(2, "a2", 10.0, 1000, "2023-12-06", "01")
+          )
 
-          withSparkSqlSessionConfig("hoodie.datasource.overwrite.mode" -> overwriteMode,
-            HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+          withSQLConf("hoodie.datasource.overwrite.mode" -> overwriteMode) {
             // test insert overwrite partitions with partial partition values
             spark.sql(
               s"""
@@ -1015,8 +1009,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test bulk insert with insert into for multi partitioned table") {
-    withSQLConf("hoodie.sql.insert.mode" -> "non-strict",
-      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
+    withSQLConf("hoodie.sql.insert.mode" -> "non-strict") {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           withTable(generateTableName) { tableMultiPartition =>
@@ -1036,7 +1029,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  | partitioned by (dt, hh)
                  | location '${tmp.getCanonicalPath}/$tableMultiPartition'
          """.stripMargin)
-
+            disableComplexKeygenValidation(spark, tableMultiPartition)
             // Enable the bulk insert
             spark.sql("set hoodie.sql.bulk.insert.enable = true")
             spark.sql(s"insert into $tableMultiPartition values(1, 'a1', 10, '2021-07-18', '12')")
@@ -2584,11 +2577,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |partitioned by (`day`,`hour`)
            |location '${tmp.getCanonicalPath}/$targetTable'
            |""".stripMargin)
-      spark.sql(
-        s"""
-           |ALTER TABLE $targetTable
-           |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-           |""".stripMargin)
+      disableComplexKeygenValidation(spark, targetTable)
       spark.sql(
         s"""
            |insert into ${targetTable}
@@ -2884,12 +2873,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       // Avoid operation type modification.
       spark.sql(s"set ${INSERT_DROP_DUPS.key}=false")
       spark.sql(s"set ${INSERT_DUP_POLICY.key}=$NONE_INSERT_DUP_POLICY")
-
-      spark.sql(
-        s"""
-           |ALTER TABLE $tableName
-           |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-           |""".stripMargin)
+      disableComplexKeygenValidation(spark, tableName)
       // Insert data into partitioned table
       spark.sql(
         s"""
@@ -3193,19 +3177,19 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |location '$tablePathB'
            |""".stripMargin)
 
-      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-        spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
-          s"values (2, '01', 12.2, 'bbb', '02')")
+      disableComplexKeygenValidation(spark, targetTableB)
 
-        spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
-          s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")
+      spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
+        s"values (2, '01', 12.2, 'bbb', '02')")
 
-        spark.sql(s"insert into $targetTableB partition(day='02', hour) (id, hour, price, name) " +
-          s"values (3, '01', 12.3, 'ccc')")
+      spark.sql(s"insert into $targetTableB (id, day, price, name, hour) " +
+        s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")
 
-        spark.sql(s"insert into $targetTableB partition(day='02', hour='02') (id, price, name) " +
-          s"values (4, 12.4, 'ddd')")
-      }
+      spark.sql(s"insert into $targetTableB partition(day='02', hour) (id, hour, price, name) " +
+        s"values (3, '01', 12.3, 'ccc')")
+
+      spark.sql(s"insert into $targetTableB partition(day='02', hour='02') (id, price, name) " +
+        s"values (4, 12.4, 'ddd')")
 
       checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
         Seq(2, 12.2, "bbb", "01", "02"),
@@ -3215,12 +3199,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       )
 
       if (HoodieSparkUtils.isSpark3_4) {
-        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false",
-          "spark.sql.defaultColumn.enabled" -> "true") {
-          checkExceptionContain(s"insert into $targetTableB (id, day, price, name, hour) " +
-            s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
-            "hudi not support specified cols when enable default columns")
-        }
+        spark.sql("set spark.sql.defaultColumn.enabled = true")
+        checkExceptionContain(s"insert into $targetTableB (id, day, price, name, hour) " +
+          s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
+          "hudi not support specified cols when enable default columns")
       }
     }
   }
@@ -3273,23 +3255,23 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |location '$tablePathB'
            |""".stripMargin)
 
-      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-        spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
-          s"values (2, '01', 12.2, 'bbb', '02')")
+      disableComplexKeygenValidation(spark, targetTableB)
 
-        checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
-          Seq(2, 12.2, "bbb", "01", "02")
-        )
+      spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
+        s"values (2, '01', 12.2, 'bbb', '02')")
 
-        spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
-          s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")
+      checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
+        Seq(2, 12.2, "bbb", "01", "02")
+      )
 
-        spark.sql(s"insert overwrite $targetTableB partition(day='02', hour) (id, hour, price, name) " +
-          s"values (3, '01', 12.3, 'ccc')")
+      spark.sql(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
+        s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")
 
-        spark.sql(s"insert overwrite $targetTableB partition(day='02', hour='02') (id, price, name) " +
-          s"values (4, 12.4, 'ddd')")
-      }
+      spark.sql(s"insert overwrite $targetTableB partition(day='02', hour) (id, hour, price, name) " +
+        s"values (3, '01', 12.3, 'ccc')")
+
+      spark.sql(s"insert overwrite $targetTableB partition(day='02', hour='02') (id, price, name) " +
+        s"values (4, 12.4, 'ddd')")
 
       checkAnswer(s"select id, price, name, day, hour from $targetTableB")(
         Seq(1, 12.1, "aaa", "01", "03"),
@@ -3298,12 +3280,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       )
 
       if (HoodieSparkUtils.isSpark3_4) {
-        withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false",
-          "spark.sql.defaultColumn.enabled" -> "true") {
-          checkExceptionContain(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
-            s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
-            "hudi not support specified cols when enable default columns")
-        }
+        spark.sql("set spark.sql.defaultColumn.enabled = true")
+        checkExceptionContain(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
+          s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
+          "hudi not support specified cols when enable default columns")
       }
     }
   }
@@ -3334,11 +3314,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              | partitioned by (dt, pt)
              | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
-        spark.sql(
-          s"""
-             |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-             |""".stripMargin)
+        disableComplexKeygenValidation(spark, tableName)
         //Insert data and check the same
         spark.sql(
           s"""insert into $tableName  values
@@ -3353,7 +3329,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  // TODO(yihua): check failed test
   test("Test table with insert dup policy") {
     withTempDir { tmp =>
       Seq(
@@ -3383,12 +3358,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            partitioned by (`day`,`hour`)
            location '${tablePath}'
            """.stripMargin)
-
-        spark.sql(
-          s"""
-             |ALTER TABLE $targetTable
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-             |""".stripMargin)
+        disableComplexKeygenValidation(spark, targetTable)
         spark.sql("set spark.sql.shuffle.partitions = 11")
         spark.sql(
           s"""

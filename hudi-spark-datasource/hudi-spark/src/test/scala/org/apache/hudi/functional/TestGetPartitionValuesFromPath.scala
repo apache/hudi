@@ -19,6 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.disableComplexKeygenValidation
 
 class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
 
@@ -40,11 +41,7 @@ class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
                  | type='mor',
                  | hoodie.datasource.write.hive_style_partitioning='$hiveStylePartitioning')
                  |partitioned by (region, dt)""".stripMargin)
-            spark.sql(
-              s"""
-                 |ALTER TABLE $tableName
-                 |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-                 |""".stripMargin)
+            disableComplexKeygenValidation(spark, tableName)
             spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-08-01') select 1, 'name1'")
 
             checkAnswer(s"select id, name, region, cast(dt as string) from $tableName")(
@@ -74,12 +71,8 @@ class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
            | hoodie.datasource.write.drop.partition.columns = 'true'
            |)
            |partitioned by (region, dt)""".stripMargin)
-      spark.sql(
-        s"""
-           |ALTER TABLE $tableName
-           |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-           |""".stripMargin)
 
+      disableComplexKeygenValidation(spark, tableName)
       spark.sql(s"insert into $tableName partition (region='reg1', dt='2023-10-01') select 1, 'name1', 1000")
       checkAnswer(s"select id, name, ts, region, cast(dt as string) from $tableName")(
         Seq(1, "name1", 1000, "reg1", "2023-10-01")
