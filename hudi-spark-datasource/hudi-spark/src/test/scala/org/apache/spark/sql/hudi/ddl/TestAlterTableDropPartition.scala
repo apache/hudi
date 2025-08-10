@@ -30,7 +30,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.avro.Schema
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation, getLastCleanMetadata}
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -431,17 +431,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
         ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
-        spark.sql(
-          s"""
-             |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-             |""".stripMargin)
+        disableComplexKeygenValidation(spark, tableName)
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
-        spark.sql(
-          s"""
-             |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'true')
-             |""".stripMargin)
+        enableComplexKeygenValidation(spark, tableName)
 
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
@@ -457,19 +449,11 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         })
         assertTrue(totalDeletedFiles > 0)
 
-        spark.sql(
-          s"""
-             |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-             |""".stripMargin)
+        disableComplexKeygenValidation(spark, tableName)
         // insert data
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
-        spark.sql(
-          s"""
-             |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'true')
-             |""".stripMargin)
-        
+        enableComplexKeygenValidation(spark, tableName)
+
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
         )

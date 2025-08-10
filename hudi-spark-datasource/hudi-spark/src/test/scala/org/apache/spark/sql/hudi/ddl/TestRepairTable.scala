@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.disableComplexKeygenValidation
 
 class TestRepairTable extends HoodieSparkSqlTestBase {
 
@@ -95,11 +96,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
           .save(basePath)
 
         assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
-        spark.sql(
-          s"""
-             |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-             |""".stripMargin)
+        disableComplexKeygenValidation(spark, tableName)
         spark.sql(s"msck repair table $tableName")
         assertResult(Seq("dt=2022-10-06/hh=11", "dt=2022-10-06/hh=12"))(
           spark.sessionState.catalog.listPartitionNames(table))
@@ -135,11 +132,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
         val table = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
 
         assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
-        spark.sql(
-          s"""
-             |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-             |""".stripMargin)
+        disableComplexKeygenValidation(spark, tableName)
         spark.sql(s"msck repair table $tableName")
         assertResult(Seq("dt=2022-10-06/hh=11", "dt=2022-10-06/hh=12"))(
           spark.sessionState.catalog.listPartitionNames(table))

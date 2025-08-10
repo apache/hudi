@@ -19,6 +19,8 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation}
+
 class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
 
   test("Test push down different partitions") {
@@ -49,14 +51,11 @@ class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
                  | )
                  | PARTITIONED BY (date_par, country, hour, longValue)""".stripMargin)
 
-            spark.sql(
-              s"""
-                 |ALTER TABLE $tableName
-                 |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-                 |""".stripMargin)
+            disableComplexKeygenValidation(spark, tableName)
             spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, date '2023-02-27', 'ID', 1, 102345L)")
             spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, date '2023-02-28', 'US', 4, 102346L)")
             spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, date '2023-03-01', 'CN', 10, 102347L)")
+            enableComplexKeygenValidation(spark, tableName)
 
             // Only filter one partition column
             checkAnswer(s"select id, name, price, ts from $tableName where date_par = date'2023-03-01' order by id")(

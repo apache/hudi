@@ -20,10 +20,10 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation}
 
 import java.util.{Date, UUID}
 
@@ -152,13 +152,13 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
            |  orderingFields = 'ts'
            | )
        """.stripMargin)
-      withSparkSqlSessionConfig(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false") {
-        // insert data to table
-        spark.sql(s"insert into $tableName select 1, 'a1', 10, 1001, '2022', '08', '30'")
-        spark.sql(s"insert into $tableName select 2, 'a2', 20, 1002, '2022', '08', '31'")
-        spark.sql(s"insert into $tableName select 3, 'a3', 10, 1003, '2022', '07', '03'")
-        spark.sql(s"insert into $tableName select 4, 'a4', 20, 1004, '2022', '07', '04'")
-      }
+      // insert data to table
+      disableComplexKeygenValidation(spark, tableName)
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1001, '2022', '08', '30'")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1002, '2022', '08', '31'")
+      spark.sql(s"insert into $tableName select 3, 'a3', 10, 1003, '2022', '07', '03'")
+      spark.sql(s"insert into $tableName select 4, 'a4', 20, 1004, '2022', '07', '04'")
+      enableComplexKeygenValidation(spark, tableName)
 
       // Check required fields
       checkExceptionContain(s"""call show_invalid_parquet(limit => 10)""")(

@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 
@@ -1696,11 +1696,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |PARTITIONED BY (city, state)
            |location '$tablePath';
        """.stripMargin)
-      spark.sql(
-        s"""
-           |ALTER TABLE $tableName
-           |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-           |""".stripMargin)
+      disableComplexKeygenValidation(spark, tableName)
       // insert and validate
       spark.sql(s"insert into $tableName values(1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas')")
       checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName")(
@@ -1865,17 +1861,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     // Query should still succeed
     checkAnswer(query)(expectedRowsBefore: _*)
     // Disabling the complex key generator validation should let write succeed
-    spark.sql(
-      s"""
-         |ALTER TABLE $tableName
-         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'false')
-         |""".stripMargin)
+    HoodieSparkSqlTestBase.disableComplexKeygenValidation(spark, tableName)
     spark.sql(dmlToWrite)
-    spark.sql(
-      s"""
-         |ALTER TABLE $tableName
-         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = 'true')
-         |""".stripMargin)
+    HoodieSparkSqlTestBase.enableComplexKeygenValidation(spark, tableName)
     checkAnswer(query)(expectedRowsAfter: _*)
   }
 }
