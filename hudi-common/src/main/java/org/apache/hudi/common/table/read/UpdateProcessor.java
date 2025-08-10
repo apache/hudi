@@ -55,7 +55,7 @@ public interface UpdateProcessor<T> {
                                        TypedProperties properties) {
     UpdateProcessor<T> handler;
     Option<String> payloadClass = readerContext.getPayloadClasses(properties).map(Pair::getRight);
-    if (payloadClass.map(className -> className.equals(HoodieMetadataPayload.class.getName())).orElse(false)) {
+    if (payloadClass.map(className -> !className.equals(HoodieMetadataPayload.class.getName())).orElse(false)) {
       handler = new PayloadUpdateProcessor<>(readStats, readerContext, emitDeletes, properties, payloadClass.get());
     } else {
       handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
