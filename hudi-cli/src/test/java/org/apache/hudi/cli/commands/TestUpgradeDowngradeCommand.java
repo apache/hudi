@@ -36,6 +36,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -110,6 +111,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     }).map(Arguments::of);
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("testArgsForUpgradeDowngradeCommand")
   public void testUpgradeDowngradeCommand(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {

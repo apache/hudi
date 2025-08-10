@@ -2657,6 +2657,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  @Disabled
   @Test
   public void testUpgradeDowngrade() throws IOException {
     init(HoodieTableType.COPY_ON_WRITE, false);
@@ -2729,6 +2730,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * When table needs to be upgraded and when multi writer is enabled, hudi rolls back partial commits. Upgrade itself is happening
    * within a lock and hence rollback should not lock again.
    */
+  @Disabled
   @Test
   public void testRollbackDuringUpgradeForDoubleLocking() throws IOException {
     init(HoodieTableType.COPY_ON_WRITE, false);

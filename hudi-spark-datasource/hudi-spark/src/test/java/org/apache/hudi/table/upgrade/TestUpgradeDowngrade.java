@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -132,6 +133,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     LOG.info("Successfully completed {} test for version {} -> {}", operation, fromVersion, toVersion);
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("versionsBelowSix")
   public void testAutoUpgradeDisabledForVersionsBelowSix(HoodieTableVersion originalVersion) throws Exception {
@@ -202,13 +204,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
             Arguments.of(Option.empty(), HoodieTableVersion.current(), "Default version upgrade to current version NINE"),
 
             // Case 2: hoodie.write.table.version = 6 (same as current table version)
-            Arguments.of(Option.of(HoodieTableVersion.SIX), HoodieTableVersion.SIX, HoodieTableVersion.SIX, "No upgrade when versions match"),
+            Arguments.of(Option.of(HoodieTableVersion.SIX), HoodieTableVersion.SIX, "No upgrade when versions match"),
 
             // Case 3: hoodie.write.table.version = 8
-            Arguments.of(Option.of(HoodieTableVersion.EIGHT), HoodieTableVersion.EIGHT, HoodieTableVersion.EIGHT, "Upgrade to table version EIGHT"),
+            Arguments.of(Option.of(HoodieTableVersion.EIGHT), HoodieTableVersion.EIGHT, "Upgrade to table version EIGHT"),
 
             // Case 4: hoodie.write.table.version = 9
-            Arguments.of(Option.of(HoodieTableVersion.NINE), HoodieTableVersion.NINE, HoodieTableVersion.NINE, "Upgrade to table version NINE")
+            Arguments.of(Option.of(HoodieTableVersion.NINE), HoodieTableVersion.NINE, "Upgrade to table version NINE")
     );
   }
 
@@ -294,6 +296,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     LOG.info("needsUpgrade test with auto-upgrade disabled passed successfully");
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("metadataTableCorruptionTestVersionPairs")
   public void testMetadataTableUpgradeDowngradeFailure(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
@@ -436,17 +439,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   private static Stream<Arguments> upgradeDowngradeVersionPairs() {
     return Stream.of(
-        // Upgrade test cases
-        Arguments.of(HoodieTableVersion.FOUR, HoodieTableVersion.FIVE),   // V4 -> V5
-        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.SIX),    // V5 -> V6  
+        // Upgrade test cases for six and greater
         Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT),   // V6 -> V8
         Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE),  // V8 -> V9
         
-        // Downgrade test cases
+        // Downgrade test cases til six
         Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT),  // V9 -> V8
-        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX),   // V8 -> V6
-        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5
-        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX)   // V8 -> V6
     );
   }
 

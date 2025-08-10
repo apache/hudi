@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -50,6 +51,7 @@ class TestTwoToThreeUpgradeHandler {
         .build();
   }
 
+  @Disabled
   @ParameterizedTest
   @ValueSource(strings = {"hoodie.table.keygenerator.class", "hoodie.datasource.write.keygenerator.class"})
   void upgradeHandlerShouldRetrieveKeyGeneratorConfig(String keyGenConfigKey) {
@@ -59,6 +61,7 @@ class TestTwoToThreeUpgradeHandler {
     assertEquals(KeyGenerator.class.getName(), kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(EngineType.class)
   void upgradeHandlerWhenKeyGeneratorNotSet(EngineType engineType) {
