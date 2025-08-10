@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -565,33 +564,5 @@ public class HadoopFSUtils {
       }
     }
     return result;
-  }
-
-  public static Map<String, Boolean> deleteFilesParallelize(
-      HoodieTableMetaClient metaClient,
-      List<String> paths,
-      HoodieEngineContext context,
-      int parallelism,
-      boolean ignoreFailed) {
-    return HadoopFSUtils.parallelizeFilesProcess(context,
-        (FileSystem) metaClient.getStorage().getFileSystem(),
-        parallelism,
-        pairOfSubPathAndConf -> {
-          StoragePath file = new StoragePath(pairOfSubPathAndConf.getKey());
-          try {
-            if (metaClient.getStorage().exists(file)) {
-              return metaClient.getStorage().deleteFile(file);
-            }
-            return true;
-          } catch (IOException e) {
-            if (!ignoreFailed) {
-              throw new HoodieIOException("Failed to delete : " + file, e);
-            } else {
-              LOG.warn("Ignore failed deleting : " + file);
-              return true;
-            }
-          }
-        },
-        paths);
   }
 }
