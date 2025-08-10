@@ -346,14 +346,13 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       callbacks.add(new CDCCallback<>(cdcLogger.get(), readerContext));
     }
     // record index callback
-    recordIndexCallbackOpt.ifPresent(recordLevelIndexCallback -> callbacks.add(recordLevelIndexCallback));
+    recordIndexCallbackOpt.ifPresent(callbacks::add);
     // Stream secondary index stats.
     if (isSecondaryIndexStatsStreamingWritesEnabled) {
       this.secondaryIndexCallbackOpt = Option.of(new SecondaryIndexCallback<>(
           partitionPath,
           writeSchemaWithMetaFields,
           readerContext,
-          getNewSchema(),
           writeStatus,
           secondaryIndexDefns
       ));
@@ -433,20 +432,17 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     private final String partitionPath;
     private final Schema writeSchemaWithMetaFields;
     private final HoodieReaderContext<T> readerContext;
-    private final Schema newSchema;
     private final WriteStatus writeStatus;
     private final List<HoodieIndexDefinition> secondaryIndexDefns;
 
     public SecondaryIndexCallback(String partitionPath,
                                   Schema writeSchemaWithMetaFields,
                                   HoodieReaderContext<T> readerContext,
-                                  Schema newSchema,
                                   WriteStatus writeStatus,
                                   List<HoodieIndexDefinition> secondaryIndexDefns) {
       this.partitionPath = partitionPath;
       this.writeSchemaWithMetaFields = writeSchemaWithMetaFields;
       this.readerContext = readerContext;
-      this.newSchema = newSchema;
       this.secondaryIndexDefns = secondaryIndexDefns;
       this.writeStatus = writeStatus;
     }

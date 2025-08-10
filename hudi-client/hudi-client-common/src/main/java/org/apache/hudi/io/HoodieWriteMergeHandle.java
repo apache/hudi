@@ -437,7 +437,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     }
   }
 
-  protected Schema getNewSchema() {
+  private Schema getNewSchema() {
     return preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
   }
 

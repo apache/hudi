@@ -121,7 +121,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
   }
 
   protected def validateDataAndRecordIndices(hudiOpts: Map[String, String],
-                                             deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
+                                           deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val readDf = spark.read.format("hudi").load(basePath)
