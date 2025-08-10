@@ -176,6 +176,7 @@ public class TestMultipleHoodieJavaWriteClient {
             .withCleanConfig(HoodieCleanConfig.newBuilder()
                 .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
                 .build())
+            .withComplexKeygenValidation(false)
             .build();
 
     BlockingQueue<HoodieJavaWriteClient> writerQueue = new LinkedBlockingQueue<>();

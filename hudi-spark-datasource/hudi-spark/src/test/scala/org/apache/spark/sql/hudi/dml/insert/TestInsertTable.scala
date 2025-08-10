@@ -3359,6 +3359,12 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            location '${tablePath}'
            """.stripMargin)
         disableComplexKeygenValidation(spark, targetTable)
+        // TODO(yihua): investigate the expected dups
+        spark.sql(
+          s"""
+             |ALTER TABLE $targetTable
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.encode.single.record.key.field.name = 'false')
+             |""".stripMargin)
         spark.sql("set spark.sql.shuffle.partitions = 11")
         spark.sql(
           s"""
