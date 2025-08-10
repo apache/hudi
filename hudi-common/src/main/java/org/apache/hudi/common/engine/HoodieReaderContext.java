@@ -55,6 +55,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
@@ -339,4 +340,17 @@ public abstract class HoodieReaderContext<T> {
                                                             ClosableIterator<T> dataFileIterator,
                                                             Schema dataRequiredSchema,
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
+
+  public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
+    return getRecordMerger().map(merger -> {
+      if (merger.getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
+        String incomingPayloadClass = tableConfig.getPayloadClass();
+        if (props.containsKey("hoodie.datasource.write.payload.class")) {
+          incomingPayloadClass = props.getString("hoodie.datasource.write.payload.class");
+        }
+        return Pair.of(tableConfig.getPayloadClass(), incomingPayloadClass);
+      }
+      return null;
+    });
+  }
 }

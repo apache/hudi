@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -40,7 +39,6 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -52,10 +50,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -69,7 +65,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
-import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
@@ -107,15 +102,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     this.recordMergeMode = recordMergeMode;
     this.partialUpdateMode = partialUpdateMode;
     this.recordMerger = readerContext.getRecordMerger();
-    if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-      String incomingPayloadClass = hoodieTableMetaClient.getTableConfig().getPayloadClass();
-      if (props.containsKey("hoodie.datasource.write.payload.class")) {
-        incomingPayloadClass = props.getString("hoodie.datasource.write.payload.class");
-      }
-      this.payloadClasses = Option.of(Pair.of(hoodieTableMetaClient.getTableConfig().getPayloadClass(), incomingPayloadClass));
-    } else {
-      this.payloadClasses = Option.empty();
-    }
+    this.payloadClasses = readerContext.getPayloadClasses(props);
     this.orderingFieldNames = orderingFieldNames;
     // Ensure that ordering field is populated for mergers and legacy payloads
     this.props = ConfigUtils.supplementOrderingFields(props, orderingFieldNames);
@@ -268,28 +255,12 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
-      if (shouldProcessLogRecord(nextRecordInfo)) {
-        nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo, nextRecordInfo.isDelete());
-        if (nextRecord != null) {
-          return true;
-        }
+      nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo, nextRecordInfo.isDelete());
+      if (nextRecord != null) {
+        return true;
       }
     }
     return false;
-  }
-
-  // TODO: should this be moved to the update processor and limited to merge into operations?
-  boolean shouldProcessLogRecord(BufferedRecord<T> nextRecord) {
-    if (recordMergeMode == RecordMergeMode.CUSTOM && !nextRecord.isDelete() && payloadClasses.isPresent() && !payloadClasses.get().getLeft().equals(HoodieMetadataPayload.class.getName())) {
-      try {
-        GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(nextRecord.getRecord(), readerSchema);
-        HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClasses.get().getRight(), record, nextRecord.getOrderingValue()));
-        return !hoodieRecord.shouldIgnore(readerSchema, props);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to load payload for record", e);
-      }
-    }
-    return true;
   }
 
   protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {

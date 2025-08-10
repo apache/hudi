@@ -65,7 +65,7 @@ class TestReusableKeyBasedRecordBuffer {
     preMergedLogRecords.put("3", new BufferedRecord<>("3", 10, new TestRecord("3", 3), 0, null));
     preMergedLogRecords.put("4", new BufferedRecord<>("4", 10, new TestRecord("4", 4), 0, null));
     HoodieReadStats readStats = new HoodieReadStats();
-    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
+    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), new TypedProperties());
 
     // Filter excludes key "4", so it should not be returned. It also includes key "5" which is not in the base file or log file.
     Predicate keyFilter = Predicates.in(null, Arrays.asList(Literal.from("1"), Literal.from("2"), Literal.from("3"), Literal.from("5")));
