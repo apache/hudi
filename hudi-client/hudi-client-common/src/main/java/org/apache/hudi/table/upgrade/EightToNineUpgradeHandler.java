@@ -56,7 +56,7 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_M
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
@@ -211,14 +211,14 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     }
     if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
       tablePropsToAdd.put(
-          ConfigProperty.key(MERGE_PROPERTIES_PREFIX + DELETE_KEY).noDefaultValue(),
+          ConfigProperty.key(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue(),
           AWSDmsAvroPayload.OP_FIELD);
       tablePropsToAdd.put(
-          ConfigProperty.key(MERGE_PROPERTIES_PREFIX + DELETE_MARKER).noDefaultValue(),
+          ConfigProperty.key(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue(),
           AWSDmsAvroPayload.D_VALUE);
     } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
       tablePropsToAdd.put(
-          ConfigProperty.key(MERGE_PROPERTIES_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue(),
+          ConfigProperty.key(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue(),
           DEBEZIUM_UNAVAILABLE_VALUE);
     }
   }

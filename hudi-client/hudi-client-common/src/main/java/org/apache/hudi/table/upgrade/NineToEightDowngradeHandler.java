@@ -43,7 +43,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
@@ -112,13 +112,13 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
       }
       if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
         propertiesToRemove.add(
-            ConfigProperty.key(MERGE_PROPERTIES_PREFIX + DELETE_KEY).noDefaultValue());
+            ConfigProperty.key(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
         propertiesToRemove.add(
-            ConfigProperty.key(MERGE_PROPERTIES_PREFIX + DELETE_MARKER).noDefaultValue());
+            ConfigProperty.key(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue());
       }
       if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         propertiesToRemove.add(
-            ConfigProperty.key(MERGE_PROPERTIES_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue());
+            ConfigProperty.key(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue());
       }
     }
   }

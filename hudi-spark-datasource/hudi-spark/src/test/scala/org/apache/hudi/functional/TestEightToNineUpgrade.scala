@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.{AWSDmsAvroPayload, HoodieRecordMerger, Hood
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, PartialUpdateMode}
-import org.apache.hudi.common.table.HoodieTableConfig.{DEBEZIUM_UNAVAILABLE_VALUE, MERGE_PROPERTIES_PREFIX, PARTIAL_UPDATE_CUSTOM_MARKER}
+import org.apache.hudi.common.table.HoodieTableConfig.{DEBEZIUM_UNAVAILABLE_VALUE, MERGE_CUSTOM_PROPERTY_PREFIX, PARTIAL_UPDATE_CUSTOM_MARKER}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -148,16 +148,16 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
         metaClient.getTableConfig.getRecordMergeStrategyId)
       assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, metaClient.getTableConfig.getRecordMergeMode)
       assertEquals(PartialUpdateMode.IGNORE_MARKERS, metaClient.getTableConfig.getPartialUpdateMode)
-      val customMarker = metaClient.getTableConfig.getString(s"${MERGE_PROPERTIES_PREFIX}${PARTIAL_UPDATE_CUSTOM_MARKER}")
+      val customMarker = metaClient.getTableConfig.getString(s"${MERGE_CUSTOM_PROPERTY_PREFIX}${PARTIAL_UPDATE_CUSTOM_MARKER}")
       assertEquals(DEBEZIUM_UNAVAILABLE_VALUE, customMarker)
     } else if (payloadClass.equals(classOf[AWSDmsAvroPayload].getName)) {
       assertEquals(
         HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
         metaClient.getTableConfig.getRecordMergeStrategyId)
       assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, metaClient.getTableConfig.getRecordMergeMode)
-      val deleteField = metaClient.getTableConfig.getString(s"${MERGE_PROPERTIES_PREFIX}${DELETE_KEY}")
+      val deleteField = metaClient.getTableConfig.getString(s"${MERGE_CUSTOM_PROPERTY_PREFIX}${DELETE_KEY}")
       assertEquals(AWSDmsAvroPayload.OP_FIELD, deleteField)
-      val deleteMarker = metaClient.getTableConfig.getString(s"${MERGE_PROPERTIES_PREFIX}${DELETE_MARKER}")
+      val deleteMarker = metaClient.getTableConfig.getString(s"${MERGE_CUSTOM_PROPERTY_PREFIX}${DELETE_MARKER}")
       assertEquals(AWSDmsAvroPayload.D_VALUE, deleteMarker)
     }
   }

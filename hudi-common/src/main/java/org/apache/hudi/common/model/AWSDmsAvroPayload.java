@@ -117,6 +117,6 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   private static boolean isDMSDeleteRecord(GenericRecord record) {
-    return record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase("D");
+    return record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase(D_VALUE);
   }
 }

@@ -189,7 +189,7 @@ public class FileGroupReaderSchemaHandler<T> {
                                                        boolean hasInstantRange) {
     RecordMergeMode mergeMode = cfg.getRecordMergeMode();
     if (cfg.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
-      Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+      Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferBasicMergingBehavior(
           cfg.getRecordMergeMode(),
           cfg.getPayloadClass(),
           cfg.getRecordMergeStrategyId(),

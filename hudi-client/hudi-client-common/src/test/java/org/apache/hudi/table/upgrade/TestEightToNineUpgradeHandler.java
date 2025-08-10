@@ -69,7 +69,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
@@ -141,62 +141,55 @@ class TestEightToNineUpgradeHandler {
 
   static Stream<Arguments> payloadClassTestCases() {
     return Stream.of(
-        // DefaultHoodieRecordPayload
         Arguments.of(
             DefaultHoodieRecordPayload.class.getName(),
-            "", // mergeProperties
-            null, // recordMergeMode (should not be present)
-            PartialUpdateMode.NONE.name(), // partialUpdateMode
+            "",
+            null,
+            PartialUpdateMode.NONE.name(),
             "DefaultHoodieRecordPayload"
         ),
-        // OverwriteWithLatestAvroPayload
         Arguments.of(
             OverwriteWithLatestAvroPayload.class.getName(),
-            "", // mergeProperties
-            null, // recordMergeMode (should not be present)
-            PartialUpdateMode.NONE.name(), // partialUpdateMode
+            "",
+            null,
+            PartialUpdateMode.NONE.name(),
             "OverwriteWithLatestAvroPayload"
         ),
-        // AWSDmsAvroPayload
         Arguments.of(
             AWSDmsAvroPayload.class.getName(),
-            MERGE_PROPERTIES_PREFIX + DELETE_KEY + "=Op,"
-                + MERGE_PROPERTIES_PREFIX + DELETE_MARKER + "=D", // mergeProperties
-            COMMIT_TIME_ORDERING.name(), // recordMergeMode
-            PartialUpdateMode.NONE.name(), // partialUpdateMode
+            MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY + "=Op,"
+                + MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER + "=D", // mergeProperties
+            COMMIT_TIME_ORDERING.name(),
+            PartialUpdateMode.NONE.name(),
             "AWSDmsAvroPayload"
         ),
-        // PostgresDebeziumAvroPayload
         Arguments.of(
             PostgresDebeziumAvroPayload.class.getName(),
-            MERGE_PROPERTIES_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER
-                + "=" + DEBEZIUM_UNAVAILABLE_VALUE, // mergeProperties
-            EVENT_TIME_ORDERING.name(), // recordMergeMode
-            IGNORE_MARKERS.name(), // partialUpdateMode
+            MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER
+                + "=" + DEBEZIUM_UNAVAILABLE_VALUE,
+            EVENT_TIME_ORDERING.name(),
+            IGNORE_MARKERS.name(),
             "PostgresDebeziumAvroPayload"
         ),
-        // PartialUpdateAvroPayload
         Arguments.of(
             PartialUpdateAvroPayload.class.getName(),
-            "", // mergeProperties
-            EVENT_TIME_ORDERING.name(), // recordMergeMode
-            PartialUpdateMode.IGNORE_DEFAULTS.name(), // partialUpdateMode
+            "",
+            EVENT_TIME_ORDERING.name(),
+            PartialUpdateMode.IGNORE_DEFAULTS.name(),
             "PartialUpdateAvroPayload"
         ),
-        // MySqlDebeziumAvroPayload
         Arguments.of(
             MySqlDebeziumAvroPayload.class.getName(),
-            "", // mergeProperties
-            EVENT_TIME_ORDERING.name(), // recordMergeMode
-            PartialUpdateMode.NONE.name(), // partialUpdateMode
+            "",
+            EVENT_TIME_ORDERING.name(),
+            PartialUpdateMode.NONE.name(),
             "MySqlDebeziumAvroPayload"
         ),
-        // OverwriteNonDefaultsWithLatestAvroPayload
         Arguments.of(
             OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
-            "", // mergeProperties
-            COMMIT_TIME_ORDERING.name(), // recordMergeMode
-            PartialUpdateMode.IGNORE_DEFAULTS.name(), // partialUpdateMode
+            "",
+            COMMIT_TIME_ORDERING.name(),
+            PartialUpdateMode.IGNORE_DEFAULTS.name(),
             "OverwriteNonDefaultsWithLatestAvroPayload"
         )
     );
