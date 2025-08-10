@@ -105,6 +105,7 @@ import static org.apache.hudi.common.model.AWSDmsAvroPayload.OP_FIELD;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
@@ -154,11 +155,12 @@ public class HoodieTableConfig extends HoodieConfig {
           PartialUpdateAvroPayload.class.getName(),
           PostgresDebeziumAvroPayload.class.getName())));
 
-  public static final Set<String> COMMIT_TIME_BASED_PAYLOADS = Collections.unmodifiableSet(
+  public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
-          AWSDmsAvroPayload.class.getName(),
-          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
-          OverwriteWithLatestAvroPayload.class.getName())));
+          COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
+          CUSTOM_MERGE_STRATEGY_UUID,
+          EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          PAYLOAD_BASED_MERGE_STRATEGY_UUID)));
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -873,15 +875,11 @@ public class HoodieTableConfig extends HoodieConfig {
     recordMergeStrategyId = inferredConfigs.getRight();
 
     // Step 2: Handle Version 9 specific logic.
-    // CASE 1: For tables using MERGE MODE, or CUSTOM mergers.
-    //   NOTE: Payload class should NOT be set for this case.
-    if (!recordMergeStrategyId.equals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID)
-        && !recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
-        && !recordMergeStrategyId.equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)
-        && !recordMergeStrategyId.equals(COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)) {
-      reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
-      reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
-    } else if (StringUtils.isNullOrEmpty(payloadClassName)) {
+    // CASE 0: For tables with special merger properties, e.g., with non-builtin mergers.
+    // CASE 1: For tables using MERGE MODE, or CUSTOM builtin mergers.
+    //   NOTE: Payload class should NOT be set for these cases.
+    if (!BUILTIN_MERGE_STRATEGIES.contains(recordMergeStrategyId)
+        || StringUtils.isNullOrEmpty(payloadClassName)) {
       reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
       reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
     } else {
