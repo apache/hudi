@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -50,8 +52,10 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -264,12 +268,28 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
-      nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo, nextRecordInfo.isDelete());
-      if (nextRecord != null) {
-        return true;
+      if (shouldProcessLogRecord(nextRecordInfo)) {
+        nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo, nextRecordInfo.isDelete());
+        if (nextRecord != null) {
+          return true;
+        }
       }
     }
     return false;
+  }
+
+  // TODO: should this be moved to the update processor and limited to merge into operations?
+  boolean shouldProcessLogRecord(BufferedRecord<T> nextRecord) {
+    if (recordMergeMode == RecordMergeMode.CUSTOM && !nextRecord.isDelete() && !payloadClasses.get().getLeft().equals(HoodieMetadataPayload.class.getName())) {
+      try {
+        GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(nextRecord.getRecord(), readerSchema);
+        HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClasses.get().getRight(), record, nextRecord.getOrderingValue()));
+        return !hoodieRecord.shouldIgnore(readerSchema, props);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to load payload for record", e);
+      }
+    }
+    return true;
   }
 
   protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
