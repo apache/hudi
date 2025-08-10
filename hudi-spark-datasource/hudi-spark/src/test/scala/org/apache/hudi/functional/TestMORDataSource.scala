@@ -31,6 +31,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -38,15 +39,18 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 
+import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 
+import java.io.File
+import java.nio.file.Files
 import java.util.function.Consumer
 import java.util.stream.Collectors
 
@@ -1772,5 +1776,214 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
     assertEquals(10, spark.read.format("org.apache.hudi").load(basePath).filter("rider = 'rider-001'").count())
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "6,8,true,UPGRADE",           // Normal upgrade: table=6, write=8, autoUpgrade=true → should upgrade
+    "6,8,false,VERSION_ADJUST",   // Auto-upgrade disabled: table=6, write=8, autoUpgrade=false → adjust version
+    "4,8,false,EXCEPTION",       // Auto-upgrade disabled + version < 6: table=4, write=8, autoUpgrade=false → exception
+    "4,8,true,EXCEPTION"         // Step upgrade required: table=4, write=8, autoUpgrade=true → exception (need to go through 6)
+  ))
+  def testBaseHoodieWriteClientUpgradeDecisionLogic(
+    tableVersionStr: String,
+    writeVersionStr: String,
+    autoUpgrade: Boolean,
+    expectedResult: String): Unit = {
+    val tableVersion = HoodieTableVersion.fromVersionCode(tableVersionStr.toInt)
+    val writeVersion = HoodieTableVersion.fromVersionCode(writeVersionStr.toInt)
+    // Create a temporary directory for this test
+    val testBasePath = s"${basePath}_upgrade_test_${tableVersionStr}_${writeVersionStr}_${autoUpgrade}_${System.currentTimeMillis()}"
+
+    try {
+      loadFixtureTable(testBasePath, tableVersion)
+
+      // Set up Spark DataSource write options aligned with fixture schema
+      val testWriteOpts = getFixtureCompatibleWriteOpts(tableVersion) ++ Map(
+        HoodieWriteConfig.WRITE_TABLE_VERSION.key -> writeVersion.versionCode().toString,
+        HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> autoUpgrade.toString,
+        DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+        DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
+      )
+
+      // Prepare test data using fixture-compatible schema (id, name, ts, partition)
+      val testData = createFixtureCompatibleTestData()
+      import org.apache.spark.sql.types._
+      val schema = StructType(Array(
+        StructField("id", StringType, false),
+        StructField("name", StringType, false),
+        StructField("ts", LongType, false),
+        StructField("partition", StringType, false)
+      ))
+      val inputDF = spark.createDataFrame(spark.sparkContext.parallelize(testData), schema)
+
+      // Execute the test based on expected result
+      expectedResult match {
+        case "UPGRADE" =>
+          // Should perform upgrade successfully
+          inputDF.write.format("hudi")
+            .options(testWriteOpts)
+            .mode(SaveMode.Append)
+            .save(testBasePath)
+
+          // Verify table was upgraded
+          val upgradeMetaClient = HoodieTableMetaClient.builder()
+            .setConf(storageConf.newInstance())
+            .setBasePath(testBasePath)
+            .build()
+          assertTrue(upgradeMetaClient.getTableConfig.getTableVersion.versionCode() >= writeVersion.versionCode(),
+            s"Table should have been upgraded to at least version ${writeVersion.versionCode()}")
+
+          // Verify data integrity
+          val resultDF = spark.read.format("hudi").load(testBasePath)
+          assertEquals(11, resultDF.count(), "Data should be preserved after upgrade")
+
+        case "NO_UPGRADE" =>
+          // Should complete successfully without upgrade
+          inputDF.write.format("hudi")
+            .options(testWriteOpts)
+            .mode(SaveMode.Append)
+            .save(testBasePath)
+
+          // Verify table version remained unchanged
+          val noUpgradeMetaClient = HoodieTableMetaClient.builder()
+            .setConf(storageConf.newInstance())
+            .setBasePath(testBasePath)
+            .build()
+          assertEquals(tableVersion, noUpgradeMetaClient.getTableConfig.getTableVersion,
+            s"Table version should remain at ${tableVersion}")
+
+          // Verify data integrity
+          val resultDF = spark.read.format("hudi").load(testBasePath)
+          assertEquals(11, resultDF.count(), "Data should be written successfully without upgrade")
+
+        case "VERSION_ADJUST" =>
+          // Should adjust write version and complete successfully
+          inputDF.write.format("hudi")
+            .options(testWriteOpts)
+            .mode(SaveMode.Append)
+            .save(testBasePath)
+
+          // Verify table version remained unchanged
+          val adjustMetaClient = HoodieTableMetaClient.builder()
+            .setConf(storageConf.newInstance())
+            .setBasePath(testBasePath)
+            .build()
+          assertEquals(tableVersion, adjustMetaClient.getTableConfig.getTableVersion,
+            s"Table version should remain at ${tableVersion} when autoUpgrade is disabled")
+
+          // Verify data integrity
+          val resultDF = spark.read.format("hudi").load(testBasePath)
+          assertEquals(11, resultDF.count(), "Data should be written successfully after version adjustment")
+
+        case "EXCEPTION" =>
+          // Should throw HoodieUpgradeDowngradeException
+          val exception = assertThrows(classOf[HoodieUpgradeDowngradeException], () => {
+            inputDF.write.format("hudi")
+              .options(testWriteOpts)
+              .mode(SaveMode.Append)
+              .save(testBasePath)
+          }, s"Expected HoodieUpgradeDowngradeException for table=${tableVersionStr}, write=${writeVersionStr}, autoUpgrade=${autoUpgrade}")
+
+          // Verify exception message contains expected content
+          val expectedMessageFragment = if (tableVersion.versionCode() < HoodieTableVersion.SIX.versionCode() && writeVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
+            // Special case: step upgrade required (table < 6 AND write >= 8)
+            s"Please upgrade table from version ${tableVersion} to ${HoodieTableVersion.SIX.versionCode()} before upgrading to version ${writeVersion}"
+          } else if (tableVersion.versionCode() < HoodieTableVersion.SIX.versionCode()) {
+            if (autoUpgrade) {
+              s"Please upgrade table from version ${tableVersion} to ${HoodieTableVersion.SIX.versionCode()}"
+            } else {
+              s"AUTO_UPGRADE_VERSION was disabled, Please upgrade table to version ${HoodieTableVersion.SIX.versionCode()}"
+            }
+          } else {
+            "upgrade"
+          }
+          assertTrue(exception.getMessage.contains(expectedMessageFragment),
+            s"Exception message should contain '${expectedMessageFragment}', but was: ${exception.getMessage}")
+      }
+
+    } finally {
+      // Cleanup test directory
+      try {
+        val testPath = new StoragePath(testBasePath)
+        if (storage.exists(testPath)) {
+          storage.deleteDirectory(testPath)
+        }
+      } catch {
+        case _: Exception => // Ignore cleanup errors
+      }
+    }
+  }
+
+  private def loadFixtureTable(testBasePath: String, version: HoodieTableVersion): Unit = {
+    val fixtureName = getFixtureName(version)
+    val resourcePath = s"/upgrade-downgrade-fixtures/mor-tables/$fixtureName"
+
+    // Create temporary directory for fixture extraction
+    val tempFixtureDir = Files.createTempDirectory("hudi-fixture-")
+
+    try {
+      // Extract fixture to temporary directory
+      HoodieTestUtils.extractZipToDirectory(resourcePath, tempFixtureDir, this.getClass)
+
+      // Copy extracted table to test location
+      val tableName = fixtureName.replace(".zip", "")
+      val extractedTablePath = tempFixtureDir.resolve(tableName).toFile
+      val testTablePath = new File(testBasePath)
+
+      // Copy the extracted table contents to our test path
+      FileUtils.copyDirectory(extractedTablePath, testTablePath)
+
+      // Verify the table was loaded at the expected version
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf.newInstance())
+        .setBasePath(testBasePath)
+        .build()
+      assertEquals(version, metaClient.getTableConfig.getTableVersion,
+        s"Fixture table should be at version ${version}")
+
+    } finally {
+      // Cleanup temporary fixture directory
+      try {
+        FileUtils.deleteDirectory(tempFixtureDir.toFile)
+      } catch {
+        case _: Exception => // Ignore cleanup errors
+      }
+    }
+  }
+
+  private def getFixtureName(version: HoodieTableVersion): String = {
+    version match {
+      case HoodieTableVersion.FOUR => "hudi-v4-table.zip"
+      case HoodieTableVersion.FIVE => "hudi-v5-table.zip"
+      case HoodieTableVersion.SIX => "hudi-v6-table.zip"
+      case HoodieTableVersion.EIGHT => "hudi-v8-table.zip"
+      case HoodieTableVersion.NINE => "hudi-v9-table.zip"
+      case _ => throw new IllegalArgumentException(s"Unsupported fixture version: $version")
+    }
+  }
+
+  private def getFixtureCompatibleWriteOpts(version: HoodieTableVersion): Map[String, String] = {
+    // Extract table name from fixture (remove .zip extension)
+    val fixtureName = getFixtureName(version)
+    val tableName = fixtureName.replace(".zip", "")
+
+    Map(
+      // Don't override table name - let fixture table configuration take precedence
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",         // Fixture uses 'id' as record key
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",        // Fixture uses 'ts' as precombine field
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition", // Fixture uses 'partition' as partition field
+      "hoodie.upsert.shuffle.parallelism" -> "2",
+      "hoodie.insert.shuffle.parallelism" -> "2"
+    ) ++ sparkOpts
+  }
+
+  private def createFixtureCompatibleTestData(): Seq[Row] = {
+    // Create test data that matches fixture schema: (id, name, ts, partition)
+    Seq(
+      Row("id9", "TestUser1", 9000L, "2023-01-05"),
+      Row("id10", "TestUser2", 10000L, "2023-01-05"),
+      Row("id11", "TestUser3", 11000L, "2023-01-06")
+    )
   }
 }
