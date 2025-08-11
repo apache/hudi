@@ -2421,8 +2421,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       CommonOptionUtils.commonOpts ++ Map(
         HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
         HoodieWriteConfig.KEYGENERATOR_TYPE.key -> keyGenType,
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition"
-      ))
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition"))
     val expectedKeyGenType = if (StringUtils.isNullOrEmpty(keyGenClass)) {
       KeyGeneratorType.USER_PROVIDED.name
     } else {
@@ -2460,14 +2459,15 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val firstUpdate = recordsToStrings(dataGen.generateUpdatesForAllRecords("001")).asScala.toList
     val firstUpdateDF = spark.read.json(spark.sparkContext.parallelize(firstUpdate, 2))
     writeToHudi(writeOpts, firstUpdateDF)
-    actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
+    val newReadOpts = readOpts ++ Map(HoodieTableConfig.POPULATE_META_FIELDS.key -> "false")
+      actualDF = spark.read.format("hudi").options(newReadOpts).load(basePath)
     actualKeyDF = actualDF.select("_row_key").sort("_row_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
 
     // Second update.
     // Change keyGenerator class name to generate exception.
     val opt = writeOpts ++ Map(
-      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.ComplexKeyGenerator")
+      "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.SqlKeyGenerator")
     assertThrows(classOf[HoodieException])({
       writeToHudi(opt, firstUpdateDF)
     })
@@ -2506,7 +2506,7 @@ object TestCOWDataSource {
         "org.apache.hudi.keygen.SimpleAvroKeyGenerator",
         KeyGeneratorType.SIMPLE.name()),
       Arguments.of(
-        "org.apache.hudi.keygen.SimpleAvroKeyGenerator",
+        "org.apache.hudi.keygen.ComplexKeyGenerator",
         "")
     )
   }

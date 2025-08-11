@@ -146,6 +146,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.table.create.schema,,]
           |[hoodie.table.format,native,null]
           |[hoodie.table.initial.version,$tableVersion,$tableVersion]
+          |[hoodie.table.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator,null]
           |[hoodie.table.keygenerator.type,NON_PARTITION,null]
           |[hoodie.table.name,,]
           |[hoodie.table.ordering.fields,ts,null]
