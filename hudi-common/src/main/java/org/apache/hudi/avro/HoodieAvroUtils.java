@@ -632,7 +632,7 @@ public class HoodieAvroUtils {
   public static GenericRecord rewriteRecord(GenericRecord oldRecord, Schema newSchema) {
     boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
     Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldRecord.getSchema(), newSchema, Collections.emptyMap(), new LinkedList<>(), isSpecificRecord);
-    return (GenericData.Record) newRecord;
+    return (GenericRecord) newRecord;
   }
 
   /**
@@ -1022,12 +1022,12 @@ public class HoodieAvroUtils {
    */
   public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols) {
     Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), false);
-    return (GenericData.Record) newRecord;
+    return (GenericRecord) newRecord;
   }
 
   public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols, boolean validate) {
     Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), validate);
-    return (GenericData.Record) newRecord;
+    return (GenericRecord) newRecord;
   }
 
   /**
