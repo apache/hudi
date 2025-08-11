@@ -77,13 +77,12 @@ use_default_java_runtime () {
 #   SPARK_HOME: path to the spark directory
 ##
 test_spark_hadoop_mr_bundles () {
+    change_java_runtime_version
     echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
-
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
     local DERBY_PID=$!
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
-    change_java_runtime_version
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
 
@@ -240,6 +239,7 @@ test_kafka_connect_bundle() {
 #   SPARK_HOME: path to the spark directory
 ##
 test_metaserver_bundle () {
+    change_java_runtime_version
     echo "::warning::validate.sh setting up Metaserver bundle validation"
 
     echo "::warning::validate.sh Start Metaserver"
@@ -252,7 +252,6 @@ test_metaserver_bundle () {
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
 
-    change_java_runtime_version
     echo "::warning::validate.sh Writing sample data via Spark DataSource."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/service/write.scala
     ls /tmp/hudi-bundles/tests/trips
