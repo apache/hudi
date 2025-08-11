@@ -39,11 +39,11 @@ df.write.format("hudi").
   option(TABLE_NAME, tableName).
   option("hoodie.datasource.meta.sync.enable", "true").
   option("hoodie.datasource.hive_sync.enable", "true").
-  option("hoodie.datasource.hive_sync.use_jdbc", "false").
   option("hoodie.datasource.hive_sync.database", database).
   option("hoodie.datasource.hive_sync.table", tableName).
   option("hoodie.datasource.hive_sync.partition_extractor_class", "org.apache.hudi.hive.SinglePartPartitionValueExtractor").
-  option("hoodie.datasource.hive_sync.mode", "hms").
+  option("hoodie.datasource.hive_sync.mode", "jdbc").
+  option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://localhost:10000").
   mode(Overwrite).
   save(basePath)
 
