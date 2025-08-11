@@ -405,7 +405,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   /**
    * Get fixture zip file name for a given table version.
    */
-  private String getFixtureName(HoodieTableVersion version) {
+  public static String getFixtureName(HoodieTableVersion version) {
     switch (version) {
       case FOUR:
         return "hudi-v4-table.zip";

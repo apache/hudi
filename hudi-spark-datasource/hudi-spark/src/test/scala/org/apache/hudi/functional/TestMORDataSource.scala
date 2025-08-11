@@ -36,6 +36,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
+import org.apache.hudi.table.upgrade.TestUpgradeDowngrade.getFixtureName
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 
@@ -1799,7 +1800,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     try {
       loadFixtureTable(testBasePath, tableVersion)
 
-      val testWriteOpts = getFixtureCompatibleWriteOpts(tableVersion) ++ Map(
+      val testWriteOpts = getFixtureCompatibleWriteOpts() ++ Map(
         HoodieWriteConfig.WRITE_TABLE_VERSION.key -> writeVersion.versionCode().toString,
         HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> autoUpgrade.toString,
         DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
@@ -1829,7 +1830,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
             .setConf(storageConf.newInstance())
             .setBasePath(testBasePath)
             .build()
-          assertTrue(upgradeMetaClient.getTableConfig.getTableVersion.versionCode() >= writeVersion.versionCode(),
+          assertEquals(
+            writeVersion.versionCode(),
+            upgradeMetaClient.getTableConfig.getTableVersion.versionCode(),
             s"Table should have been upgraded to at least version ${writeVersion.versionCode()}")
 
           // Verify data integrity
@@ -1854,25 +1857,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
           // Verify data integrity
           val resultDF = spark.read.format("hudi").load(testBasePath)
           assertEquals(11, resultDF.count(), "Data should be written successfully without upgrade")
-
-        case "VERSION_ADJUST" =>
-          // Should adjust write version and complete successfully
-          inputDF.write.format("hudi")
-            .options(testWriteOpts)
-            .mode(SaveMode.Append)
-            .save(testBasePath)
-
-          // Verify table version remained unchanged
-          val adjustMetaClient = HoodieTableMetaClient.builder()
-            .setConf(storageConf.newInstance())
-            .setBasePath(testBasePath)
-            .build()
-          assertEquals(tableVersion, adjustMetaClient.getTableConfig.getTableVersion,
-            s"Table version should remain at $tableVersion when autoUpgrade is disabled")
-
-          // Verify data integrity
-          val resultDF = spark.read.format("hudi").load(testBasePath)
-          assertEquals(11, resultDF.count(), "Data should be written successfully after version adjustment")
 
         case "EXCEPTION" =>
           // Should throw HoodieUpgradeDowngradeException
@@ -1944,22 +1928,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     }
   }
 
-  private def getFixtureName(version: HoodieTableVersion): String = {
-    version match {
-      case HoodieTableVersion.FOUR => "hudi-v4-table.zip"
-      case HoodieTableVersion.FIVE => "hudi-v5-table.zip"
-      case HoodieTableVersion.SIX => "hudi-v6-table.zip"
-      case HoodieTableVersion.EIGHT => "hudi-v8-table.zip"
-      case HoodieTableVersion.NINE => "hudi-v9-table.zip"
-      case _ => throw new IllegalArgumentException(s"Unsupported fixture version: $version")
-    }
-  }
-
-  private def getFixtureCompatibleWriteOpts(version: HoodieTableVersion): Map[String, String] = {
-    // Extract table name from fixture (remove .zip extension)
-    val fixtureName = getFixtureName(version)
-    val tableName = fixtureName.replace(".zip", "")
-
+  private def getFixtureCompatibleWriteOpts(): Map[String, String] = {
     Map(
       // Don't override table name - let fixture table configuration take precedence
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",         // Fixture uses 'id' as record key
