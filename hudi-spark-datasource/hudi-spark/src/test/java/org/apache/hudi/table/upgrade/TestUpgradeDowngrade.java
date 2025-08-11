@@ -37,7 +37,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -271,6 +270,19 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         "Write version should be set to match table version when auto-upgrade is disabled");
   }
 
+  /**
+   * Version pairs for testing blocked downgrades to versions below SIX.
+   * These test cases should trigger exceptions in the needsDowngrade method.
+   */
+  private static Stream<Arguments> blockedDowngradeVersionPairs() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5 (blocked)
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FOUR),    // V6 -> V4 (blocked)
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.FIVE),  // V8 -> V5 (blocked)
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.FOUR)    // V9 -> V4 (blocked)
+    );
+  }
+
   @ParameterizedTest
   @MethodSource("blockedDowngradeVersionPairs")
   public void testDowngradeToVersionsBelowSixBlocked(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
@@ -459,19 +471,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
         // Non-rollback downgrade pairs  
         Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.FOUR)    // V5 -> V4 (works)
-    );
-  }
-
-  /**
-   * Version pairs for testing blocked downgrades to versions below SIX.
-   * These test cases should trigger exceptions in the needsDowngrade method.
-   */
-  private static Stream<Arguments> blockedDowngradeVersionPairs() {
-    return Stream.of(
-        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE),    // V6 -> V5 (blocked)
-        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FOUR),    // V6 -> V4 (blocked)  
-        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.FIVE),  // V8 -> V5 (blocked)
-        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.FOUR)    // V9 -> V4 (blocked)
     );
   }
 
