@@ -27,6 +27,7 @@
 
 JAVA_RUNTIME_VERSION=$1
 SCALA_PROFILE=$2
+SPARK_VERSION=$3
 DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 echo $WORKDIR
@@ -79,8 +80,12 @@ use_default_java_runtime () {
 test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
 
+    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+        change_java_runtime_version
+    fi
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
     local DERBY_PID=$!
+    use_default_java_runtime
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
     change_java_runtime_version
@@ -246,9 +251,13 @@ test_metaserver_bundle () {
     java -jar $JARS_DIR/metaserver.jar &
     local METASEVER_PID=$!
 
+    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+            change_java_runtime_version
+    fi
     echo "::warning::validate.sh Start hive server"
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
     local DERBY_PID=$!
+    use_default_java_runtime
     $HIVE_HOME/bin/hiveserver2 --hiveconf hive.aux.jars.path=$JARS_DIR/hadoop-mr.jar &
     local HIVE_PID=$!
 
