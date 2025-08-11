@@ -19,7 +19,6 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.adapter.RichSourceFunctionAdapter;
-import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -108,7 +107,7 @@ public class StreamReadMonitoringFunction
    */
   private int totalSplits = -1;
 
-  private List<MergeOnReadInputSplit> remainingSplits = new ArrayList<>();
+  private transient List<MergeOnReadInputSplit> remainingSplits = new ArrayList<>();
 
   private transient ListState<String> instantState;
 
@@ -203,16 +202,14 @@ public class StreamReadMonitoringFunction
       Iterator<SplitState> inputSplitsIterable = inputSplitsState.get().iterator();
       if (inputSplitsIterable.hasNext()) {
         SplitState splitState = inputSplitsIterable.next();
-        for (MergeOnReadInputSplit split : splitState.getRemainingSplits()) {
-          remainingSplits.add(split);
-        }
-        this.totalSplits = splitState.getTotalSplits();
+        remainingSplits.addAll(splitState.getRemainingSplits());
+        this.totalSplits = splitState.getTotalSplitState();
       }
     }
   }
 
   @Override
-  public void run(SourceFunctionAdapter.SourceContext<MergeOnReadInputSplit> context) throws Exception {
+  public void run(SourceContext<MergeOnReadInputSplit> context) throws Exception {
     checkpointLock = context.getCheckpointLock();
     while (isRunning) {
       synchronized (checkpointLock) {
@@ -237,7 +234,7 @@ public class StreamReadMonitoringFunction
   }
 
   @VisibleForTesting
-  public void monitorDirAndForwardSplits(SourceFunctionAdapter.SourceContext<MergeOnReadInputSplit> context) {
+  public void monitorDirAndForwardSplits(SourceContext<MergeOnReadInputSplit> context) {
     HoodieTableMetaClient metaClient = getOrCreateMetaClient();
     if (metaClient == null) {
       // table does not exist
@@ -322,12 +319,8 @@ public class StreamReadMonitoringFunction
     if (this.issuedOffset != null) {
       this.instantState.add(this.issuedOffset);
     }
-    SplitState splitState = new SplitState();
-    if (totalSplits > 0) {
-      splitState.setTotalSplits(totalSplits);
-    }
+    SplitState splitState = new SplitState(this.totalSplits, this.remainingSplits);
     inputSplitsState.clear();
-    splitState.setRemainingSplits(remainingSplits);
     inputSplitsState.add(splitState);
   }
 
@@ -342,23 +335,20 @@ public class StreamReadMonitoringFunction
   }
 
   private static class SplitState implements Serializable {
-    private int totalSplits;
-    private List<MergeOnReadInputSplit> remainingSplits;
+    private final int totalSplitState;
+    private final List<MergeOnReadInputSplit> remainingSplitState;
+
+    public SplitState(final int totalSplits, final List<MergeOnReadInputSplit> remainingSplits) {
+      this.totalSplitState = Math.max(totalSplits, 0);
+      this.remainingSplitState = remainingSplits;
+    }
 
     public List<MergeOnReadInputSplit> getRemainingSplits() {
-      return remainingSplits;
+      return remainingSplitState;
     }
 
-    public void setRemainingSplits(List<MergeOnReadInputSplit> remainingSplits) {
-      this.remainingSplits = remainingSplits;
-    }
-
-    public int getTotalSplits() {
-      return totalSplits;
-    }
-
-    public void setTotalSplits(int totalSplits) {
-      this.totalSplits = totalSplits;
+    public int getTotalSplitState() {
+      return totalSplitState;
     }
   }
 
