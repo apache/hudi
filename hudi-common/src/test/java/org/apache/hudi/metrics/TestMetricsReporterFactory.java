@@ -45,7 +45,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class TestMetricsReporterFactory {
+public class TestMetricsReporterFactory {
 
   @Mock
   HoodieMetricsConfig metricsConfig;
@@ -61,7 +61,7 @@ class TestMetricsReporterFactory {
   }
 
   @Test
-  void metricsReporterFactoryShouldReturnUserDefinedReporter() {
+  public void metricsReporterFactoryShouldReturnUserDefinedReporter() {
     when(metricsConfig.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
 
     TypedProperties props = new TypedProperties();
@@ -75,7 +75,7 @@ class TestMetricsReporterFactory {
   }
 
   @Test
-  void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
+  public void metricsReporterFactoryShouldThrowExceptionWhenMetricsReporterClassIsIllegal() {
     when(metricsConfig.getMetricReporterClassName()).thenReturn(IllegalTestMetricsReporter.class.getName());
     when(metricsConfig.getProps()).thenReturn(new TypedProperties());
     assertThrows(HoodieException.class, () -> MetricsReporterFactory.createReporter(metricsConfig, registry));
@@ -102,3 +102,4 @@ class TestMetricsReporterFactory {
     public IllegalTestMetricsReporter(Properties props, MetricRegistry registry) {}
   }
 }
+

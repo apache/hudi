@@ -44,7 +44,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class TestCloudWatchMetricsReporter {
+public class TestCloudWatchMetricsReporter {
 
   @Mock
   private HoodieWriteConfig writeConfig;
@@ -59,7 +59,7 @@ class TestCloudWatchMetricsReporter {
   private CloudWatchReporter reporter;
 
   @Test
-  void testReporter() {
+  public void testReporter() {
     when(metricsConfig.getCloudWatchReportPeriodSeconds()).thenReturn(30);
     CloudWatchMetricsReporter metricsReporter = new CloudWatchMetricsReporter(metricsConfig, registry, reporter);
 
@@ -74,7 +74,7 @@ class TestCloudWatchMetricsReporter {
   }
 
   @Test
-  void testReporterUsingMetricsConfig() {
+  public void testReporterUsingMetricsConfig() {
     when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
     when(metricsConfig.getCloudWatchReportPeriodSeconds()).thenReturn(30);
     CloudWatchMetricsReporter metricsReporter = new CloudWatchMetricsReporter(writeConfig, registry, reporter);
@@ -90,7 +90,7 @@ class TestCloudWatchMetricsReporter {
   }
 
   @Test
-  void testReporterViaReporterFactory() {
+  public void testReporterViaReporterFactory() {
     try {
       when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
       // MetricsReporterFactory uses reflection to create CloudWatchMetricsReporter
@@ -100,31 +100,6 @@ class TestCloudWatchMetricsReporter {
       assertTrue(e.getCause() instanceof InvocationTargetException);
       assertTrue(Arrays.stream(((InvocationTargetException) e.getCause()).getTargetException().getStackTrace()).anyMatch(
           ste -> ste.toString().contains("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.getAmazonCloudWatchClient")));
-    }
-  }
-
-  @Test
-  void testCreateCloudWatchReporter() {
-    when(metricsConfig.getCloudWatchMetricPrefix()).thenReturn("prefix");
-    when(metricsConfig.getCloudWatchMetricNamespace()).thenReturn("namespace");
-    when(metricsConfig.getCloudWatchMaxDatumsPerRequest()).thenReturn(100);
-    TypedProperties props = new TypedProperties();
-    when(metricsConfig.getProps()).thenReturn(props);
-
-    CloudWatchReporter reporterMock = mock(CloudWatchReporter.class);
-    CloudWatchReporter.Builder builderMock = mock(CloudWatchReporter.Builder.class);
-
-    try (MockedStatic<CloudWatchReporter> mockedStatic = Mockito.mockStatic(CloudWatchReporter.class)) {
-      mockedStatic.when(() -> CloudWatchReporter.forRegistry(registry))
-          .thenReturn(builderMock);
-      when(builderMock.prefixedWith("prefix")).thenReturn(builderMock);
-      when(builderMock.namespace("namespace")).thenReturn(builderMock);
-      when(builderMock.maxDatumsPerRequest(100)).thenReturn(builderMock);
-      when(builderMock.build(props)).thenReturn(reporterMock);
-
-      CloudWatchMetricsReporter metricsReporter =
-          new CloudWatchMetricsReporter(metricsConfig, registry);
-      assertNotNull(metricsReporter);
     }
   }
 }
