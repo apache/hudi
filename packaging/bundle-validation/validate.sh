@@ -108,7 +108,7 @@ test_spark_hadoop_mr_bundles () {
     mkdir -p $hiveqlresultsdir
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
           -u jdbc:hive2://localhost:10000/default --showHeader=true --outputformat=csv2 \
-          -e 'select * from trips' --verbose=true --showNestedErrs=true
+          -e 'select * from default.trips' --verbose=true --showNestedErrs=true
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
       -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
       -e 'select * from trips' >> $hiveqlresultsdir/results.csv
