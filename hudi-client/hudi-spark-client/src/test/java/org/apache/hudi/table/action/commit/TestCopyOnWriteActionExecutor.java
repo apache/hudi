@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -497,10 +498,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     BaseSparkCommitActionExecutor newActionExecutor =
         new SparkUpsertCommitActionExecutor(context, config, table,
             instantTime, context.parallelize(updates));
+    ReaderContextFactory readerContextFactory = context.getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, config.getProps(), false);
     final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1))
         .map(x -> (Iterator<List<WriteStatus>>)
-            newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator(),
-                context.getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, config.getProps(), false)))
+            newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator(), readerContextFactory))
         .map(Transformations::flatten).collect();
     assertEquals(updates.size() - numRecordsInPartition,
         updateStatus.get(0).get(0).getTotalErrorRecords());
