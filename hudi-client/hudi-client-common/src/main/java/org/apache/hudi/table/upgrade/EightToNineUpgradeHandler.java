@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -40,11 +39,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
                                              SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 
-    // If auto upgrade is disabled, set writer version to 8 and return
-    if (!config.autoUpgrade()) {
-      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-      return Collections.emptyMap();
-    }
     HoodieTableMetaClient metaClient = table.getMetaClient();
 
     // Populate missing index versions indexes
