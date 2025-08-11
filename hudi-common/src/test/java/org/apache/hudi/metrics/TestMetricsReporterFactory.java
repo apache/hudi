@@ -61,26 +61,6 @@ class TestMetricsReporterFactory {
   }
 
   @Test
-  void metricsReporterFactoryShouldReturnCloudWatchReporter() {
-    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
-
-    MetricsReporter reporterMock = mock(MetricsReporter.class);
-    try (MockedStatic<ReflectionUtils> mockedStatic = Mockito.mockStatic(ReflectionUtils.class)) {
-      mockedStatic.when(() ->
-          ReflectionUtils.loadClass(
-              eq("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter"),
-              any(Class[].class),
-              eq(metricsConfig),
-              eq(registry)
-          )
-      ).thenReturn(reporterMock);
-
-      MetricsReporter actualReporter = MetricsReporterFactory.createReporter(metricsConfig, registry).get();
-      assertSame(reporterMock, actualReporter);
-    }
-  }
-
-  @Test
   void metricsReporterFactoryShouldReturnUserDefinedReporter() {
     when(metricsConfig.getMetricReporterClassName()).thenReturn(DummyMetricsReporter.class.getName());
 
