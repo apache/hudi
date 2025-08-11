@@ -138,6 +138,13 @@ public interface UpdateProcessor<T> {
         try {
           if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
             return null;
+          } else {
+            Schema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
+            // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
+            if (!readerSchema.equals(recordSchema)) {
+              hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
+                  .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
+            }
           }
         } catch (IOException e) {
           throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);
