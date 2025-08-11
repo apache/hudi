@@ -34,15 +34,10 @@ import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+import org.apache.spark.sql.SQLContext;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -54,7 +49,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,7 +109,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .build();
     
     assertTableVersionOnDataAndMetadataTable(resultMetaClient, toVersion);
-    validateVersionSpecificProperties(resultMetaClient, fromVersion, toVersion);
+    validateVersionSpecificProperties(resultMetaClient, toVersion);
     validateDataConsistency(originalData, resultMetaClient, "after " + operation);
 
     // Validate pending commits based on whether this transition performs rollback and compaction operations
@@ -139,9 +139,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     LOG.info("Testing auto-upgrade disabled for version {} (below SIX)", originalVersion);
     
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(originalVersion);
-
     HoodieTableVersion targetVersion = getNextVersion(originalVersion).get();
-
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
     
     // For versions below SIX with autoUpgrade disabled, expect exception
@@ -151,12 +149,11 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     );
     
     // Validate exception message
-    String expectedMessage = String.format("1.1.0 only supports table version greater then version SIX or above. Please upgrade table from version %s to %s using a hudi version prior to 1.1.0",
-        originalVersion, HoodieTableVersion.SIX);
+    String expectedMessage = String.format("Hudi 1.x release only supports table version greater than version 6 or above. "
+            + "Please upgrade table from version %s to %s using a Hudi release prior to 1.0.0",
+        originalVersion.versionCode(), HoodieTableVersion.SIX.versionCode());
     assertEquals(expectedMessage, exception.getMessage(),
         "Exception message should match expected format");
-    
-    LOG.info("Auto-upgrade disabled test passed for version {} (expected exception thrown)", originalVersion);
   }
 
   @ParameterizedTest
@@ -201,13 +198,10 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
             // Case 1: No explicit hoodie.write.table.version (uses default)
             Arguments.of(Option.empty(), HoodieTableVersion.current(), "Default version upgrade to current version NINE"),
-
             // Case 2: hoodie.write.table.version = 6 (same as current table version)
             Arguments.of(Option.of(HoodieTableVersion.SIX), HoodieTableVersion.SIX, "No upgrade when versions match"),
-
             // Case 3: hoodie.write.table.version = 8
             Arguments.of(Option.of(HoodieTableVersion.EIGHT), HoodieTableVersion.EIGHT, "Upgrade to table version EIGHT"),
-
             // Case 4: hoodie.write.table.version = 9
             Arguments.of(Option.of(HoodieTableVersion.NINE), HoodieTableVersion.NINE, "Upgrade to table version NINE")
     );
@@ -218,18 +212,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
   public void testAutoUpgradeWithWriteTableVersionConfiguration(
       Option<HoodieTableVersion> writeTableVersion, HoodieTableVersion expectedVersion, String description) throws Exception {
     LOG.info("Testing auto-upgrade configuration: {}", description);
-    
-    // Load table version SIX fixture as starting point for all test cases
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(HoodieTableVersion.SIX);
     assertEquals(HoodieTableVersion.SIX, originalMetaClient.getTableConfig().getTableVersion(),
         "Fixture table should start at version SIX");
     
-    // Create write config with specified write table version
     HoodieWriteConfig.Builder configBuilder = HoodieWriteConfig.newBuilder()
         .withPath(originalMetaClient.getBasePath().toString())
         .withAutoUpgradeVersion(true);
-    
-    // Set write table version if specified (null means use default)
     if (writeTableVersion.isPresent()) {
       configBuilder.withWriteTableVersion(writeTableVersion.get().versionCode());
     }
@@ -249,17 +238,12 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .setBasePath(originalMetaClient.getBasePath())
         .build();
     
-    // table version should match expected
     assertEquals(expectedVersion, resultMetaClient.getTableConfig().getTableVersion(),
         description + " - Final table version should match expected version");
 
-    // do validation similar to testUpgradeDowngrade (without rollback and compaction check)
     assertTableVersionOnDataAndMetadataTable(resultMetaClient, expectedVersion);
-    validateVersionSpecificProperties(resultMetaClient, HoodieTableVersion.SIX, expectedVersion);
+    validateVersionSpecificProperties(resultMetaClient, expectedVersion);
     validateDataConsistency(originalData, resultMetaClient, "after " + description);
-
-    LOG.info("Auto-upgrade test completed successfully: {} -> Expected: {}, Actual: {}", 
-        description, expectedVersion, resultMetaClient.getTableConfig().getTableVersion());
   }
 
   @Test
@@ -278,21 +262,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         .withWriteTableVersion(8)
         .build();
     
-    // Verify initial state
     assertEquals(HoodieTableVersion.EIGHT, config.getWriteVersion(),
         "Initial write version should be EIGHT");
     
-    // Call the static method directly to test our specific code path
     boolean result = UpgradeDowngrade.needsUpgrade(metaClient, config, HoodieTableVersion.EIGHT);
-    
-    // should return false (no upgrade needed due to disabled auto-upgrade)
     assertFalse(result, "needsUpgrade should return false when auto-upgrade is disabled");
-    
-    // write version should now match table version
-    assertEquals(HoodieTableVersion.SIX, config.getWriteVersion(), 
+    assertEquals(HoodieTableVersion.SIX, config.getWriteVersion(),
         "Write version should be set to match table version when auto-upgrade is disabled");
-    
-    LOG.info("needsUpgrade test with auto-upgrade disabled passed successfully");
   }
 
   @ParameterizedTest
@@ -311,14 +287,11 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
             () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
             "Expected HoodieUpgradeDowngradeException for downgrade from " + fromVersion + " to " + toVersion
     );
-    
-    // Validate exception message contains the expected blocked downgrade message
-    String expectedMessage = String.format("1.1.0 only supports table version greater then version SIX or above. Please downgrade table from version %s to %s using a hudi version prior to 1.1.0",
-        fromVersion, toVersion);
+    String expectedMessage = String.format("Hudi 1.x release only supports table version greater than version 6 or above. " +
+            "Please downgrade table from version 6 to %s using a Hudi release prior to 1.0.0",
+        toVersion.versionCode());
     assertEquals(expectedMessage, exception.getMessage(),
         "Exception message should match expected blocked downgrade format");
-    
-    LOG.info("Blocked downgrade test passed for {} -> {} (expected exception thrown)", fromVersion, toVersion);
   }
 
   @Disabled
@@ -525,37 +498,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
       HoodieTableMetaClient metaClient, HoodieTableVersion expectedVersion) {
     assertEquals(expectedVersion,
         metaClient.getTableConfig().getTableVersion());
-  }
-
-  /**
-   * Validate version-specific properties after upgrade/downgrade operations.
-   */
-  private void validateVersionSpecificProperties(
-      HoodieTableMetaClient metaClient, HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws IOException {
-    LOG.info("Validating version-specific properties: {} -> {}", fromVersion, toVersion);
-    
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    
-    // Validate properties for target version
-    switch (toVersion) {
-      case FOUR:
-        validateVersion4Properties(metaClient, tableConfig);
-        break;
-      case FIVE:
-        validateVersion5Properties(metaClient, tableConfig);
-        break;
-      case SIX:
-        validateVersion6Properties(metaClient);
-        break;
-      case EIGHT:
-        validateVersion8Properties(tableConfig);
-        break;
-      case NINE:
-        validateVersion9Properties(metaClient, tableConfig);
-        break;
-      default:
-        LOG.warn("No specific property validation for version {}", toVersion);
-    }
   }
 
   /**

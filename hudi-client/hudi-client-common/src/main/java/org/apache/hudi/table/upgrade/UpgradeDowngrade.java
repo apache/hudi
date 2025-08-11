@@ -92,7 +92,7 @@ public class UpgradeDowngrade {
     if (toWriteVersion.lesserThan(HoodieTableVersion.SIX)) {
       throw new HoodieUpgradeDowngradeException(
           String.format("Hudi 1.x release only supports table version greater than "
-                  + "version SIX or above. Please downgrade table from version %s to %s "
+                  + "version 6 or above. Please downgrade table from version %s to %s "
                   + "using a Hudi release prior to 1.0.0",
               HoodieTableVersion.SIX.versionCode(), toWriteVersion.versionCode()));
     }
@@ -108,7 +108,7 @@ public class UpgradeDowngrade {
     if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
       throw new HoodieUpgradeDowngradeException(
           String.format("Hudi 1.x release only supports table version greater than "
-                  + "version SIX or above. Please upgrade table from version %s to %s "
+                  + "version 6 or above. Please upgrade table from version %s to %s "
                   + "using a Hudi release prior to 1.0.0",
               fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
     }

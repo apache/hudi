@@ -44,6 +44,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1798,7 +1799,6 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     try {
       loadFixtureTable(testBasePath, tableVersion)
 
-      // Set up Spark DataSource write options aligned with fixture schema
       val testWriteOpts = getFixtureCompatibleWriteOpts(tableVersion) ++ Map(
         HoodieWriteConfig.WRITE_TABLE_VERSION.key -> writeVersion.versionCode().toString,
         HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> autoUpgrade.toString,
@@ -1806,9 +1806,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
       )
 
-      // Prepare test data using fixture-compatible schema (id, name, ts, partition)
       val testData = createFixtureCompatibleTestData()
-      import org.apache.spark.sql.types._
       val schema = StructType(Array(
         StructField("id", StringType, false),
         StructField("name", StringType, false),
@@ -1851,7 +1849,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
             .setBasePath(testBasePath)
             .build()
           assertEquals(tableVersion, noUpgradeMetaClient.getTableConfig.getTableVersion,
-            s"Table version should remain at ${tableVersion}")
+            s"Table version should remain at $tableVersion")
 
           // Verify data integrity
           val resultDF = spark.read.format("hudi").load(testBasePath)
@@ -1870,7 +1868,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
             .setBasePath(testBasePath)
             .build()
           assertEquals(tableVersion, adjustMetaClient.getTableConfig.getTableVersion,
-            s"Table version should remain at ${tableVersion} when autoUpgrade is disabled")
+            s"Table version should remain at $tableVersion when autoUpgrade is disabled")
 
           // Verify data integrity
           val resultDF = spark.read.format("hudi").load(testBasePath)
@@ -1888,7 +1886,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
           // Verify exception message contains expected content
           val expectedMessageFragment = if (tableVersion.versionCode() < HoodieTableVersion.SIX.versionCode()) {
             // For Hudi 1.1.0: any table version < 6 throws exception with this message
-            "1.1.0 only supports table version greater then version SIX or above"
+            "Hudi 1.x release only supports table version greater than version 6 or above"
           } else {
             "upgrade"
           }
@@ -1909,7 +1907,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     }
   }
 
-  private def loadFixtureTable(testBasePath: String, version: HoodieTableVersion): Unit = {
+  private def loadFixtureTable(testBasePath: String, version: HoodieTableVersion): HoodieTableMetaClient = {
     val fixtureName = getFixtureName(version)
     val resourcePath = s"/upgrade-downgrade-fixtures/mor-tables/$fixtureName"
 
@@ -1935,7 +1933,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         .build()
       assertEquals(version, metaClient.getTableConfig.getTableVersion,
         s"Fixture table should be at version ${version}")
-
+      metaClient
     } finally {
       // Cleanup temporary fixture directory
       try {
