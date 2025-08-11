@@ -21,6 +21,7 @@ package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -70,6 +71,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
  */
 public abstract class HoodieReaderContext<T> {
   private final StorageConfiguration<?> storageConfiguration;
+  protected final HoodieFileFormat baseFileFormat;
   // For general predicate pushdown.
   protected final Option<Predicate> keyFilterOpt;
   protected final HoodieTableConfig tableConfig;
@@ -96,6 +98,7 @@ public abstract class HoodieReaderContext<T> {
                                 RecordContext<T> recordContext) {
     this.tableConfig = tableConfig;
     this.storageConfiguration = storageConfiguration;
+    this.baseFileFormat = tableConfig.getBaseFileFormat();
     this.instantRangeOpt = instantRangeOpt;
     this.keyFilterOpt = keyFilterOpt;
     this.recordContext = recordContext;
