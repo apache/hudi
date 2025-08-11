@@ -20,7 +20,6 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.InvalidUnionTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
@@ -30,8 +29,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.slf4j.Logger;
@@ -41,7 +38,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -388,92 +384,7 @@ public class AvroSchemaUtils {
    *  The names of records, namespaces, or docs do not need to match. Nullability is ignored.
    */
   public static boolean areSchemasProjectionEquivalent(Schema schema1, Schema schema2) {
-    if (Objects.equals(schema1, schema2)) {
-      return true;
-    }
-    if (schema1 == null || schema2 == null) {
-      return false;
-    }
-    return areSchemasProjectionEquivalentInternal(resolveNullableSchema(schema1), resolveNullableSchema(schema2));
-  }
-
-  @VisibleForTesting
-  static boolean areSchemasProjectionEquivalentInternal(Schema schema1, Schema schema2) {
-    if (Objects.equals(schema1, schema2)) {
-      return true;
-    }
-    switch (schema1.getType()) {
-      case RECORD:
-        if (schema2.getType() != Schema.Type.RECORD) {
-          return false;
-        }
-        List<Schema.Field> fields1 = schema1.getFields();
-        List<Schema.Field> fields2 = schema2.getFields();
-        if (fields1.size() != fields2.size()) {
-          return false;
-        }
-        for (int i = 0; i < fields1.size(); i++) {
-          if (!fields1.get(i).name().equalsIgnoreCase(fields2.get(i).name())) {
-            return false;
-          }
-          if (!areSchemasProjectionEquivalent(fields1.get(i).schema(), fields2.get(i).schema())) {
-            return false;
-          }
-        }
-        return true;
-
-      case ARRAY:
-        if (schema2.getType() != Schema.Type.ARRAY) {
-          return false;
-        }
-        return areSchemasProjectionEquivalent(schema1.getElementType(), schema2.getElementType());
-
-      case MAP:
-        if (schema2.getType() != Schema.Type.MAP) {
-          return false;
-        }
-        return areSchemasProjectionEquivalent(schema1.getValueType(), schema2.getValueType());
-      case UNION:
-        throw new IllegalArgumentException("Union schemas are not supported besides nullable");
-      default:
-        return areSchemaPrimitivesProjectionEquivalent(schema1, schema2);
-    }
-  }
-
-  @VisibleForTesting
-  static boolean areSchemaPrimitivesProjectionEquivalent(Schema schema1, Schema schema2) {
-    if (!areLogicalTypesProjectionEquivalent(schema1.getLogicalType(), schema2.getLogicalType())) {
-      return false;
-    }
-    if (Objects.requireNonNull(schema1.getType()) == Schema.Type.FIXED) {
-      return schema2.getType() == Schema.Type.FIXED
-          && schema1.getFixedSize() == schema2.getFixedSize();
-    }
-    if (Objects.requireNonNull(schema1.getType()) == Schema.Type.ENUM) {
-      return schema2.getType() == Schema.Type.ENUM
-          && areEnumSymbolsProjectionEquivalent(schema1.getEnumSymbols(), schema2.getEnumSymbols());
-    }
-    return Objects.equals(schema1.getType(), schema2.getType());
-  }
-
-  private static boolean areEnumSymbolsProjectionEquivalent(List<String> enumSymbols1, List<String> enumSymbols2) {
-    Set<String> set1 = new HashSet<>(enumSymbols1);
-    Set<String> set2 = new HashSet<>(enumSymbols2);
-    return set2.containsAll(set1);
-  }
-
-  private static boolean areLogicalTypesProjectionEquivalent(LogicalType logicalType1, LogicalType logicalType2) {
-    if (Objects.equals(logicalType1, logicalType2)) {
-      return true;
-    }
-    if (logicalType1 == null || logicalType2 == null) {
-      return false;
-    }
-    if (logicalType1 instanceof LogicalTypes.Decimal && logicalType2 instanceof LogicalTypes.Decimal) {
-      return ((LogicalTypes.Decimal) logicalType1).getScale() == ((LogicalTypes.Decimal) logicalType2).getScale()
-          && ((LogicalTypes.Decimal) logicalType1).getPrecision() == ((LogicalTypes.Decimal) logicalType2).getPrecision();
-    }
-    return false;
+    return AvroSchemaComparatorForRecordProjection.areSchemasProjectionEquivalent(schema1, schema2);
   }
 
   /**

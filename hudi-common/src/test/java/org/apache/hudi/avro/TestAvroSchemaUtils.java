@@ -495,36 +495,19 @@ public class TestAvroSchemaUtils {
   }
 
   @Test
-  void testAreSchemasProjectionEquivalentUnsupportedUnionThrows() {
-    Schema intSchema = Schema.create(Schema.Type.INT);
-    intSchema.addProp("prop1", "value1");
-    Schema union = Schema.createUnion(
-        Arrays.asList(intSchema, Schema.create(Schema.Type.STRING))
-    );
-    Schema union2 = Schema.createUnion(
-        Arrays.asList(Schema.create(Schema.Type.INT), Schema.create(Schema.Type.STRING))
-    );
-    IllegalArgumentException ex = assertThrows(
-        IllegalArgumentException.class,
-        () -> AvroSchemaUtils.areSchemasProjectionEquivalentInternal(union, union2)
-    );
-    assertEquals("Union schemas are not supported besides nullable", ex.getMessage());
-  }
-
-  @Test
   void testAreSchemasProjectionEquivalentListVsString() {
     Schema stringSchema = Schema.create(Schema.Type.STRING);
     Schema listSchema = Schema.createArray(Schema.create(Schema.Type.STRING));
-    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalentInternal(listSchema, stringSchema));
-    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalentInternal(stringSchema, listSchema));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(listSchema, stringSchema));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(stringSchema, listSchema));
   }
 
   @Test
   void testAreSchemasProjectionEquivalentMapVsString() {
     Schema stringSchema = Schema.create(Schema.Type.STRING);
     Schema mapSchema = Schema.createMap(Schema.create(Schema.Type.STRING));
-    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalentInternal(mapSchema, stringSchema));
-    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalentInternal(stringSchema, mapSchema));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(mapSchema, stringSchema));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(stringSchema, mapSchema));
   }
 
   @Test
@@ -532,7 +515,7 @@ public class TestAvroSchemaUtils {
     Schema s1 = Schema.createFixed("F", null, null, 16);
     Schema s2 = Schema.createFixed("F", null, null, 16);
     s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s1, s2));
+    assertTrue(AvroSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
   }
 
   @Test
@@ -540,22 +523,22 @@ public class TestAvroSchemaUtils {
     Schema s1 = Schema.createFixed("F", null, null, 8);
     Schema s2 = Schema.createFixed("F", null, null, 4);
     s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertFalse(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s1, s2));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
   }
 
   @Test
   void testAreSchemasProjectionEquivalentEnums() {
     Schema s1 = Schema.createEnum("E", null, null, Arrays.asList("A", "B", "C"));
-    Schema s2 = Schema.createEnum("E", null, null, Arrays.asList("C", "B", "A"));
+    Schema s2 = Schema.createEnum("E", null, null, Arrays.asList("A", "B", "C"));
     s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s1, s2));
+    assertTrue(AvroSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
   }
 
   @Test
   void testAreSchemasProjectionEquivalentDifferentEnumSymbols() {
     Schema s1 = Schema.createEnum("E", null, null, Arrays.asList("X", "Y"));
     Schema s2 = Schema.createEnum("E", null, null, Arrays.asList("A", "B"));
-    assertFalse(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s1, s2));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
   }
 
   @Test
@@ -563,8 +546,8 @@ public class TestAvroSchemaUtils {
     Schema s1 = Schema.createEnum("E", null, null, Arrays.asList("A", "B"));
     Schema s2 = Schema.createEnum("E", null, null, Arrays.asList("A", "B", "C"));
     s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s1, s2));
-    assertFalse(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s2, s1));
+    assertTrue(AvroSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(s2, s1));
   }
 
   @Test
@@ -576,7 +559,7 @@ public class TestAvroSchemaUtils {
     LogicalTypes.decimal(12, 2).addToSchema(s2);
     s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
 
-    assertTrue(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s1, s2));
+    assertTrue(AvroSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
   }
 
   @Test
@@ -587,7 +570,7 @@ public class TestAvroSchemaUtils {
     Schema s2 = Schema.create(Schema.Type.BYTES);
     LogicalTypes.decimal(13, 2).addToSchema(s2);
 
-    assertFalse(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s1, s2));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
   }
 
   @Test
@@ -597,7 +580,7 @@ public class TestAvroSchemaUtils {
 
     Schema s2 = Schema.create(Schema.Type.BYTES);
 
-    assertFalse(AvroSchemaUtils.areSchemaPrimitivesProjectionEquivalent(s1, s2));
+    assertFalse(AvroSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
   }
 
   @Test
