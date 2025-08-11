@@ -234,6 +234,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
     if (logRecordInfo != null) {
+      usedKeys.add(logRecordInfo.getRecordKey());
       BufferedRecord<T> baseRecordInfo = BufferedRecords.fromEngineRecord(baseRecord, readerSchema, readerContext.getRecordContext(), orderingFieldNames, false);
       BufferedRecord<T> mergeResult = bufferedRecordMerger.finalMerge(baseRecordInfo, logRecordInfo);
       nextRecord = updateProcessor.processUpdate(logRecordInfo.getRecordKey(), baseRecordInfo, mergeResult, mergeResult.isDelete());
