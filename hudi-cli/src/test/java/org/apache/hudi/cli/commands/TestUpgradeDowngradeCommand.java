@@ -111,7 +111,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     }).map(Arguments::of);
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @MethodSource("testArgsForUpgradeDowngradeCommand")
   public void testUpgradeDowngradeCommand(HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {

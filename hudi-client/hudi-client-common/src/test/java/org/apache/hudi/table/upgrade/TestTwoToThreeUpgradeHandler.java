@@ -51,7 +51,7 @@ class TestTwoToThreeUpgradeHandler {
         .build();
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @ValueSource(strings = {"hoodie.table.keygenerator.class", "hoodie.datasource.write.keygenerator.class"})
   void upgradeHandlerShouldRetrieveKeyGeneratorConfig(String keyGenConfigKey) {
@@ -61,7 +61,7 @@ class TestTwoToThreeUpgradeHandler {
     assertEquals(KeyGenerator.class.getName(), kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @EnumSource(EngineType.class)
   void upgradeHandlerWhenKeyGeneratorNotSet(EngineType engineType) {

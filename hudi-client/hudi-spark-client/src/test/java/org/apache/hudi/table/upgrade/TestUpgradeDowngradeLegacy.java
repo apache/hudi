@@ -187,13 +187,13 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   public void testLeftOverUpdatedPropFileCleanup() throws IOException {
     testUpgradeZeroToOneInternal(true, true, HoodieTableType.MERGE_ON_READ);
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
   @MethodSource("configParams")
   public void testUpgradeZeroToOne(boolean deletePartialMarkerFiles, HoodieTableType tableType) throws IOException {
@@ -262,7 +262,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     }*/
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   public void testUpgradeOneToTwo(HoodieTableType tableType) throws IOException {
@@ -295,7 +295,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     assertTableProps(cfg);
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @MethodSource("twoToThreeUpgradeConfigParams")
   public void testUpgradeTwoToThree(
@@ -341,7 +341,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
         HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   public void testUpgradeDowngradeBetweenThreeAndCurrentVersion() throws IOException {
     // init config, table and client.
@@ -376,31 +376,31 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     assertEquals(checksum, metaClient.getTableConfig().getProps().getString(HoodieTableConfig.TABLE_CHECKSUM.key()));
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   public void testUpgradeFourtoFive() throws Exception {
     testUpgradeFourToFiveInternal(false, false, false);
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   public void testUpgradeFourtoFiveWithDefaultPartition() throws Exception {
     testUpgradeFourToFiveInternal(true, false, false);
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   public void testUpgradeFourtoFiveWithDefaultPartitionWithSkipValidation() throws Exception {
     testUpgradeFourToFiveInternal(true, true, false);
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   public void testUpgradeFourtoFiveWithHiveStyleDefaultPartition() throws Exception {
     testUpgradeFourToFiveInternal(true, false, true);
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   public void testUpgradeFourtoFiveWithHiveStyleDefaultPartitionWithSkipValidation() throws Exception {
     testUpgradeFourToFiveInternal(true, true, true);
@@ -560,7 +560,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     assertEquals(tableConfig.getBaseFileFormat().name(), originalProps.getProperty(BASE_FILE_FORMAT.key()));
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   public void testDowngradeSixToFiveShouldDeleteRecordIndexPartition() throws Exception {
     HoodieWriteConfig config = getConfigBuilder()
@@ -604,7 +604,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
 
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest(name = TEST_NAME_WITH_DOWNGRADE_PARAMS)
   @MethodSource("downGradeConfigParams")
   public void testDowngrade(

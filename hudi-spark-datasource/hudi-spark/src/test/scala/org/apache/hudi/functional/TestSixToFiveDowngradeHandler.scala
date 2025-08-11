@@ -40,7 +40,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
 
   private var partitionPaths: java.util.List[StoragePath] = null
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testDowngradeWithMDTAndLogFiles(tableType: HoodieTableType): Unit = {
@@ -72,7 +72,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     }
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @Test
   def testDowngradeWithoutLogFiles(): Unit = {
     val hudiOpts = commonOpts + (
@@ -92,7 +92,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     assertEquals(HoodieTableVersion.FIVE, metaClient.getTableConfig.getTableVersion)
   }
 
-  @Disabled
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testDowngradeWithoutMDT(tableType: HoodieTableType): Unit = {

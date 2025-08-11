@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 
 class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
-  ignore("Test Call downgrade_table and upgrade_table Procedure") {
+  ignore("[HUDI-9700] Test Call downgrade_table and upgrade_table Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -87,7 +87,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  ignore("Test Call upgrade_table from version three") {
+  ignore("[HUDI-9700] Test Call upgrade_table from version three") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
