@@ -360,7 +360,12 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
             HoodieInternalRowUtils.getCachedPosList(structType, field);
         if (cachedNestedFieldPath.isDefined()) {
           NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-          return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+          if (nestedFieldPath.parts()[0]._2.dataType() instanceof org.apache.spark.sql.types.StringType) {
+            return SparkAdapterSupport$.MODULE$.sparkAdapter().getHoodieUTF8StringFactory()
+                .wrapUTF8String((UTF8String) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath));
+          } else {
+            return (Comparable<?>) HoodieUnsafeRowUtils.getNestedInternalRowValue(data, nestedFieldPath);
+          }
         }
         return OrderingValues.getDefault();
       });
