@@ -6,11 +6,15 @@ toc: true
 
 # Weekly Office Hours
 
-**[ZOOM LINK TO JOIN](https://zoom.us/j/95710395048)**
+We now have two weekly office hours to accommodate different time zones:
 
-Office hours are held every week on Wed, 09:00 AM Pacific Time (US and Canada)([translate to other time zones](https://www.worldtimebuddy.com/?qm=1&lid=5368361,2643743,1264527,1796236&h=5368361&date=2022-8-25&sln=8-9&hf=1))
+🌍 **Global Office Hours** – Every Wednesday, 09:00 AM Pacific Time (US & Canada)
+[ZOOM LINK TO JOIN](https://zoom.us/j/95710395048)
 
-One of the PMC members/committers will hold office hours to help answer questions interactively, on a first-come first-serve basis.
+🌏 **Asia-Friendly Office Hours** – Every Thursday, 10:00 AM Indian Standard Time
+[ZOOM LINK TO JOIN](https://us06web.zoom.us/j/86229939685)
+
+During each session, one of the PMC members/committers will be available to answer questions interactively on a first-come, first-serve basis.
 
 ## 1-1 Consultation
 
