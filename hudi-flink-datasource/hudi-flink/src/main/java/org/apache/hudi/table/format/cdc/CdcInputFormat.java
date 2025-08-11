@@ -195,7 +195,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         MergeOnReadInputSplit split = singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getSplitRecordIterator(split);
-        return new DataLogFileIterator(maxCompactionMemoryInBytes, imageManager, fileSplit, tableState, recordIterator, metaClient, writeConfig, conf);
+        return new DataLogFileIterator(maxCompactionMemoryInBytes, imageManager, fileSplit, tableState, recordIterator, metaClient);
       case REPLACE_COMMIT:
         return new ReplaceCommitIterator(conf, tablePath, tableState, fileSplit, this::getFileSliceIterator);
       default:
@@ -356,15 +356,14 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         HoodieCDCFileSplit cdcFileSplit,
         MergeOnReadTableState tableState,
         ClosableIterator<HoodieRecord<RowData>> logRecordIterator,
-        HoodieTableMetaClient metaClient,
-        HoodieWriteConfig writeConfig,
-        Configuration flinkConf) throws IOException {
+        HoodieTableMetaClient metaClient) throws IOException {
       this.tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.imageManager = imageManager;
       this.projection = tableState.getRequiredRowType().equals(tableState.getRowType())
           ? null
           : RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
+      HoodieWriteConfig writeConfig = this.imageManager.writeConfig;
       this.props = writeConfig.getProps();
       this.readerContext = new FlinkReaderContextFactory(metaClient).getContext();
       readerContext.initRecordMerger(props);
