@@ -46,6 +46,11 @@ import java.util.Properties;
  * Record context for reading and transforming avro indexed records.
  */
 public class AvroRecordContext extends RecordContext<IndexedRecord> {
+  private static final AvroRecordContext FIELD_ACCESSOR_INSTANCE = new AvroRecordContext();
+
+  public static AvroRecordContext getFieldAccessorInstance() {
+    return FIELD_ACCESSOR_INSTANCE;
+  }
 
   private final String payloadClass;
   // This boolean indicates whether the caller requires payloads in the HoodieRecord conversion.
@@ -53,10 +58,15 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   private final boolean requiresPayloadRecords;
 
   public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords) {
-    super(tableConfig);
+    super(tableConfig, new AvroJavaTypeConverter());
     this.payloadClass = payloadClass;
-    this.typeConverter = new AvroJavaTypeConverter();
     this.requiresPayloadRecords = requiresPayloadRecords;
+  }
+
+  public AvroRecordContext() {
+    super(new AvroJavaTypeConverter());
+    this.payloadClass = null;
+    this.requiresPayloadRecords = false;
   }
 
   public static Object getFieldValueFromIndexedRecord(

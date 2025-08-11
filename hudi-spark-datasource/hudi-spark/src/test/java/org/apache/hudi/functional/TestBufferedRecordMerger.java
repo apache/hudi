@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -785,7 +786,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   static class DummyRecordContext extends RecordContext<InternalRow> {
 
     public DummyRecordContext(HoodieTableConfig tableConfig) {
-      super(tableConfig);
+      super(tableConfig, new DefaultJavaTypeConverter());
     }
 
     @Override

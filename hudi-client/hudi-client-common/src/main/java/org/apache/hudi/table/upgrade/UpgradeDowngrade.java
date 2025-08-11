@@ -87,19 +87,45 @@ public class UpgradeDowngrade {
 
   public static boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
-    return needsUpgrade(metaClient, config, toWriteVersion) || toWriteVersion.versionCode() < fromTableVersion.versionCode();
+    return needsUpgrade(metaClient, config, toWriteVersion) || needsDowngrade(fromTableVersion, toWriteVersion);
+  }
+
+  public static boolean needsDowngrade(HoodieTableVersion fromTableVersion, HoodieTableVersion toWriteVersion) {
+    if (toWriteVersion.lesserThan(HoodieTableVersion.SIX)) {
+      throw new HoodieUpgradeDowngradeException(
+          String.format("Hudi 1.x release only supports table version greater than "
+                  + "version 6 or above. Please downgrade table from version %s to %s "
+                  + "using a Hudi release prior to 1.0.0",
+              HoodieTableVersion.SIX.versionCode(), toWriteVersion.versionCode()));
+    }
+    return toWriteVersion.lesserThan(fromTableVersion);
   }
 
   public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
-    // If table version is less than SIX, then we need to upgrade to SIX first before upgrading to any other version, irrespective of autoUpgrade flag
-    if (fromTableVersion.versionCode() < HoodieTableVersion.SIX.versionCode() && toWriteVersion.versionCode() >= HoodieTableVersion.EIGHT.versionCode()) {
-      throw new HoodieUpgradeDowngradeException(
-          String.format("Please upgrade table from version %s to %s before upgrading to version %s.", fromTableVersion, HoodieTableVersion.SIX.versionCode(), toWriteVersion));
+    if (fromTableVersion.greaterThanOrEquals(toWriteVersion)) {
+      LOG.warn("Table version {} is greater than or equal to write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
+      return false;
     }
-
-    // allow upgrades otherwise.
-    return toWriteVersion.versionCode() > fromTableVersion.versionCode();
+    if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
+      throw new HoodieUpgradeDowngradeException(
+          String.format("Hudi 1.x release only supports table version greater than "
+                  + "version 6 or above. Please upgrade table from version %s to %s "
+                  + "using a Hudi release prior to 1.0.0",
+              fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
+    }
+    if (!config.autoUpgrade()) {
+      // if autoUpgrade is disabled and table version is greater than or equal to SIX,
+      // then we must ensure the write version is set to the table version.
+      // and skip the upgrade
+      config.setWriteVersion(fromTableVersion);
+      LOG.warn("hoodie.write.auto.upgrade was disabled. Table version {} does not match write version {}. "
+                      + "Setting hoodie.write.table.version={} to match hoodie.table.version, and skipping upgrade",
+              fromTableVersion.versionCode(), toWriteVersion.versionCode(), fromTableVersion.versionCode());
+      return false;
+    }
+    // if we have passed all the checks, then this is valid to upgrade
+    return true;
   }
 
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
@@ -152,12 +178,6 @@ public class UpgradeDowngrade {
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
     // Determine if we are upgrading or downgrading
     boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
-    if (isUpgrade && !config.autoUpgrade()) {
-      // if we are attempting to upgrade and auto-upgrade is disabled
-      // we exit out the upgrade process
-      LOG.warn("AUTO_UPGRADE_VERSION was explicitly disabled, skipping table version upgrade process");
-      return;
-    }
 
     if (!needsUpgradeOrDowngrade(toVersion)) {
       return;
@@ -220,16 +240,11 @@ public class UpgradeDowngrade {
       // add alternate keys.
       metaClient.getTableConfig().setValue(entry.getKey(), entry.getValue());
       entry.getKey().getAlternatives().forEach(alternateKey -> {
-        metaClient.getTableConfig().setValue((String)alternateKey, entry.getValue());
+        metaClient.getTableConfig().setValue((String) alternateKey, entry.getValue());
       });
     }
     for (ConfigProperty configProperty : tablePropsToRemove) {
       metaClient.getTableConfig().clearValue(configProperty);
-    }
-    // user could have disabled auto upgrade (probably to deploy the new binary only),
-    // in which case, we should not update the table version
-    if (config.autoUpgrade()) {
-      metaClient.getTableConfig().setTableVersion(toVersion);
     }
 
     // Remove properties.

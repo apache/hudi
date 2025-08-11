@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -307,7 +308,7 @@ public abstract class SchemaHandlerTestBase {
   static class StubbedReaderContext extends HoodieReaderContext<String> {
 
     protected StubbedReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex) {
-      super(null, hoodieTableConfig, Option.empty(), Option.empty(), new RecordContext<String>(hoodieTableConfig) {
+      super(null, hoodieTableConfig, Option.empty(), Option.empty(), new RecordContext<String>(hoodieTableConfig, new DefaultJavaTypeConverter()) {
         @Override
         public boolean supportsParquetRowIndex() {
           return supportsParquetRowIndex;

@@ -113,6 +113,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
       return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptyList());
     }
+
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // Populate missing index versions indexes

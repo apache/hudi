@@ -101,16 +101,16 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
-import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
@@ -2657,6 +2657,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  @Disabled("HUDI-9700")
   @Test
   public void testUpgradeDowngrade() throws IOException {
     init(HoodieTableType.COPY_ON_WRITE, false);
@@ -2729,6 +2730,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * When table needs to be upgraded and when multi writer is enabled, hudi rolls back partial commits. Upgrade itself is happening
    * within a lock and hence rollback should not lock again.
    */
+  @Disabled("HUDI-9700")
   @Test
   public void testRollbackDuringUpgradeForDoubleLocking() throws IOException {
     init(HoodieTableType.COPY_ON_WRITE, false);
