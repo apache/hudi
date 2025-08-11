@@ -1782,10 +1782,12 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @CsvSource(Array(
-    "6,8,true,UPGRADE",           // Normal upgrade: table=6, write=8, autoUpgrade=true → should upgrade
-    "6,8,false,VERSION_ADJUST",   // Auto-upgrade disabled: table=6, write=8, autoUpgrade=false → adjust version
-    "4,8,true,EXCEPTION",         // Auto-upgrade enabled: Should throw exception since table version is less than 6
-    "4,8,false,EXCEPTION"         // Auto-upgrade disabled: Should throw exception since table version is less than 6
+    "6,8,true,UPGRADE", // Normal upgrade: table=6, write=8, autoUpgrade=true → should upgrade
+    "6,9,true,UPGRADE", // Normal upgrade: table=6, write=9, autoUpgrade=true → should upgrade
+    "6,6,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=6, autoUpgrade=false → no upgrade
+    "6,8,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=8, autoUpgrade=false → no upgrade
+    "4,8,true,EXCEPTION", // Auto-upgrade enabled: Should throw exception since table version is less than 6
+    "4,8,false,EXCEPTION" // Auto-upgrade disabled: Should throw exception since table version is less than 6
   ))
   def testBaseHoodieWriteClientUpgradeDecisionLogic(
     tableVersionStr: String,
