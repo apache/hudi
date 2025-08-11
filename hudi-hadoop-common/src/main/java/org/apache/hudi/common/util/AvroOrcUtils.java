@@ -27,6 +27,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.StringType;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
@@ -318,7 +319,7 @@ public class AvroOrcUtils {
       case STRUCT:
         StructColumnVector structColVec = (StructColumnVector) colVector;
 
-        GenericData.Record record = (GenericData.Record) value;
+        GenericRecord record = (GenericRecord) value;
 
         for (int i = 0; i < type.getFieldNames().size(); i++) {
           String fieldName = type.getFieldNames().get(i);

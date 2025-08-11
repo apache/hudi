@@ -55,8 +55,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   public HiveRecordContext(HoodieTableConfig tableConfig) {
-    super(tableConfig);
-    this.typeConverter = new HiveJavaTypeConverter();
+    super(tableConfig, new HiveJavaTypeConverter());
   }
 
   @Override

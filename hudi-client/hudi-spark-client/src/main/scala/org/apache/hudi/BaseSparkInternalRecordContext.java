@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
@@ -45,7 +46,7 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 public abstract class BaseSparkInternalRecordContext extends RecordContext<InternalRow> {
 
   public BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
-    super(tableConfig);
+    super(tableConfig, new DefaultJavaTypeConverter());
   }
 
   public static Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
