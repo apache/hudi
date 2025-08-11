@@ -56,7 +56,7 @@ class TestTwoToThreeUpgradeHandler {
     config.setValue(keyGenConfigKey, KeyGenerator.class.getName());
     TwoToThreeUpgradeHandler handler = new TwoToThreeUpgradeHandler();
     Map<ConfigProperty, String> kv =
-        handler.upgrade(config, null, null, null).getPropertiesToUpdate();
+        handler.upgrade(config, null, null, null).propertiesToUpdate();
     assertEquals(KeyGenerator.class.getName(), kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
   }
 
@@ -72,7 +72,7 @@ class TestTwoToThreeUpgradeHandler {
     TwoToThreeUpgradeHandler handler = new TwoToThreeUpgradeHandler();
     if (engineType == EngineType.SPARK) {
       Map<ConfigProperty, String> kv =
-          handler.upgrade(config, null, null, null).getPropertiesToUpdate();
+          handler.upgrade(config, null, null, null).propertiesToUpdate();
       assertEquals(TwoToThreeUpgradeHandler.SPARK_SIMPLE_KEY_GENERATOR,
           kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
     } else {

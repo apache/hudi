@@ -268,7 +268,7 @@ public class HoodieTableConfig extends HoodieConfig {
           + " produce a new base file.");
 
   public static final ConfigProperty<String> LEGACY_PAYLOAD_CLASS_NAME = ConfigProperty
-      .key("hoodie.legacy.payload.class")
+      .key("hoodie.table.legacy.payload.class")
       .noDefaultValue()
       .sinceVersion("1.1.0")
       .withDocumentation("The payload class previously used to populate the table is now deprecated and should be avoided in future use.");

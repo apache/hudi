@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.StringUtils;
@@ -50,8 +49,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 /**
  * Version 8 is the placeholder version from 1.0.0 to 1.0.2.
@@ -74,13 +71,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
                                                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    // handle metadata table
-    checkAndHandleMetadataTable(context, table, config, metaClient);
-    // Rollback and run compaction in one step
-    rollbackFailedWritesAndCompact(
-        table, context, config, upgradeDowngradeHelper,
-        HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
-        HoodieTableVersion.NINE);
     // Handle secondary index.
     UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
         config, context, table, upgradeDowngradeHelper, "downgrading from table version nine to eight");

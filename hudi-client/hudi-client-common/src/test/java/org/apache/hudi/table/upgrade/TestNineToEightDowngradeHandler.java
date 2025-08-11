@@ -171,22 +171,22 @@ class TestNineToEightDowngradeHandler {
       UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
       // Assert properties to remove
-      assertEquals(expectedPropertiesToRemoveSize, propertiesToChange.getPropertiesToDelete().size());
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getPropertiesToDelete().get(1));
-      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.getPropertiesToDelete().get(2));
+      assertEquals(expectedPropertiesToRemoveSize, propertiesToChange.propertiesToDelete().size());
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.propertiesToDelete().get(1));
+      assertEquals(LEGACY_PAYLOAD_CLASS_NAME, propertiesToChange.propertiesToDelete().get(2));
       // Assert properties to add
-      assertEquals(expectedPropertiesToAddSize, propertiesToChange.getPropertiesToUpdate().size());
+      assertEquals(expectedPropertiesToAddSize, propertiesToChange.propertiesToUpdate().size());
       // Assert payload class is always set
-      assertEquals(payloadClassName, propertiesToChange.getPropertiesToUpdate().get(PAYLOAD_CLASS_NAME));
+      assertEquals(payloadClassName, propertiesToChange.propertiesToUpdate().get(PAYLOAD_CLASS_NAME));
       // Assert record merge mode if required
       if (hasRecordMergeMode) {
         assertEquals(RecordMergeMode.CUSTOM.name(),
-            propertiesToChange.getPropertiesToUpdate().get(RECORD_MERGE_MODE));
+            propertiesToChange.propertiesToUpdate().get(RECORD_MERGE_MODE));
       }
       // Assert record merge strategy ID if required
       if (hasRecordMergeStrategyId) {
         assertEquals(PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-            propertiesToChange.getPropertiesToUpdate().get(RECORD_MERGE_STRATEGY_ID));
+            propertiesToChange.propertiesToUpdate().get(RECORD_MERGE_STRATEGY_ID));
       }
     }
   }
@@ -201,9 +201,9 @@ class TestNineToEightDowngradeHandler {
       when(tableConfig.getLegacyPayloadClass()).thenReturn("NonExistentPayloadClass");
       UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
-      assertEquals(2, propertiesToChange.getPropertiesToDelete().size());
-      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.getPropertiesToDelete().get(1));
-      assertEquals(0, propertiesToChange.getPropertiesToUpdate().size());
+      assertEquals(2, propertiesToChange.propertiesToDelete().size());
+      assertEquals(PARTIAL_UPDATE_MODE, propertiesToChange.propertiesToDelete().get(1));
+      assertEquals(0, propertiesToChange.propertiesToUpdate().size());
     }
   }
 

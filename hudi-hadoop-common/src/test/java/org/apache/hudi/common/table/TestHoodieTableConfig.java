@@ -172,7 +172,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(9, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
-    assertEquals("new_field", config.getPreCombineFields());
+    assertEquals(Collections.singletonList("new_field"), config.getPreCombineFields());
     assertEquals("partition_path", config.getPartitionFields().get()[0]);
 
     // update 1 property and delete 1 property
@@ -186,7 +186,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
-    assertEquals("new_field2", config.getPreCombineFields());
+    assertEquals(Collections.singletonList("new_field2"), config.getPreCombineFields());
     assertFalse(config.getPartitionFields().isPresent());
 
     // just delete 1 property w/o updating anything.
@@ -195,7 +195,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(7, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
-    assertNull(config.getPreCombineFields());
+    assertTrue(config.getPreCombineFields().isEmpty());
     assertFalse(config.getPartitionFields().isPresent());
   }
 

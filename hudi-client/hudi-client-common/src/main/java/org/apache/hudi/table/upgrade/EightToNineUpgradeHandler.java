@@ -63,8 +63,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 /**
  * Version 8 presents Hudi version from 1.0.0 to 1.0.2.
@@ -128,14 +126,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           indexMetadataOpt.get(),
           metaClient.getTableConfig().getTableVersion());
     }
-    // If metadata is enabled for the data table, and
-    // existing metadata table is behind the data table, then delete it.
-    checkAndHandleMetadataTable(context, table, config, metaClient);
-    // Rollback and run compaction in one step.
-    rollbackFailedWritesAndCompact(
-        table, context, config, upgradeDowngradeHelper,
-        HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
-        HoodieTableVersion.EIGHT);
     List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
     // TODO: make it work for COW after write path is ready.
     if (tableConfig.getTableType() == HoodieTableType.MERGE_ON_READ) {

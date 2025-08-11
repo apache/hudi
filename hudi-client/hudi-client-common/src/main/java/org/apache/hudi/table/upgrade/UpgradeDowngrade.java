@@ -197,8 +197,8 @@ public class UpgradeDowngrade {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
         UpgradeDowngrade.TableConfigChangeSet tableConfigChangeSet =
             upgrade(fromVersion, nextVersion, instantTime);
-        tablePropsToAdd.putAll(tableConfigChangeSet.getPropertiesToUpdate());
-        tablePropsToRemove.addAll(tableConfigChangeSet.getPropertiesToDelete());
+        tablePropsToAdd.putAll(tableConfigChangeSet.propertiesToUpdate());
+        tablePropsToRemove.addAll(tableConfigChangeSet.propertiesToDelete());
         fromVersion = nextVersion;
       }
     } else {
@@ -206,8 +206,8 @@ public class UpgradeDowngrade {
       while (fromVersion.versionCode() > toVersion.versionCode()) {
         HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() - 1);
         UpgradeDowngrade.TableConfigChangeSet tableConfigChangeSet = downgrade(fromVersion, prevVersion, instantTime);
-        tablePropsToAdd.putAll(tableConfigChangeSet.getPropertiesToUpdate());
-        tablePropsToRemove.addAll(tableConfigChangeSet.getPropertiesToDelete());
+        tablePropsToAdd.putAll(tableConfigChangeSet.propertiesToUpdate());
+        tablePropsToRemove.addAll(tableConfigChangeSet.propertiesToDelete());
         fromVersion = prevVersion;
       }
     }
@@ -332,11 +332,11 @@ public class UpgradeDowngrade {
       this.propertiesToDelete = propertiesToDelete;
     }
 
-    public Map<ConfigProperty, String> getPropertiesToUpdate() {
+    public Map<ConfigProperty, String> propertiesToUpdate() {
       return propertiesToUpdate;
     }
 
-    public List<ConfigProperty> getPropertiesToDelete() {
+    public List<ConfigProperty> propertiesToDelete() {
       return propertiesToDelete;
     }
   }
