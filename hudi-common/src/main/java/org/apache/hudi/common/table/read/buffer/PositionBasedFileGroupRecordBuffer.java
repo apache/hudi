@@ -203,7 +203,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
           // and these keys would be deleted no matter whether there are following-up inserts/updates.
           DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
-          BufferedRecord<T> record = BufferedRecords.fromDeleteRecord(deleteRecord, deleteRecord.getOrderingValue());
+          BufferedRecord<T> record = BufferedRecords.fromDeleteRecord(deleteRecord, readerContext.getRecordContext());
           records.put(recordPosition, record);
         }
         return;

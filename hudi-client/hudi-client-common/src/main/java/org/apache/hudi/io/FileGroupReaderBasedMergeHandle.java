@@ -91,9 +91,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   private HoodieReadStats readStats;
   private HoodieRecord.HoodieRecordType recordType;
   private Option<HoodieCDCLogger> cdcLogger;
-  private Option<RecordLevelIndexCallback> recordIndexCallbackOpt;
-  private Option<SecondaryIndexCallback> secondaryIndexCallbackOpt;
-  private final boolean isCompaction;
+  private Option<RecordLevelIndexCallback> recordIndexCallbackOpt = Option.empty();
+  private Option<SecondaryIndexCallback> secondaryIndexCallbackOpt = Option.empty();
   private final TypedProperties props;
   private Iterator<HoodieRecord> incomingRecordsItr;
 
@@ -122,7 +121,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     this.maxInstantTime = instantTime;
     initRecordTypeAndCdcLogger(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.props = TypedProperties.copy(config.getProps());
-    this.isCompaction = false;
     populateIncomingRecordsMapIterator(recordItr);
     initRecordIndexCallback();
   }
@@ -151,8 +149,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     initRecordTypeAndCdcLogger(enginRecordType);
     init(operation, this.partitionPath);
     this.props = TypedProperties.copy(config.getProps());
-    this.isCompaction = true;
-    initRecordIndexCallback();
   }
 
   private void initRecordTypeAndCdcLogger(HoodieRecord.HoodieRecordType enginRecordType) {
@@ -245,10 +241,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param newRecordsItr
    */
   private void populateIncomingRecordsMapIterator(Iterator<HoodieRecord<T>> newRecordsItr) {
-    if (!isCompaction) {
-      // avoid populating external spillable in base {@link HoodieWriteMergeHandle)
-      this.incomingRecordsItr = new MappingIterator<>(newRecordsItr, record -> (HoodieRecord) record);
-    }
+    // avoid populating external spillable in base {@link HoodieWriteMergeHandle)
+    this.incomingRecordsItr = new MappingIterator<>(newRecordsItr, record -> (HoodieRecord) record);
   }
 
   /**
@@ -265,12 +259,14 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
             config.getBasePath(), op.getPartitionPath()), logFileName))));
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, internalSchemaOption, props, isCompaction, logFilesStreamOpt, incomingRecordsItr)) {
+    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, internalSchemaOption, props, logFilesStreamOpt, incomingRecordsItr)) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
           HoodieRecord<T> record = recordIterator.next();
           Option<Map<String, String>> recordMetadata = getRecordMetadata(record, writeSchema, props);
+          record.setCurrentLocation(newRecordLocation);
+          record.setNewLocation(newRecordLocation);
           if (!partitionPath.equals(record.getPartitionPath())) {
             HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
                 + record.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
@@ -303,7 +299,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
-  private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props, boolean isCompaction,
+  private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
                                                       Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord> incomingRecordsItr) {
     HoodieFileGroupReader.Builder<T> fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
@@ -312,7 +308,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(createCallback());
 
-    if (isCompaction) {
+    if (logFileStreamOpt.isPresent()) {
       fileGroupBuilder.withLogFiles(logFileStreamOpt.get());
     } else {
       fileGroupBuilder.withRecordIterator(incomingRecordsItr, writeSchema);
@@ -340,7 +336,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       writeStatus.getStat().setTotalLogBlocks(readStats.getTotalLogBlocks());
       writeStatus.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
       writeStatus.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
-      if (isCompaction) {
+      if (operation.isPresent()) {
         writeStatus.getStat().setTotalLogSizeCompacted(operation.get().getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
       }
 
@@ -365,7 +361,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     if (isSecondaryIndexStatsStreamingWritesEnabled) {
       this.secondaryIndexCallbackOpt = Option.of(new SecondaryIndexCallback<>(
           partitionPath,
-          writeSchemaWithMetaFields,
           readerContext,
           writeStatus,
           secondaryIndexDefns
@@ -444,18 +439,15 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   private static class SecondaryIndexCallback<T> implements BaseFileUpdateCallback<T> {
     private final String partitionPath;
-    private final Schema writeSchemaWithMetaFields;
     private final HoodieReaderContext<T> readerContext;
     private final WriteStatus writeStatus;
     private final List<HoodieIndexDefinition> secondaryIndexDefns;
 
     public SecondaryIndexCallback(String partitionPath,
-                                  Schema writeSchemaWithMetaFields,
                                   HoodieReaderContext<T> readerContext,
                                   WriteStatus writeStatus,
                                   List<HoodieIndexDefinition> secondaryIndexDefns) {
       this.partitionPath = partitionPath;
-      this.writeSchemaWithMetaFields = writeSchemaWithMetaFields;
       this.readerContext = readerContext;
       this.secondaryIndexDefns = secondaryIndexDefns;
       this.writeStatus = writeStatus;

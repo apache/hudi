@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -32,13 +31,11 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
-import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -58,7 +55,6 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
-import static org.apache.hudi.common.table.read.buffer.FileGroupRecordBuffer.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -93,7 +89,6 @@ class TestFileGroupRecordBuffer {
   private final UpdateProcessor updateProcessor = mock(UpdateProcessor.class);
   private HoodieTableMetaClient hoodieTableMetaClient = mock(HoodieTableMetaClient.class);
   private TypedProperties props;
-  private HoodieReadStats readStats = mock(HoodieReadStats.class);
 
   @BeforeEach
   void setUp() {
@@ -106,22 +101,6 @@ class TestFileGroupRecordBuffer {
     when(readerContext.getRecordSerializer()).thenReturn(new DefaultSerializer<>());
     when(readerContext.getRecordSizeEstimator()).thenReturn(new DefaultSizeEstimator<>());
     when(readerContext.getIteratorMode()).thenReturn(IteratorMode.ENGINE_RECORD);
-  }
-
-  @Test
-  void testGetOrderingValueFromDeleteRecord() {
-    HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
-    DeleteRecord deleteRecord = mock(DeleteRecord.class);
-    mockDeleteRecord(deleteRecord, null);
-    assertEquals(OrderingValues.getDefault(), getOrderingValue(readerContext, deleteRecord));
-    mockDeleteRecord(deleteRecord, OrderingValues.getDefault());
-    assertEquals(OrderingValues.getDefault(), getOrderingValue(readerContext, deleteRecord));
-    Comparable orderingValue = "xyz";
-    Comparable convertedValue = "_xyz";
-    mockDeleteRecord(deleteRecord, orderingValue);
-    when(recordContext.convertOrderingValueToEngineType(orderingValue)).thenReturn(convertedValue);
-    when(readerContext.getRecordContext()).thenReturn(recordContext);
-    assertEquals(convertedValue, getOrderingValue(readerContext, deleteRecord));
   }
 
   @ParameterizedTest
@@ -147,11 +126,6 @@ class TestFileGroupRecordBuffer {
         () -> new DeleteContext(props, dataSchema));
     assertEquals("Either custom delete key or marker is not specified",
         exception.getMessage());
-  }
-
-  private void mockDeleteRecord(DeleteRecord deleteRecord,
-                                Comparable orderingValue) {
-    when(deleteRecord.getOrderingValue()).thenReturn(orderingValue);
   }
 
   @Test

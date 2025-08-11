@@ -487,10 +487,13 @@ public class HoodieIndexUtils {
         // the record was deleted
         return Option.empty();
       }
-      String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
+      Schema recordSchema = incomingRecordContext.getSchemaFromBufferRecord(mergeResult);
+      String partitionPath = inferPartitionPath(incoming, existing, recordSchema, keyGenerator, existingRecordContext, mergeResult);
       HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
+      HoodieRecord<R> withMeta = result.prependMetaFields(recordSchema, writeSchemaWithMetaFields,
+          new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
       // the merged record needs to be converted back to the original payload
-      return Option.of(result.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+      return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
           config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
     }
   }

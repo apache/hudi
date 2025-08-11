@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.serialization;
 
+import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.AvroRecordSerializer;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -101,7 +102,7 @@ public class TestBufferedRecordSerializer {
   void testDeleteRecordSerAndDe(HoodieOperation hoodieOperation) throws IOException {
     Schema schema = SchemaTestUtil.getSimpleSchema();
     DeleteRecord record = DeleteRecord.create("id", "partition", 100);
-    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.fromDeleteRecord(record, 100);
+    BufferedRecord<IndexedRecord> bufferedRecord = BufferedRecords.fromDeleteRecord(record, new AvroRecordContext(null, null, false));
     bufferedRecord.setHoodieOperation(hoodieOperation);
 
     AvroRecordSerializer avroRecordSerializer = new AvroRecordSerializer(integer -> schema);

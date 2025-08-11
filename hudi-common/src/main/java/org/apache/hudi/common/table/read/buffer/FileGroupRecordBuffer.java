@@ -23,7 +23,6 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -41,7 +40,6 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -276,18 +274,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
         .orElseGet(dataBlock::getSchema);
     return Pair.of(transformer, evolvedSchema);
-  }
-
-  static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
-    return orderingValue == null || OrderingValues.isDefault(orderingValue);
-  }
-
-  static Comparable getOrderingValue(HoodieReaderContext readerContext,
-                                     DeleteRecord deleteRecord) {
-    Comparable orderingValue = deleteRecord.getOrderingValue();
-    return isCommitTimeOrderingValue(orderingValue)
-        ? OrderingValues.getDefault()
-        : readerContext.getRecordContext().convertOrderingValueToEngineType(orderingValue);
   }
 
   private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
