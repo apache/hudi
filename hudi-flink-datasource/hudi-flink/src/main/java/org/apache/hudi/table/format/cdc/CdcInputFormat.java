@@ -36,8 +36,8 @@ import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.table.read.MergeResult;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -453,13 +453,10 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     @SuppressWarnings("unchecked")
     private Option<HoodieRecord<RowData>> mergeRowWithLog(HoodieRecord<RowData> historyRecord, HoodieRecord<RowData> newRecord) {
       try {
-        BufferedRecord<RowData> historyBufferedRecord = BufferedRecord.forRecordWithContext(historyRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields);
-        BufferedRecord<RowData> newBufferedRecord = BufferedRecord.forRecordWithContext(newRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields);
-        MergeResult<RowData> mergeResult = recordMerger.finalMerge(historyBufferedRecord, newBufferedRecord);
-        RowData mergedRecord = mergeResult.getMergedRecord();
-        BufferedRecord<RowData> resultingBufferedRecord = BufferedRecord.forRecordWithContext(mergedRecord, tableSchema, readerContext.getRecordContext(),
-            orderingFields, historyRecord.getRecordKey(), mergedRecord == null);
-        return Option.ofNullable(readerContext.getRecordContext().constructHoodieRecord(resultingBufferedRecord, historyRecord.getPartitionPath()));
+        BufferedRecord<RowData> historyBufferedRecord = BufferedRecords.fromHoodieRecord(historyRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields);
+        BufferedRecord<RowData> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields);
+        BufferedRecord<RowData> mergedRecord = recordMerger.finalMerge(historyBufferedRecord, newBufferedRecord);
+        return Option.ofNullable(readerContext.getRecordContext().constructHoodieRecord(mergedRecord, historyRecord.getPartitionPath()));
       } catch (IOException e) {
         throw new HoodieIOException("Merge base and delta payloads exception", e);
       }
