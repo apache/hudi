@@ -105,7 +105,7 @@ test_spark_hadoop_mr_bundles () {
     if [[ $HIVE_HOME =~ 'hive-2' ]]; then return; fi # skipping hive2 for HiveQL query due to setup issue
     # save HiveQL query results
     hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
-    mkdir $hiveqlresultsdir
+    mkdir -p $hiveqlresultsdir
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
       -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
       -e 'select * from trips' >> $hiveqlresultsdir/results.csv
