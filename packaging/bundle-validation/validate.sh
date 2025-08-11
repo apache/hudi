@@ -105,10 +105,11 @@ test_spark_hadoop_mr_bundles () {
     if [[ $HIVE_HOME =~ 'hive-2' ]]; then return; fi # skipping hive2 for HiveQL query due to setup issue
     # save HiveQL query results
     hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
-    mkdir -p $hiveqlresultsdir
+    mkdir $hiveqlresultsdir
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
       -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
       -e 'select * from trips' >> $hiveqlresultsdir/results.csv
+    cat $hiveqlresultsdir/results.csv
     numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
     if [ "$numRecordsHiveQL" -ne 10 ]; then
         echo "::error::validate.sh HiveQL validation failed."
