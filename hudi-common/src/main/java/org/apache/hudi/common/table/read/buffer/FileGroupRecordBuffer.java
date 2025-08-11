@@ -53,10 +53,12 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
@@ -66,6 +68,7 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BAS
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
+  protected final Set<String> usedKeys = new HashSet<>();
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
   protected final List<String> orderingFieldNames;
@@ -253,6 +256,9 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
     while (logRecordIterator.hasNext()) {
       BufferedRecord<T> nextRecordInfo = logRecordIterator.next();
+      if (usedKeys.contains(nextRecordInfo.getRecordKey())) {
+        continue; // Skip already used keys
+      }
       nextRecord = updateProcessor.processUpdate(nextRecordInfo.getRecordKey(), null, nextRecordInfo, nextRecordInfo.isDelete());
       if (nextRecord != null) {
         return true;
