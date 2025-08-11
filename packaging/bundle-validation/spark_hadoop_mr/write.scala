@@ -38,6 +38,8 @@ df.write.format("hudi").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
   option(TABLE_NAME, tableName).
   option("hoodie.datasource.meta.sync.enable", "true").
+  option("hoodie.datasource.hive_sync.enable", "true").
+  option("hoodie.datasource.hive_sync.use_jdbc", "false").
   option("hoodie.datasource.hive_sync.database", database).
   option("hoodie.datasource.hive_sync.table", tableName).
   option("hoodie.datasource.hive_sync.partition_extractor_class", "org.apache.hudi.hive.SinglePartPartitionValueExtractor").
