@@ -299,8 +299,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
             () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
             "Expected HoodieUpgradeDowngradeException for downgrade from " + fromVersion + " to " + toVersion
     );
-    String expectedMessage = String.format("Hudi 1.x release only supports table version greater than version 6 or above. " +
-            "Please downgrade table from version 6 to %s using a Hudi release prior to 1.0.0",
+    String expectedMessage = String.format("Hudi 1.x release only supports table version greater than version 6 or above. "
+            + "Please downgrade table from version 6 to %s using a Hudi release prior to 1.0.0",
         toVersion.versionCode());
     assertEquals(expectedMessage, exception.getMessage(),
         "Exception message should match expected blocked downgrade format");
