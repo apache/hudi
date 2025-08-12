@@ -122,7 +122,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   protected Configuration conf;
   
   // Flag to control schema evolution behavior
-  protected boolean schemaEvolutionEnabled = true;
+  protected Boolean schemaEvolutionEnabled = null;
 
   public HoodieParquetBinaryCopyBase(Configuration conf) {
     this.conf = conf;
@@ -198,6 +198,10 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
       // resolve the conflict schema between avro parquet write support and spark native parquet write support
       // Only attempt legacy conversion if schema evolution is enabled
+      if (schemaEvolutionEnabled == null) {
+        throw new HoodieException("Schema Evolution enabled not set");
+      }
+
       if (descriptor == null && schemaEvolutionEnabled) {
         String[] path = chunk.getPath().toArray();
         path = Arrays.copyOf(path, path.length);
@@ -520,6 +524,12 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       MessageType schema,
       CompressionCodecName newCodecName,
       Binary maskValue) throws IOException {
+
+    // Check if schema evolution is enabled before proceeding with column masking
+    if (schemaEvolutionEnabled == null || !schemaEvolutionEnabled) {
+      throw new HoodieException("Column masking operation is not supported when schema evolution is disabled. "
+          + "Set 'hoodie.file.stitching.binary.copy.schema.evolution.enable' to true to enable schema evolution support.");
+    }
 
     long totalChunkValues = chunk.getValueCount();
     ColumnReader cReader = crStore.getColumnReader(descriptor);

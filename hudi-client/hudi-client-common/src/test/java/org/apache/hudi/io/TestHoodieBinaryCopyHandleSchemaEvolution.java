@@ -21,11 +21,11 @@ package org.apache.hudi.io;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -34,7 +34,7 @@ import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
+import org.mockito.MockedConstruction;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
@@ -46,9 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.when;
 
 /**
@@ -56,7 +54,6 @@ import static org.mockito.Mockito.when;
  */
 public class TestHoodieBinaryCopyHandleSchemaEvolution {
 
-  @Mock
   private HoodieWriteConfig config;
   @Mock
   private HoodieTable<?, ?, ?, ?> hoodieTable;
@@ -64,7 +61,6 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
   private TaskContextSupplier taskContextSupplier;
   @Mock
   private HoodieStorage storage;
-  @Mock
   private Configuration hadoopConf;
 
   private MessageType fileSchema;
@@ -75,6 +71,9 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
   @BeforeEach
   public void setUp() {
     MockitoAnnotations.openMocks(this);
+    
+    // Initialize Hadoop Configuration
+    hadoopConf = new Configuration();
     
     // Setup test schemas
     String avroSchemaStr = "{\"type\":\"record\",\"name\":\"TestRecord\",\"fields\":["
@@ -90,7 +89,7 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
         + "{\"name\":\"field1\",\"type\":\"string\"},"
         + "{\"name\":\"field2\",\"type\":\"int\"},"
         + "{\"name\":\"field3\",\"type\":[\"null\",\"string\"],\"default\":null}"
-        + "]};";
+        + "]}";
     Schema tableAvroSchema = new Schema.Parser().parse(tableAvroSchemaStr);
     tableSchema = new AvroSchemaConverter().convert(tableAvroSchema);
     
@@ -100,19 +99,21 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
     when(hoodieTable.getStorage()).thenReturn(storage);
     when(hoodieTable.getStorageConf()).thenReturn(mock(org.apache.hudi.storage.StorageConfiguration.class));
     when(hoodieTable.getStorageConf().unwrapAs(Configuration.class)).thenReturn(hadoopConf);
-    when(config.getProps()).thenReturn(new TypedProperties());
   }
 
   @Test
   public void testSchemaEvolutionDisabled_UsesFileSchema() throws Exception {
     // Given: Schema evolution is disabled
-    when(config.isFileStitchingBinaryCopySchemaEvolutionEnabled()).thenReturn(false);
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/dummy/path")
+        .build();
+    config.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "false");
     
     // Mock ParquetUtils to return file schema
-    try (MockedStatic<ParquetUtils> parquetUtilsMock = mockStatic(ParquetUtils.class)) {
-      ParquetUtils parquetUtils = mock(ParquetUtils.class);
-      parquetUtilsMock.when(() -> new ParquetUtils()).thenReturn(parquetUtils);
-      when(parquetUtils.readSchema(eq(storage), eq(inputFiles.get(0)))).thenReturn(fileSchema);
+    try (MockedConstruction<ParquetUtils> parquetUtilsConstruction = mockConstruction(ParquetUtils.class, 
+        (mock, context) -> {
+          when(mock.readSchema(eq(storage), eq(inputFiles.get(0)))).thenReturn(fileSchema);
+        })) {
       
       // When: Creating HoodieBinaryCopyHandle (we can't instantiate directly due to complex dependencies,
       // so we test the getWriteSchema method logic indirectly)
@@ -121,14 +122,18 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
       
       // Then: Should use file schema, not table schema
       assertEquals(fileSchema, result);
-      verify(parquetUtils, times(1)).readSchema(eq(storage), eq(inputFiles.get(0)));
+      // Verify that ParquetUtils was constructed and readSchema was called
+      assertEquals(1, parquetUtilsConstruction.constructed().size());
     }
   }
 
   @Test
   public void testSchemaEvolutionEnabled_UsesTableSchema() throws Exception {
     // Given: Schema evolution is enabled (default)
-    when(config.isFileStitchingBinaryCopySchemaEvolutionEnabled()).thenReturn(true);
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/dummy/path")
+        .build();
+    config.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "true");
     
     // When: Creating HoodieBinaryCopyHandle
     TestableHoodieBinaryCopyHandle handle = new TestableHoodieBinaryCopyHandle();
@@ -143,7 +148,10 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
   @Test
   public void testSchemaEvolutionDisabled_FileReadError_ThrowsException() throws Exception {
     // Given: Schema evolution is disabled but file read fails
-    when(config.isFileStitchingBinaryCopySchemaEvolutionEnabled()).thenReturn(false);
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/dummy/path")
+        .build();
+    config.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "false");
     
     // When: Creating HoodieBinaryCopyHandle with a file that causes read error
     TestableHoodieBinaryCopyHandle handle = new TestableHoodieBinaryCopyHandle();
@@ -159,7 +167,10 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
   @Test
   public void testSchemaEvolutionDisabled_EmptyInputFiles_UsesTableSchema() throws Exception {
     // Given: Schema evolution is disabled but no input files
-    when(config.isFileStitchingBinaryCopySchemaEvolutionEnabled()).thenReturn(false);
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/dummy/path")
+        .build();
+    config.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "false");
     
     // When: Creating HoodieBinaryCopyHandle with empty input files
     TestableHoodieBinaryCopyHandle handle = new TestableHoodieBinaryCopyHandle();

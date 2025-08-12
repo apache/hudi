@@ -81,6 +81,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     // Only group by schema if schema evolution is disabled
     // When schema evolution is disabled, files must have the same schema to be grouped together
     boolean enableSchemaGrouping = !writeConfig.isFileStitchingBinaryCopySchemaEvolutionEnabled();
+    LOG.info("Schema grouping enabled: {}", enableSchemaGrouping);
     Integer currentGroupSchemaHash = null; // Track schema hash for current group
 
     for (FileSlice currentSlice : sortedFileSlices) {

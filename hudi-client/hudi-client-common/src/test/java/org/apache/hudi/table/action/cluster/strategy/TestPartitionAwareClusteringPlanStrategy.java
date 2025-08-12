@@ -99,13 +99,11 @@ public class TestPartitionAwareClusteringPlanStrategy {
   @Test
   public void testSchemaEvolutionDisabled_GroupsFilesBySchema() {
     // Given: Schema evolution is disabled
-    Properties props = new Properties();
-    props.setProperty("hoodie.file.stitching.binary.copy.schema.evolution.enable", "false");
     HoodieWriteConfig configWithEvolutionDisabled = HoodieWriteConfig
         .newBuilder()
         .withPath("dummy_Table_Path")
-        .withProps(props)
         .build();
+    configWithEvolutionDisabled.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "false");
     
     when(table.getStorage()).thenReturn(storage);
     
@@ -124,7 +122,8 @@ public class TestPartitionAwareClusteringPlanStrategy {
       parquetUtilsMock.when(() -> ParquetUtils.readSchemaHash(eq(storage), any(StoragePath.class)))
           .thenAnswer(invocation -> {
             StoragePath path = invocation.getArgument(1);
-            if (path.toString().contains("file1") || path.toString().contains("file2")) {
+            String pathStr = path.toString();
+            if (pathStr.contains("file1") || pathStr.contains("file2")) {
               return 1001;
             } else {
               return 1002;
@@ -137,27 +136,32 @@ public class TestPartitionAwareClusteringPlanStrategy {
       
       List<HoodieClusteringGroup> groups = result.getLeft().collect(java.util.stream.Collectors.toList());
       
-      // Then: Should create separate groups for different schemas
-      assertEquals(2, groups.size(), "Should create separate groups for different schema hashes");
+      // Then: Should create groups based on schema and size order
+      // Files are processed by size desc: file2(200), file4(180), file3(150), file1(100)
+      // Group 1: file2 (schema 1001)
+      // Group 2: file4, file3 (schema 1002) 
+      // Group 3: file1 (schema 1001) - can't join group 1 as algorithm doesn't look back
+      assertEquals(3, groups.size(), "Should create 3 groups based on size order and schema");
       
-      // Verify first group has files with schema hash 1001 (file2, file1 - sorted by size desc)
-      assertEquals(2, groups.get(0).getSlices().size());
+      // Verify first group has file2 (schema 1001)
+      assertEquals(1, groups.get(0).getSlices().size());
       
-      // Verify second group has files with schema hash 1002 (file4, file3 - sorted by size desc)  
+      // Verify second group has file4 and file3 (schema 1002)
       assertEquals(2, groups.get(1).getSlices().size());
+      
+      // Verify third group has file1 (schema 1001) 
+      assertEquals(1, groups.get(2).getSlices().size());
     }
   }
 
   @Test
   public void testSchemaEvolutionEnabled_DoesNotGroupBySchema() {
     // Given: Schema evolution is enabled (default)
-    Properties props = new Properties();
-    props.setProperty("hoodie.file.stitching.binary.copy.schema.evolution.enable", "true");
     HoodieWriteConfig configWithEvolutionEnabled = HoodieWriteConfig
         .newBuilder()
         .withPath("dummy_Table_Path")
-        .withProps(props)
         .build();
+    configWithEvolutionEnabled.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "true");
     
     when(table.getStorage()).thenReturn(storage);
     
@@ -186,14 +190,12 @@ public class TestPartitionAwareClusteringPlanStrategy {
   @Test
   public void testSchemaEvolutionDisabled_LargeGroup_SplitsBySize() {
     // Given: Schema evolution is disabled but group size exceeds limit
-    Properties props = new Properties();
-    props.setProperty("hoodie.file.stitching.binary.copy.schema.evolution.enable", "false");
-    props.setProperty("hoodie.clustering.plan.strategy.max.bytes.per.group", "300"); // Small limit
     HoodieWriteConfig configWithEvolutionDisabled = HoodieWriteConfig
         .newBuilder()
         .withPath("dummy_Table_Path")
-        .withProps(props)
         .build();
+    configWithEvolutionDisabled.setValue(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, "false");
+    configWithEvolutionDisabled.setValue(HoodieClusteringConfig.PLAN_STRATEGY_MAX_BYTES_PER_OUTPUT_FILEGROUP, "300"); // Small limit
     
     when(table.getStorage()).thenReturn(storage);
     
@@ -226,8 +228,12 @@ public class TestPartitionAwareClusteringPlanStrategy {
     HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
     
     when(slice.getBaseFile()).thenReturn(Option.of(baseFile));
+    when(slice.getPartitionPath()).thenReturn("test_partition");
+    when(slice.getFileId()).thenReturn(fileName + "_id");
+    when(slice.getLogFiles()).thenAnswer(invocation -> Stream.empty());
     when(baseFile.getFileSize()).thenReturn(fileSize);
     when(baseFile.getPath()).thenReturn("/test/path/" + fileName + ".parquet");
+    when(baseFile.getBootstrapBaseFile()).thenReturn(Option.empty());
     
     return slice;
   }

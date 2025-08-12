@@ -689,15 +689,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, records in older schema are rewritten into newer schema during upsert,delete and background"
           + " compaction,clustering operations.");
 
-  public static final ConfigProperty<Boolean> FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE = ConfigProperty
-      .key("hoodie.file.stitching.binary.copy.schema.evolution.enable")
-      .defaultValue(true)
-      .markAdvanced()
-      .sinceVersion("0.16.0")
-      .withDocumentation("When enabled (default), file stitching binary copy operations will handle schema evolution by adding null columns "
-          + "for missing fields. When disabled, all input files must have exactly the same schema, and the operation will fail "
-          + "if schemas don't match. Disabling can avoid the risk of schema errors of schema evolution when schema evolution is not needed during file stitching.");
-
   public static final ConfigProperty<Boolean> ALLOW_EMPTY_COMMIT = ConfigProperty
       .key("hoodie.allow.empty.commit")
       .defaultValue(true)
@@ -1793,6 +1784,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
   }
 
+  public boolean isFileStitchingBinaryCopySchemaEvolutionEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
+  }
+
   public int getInlineClusterMaxCommits() {
     return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS);
   }
@@ -2705,10 +2700,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean allowOperationMetadataField() {
     return getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD);
-  }
-
-  public boolean isFileStitchingBinaryCopySchemaEvolutionEnabled() {
-    return getBooleanOrDefault(FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
   }
 
   public String getFileIdPrefixProviderClassName() {

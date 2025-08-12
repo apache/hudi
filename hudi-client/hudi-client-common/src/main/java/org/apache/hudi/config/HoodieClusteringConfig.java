@@ -343,6 +343,16 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
 
+  public static final ConfigProperty<Boolean> FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE = ConfigProperty
+      .key("hoodie.file.stitching.binary.copy.schema.evolution.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Enable schema evolution support for binary file stitching during clustering. "
+          + "When enabled, allows clustering of files with different but compatible schemas (e.g., files with added columns). "
+          + "When disabled (default), only files with identical schemas will be clustered together, providing better performance "
+          + "but requiring schema consistency across all files in a clustering group.");
+
   /**
    * @deprecated Use {@link #PLAN_STRATEGY_CLASS_NAME} and its methods instead
    */
