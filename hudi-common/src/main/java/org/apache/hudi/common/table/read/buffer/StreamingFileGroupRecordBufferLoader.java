@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
@@ -53,10 +54,10 @@ import java.util.List;
  * @param <T> Engine native presentation of the record.
  */
 public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordBufferLoader<T> {
-  private final Schema recordSchema;
+  private static final StreamingFileGroupRecordBufferLoader INSTANCE = new StreamingFileGroupRecordBufferLoader<>();
 
-  StreamingFileGroupRecordBufferLoader(Schema recordSchema) {
-    this.recordSchema = recordSchema;
+  static <T> StreamingFileGroupRecordBufferLoader<T> getInstance() {
+    return INSTANCE;
   }
 
   @Override
@@ -64,6 +65,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             List<String> orderingFieldNames, HoodieTableMetaClient hoodieTableMetaClient,
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
+    Schema recordSchema = HoodieAvroUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     PartialUpdateMode partialUpdateMode = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);

@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -70,6 +71,7 @@ public class InputSplit {
   }
 
   public List<HoodieLogFile> getLogFiles() {
+    ValidationUtils.checkArgument(recordIterator.isEmpty(), "Log files are not initialized");
     return logFiles;
   }
 

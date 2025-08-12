@@ -137,6 +137,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param maxInstantTime max instant time to use.
    * @param enginRecordType engine record type.
    */
+  @SuppressWarnings("unused")
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                          HoodieReaderContext<T> readerContext, String maxInstantTime,
@@ -421,19 +422,21 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
     @Override
     public void onUpdate(String recordKey, BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord) {
-      writeStatus.addRecordDelegate(HoodieRecordDelegate.create(recordKey, partitionPath, fileRecordLocation, fileRecordLocation, mergedRecord.getHoodieOperation() == HoodieOperation.UPDATE_BEFORE));
+      writeStatus.addRecordDelegate(HoodieRecordDelegate.create(recordKey, partitionPath, fileRecordLocation, fileRecordLocation));
     }
 
     @Override
     public void onInsert(String recordKey, BufferedRecord<T> newRecord) {
-      writeStatus.addRecordDelegate(HoodieRecordDelegate.create(recordKey, partitionPath, null, fileRecordLocation, newRecord.getHoodieOperation() == HoodieOperation.UPDATE_BEFORE));
+      writeStatus.addRecordDelegate(HoodieRecordDelegate.create(recordKey, partitionPath, null, fileRecordLocation));
     }
 
     @Override
     public void onDelete(String recordKey, BufferedRecord<T> previousRecord, HoodieOperation hoodieOperation) {
       // The update before operation is used when a deletion is being sent to the old File Group in a different partition.
       // In this case, we do not want to delete the record metadata from the index.
-      writeStatus.addRecordDelegate(HoodieRecordDelegate.create(recordKey, partitionPath, fileRecordLocation, null, hoodieOperation == HoodieOperation.UPDATE_BEFORE));
+      if (hoodieOperation != HoodieOperation.UPDATE_BEFORE) {
+        writeStatus.addRecordDelegate(HoodieRecordDelegate.create(recordKey, partitionPath, fileRecordLocation, null));
+      }
     }
   }
 

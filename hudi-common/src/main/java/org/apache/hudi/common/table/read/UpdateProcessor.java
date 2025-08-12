@@ -57,11 +57,13 @@ public interface UpdateProcessor<T> {
                                        TypedProperties properties) {
     UpdateProcessor<T> handler;
     Option<String> payloadClass = readerContext.getPayloadClasses(properties).map(Pair::getRight);
-    if (payloadClass.map(className -> !className.equals(HoodieMetadataPayload.class.getName())).orElse(false)) {
-      handler = new PayloadUpdateProcessor<>(readStats, readerContext, emitDeletes, properties, payloadClass.get());
-    } else if (readerContext.getMergeMode() == RecordMergeMode.CUSTOM) {
-      // TODO can we limit this to user provided merger somehow?
-      handler = new CustomMergerUpdateProcessor<>(readStats, readerContext, emitDeletes, properties);
+    boolean isNotMetadataPayload = payloadClass.map(className -> !className.equals(HoodieMetadataPayload.class.getName())).orElse(false);
+    if (readerContext.getMergeMode() == RecordMergeMode.CUSTOM && isNotMetadataPayload) {
+      if (payloadClass.isEmpty()) {
+        handler = new CustomMergerUpdateProcessor<>(readStats, readerContext, emitDeletes, properties);
+      } else {
+        handler = new PayloadUpdateProcessor<>(readStats, readerContext, emitDeletes, properties, payloadClass.get());
+      }
     } else {
       handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
     }
@@ -146,10 +148,8 @@ public interface UpdateProcessor<T> {
           } else {
             Schema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
             // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
-            if (!readerSchema.equals(recordSchema)) {
-              hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
-                  .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
-            }
+            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
+                .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
           }
         } catch (IOException e) {
           throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);

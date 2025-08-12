@@ -84,14 +84,6 @@ public class HoodieRecordDelegate implements Serializable, KryoSerializable {
     return new HoodieRecordDelegate(new HoodieKey(recordKey, partitionPath), currentLocation, newLocation, false);
   }
 
-  public static HoodieRecordDelegate create(String recordKey,
-                                            String partitionPath,
-                                            HoodieRecordLocation currentLocation,
-                                            HoodieRecordLocation newLocation,
-                                            boolean ignoreIndexUpdate) {
-    return new HoodieRecordDelegate(new HoodieKey(recordKey, partitionPath), currentLocation, newLocation, ignoreIndexUpdate);
-  }
-
   public static HoodieRecordDelegate create(HoodieKey key) {
     return new HoodieRecordDelegate(key, null, null, false);
   }

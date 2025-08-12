@@ -29,8 +29,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.avro.Schema;
-
 import java.util.List;
 
 /**
@@ -54,8 +52,8 @@ public interface FileGroupRecordBufferLoader<T> {
     return DefaultFileGroupRecordBufferLoader.getInstance();
   }
 
-  static <T> FileGroupRecordBufferLoader<T> createStreamingRecordsBufferLoader(Schema recordSchema) {
-    return new StreamingFileGroupRecordBufferLoader<>(recordSchema);
+  static <T> FileGroupRecordBufferLoader<T> createStreamingRecordsBufferLoader() {
+    return StreamingFileGroupRecordBufferLoader.getInstance();
   }
 
   static <T> ReusableFileGroupRecordBufferLoader<T> createReusable(HoodieReaderContext<T> readerContextWithoutFilters) {

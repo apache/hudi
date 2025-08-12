@@ -58,7 +58,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
   public void testDefaultFileGroupBufferRecordLoader(String fileGroupRecordBufferType, boolean testRecordsBased) {
     FileGroupRecordBufferLoader fileGroupRecordBufferLoader = !testRecordsBased
         ? FileGroupRecordBufferLoader.createDefault()
-        : FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader(SCHEMA);
+        : FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);

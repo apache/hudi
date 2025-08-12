@@ -75,7 +75,6 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     this.avroSerializer = avroSerializer;
     this.schema = schema;
     this.copy = false;
-    this.isDelete = isDelete;
   }
 
   private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
