@@ -211,7 +211,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     shutdown(false);
   }
 
-  private synchronized void shutdown(boolean fromShutdownHook) {
+  @VisibleForTesting
+  synchronized void shutdown(boolean fromShutdownHook) {
     if (fromShutdownHook) {
       // Try to expire the lock from the shutdown hook.
       if (!isClosed && actuallyHoldsLock()) {

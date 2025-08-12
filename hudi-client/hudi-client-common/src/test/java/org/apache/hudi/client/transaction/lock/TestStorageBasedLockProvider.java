@@ -542,9 +542,7 @@ class TestStorageBasedLockProvider {
             .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
 
     // Mock shutdown
-    Method shutdownMethod = lockProvider.getClass().getDeclaredMethod("shutdown", boolean.class);
-    shutdownMethod.setAccessible(true);
-    shutdownMethod.invoke(lockProvider, true);
+    lockProvider.shutdown(true);
 
     // Verify that the expected shutdown behaviors occurred.
     assertNull(lockProvider.getLock());
@@ -556,9 +554,7 @@ class TestStorageBasedLockProvider {
   @Test
   public void testShutdownHookWhenNoLockPresent() throws Exception {
     // Now, when calling shutdown(true), the method should immediately return.
-    Method shutdownMethod = lockProvider.getClass().getDeclaredMethod("shutdown", boolean.class);
-    shutdownMethod.setAccessible(true);
-    shutdownMethod.invoke(lockProvider, true);
+    lockProvider.shutdown(true);
 
     // Verify that unlock or close methods are NOT invoked, or adjust expectations accordingly.
     verify(mockLockService, never()).close();
@@ -627,18 +623,11 @@ class TestStorageBasedLockProvider {
     assertTrue(tryLockStarted.await(2, TimeUnit.SECONDS), "tryLock should have started");
 
     // Now invoke the shutdown hook while tryLock is in progress
-    Method shutdownMethod = lockProvider.getClass().getDeclaredMethod("shutdown", boolean.class);
-    shutdownMethod.setAccessible(true);
-
     // Invoke shutdown in a separate thread to simulate shutdown hook
     Thread shutdownThread = new Thread(() -> {
-      try {
-        proceedWithShutdown.countDown();  // Signal tryLock to proceed
-        shutdownMethod.invoke(lockProvider, true);
-        shutdownCompleted.countDown();  // Signal that shutdown is complete
-      } catch (Exception ignored) {
-        // do nothing
-      }
+      proceedWithShutdown.countDown();  // Signal tryLock to proceed
+      lockProvider.shutdown(true);
+      shutdownCompleted.countDown();  // Signal that shutdown is complete
     });
     shutdownThread.start();
 
