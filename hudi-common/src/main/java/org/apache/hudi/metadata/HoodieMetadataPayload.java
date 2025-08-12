@@ -148,6 +148,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
   public static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
   public static final String COLUMN_STATS_FIELD_IS_TIGHT_BOUND = "isTightBound";
+  public static final String COLUMN_STATS_FIELD_VALUE_TYPE = "valueType";
 
   /**
    * HoodieMetadata record index payload field ids
@@ -570,13 +571,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         HoodieMetadataColumnStats.newBuilder()
             .setFileName(new StoragePath(columnRangeMetadata.getFilePath()).getName())
             .setColumnName(columnRangeMetadata.getColumnName())
-            .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
-            .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
+            .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue(), columnRangeMetadata.getValueMetadata()))
+            .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue(), columnRangeMetadata.getValueMetadata()))
             .setNullCount(columnRangeMetadata.getNullCount())
             .setValueCount(columnRangeMetadata.getValueCount())
             .setTotalSize(columnRangeMetadata.getTotalSize())
             .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
             .setIsDeleted(isDeleted)
+            .setValueType(columnRangeMetadata.getValueMetadata().getValueTypeInfo())
             .build(),
         recordType);
 
@@ -603,14 +605,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(columnRangeMetadata.getFilePath())
               .setColumnName(columnRangeMetadata.getColumnName())
-              .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
-              .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
+              .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue(), columnRangeMetadata.getValueMetadata()))
+              .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue(), columnRangeMetadata.getValueMetadata()))
               .setNullCount(columnRangeMetadata.getNullCount())
               .setValueCount(columnRangeMetadata.getValueCount())
               .setTotalSize(columnRangeMetadata.getTotalSize())
               .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
               .setIsDeleted(isDeleted)
               .setIsTightBound(isTightBound)
+              .setValueType(columnRangeMetadata.getValueMetadata().getValueTypeInfo())
               .build(),
           MetadataPartitionType.PARTITION_STATS.getRecordType());
 

@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.config.SerializableSchema;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -84,9 +85,13 @@ import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -104,6 +109,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -116,7 +122,9 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
+import static org.apache.hudi.common.util.DateTimeUtils.instantToNanos;
 import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
+import static org.apache.hudi.common.util.DateTimeUtils.nanosToInstant;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
@@ -1325,9 +1333,15 @@ public class HoodieAvroUtils {
    * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
    */
   public static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
-    return new BigDecimal(new BigInteger(value),
-        decimal.getScale(), new MathContext(decimal.getPrecision(), RoundingMode.HALF_UP));
+    return convertBytesToBigDecimal(value, decimal.getPrecision(), decimal.getScale());
   }
+
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, int precision, int scale) {
+    return new BigDecimal(new BigInteger(value),
+        scale, new MathContext(precision, RoundingMode.HALF_UP));
+  }
+
+
 
   public static boolean hasDecimalField(Schema schema) {
     return hasDecimalWithCondition(schema, unused -> true);
@@ -1587,18 +1601,26 @@ public class HoodieAvroUtils {
    * @param value Java value.
    * @return A wrapped value with Avro type wrapper.
    */
-  public static Object wrapValueIntoAvro(Comparable<?> value) {
+  public static Object wrapValueIntoAvro(Comparable<?> value, HoodieColumnRangeMetadata.ValueMetadata valueMetadata) {
     if (value == null) {
       return null;
     } else if (value instanceof Date) {
+      LocalDate localDate = ((Date) value).toLocalDate();
+      int epochDay = (int) localDate.toEpochDay();
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.DATE) {
+          return IntWrapper.newBuilder(INT_WRAPPER_BUILDER_STUB.get()).setValue(epochDay).build();
+      }
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
       //       rely on logical types to do proper encoding of the native Java types,
       //       and hereby have to encode value manually
-      LocalDate localDate = ((Date) value).toLocalDate();
       return DateWrapper.newBuilder(DATE_WRAPPER_BUILDER_STUB.get())
-          .setValue((int) localDate.toEpochDay())
+          .setValue(epochDay)
           .build();
     } else if (value instanceof LocalDate) {
+      // what does this even map to???
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
       //       rely on logical types to do proper encoding of the native Java types,
       //       and hereby have to encode value manually
@@ -1607,12 +1629,18 @@ public class HoodieAvroUtils {
           .setValue((int) localDate.toEpochDay())
           .build();
     } else if (value instanceof BigDecimal) {
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.DECIMAL) {
+        return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB.get()).setValue(ByteBuffer.wrap(((BigDecimal) value).unscaledValue().toByteArray())).build();
+      }
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
       BigDecimal upcastDecimal = tryUpcastDecimal((BigDecimal) value, (LogicalTypes.Decimal) valueSchema.getLogicalType());
       return DecimalWrapper.newBuilder(DECIMAL_WRAPPER_BUILDER_STUB.get())
           .setValue(AVRO_DECIMAL_CONVERSION.toBytes(upcastDecimal, valueSchema, valueSchema.getLogicalType()))
           .build();
     } else if (value instanceof Timestamp) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       // NOTE: Due to breaking changes in code-gen b/w Avro 1.8.2 and 1.10, we can't
       //       rely on logical types to do proper encoding of the native Java types,
       //       and hereby have to encode value manually
@@ -1620,22 +1648,65 @@ public class HoodieAvroUtils {
       return TimestampMicrosWrapper.newBuilder(TIMESTAMP_MICROS_WRAPPER_BUILDER_STUB.get())
           .setValue(instantToMicros(instant))
           .build();
+    } else if (value instanceof Instant) {
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MILLIS) {
+        return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue(((Instant) value).toEpochMilli()).build();
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MICROS) {
+        return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue(instantToMicros((Instant) value)).build();
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIMESTAMP_NANOS) {
+        return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue(instantToNanos((Instant) value)).build();
+      }
+      throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+    } else if (value instanceof LocalDateTime) {
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MILLIS) {
+        return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue(((LocalDateTime) value).toInstant(ZoneOffset.UTC).toEpochMilli()).build();
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MICROS) {
+        return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue(instantToMicros(((LocalDateTime) value).toInstant(ZoneOffset.UTC))).build();
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_NANOS) {
+        return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue(instantToNanos(((LocalDateTime) value).toInstant(ZoneOffset.UTC))).build();
+      }
+      throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+    } else if (value instanceof LocalTime) {
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIME_MILLIS) {
+        return IntWrapper.newBuilder(INT_WRAPPER_BUILDER_STUB.get()).setValue(((LocalTime) value).toSecondOfDay() * 1000 + (((LocalTime) value).getNano() / 1_000_000)).build();
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIME_MICROS) {
+        return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue(((LocalTime) value).toSecondOfDay() * 1000_000L + (((LocalTime) value).getNano() / 1_000)).build();
+      }
+      throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
     } else if (value instanceof Boolean) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       return BooleanWrapper.newBuilder(BOOLEAN_WRAPPER_BUILDER_STUB.get()).setValue((Boolean) value).build();
     } else if (value instanceof Integer) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       return IntWrapper.newBuilder(INT_WRAPPER_BUILDER_STUB.get()).setValue((Integer) value).build();
     } else if (value instanceof Long) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue((Long) value).build();
     } else if (value instanceof Float) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       return FloatWrapper.newBuilder(FLOAT_WRAPPER_BUILDER_STUB.get()).setValue((Float) value).build();
     } else if (value instanceof Double) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       return DoubleWrapper.newBuilder(DOUBLE_WRAPPER_BUILDER_STUB.get()).setValue((Double) value).build();
     } else if (value instanceof ByteBuffer) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB.get()).setValue((ByteBuffer) value).build();
-    } else if (value instanceof String || value instanceof Utf8) {
+    } else if (value instanceof String || value instanceof Utf8 || value instanceof UUID) {
       return StringWrapper.newBuilder(STRING_WRAPPER_BUILDER_STUB.get()).setValue(value.toString()).build();
     } else if (value instanceof ArrayComparable) {
-      List<Object> avroValues = OrderingValues.getValues((ArrayComparable) value).stream().map(HoodieAvroUtils::wrapValueIntoAvro).collect(Collectors.toList());
+      List<Object> avroValues = OrderingValues.getValues((ArrayComparable) value).stream().map(element -> wrapValueIntoAvro(element,valueMetadata)).collect(Collectors.toList());
       return ArrayWrapper.newBuilder(ARRAY_WRAPPER_BUILDER_STUB.get()).setWrappedValues(avroValues).build();
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", value.getClass()));
@@ -1648,7 +1719,7 @@ public class HoodieAvroUtils {
    * @param avroValueWrapper A wrapped value with Avro type wrapper.
    * @return Java value.
    */
-  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper) {
+  public static Comparable<?> unwrapAvroValueWrapper(Object avroValueWrapper, HoodieColumnRangeMetadata.ValueMetadata valueMetadata) {
     if (avroValueWrapper == null) {
       return null;
     }
@@ -1659,32 +1730,94 @@ public class HoodieAvroUtils {
     }
 
     if (avroValueWrapper instanceof DateWrapper) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
       return Date.valueOf(LocalDate.ofEpochDay(((DateWrapper) avroValueWrapper).getValue()));
     } else if (avroValueWrapper instanceof LocalDateWrapper) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
       return LocalDate.ofEpochDay(((LocalDateWrapper) avroValueWrapper).getValue());
     } else if (avroValueWrapper instanceof DecimalWrapper) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
       Schema valueSchema = DecimalWrapper.SCHEMA$.getField("value").schema();
       return AVRO_DECIMAL_CONVERSION.fromBytes(((DecimalWrapper) avroValueWrapper).getValue(), valueSchema, valueSchema.getLogicalType());
     } else if (avroValueWrapper instanceof TimestampMicrosWrapper) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
       return microsToInstant(((TimestampMicrosWrapper) avroValueWrapper).getValue());
     } else if (avroValueWrapper instanceof BooleanWrapper) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+          throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
       return ((BooleanWrapper) avroValueWrapper).getValue();
     } else if (avroValueWrapper instanceof IntWrapper) {
-      return ((IntWrapper) avroValueWrapper).getValue();
+      int value = ((IntWrapper) avroValueWrapper).getValue();
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.DATE) {
+        return Date.valueOf(LocalDate.ofEpochDay(value));
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIME_MILLIS) {
+        return LocalTime.ofNanoOfDay(value * 1_000_000L);
+      } else if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
+      return value;
     } else if (avroValueWrapper instanceof LongWrapper) {
-      return ((LongWrapper) avroValueWrapper).getValue();
+      long value = ((LongWrapper) avroValueWrapper).getValue();
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIME_MICROS) {
+        return LocalTime.ofNanoOfDay(value * 1000);
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MILLIS) {
+        return Instant.ofEpochMilli(value);
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MICROS) {
+        return microsToInstant(value);
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.TIMESTAMP_NANOS) {
+        return nanosToInstant(value);
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MILLIS) {
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(value), ZoneOffset.UTC);
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MICROS) {
+        return LocalDateTime.ofInstant(microsToInstant(value), ZoneOffset.UTC);
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_NANOS) {
+        return LocalDateTime.ofInstant(nanosToInstant(value), ZoneOffset.UTC);
+      } else if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
+      return value;
     } else if (avroValueWrapper instanceof FloatWrapper) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
       return ((FloatWrapper) avroValueWrapper).getValue();
     } else if (avroValueWrapper instanceof DoubleWrapper) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
       return ((DoubleWrapper) avroValueWrapper).getValue();
     } else if (avroValueWrapper instanceof BytesWrapper) {
-      return ((BytesWrapper) avroValueWrapper).getValue();
+      ByteBuffer value = ((BytesWrapper) avroValueWrapper).getValue();
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.DECIMAL) {
+        HoodieColumnRangeMetadata.DecimalMetadata decimalMetadata = (HoodieColumnRangeMetadata.DecimalMetadata) valueMetadata;
+        return convertBytesToBigDecimal(value.array(), decimalMetadata.getPrecision(), decimalMetadata.getScale());
+      } else if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.DURATION) {
+        throw new UnsupportedOperationException(String.format("Duration is not supported (%s)", avroValueWrapper.getClass()));
+      } else if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
+      return value;
     } else if (avroValueWrapper instanceof StringWrapper) {
-      return ((StringWrapper) avroValueWrapper).getValue();
+      String valueString = ((StringWrapper) avroValueWrapper).getValue();
+      if (valueMetadata.getValueType() == HoodieColumnRangeMetadata.ValueType.UUID) {
+        return UUID.fromString(valueString);
+      } else if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
+      }
+      return valueString;
     } else if (avroValueWrapper instanceof ArrayWrapper) {
       ArrayWrapper arrayWrapper = (ArrayWrapper) avroValueWrapper;
       return OrderingValues.create(arrayWrapper.getWrappedValues().stream()
-          .map(HoodieAvroUtils::unwrapAvroValueWrapper)
+          .map(value -> unwrapAvroValueWrapper(value, valueMetadata))
           .toArray(Comparable[]::new));
     } else if (avroValueWrapper instanceof GenericRecord) {
       // NOTE: This branch could be hit b/c Avro records could be reconstructed

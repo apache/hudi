@@ -19,7 +19,12 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.avro.model.HoodieValueTypeInfo;
 import org.apache.hudi.common.util.ValidationUtils;
+
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
 
 import javax.annotation.Nullable;
 
@@ -48,6 +53,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   private final long totalSize;
   private final long totalUncompressedSize;
 
+  private final ValueMetadata valueMetadata;
+
   private HoodieColumnRangeMetadata(String filePath,
                                     String columnName,
                                     @Nullable T minValue,
@@ -55,7 +62,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                     long nullCount,
                                     long valueCount,
                                     long totalSize,
-                                    long totalUncompressedSize) {
+                                    long totalUncompressedSize,
+                                    ValueMetadata valueMetadata) {
     this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
@@ -64,6 +72,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     this.valueCount = valueCount;
     this.totalSize = totalSize;
     this.totalUncompressedSize = totalUncompressedSize;
+    this.valueMetadata = valueMetadata;
   }
 
   public String getFilePath() {
@@ -98,6 +107,10 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
 
   public long getTotalUncompressedSize() {
     return totalUncompressedSize;
+  }
+
+  public ValueMetadata getValueMetadata() {
+    return valueMetadata;
   }
 
   @Override
@@ -145,29 +158,32 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                                                               long nullCount,
                                                                               long valueCount,
                                                                               long totalSize,
-                                                                              long totalUncompressedSize) {
-    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize);
+                                                                              long totalUncompressedSize,
+                                                                              ValueMetadata valueMetadata) {
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize, valueMetadata);
   }
 
   /**
    * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
    */
   public static HoodieColumnRangeMetadata<Comparable> fromColumnStats(HoodieMetadataColumnStats columnStats) {
+    ValueMetadata valueMetadata = getValueMetadata(columnStats.getValueType());
     return HoodieColumnRangeMetadata.<Comparable>create(
         columnStats.getFileName(),
         columnStats.getColumnName(),
-        unwrapAvroValueWrapper(columnStats.getMinValue()), // misses for special handling.
-        unwrapAvroValueWrapper(columnStats.getMaxValue()), // misses for special handling.
+        unwrapAvroValueWrapper(columnStats.getMinValue(), valueMetadata),
+        unwrapAvroValueWrapper(columnStats.getMaxValue(), valueMetadata),
         columnStats.getNullCount(),
         columnStats.getValueCount(),
         columnStats.getTotalSize(),
-        columnStats.getTotalUncompressedSize());
+        columnStats.getTotalUncompressedSize(),
+        valueMetadata);
   }
 
   @SuppressWarnings("rawtype")
   public static HoodieColumnRangeMetadata<Comparable> stub(String filePath,
                                                            String columnName) {
-    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1);
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1, NoneMetadata.INSTANCE);
   }
 
   /**
@@ -190,7 +206,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     long valueCount = left.getValueCount() + right.getValueCount();
     long totalSize = left.getTotalSize() + right.getTotalSize();
     long totalUncompressedSize = left.getTotalUncompressedSize() + right.getTotalUncompressedSize();
-    return create(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize);
+
+    return create(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize, left.getValueMetadata());
   }
 
   private static <T extends Comparable<T>> T minVal(T val1, T val2) {
@@ -211,5 +228,163 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return val1;
     }
     return val1.compareTo(val2) > 0 ? val1 : val2;
+  }
+
+  public static ValueMetadata getValueMetadata(HoodieValueTypeInfo valueTypeInfo) {
+    if (valueTypeInfo == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    ValueType valueType = ValueType.fromInt(valueTypeInfo.getTypeOrdinal());
+    if (valueType == ValueType.NONE) {
+      return NoneMetadata.INSTANCE;
+    } else if (valueType == ValueType.DECIMAL) {
+      return DecimalMetadata.create(valueTypeInfo.getAdditionalInfo());
+    } else {
+      return new ValueMetadata(valueType);
+    }
+  }
+
+  public static ValueMetadata getValueMetadata(Schema fieldSchema) {
+    if (fieldSchema == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    ValueType valueType = ValueType.fromLogicalType(fieldSchema.getLogicalType());
+    if (valueType == ValueType.NONE) {
+      return NoneMetadata.INSTANCE;
+    } else if (valueType == ValueType.DECIMAL) {
+      return DecimalMetadata.create((LogicalTypes.Decimal) fieldSchema.getLogicalType());
+    } else {
+      return new ValueMetadata(valueType);
+    }
+  }
+
+  public static class ValueMetadata {
+
+
+    private final ValueType valueType;
+
+    private ValueMetadata(ValueType valueType) {
+      this.valueType = valueType;
+    }
+
+    public ValueType getValueType() {
+      return valueType;
+    }
+
+    public HoodieValueTypeInfo getValueTypeInfo() {
+      return new HoodieValueTypeInfo(valueType.ordinal(), getAdditionalInfo());
+    }
+
+    protected String getAdditionalInfo() {
+      return null;
+    }
+  }
+
+  public static class NoneMetadata extends ValueMetadata {
+    public static final ValueMetadata INSTANCE = new NoneMetadata();
+    private NoneMetadata() {
+      super(ValueType.NONE);
+    }
+
+    @Override
+    public HoodieValueTypeInfo getValueTypeInfo() {
+      return null;
+    }
+  }
+
+  public static class DecimalMetadata extends ValueMetadata {
+
+    public static DecimalMetadata create(String additionalInfo) {
+      if (additionalInfo == null) {
+        throw new IllegalArgumentException("additionalInfo cannot be null");
+      }
+      //TODO: decide if we want to store things in a better way
+      String[] splits = additionalInfo.split(",");
+      return new DecimalMetadata(Integer.parseInt(splits[0]), Integer.parseInt(splits[1]));
+    }
+
+    public static DecimalMetadata create(LogicalTypes.Decimal decimal) {
+      return new DecimalMetadata(decimal.getPrecision(), decimal.getScale());
+    }
+
+    private final int precision;
+    private final int scale;
+
+    private DecimalMetadata(int precision, int scale) {
+      super(ValueType.DECIMAL);
+      this.precision = precision;
+      this.scale = scale;
+    }
+
+    public int getPrecision() {
+      return precision;
+    }
+
+    public int getScale() {
+      return scale;
+    }
+
+    @Override
+    protected String getAdditionalInfo() {
+      return String.format("%d,%d", precision, scale);
+    }
+  }
+
+  public enum ValueType {
+    NONE,
+    DECIMAL,
+    UUID,
+    DATE,
+    TIME_MILLIS,
+    TIME_MICROS,
+    TIMESTAMP_MILLIS,
+    TIMESTAMP_MICROS,
+    TIMESTAMP_NANOS,
+    LOCAL_TIMESTAMP_MILLIS,
+    LOCAL_TIMESTAMP_MICROS,
+    LOCAL_TIMESTAMP_NANOS,
+    DURATION;
+
+    private static ValueType[] myEnumValues;
+
+    public static ValueType fromInt(int i) {
+      if (ValueType.myEnumValues == null) {
+        ValueType.myEnumValues = ValueType.values();
+      }
+      return ValueType.myEnumValues[i];
+    }
+
+    public static ValueType fromLogicalType(LogicalType logicalType) {
+      if (logicalType == null) {
+        return ValueType.NONE;
+      } else if (logicalType instanceof LogicalTypes.Decimal) {
+        return ValueType.DECIMAL;
+      } else if (Objects.equals(logicalType.getName(), LogicalTypes.uuid().getName())) {
+        return ValueType.UUID;
+      } else if (logicalType instanceof LogicalTypes.Date) {
+        return ValueType.DATE;
+      } else if (logicalType instanceof LogicalTypes.TimeMillis) {
+        return ValueType.TIME_MILLIS;
+      } else if (logicalType instanceof LogicalTypes.TimeMicros) {
+        return ValueType.TIME_MICROS;
+      } else if (logicalType instanceof LogicalTypes.TimestampMillis) {
+        return ValueType.TIMESTAMP_MILLIS;
+      } else if (logicalType instanceof LogicalTypes.TimestampMicros) {
+        return ValueType.TIMESTAMP_MICROS;
+//      } else if (logicalType instanceof LogicalTypes.TimestampNanos) {
+//        return ValueType.TIMESTAMP_NANOS;
+      } else if (logicalType instanceof LogicalTypes.LocalTimestampMillis) {
+        return ValueType.LOCAL_TIMESTAMP_MILLIS;
+      } else if (logicalType instanceof LogicalTypes.LocalTimestampMicros) {
+        return ValueType.LOCAL_TIMESTAMP_MICROS;
+//      } else if (logicalType instanceof LogicalTypes.LocalTimestampNanos) {
+//        return ValueType.LOCAL_TIMESTAMP_NANOS;
+//      } else if (logicalType instanceof LogicalTypes.Duration) {
+//        return ValueType.DURATION;
+      }
+      return ValueType.NONE;
+    }
   }
 }

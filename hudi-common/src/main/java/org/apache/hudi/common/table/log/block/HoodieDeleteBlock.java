@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
@@ -145,7 +146,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
         .map(record -> HoodieDeleteRecord.newBuilder(recordBuilder)
           .setRecordKey(record.getRecordKey())
           .setPartitionPath(record.getPartitionPath())
-          .setOrderingVal(HoodieAvroUtils.wrapValueIntoAvro(record.getOrderingValue()))
+          .setOrderingVal(HoodieAvroUtils.wrapValueIntoAvro(record.getOrderingValue(), HoodieColumnRangeMetadata.NoneMetadata.INSTANCE))
           .build())
         .collect(Collectors.toList());
     writer.write(HoodieDeleteRecordList.newBuilder(recordListBuilder)
@@ -171,7 +172,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
           .map(record -> DeleteRecord.create(
               record.getRecordKey(),
               record.getPartitionPath(),
-              unwrapAvroValueWrapper(record.getOrderingVal())))
+              unwrapAvroValueWrapper(record.getOrderingVal(), HoodieColumnRangeMetadata.NoneMetadata.INSTANCE)))
           .toArray(DeleteRecord[]::new);
     }
   }

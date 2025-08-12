@@ -235,8 +235,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
           new BloomIndexFileInfo(
               partitionAndFileNameToFileId.get(entry.getKey()),
               // NOTE: Here we assume that the type of the primary key field is string
-              unwrapAvroValueWrapper(entry.getValue().getMinValue()).toString(),
-              unwrapAvroValueWrapper(entry.getValue().getMaxValue()).toString()
+              unwrapAvroValueWrapper(entry.getValue().getMinValue(), entry.getValue().getValueType()).toString(),
+              unwrapAvroValueWrapper(entry.getValue().getMaxValue(), entry.getValue().getValueType()).toString()
           )));
     }
 

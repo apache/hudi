@@ -1860,7 +1860,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                   .stream()
                   // We need to convert file path and use only the file name instead of the complete file path
                   .map(m -> (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.create(filename, m.getColumnName(), m.getMinValue(), m.getMaxValue(),
-                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize()));
+                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize(), m.getValueMetadata()));
             } catch (IOException e) {
               throw new HoodieIOException(String.format("Failed to get column stats for file: %s", filePath), e);
             }

@@ -75,6 +75,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
@@ -258,7 +259,8 @@ public class HoodieTableMetadataUtil {
       List<Pair<String, Schema.Field>> targetFields,
       String filePath,
       Schema recordSchema,
-      StorageConfiguration<?> storageConfig) {
+      StorageConfiguration<?> storageConfig,
+      boolean primitiveOnlyColumnStats) {
     // Helper class to calculate column stats
     class ColumnStats {
       Object minValue;
@@ -282,25 +284,30 @@ public class HoodieTableMetadataUtil {
         Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
         Object fieldValue;
-        if (record.getRecordType() == HoodieRecordType.AVRO) {
-          fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
-          if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
-            fieldValue = java.sql.Date.valueOf(fieldValue.toString());
-          }
-
-        } else if (record.getRecordType() == HoodieRecordType.SPARK) {
-          fieldValue = record.getColumnValues(recordSchema, new String[]{fieldName}, false)[0];
-          if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
-            fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
-          }
-        } else if (record.getRecordType() == HoodieRecordType.FLINK) {
+        if (primitiveOnlyColumnStats) {
           fieldValue = record.getColumnValueAsJava(recordSchema, fieldName, properties);
         } else {
-          throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
+          if (record.getRecordType() == HoodieRecordType.AVRO) {
+            fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{fieldName}, recordSchema, false)[0];
+            if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
+              fieldValue = java.sql.Date.valueOf(fieldValue.toString());
+            }
+
+          } else if (record.getRecordType() == HoodieRecordType.SPARK) {
+            fieldValue = record.getColumnValues(recordSchema, new String[]{fieldName}, false)[0];
+            if (fieldValue != null && fieldSchema.getType() == Schema.Type.INT && fieldSchema.getLogicalType() != null && fieldSchema.getLogicalType() == LogicalTypes.date()) {
+              fieldValue = java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) fieldValue).toString());
+            }
+          } else if (record.getRecordType() == HoodieRecordType.FLINK) {
+            fieldValue = record.getColumnValueAsJava(recordSchema, fieldName, properties);
+          } else {
+            throw new HoodieException(String.format("Unknown record type: %s", record.getRecordType()));
+          }
         }
 
+
         colStats.valueCount++;
-        if (fieldValue != null && isColumnTypeSupported(fieldSchema, Option.of(record.getRecordType()))) {
+        if (fieldValue != null && isColumnTypeSupported(fieldSchema, Option.of(record.getRecordType()), primitiveOnlyColumnStats)) {
           // Set the min value of the field
           if (colStats.minValue == null
               || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema) < 0) {
@@ -321,20 +328,39 @@ public class HoodieTableMetadataUtil {
           String fieldName = fieldNameFieldPair.getKey();
           Schema fieldSchema = fieldNameFieldPair.getValue().schema();
           ColumnStats colStats = allColumnStats.get(fieldName);
-          HoodieColumnRangeMetadata<Comparable> hcrm = HoodieColumnRangeMetadata.<Comparable>create(
-              filePath,
-              fieldName,
-              colStats == null ? null : coerceToComparable(fieldSchema, colStats.minValue),
-              colStats == null ? null : coerceToComparable(fieldSchema, colStats.maxValue),
-              colStats == null ? 0L : colStats.nullCount,
-              colStats == null ? 0L : colStats.valueCount,
-              // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
-              //       mixing up those provided by Parquet with the ones from other encodings,
-              //       since those are not directly comparable
-              0L,
-              0L
-          );
-          return hcrm;
+          if (colStats == null) {
+            return HoodieColumnRangeMetadata.<Comparable>create(filePath, fieldName, null, null, 0L, 0L, 0L, 0L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+          } else if (primitiveOnlyColumnStats) {
+            return HoodieColumnRangeMetadata.<Comparable>create(
+                filePath,
+                fieldName,
+                (Comparable) colStats.minValue,
+                (Comparable) colStats.maxValue,
+                colStats.nullCount,
+                colStats.valueCount,
+                // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
+                //       mixing up those provided by Parquet with the ones from other encodings,
+                //       since those are not directly comparable
+                0L,
+                0L,
+                HoodieColumnRangeMetadata.getValueMetadata(fieldSchema)
+            );
+          } else {
+            return HoodieColumnRangeMetadata.<Comparable>create(
+                filePath,
+                fieldName,
+                coerceToComparable(fieldSchema, colStats.minValue),
+                coerceToComparable(fieldSchema, colStats.maxValue),
+                colStats.nullCount,
+                colStats.valueCount,
+                // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
+                //       mixing up those provided by Parquet with the ones from other encodings,
+                //       since those are not directly comparable
+                0L,
+                0L,
+                HoodieColumnRangeMetadata.NoneMetadata.INSTANCE
+            );
+          }
         });
     return hoodieColumnRangeMetadataStream.collect(
         Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
@@ -1591,7 +1617,7 @@ public class HoodieTableMetadataUtil {
                                                Lazy<Option<Schema>> tableSchemaLazyOpt,
                                                boolean isTableInitializing,
                                                Option<HoodieRecordType> recordType) {
-    Map<String, Schema> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetaFields(metadataConfig, tableSchemaLazyOpt, isTableInitializing, recordType);
+    Map<String, Schema> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetaFields(tableConfig, metadataConfig, tableSchemaLazyOpt, isTableInitializing, recordType);
     if (!tableConfig.populateMetaFields()) {
       return columnsToIndexWithoutRequiredMetas;
     }
@@ -1614,11 +1640,13 @@ public class HoodieTableMetadataUtil {
    * @param recordType           Option of record type. Used to determine which types are valid to index
    * @return list of columns that should be indexed
    */
-  private static Map<String, Schema> getColumnsToIndexWithoutRequiredMetaFields(HoodieMetadataConfig metadataConfig,
-                                                                           Lazy<Option<Schema>> tableSchemaLazyOpt,
-                                                                           boolean isTableInitializing,
-                                                                           Option<HoodieRecordType> recordType) {
+  private static Map<String, Schema> getColumnsToIndexWithoutRequiredMetaFields(HoodieTableConfig tableConfig,
+                                                                                HoodieMetadataConfig metadataConfig,
+                                                                                Lazy<Option<Schema>> tableSchemaLazyOpt,
+                                                                                boolean isTableInitializing,
+                                                                                Option<HoodieRecordType> recordType) {
     List<String> columnsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
+    boolean isPrimitiveOnly = tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE);
     if (!columnsToIndex.isEmpty()) {
       // if explicitly overridden
       if (isTableInitializing) {
@@ -1632,14 +1660,14 @@ public class HoodieTableMetadataUtil {
       Map<String, Schema> colsToIndexSchemaMap = new LinkedHashMap<>();
       columnsToIndex.stream().filter(fieldName -> !META_COL_SET_TO_INDEX.contains(fieldName))
           .map(colName -> Pair.of(colName, HoodieAvroUtils.getSchemaForField(tableSchema.get(), colName).getRight().schema()))
-          .filter(fieldNameSchemaPair -> isColumnTypeSupported(fieldNameSchemaPair.getValue(), recordType))
+          .filter(fieldNameSchemaPair -> isColumnTypeSupported(fieldNameSchemaPair.getValue(), recordType, isPrimitiveOnly))
           .forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue()));
       return colsToIndexSchemaMap;
     }
     // if not overridden
     if (tableSchemaLazyOpt.get().isPresent()) {
       Map<String, Schema> colsToIndexSchemaMap = new LinkedHashMap<>();
-      tableSchemaLazyOpt.get().map(schema -> getFirstNSupportedFields(schema, metadataConfig.maxColumnsToIndexForColStats(), recordType)).orElse(Stream.empty())
+      tableSchemaLazyOpt.get().map(schema -> getFirstNSupportedFields(schema, metadataConfig.maxColumnsToIndexForColStats(), recordType, isPrimitiveOnly)).orElse(Stream.empty())
           .forEach(entry -> colsToIndexSchemaMap.put(entry.getKey(), entry.getValue()));
       return colsToIndexSchemaMap;
     } else {
@@ -1648,9 +1676,9 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  private static Stream<Pair<String, Schema>> getFirstNSupportedFields(Schema tableSchema, int n, Option<HoodieRecordType> recordType) {
+  private static Stream<Pair<String, Schema>> getFirstNSupportedFields(Schema tableSchema, int n, Option<HoodieRecordType> recordType, boolean isPrimitiveOnly) {
     return getFirstNFields(tableSchema.getFields().stream()
-        .filter(field -> isColumnTypeSupported(field.schema(), recordType)).map(field -> Pair.of(field.name(), field.schema())), n);
+        .filter(field -> isColumnTypeSupported(field.schema(), recordType, isPrimitiveOnly)).map(field -> Pair.of(field.name(), field.schema())), n);
   }
 
   private static Stream<Pair<String, Schema>> getFirstNFields(Stream<Pair<String, Schema>> fieldSchemaPairStream, int n) {
@@ -1762,7 +1790,8 @@ public class HoodieTableMetadataUtil {
           return Collections.emptyList();
         }
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-            collectColumnRangeMetadata(recordIterator, fieldsToIndex, getFileNameFromPath(filePath), writerSchemaOpt.get(), datasetMetaClient.getStorage().getConf());
+            collectColumnRangeMetadata(recordIterator, fieldsToIndex, getFileNameFromPath(filePath), writerSchemaOpt.get(), datasetMetaClient.getStorage().getConf(),
+                datasetMetaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE));
         return new ArrayList<>(columnRangeMetadataMap.values());
       }
     }
@@ -1962,26 +1991,33 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  public static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType) {
+  public static boolean isColumnTypeSupported(Schema schema, Option<HoodieRecordType> recordType, boolean primitiveOnlyColumnStats) {
     Schema schemaToCheck = resolveNullableSchema(schema);
     // Check for precision and scale if the schema has a logical decimal type.
-    LogicalType logicalType = schemaToCheck.getLogicalType();
-    if (logicalType != null && logicalType instanceof LogicalTypes.Decimal) {
-      LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) logicalType;
-      if (decimalType.getPrecision() + (DECIMAL_MAX_SCALE - decimalType.getScale()) > DECIMAL_MAX_PRECISION || decimalType.getScale() > DECIMAL_MAX_SCALE) {
-        return false;
+    if (primitiveOnlyColumnStats) {
+      if (schemaToCheck.getType() == Schema.Type.ARRAY) {
+        return isColumnTypeSupported(schemaToCheck.getElementType(), recordType, primitiveOnlyColumnStats);
       }
-    }
+      return schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.MAP && schemaToCheck.getType() != Schema.Type.ENUM;
+    } else {
+      LogicalType logicalType = schemaToCheck.getLogicalType();
+      if (logicalType != null && logicalType instanceof LogicalTypes.Decimal) {
+        LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) logicalType;
+        if (decimalType.getPrecision() + (DECIMAL_MAX_SCALE - decimalType.getScale()) > DECIMAL_MAX_PRECISION || decimalType.getScale() > DECIMAL_MAX_SCALE) {
+          return false;
+        }
+      }
 
-    // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
-    if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
-      return (schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.ARRAY && schemaToCheck.getType() != Schema.Type.MAP
-          && schemaToCheck.getType() != Schema.Type.ENUM);
+      // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
+      if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
+        return (schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.ARRAY && schemaToCheck.getType() != Schema.Type.MAP
+            && schemaToCheck.getType() != Schema.Type.ENUM);
+      }
+      // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
+      // HUDI-8585 will add support for BYTES and FIXED
+      return schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.ARRAY && schemaToCheck.getType() != Schema.Type.MAP
+          && schemaToCheck.getType() != Schema.Type.ENUM && schemaToCheck.getType() != Schema.Type.BYTES && schemaToCheck.getType() != Schema.Type.FIXED;
     }
-    // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
-    // HUDI-8585 will add support for BYTES and FIXED
-    return schemaToCheck.getType() != Schema.Type.RECORD && schemaToCheck.getType() != Schema.Type.ARRAY && schemaToCheck.getType() != Schema.Type.MAP
-        && schemaToCheck.getType() != Schema.Type.ENUM && schemaToCheck.getType() != Schema.Type.BYTES && schemaToCheck.getType() != Schema.Type.FIXED;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
@@ -2584,7 +2620,7 @@ public class HoodieTableMetadataUtil {
       iterable.forEach(e -> {
         HoodieColumnRangeMetadata<Comparable> rangeMetadata = HoodieColumnRangeMetadata.create(
             partitionName, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
-            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize());
+            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize(), e.getValueMetadata());
         finalMetadata[0] = HoodieColumnRangeMetadata.merge(finalMetadata[0], rangeMetadata);
       });
       return HoodieMetadataPayload.createPartitionStatsRecords(partitionName, Collections.singletonList(finalMetadata[0]), false, isTightBound, indexPartitionOpt)
@@ -2867,18 +2903,21 @@ public class HoodieTableMetadataUtil {
       return newColumnStats;
     }
 
+    HoodieColumnRangeMetadata.ValueMetadata prevValueMetadata = HoodieColumnRangeMetadata.getValueMetadata(prevColumnStats.getValueType());
+    HoodieColumnRangeMetadata.ValueMetadata newValueMetadata = HoodieColumnRangeMetadata.getValueMetadata(newColumnStats.getValueType());
+
     Comparable minValue =
         (Comparable) Stream.of(
-                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMinValue()),
-                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMinValue()))
+                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMinValue(), prevValueMetadata),
+                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMinValue(), newValueMetadata))
             .filter(Objects::nonNull)
             .min(Comparator.naturalOrder())
             .orElse(null);
 
     Comparable maxValue =
         (Comparable) Stream.of(
-                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMaxValue()),
-                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMaxValue()))
+                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMaxValue(), prevValueMetadata),
+                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMaxValue(), newValueMetadata))
             .filter(Objects::nonNull)
             .max(Comparator.naturalOrder())
             .orElse(null);
@@ -2886,12 +2925,13 @@ public class HoodieTableMetadataUtil {
     HoodieMetadataColumnStats.Builder columnStatsBuilder = HoodieMetadataColumnStats.newBuilder(HoodieMetadataPayload.METADATA_COLUMN_STATS_BUILDER_STUB.get())
         .setFileName(newColumnStats.getFileName())
         .setColumnName(newColumnStats.getColumnName())
-        .setMinValue(wrapValueIntoAvro(minValue))
-        .setMaxValue(wrapValueIntoAvro(maxValue))
+        .setMinValue(wrapValueIntoAvro(minValue, newValueMetadata))
+        .setMaxValue(wrapValueIntoAvro(maxValue, newValueMetadata))
         .setValueCount(prevColumnStats.getValueCount() + newColumnStats.getValueCount())
         .setNullCount(prevColumnStats.getNullCount() + newColumnStats.getNullCount())
         .setTotalSize(prevColumnStats.getTotalSize() + newColumnStats.getTotalSize())
         .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
+        .setValueType(newColumnStats.getValueType())
         .setIsDeleted(newColumnStats.getIsDeleted());
     if (newColumnStats.hasField(COLUMN_STATS_FIELD_IS_TIGHT_BOUND)) {
       columnStatsBuilder.setIsTightBound(newColumnStats.getIsTightBound());

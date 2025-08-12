@@ -19,6 +19,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.model.HoodieInternalRow;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
@@ -56,6 +58,19 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     if (cachedNestedFieldPath.isDefined()) {
       HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
       return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);
+    } else {
+      return null;
+    }
+  }
+
+  public static Object getFieldValueFromInternalRowAsJava(InternalRow row, Schema recordSchema, String fieldName) {
+    StructType structType = getCachedSchema(recordSchema);
+    Option<Schema> nestedFieldSchema = AvroSchemaUtils.findNestedFieldSchema(recordSchema, fieldName);
+    scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
+        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
+    if (cachedNestedFieldPath.isDefined() && nestedFieldSchema.isPresent()) {
+      HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+      return HoodieUnsafeRowUtils.getNestedInternalRowValueAsJava(row, nestedFieldPath, nestedFieldSchema.get());
     } else {
       return null;
     }

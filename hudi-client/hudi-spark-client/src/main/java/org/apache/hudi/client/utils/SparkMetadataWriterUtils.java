@@ -20,6 +20,8 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -42,6 +44,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -54,6 +57,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
@@ -72,6 +76,7 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.HoodieCatalystExpressionUtils;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.avro.HoodieAvroDeserializer;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
@@ -149,7 +154,7 @@ public class SparkMetadataWriterUtils {
   }
 
   @SuppressWarnings("checkstyle:LineLength")
-  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex,
+  public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex, Schema columnSchema,
                                                                                              Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt) {
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
@@ -165,8 +170,9 @@ public class SparkMetadataWriterUtils {
             row -> {
               int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
               long nullCount = row.getLong(baseAggregatePosition);
-              Comparable minValue = (Comparable) row.get(baseAggregatePosition + 1);
-              Comparable maxValue = (Comparable) row.get(baseAggregatePosition + 2);
+              HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(columnSchema, row.schema().fields()[baseAggregatePosition + 1].dataType());
+              Comparable minValue = (Comparable) deserializer.deserialize(row.get(baseAggregatePosition + 1));
+              Comparable maxValue = (Comparable) deserializer.deserialize(row.get(baseAggregatePosition + 2));
               long valueCount = row.getLong(baseAggregatePosition + 3);
 
               String partitionName = row.getString(0);
@@ -183,7 +189,8 @@ public class SparkMetadataWriterUtils {
                   nullCount,
                   valueCount,
                   totalFileSize,
-                  totalUncompressedSize
+                  totalUncompressedSize,
+                  HoodieColumnRangeMetadata.getValueMetadata(columnSchema)
               );
               return Collections.singletonList(Pair.of(partitionName, rangeMetadata)).iterator();
             });
@@ -291,7 +298,11 @@ public class SparkMetadataWriterUtils {
 
     // Generate expression index records
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt);
+      Option<Schema> schemaToIndexOpt = AvroSchemaUtils.findNestedFieldSchema(readerSchema, columnToIndex);
+      if (schemaToIndexOpt.isEmpty()) {
+          throw new HoodieMetadataException("Failed to find schema for column " + columnToIndex);
+      }
+      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex,schemaToIndexOpt.get(), partitionRecordsFunctionOpt);
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
       return getExpressionIndexRecordsUsingBloomFilter(
           rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
@@ -359,6 +370,7 @@ public class SparkMetadataWriterUtils {
     // We fetch stored Expression index records for these latest files and return HoodiePairData of partition name and list of column range metadata of these files
 
     // Step 1: Validate that partition stats is supported for the column data type
+    boolean primitiveOnlyColStats = dataMetaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE);
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataMetaClient);
     List<String> columnsToIndex = Collections.singletonList(indexDefinition.getSourceFields().get(0));
     try {
@@ -377,7 +389,7 @@ public class SparkMetadataWriterUtils {
       // filter for supported types
       final List<String> validColumnsToIndex = columnsToIndexSchemaMap.stream()
           .filter(colSchemaPair -> HoodieTableMetadataUtil.SUPPORTED_META_FIELDS_PARTITION_STATS.contains(colSchemaPair.getKey())
-              || HoodieTableMetadataUtil.isColumnTypeSupported(colSchemaPair.getValue(), recordTypeOpt))
+              || HoodieTableMetadataUtil.isColumnTypeSupported(colSchemaPair.getValue(), recordTypeOpt, primitiveOnlyColStats))
           .map(entry -> entry.getKey())
           .collect(Collectors.toList());
       if (validColumnsToIndex.isEmpty()) {
