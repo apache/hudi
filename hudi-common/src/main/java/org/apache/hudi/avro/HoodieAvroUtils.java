@@ -111,6 +111,7 @@ import java.util.stream.Collectors;
 import static org.apache.avro.Schema.Type.ARRAY;
 import static org.apache.avro.Schema.Type.MAP;
 import static org.apache.avro.Schema.Type.UNION;
+import static org.apache.hudi.avro.AvroSchemaUtils.areSchemasProjectionEquivalent;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
@@ -1054,7 +1055,7 @@ public class HoodieAvroUtils {
     if (oldRecord == null) {
       return null;
     }
-    if (oldAvroSchema.equals(newSchema)) {
+    if (areSchemasProjectionEquivalent(oldAvroSchema,newSchema)) {
       // there is no need to rewrite if the schema equals.
       return oldRecord;
     }
