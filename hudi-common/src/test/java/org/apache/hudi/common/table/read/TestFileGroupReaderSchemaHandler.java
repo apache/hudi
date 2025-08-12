@@ -22,7 +22,9 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
@@ -30,9 +32,14 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
@@ -40,12 +47,17 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
@@ -89,6 +101,35 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     Pair<List<Schema.Field>, List<Schema.Field>> bootstrapFields = schemaHandler.getBootstrapRequiredFields();
     assertEquals(Collections.singletonList(getField("_hoodie_record_key")), bootstrapFields.getLeft());
     assertEquals(Arrays.asList(getField("begin_lat"), getField("tip_history"), getField("rider")), bootstrapFields.getRight());
+  }
+
+  @Test
+  void testGetRequiredSchemaForFileAndRenameColumns() {
+    HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
+    when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
+    Schema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
+
+    InternalSchema internalSchema = AvroInternalSchemaConverter.convert(DATA_SCHEMA);
+    InternalSchema originalSchema = new InternalSchema(Types.RecordType.get(internalSchema.columns().stream().map(field -> {
+      if (field.name().equals("timestamp")) {
+        // rename timestamp to ts in file schema and change type to int, output schema names and types must match the requested schema
+        return Types.Field.get(field.fieldId(), "ts", Types.IntType.get());
+      }
+      return field;
+    }).collect(Collectors.toList())));
+    FileGroupReaderSchemaHandler<String> schemaHandler = new FileGroupReaderSchemaHandler<>(readerContext, DATA_SCHEMA, requestedSchema,
+        Option.of(internalSchema), hoodieTableConfig, new TypedProperties(), metaClient);
+
+    try (MockedStatic<InternalSchemaCache> mockedStatic = Mockito.mockStatic(InternalSchemaCache.class)) {
+      String instantTime = "20231010101010";
+      mockedStatic.when(() -> InternalSchemaCache.searchSchemaAndCache(Long.parseLong(instantTime), metaClient))
+          .thenReturn(originalSchema);
+      StoragePath filePath = new StoragePath("/2023-01-01/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), HoodieFileFormat.PARQUET.getFileExtension()));
+      Pair<Schema, Map<String, String>> requiredSchemaAndRenamedFields = schemaHandler.getRequiredSchemaForFileAndRenamedColumns(filePath);
+      assertEquals(Collections.singletonMap("timestamp", "ts"), requiredSchemaAndRenamedFields.getRight());
+      assertEquals(requestedSchema, requiredSchemaAndRenamedFields.getLeft());
+    }
   }
 
   private static Stream<Arguments> testMorParams() {

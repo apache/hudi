@@ -144,7 +144,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     Schema fileOutputSchema;
     Map<String, String> renamedColumns;
     if (isLogFile) {
-      fileOutputSchema = dataSchema;
+      fileOutputSchema = requiredSchema;
       renamedColumns = Collections.emptyMap();
     } else {
       Pair<Schema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
