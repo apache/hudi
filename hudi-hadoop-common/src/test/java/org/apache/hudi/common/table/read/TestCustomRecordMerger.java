@@ -156,7 +156,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions);
     try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(3, useRecordPositions)) {
       List<String> leftKeysExpected =
-          Arrays.asList("1", "3", "6", "7", "8", "9", "10");
+          Arrays.asList("3", "6", "7", "8", "9", "10");
       List<String> leftKeysActual = new ArrayList<>();
       while (iterator.hasNext()) {
         leftKeysActual.add(iterator.next()
@@ -174,7 +174,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions)) {
       // The records with keys 6 and 8 are deletes with lower ordering val
       List<String> leftKeysExpected =
-          Arrays.asList("1", "3", "6", "7", "8", "9", "10");
+          Arrays.asList("3", "6", "7", "8", "9", "10");
       List<String> leftKeysActual = new ArrayList<>();
       while (iterator.hasNext()) {
         leftKeysActual.add(iterator.next()
@@ -190,7 +190,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     shouldWritePositions = Arrays.asList(false, false, false, false, false);
     try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5)) {
       List<String> leftKeysExpected =
-          Arrays.asList("1", "3", "5", "7", "9");
+          Arrays.asList("3", "5", "7", "9");
       List<String> leftKeysActual = new ArrayList<>();
       while (iterator.hasNext()) {
         leftKeysActual.add(iterator.next()
@@ -208,7 +208,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     shouldWritePositions = Arrays.asList(true, log1haspositions, log2haspositions, log3haspositions, log4haspositions);
     try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5, true)) {
       List<String> leftKeysExpected =
-          Arrays.asList("1", "3", "5", "7", "9");
+          Arrays.asList("3", "5", "7", "9");
       List<String> leftKeysActual = new ArrayList<>();
       while (iterator.hasNext()) {
         leftKeysActual.add(iterator.next()
@@ -239,7 +239,6 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
   public static class CustomAvroMerger implements HoodieRecordMerger {
     public static final String KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY =
         "KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY";
-    public static final String TIMESTAMP = "timestamp";
     private String[] orderingFields;
 
     @Override
@@ -280,12 +279,8 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     public boolean shouldFlush(
         HoodieRecord record,
         Schema schema,
-        TypedProperties props
-    ) {
-      long timestamp = (long) ((HoodieAvroIndexedRecord) record)
-          .getData()
-          .get(schema.getField(TIMESTAMP).pos());
-      return timestamp % 3 == 0L;
+        TypedProperties props) {
+      return !record.getRecordKey().equals("1");
     }
 
     @Override
