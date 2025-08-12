@@ -29,7 +29,7 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPU
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FILE_NAME_GENERATOR, INSTANT_GENERATOR}
@@ -59,7 +59,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertTrue, fail}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 
 import java.sql.{Date, Timestamp}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -114,6 +114,43 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("tableVersionCreationTestCases"))
+  def testTableVersionDuringTableCreation(autoUpgrade: String, targetTableVersion: String): Unit = {
+    val writeOptions = scala.collection.mutable.Map(
+      HoodieWriteConfig.TBL_NAME.key -> "testTableCreation",
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> autoUpgrade)
+    if (!targetTableVersion.equals("null")) {
+      writeOptions += (HoodieWriteConfig.WRITE_TABLE_VERSION.key -> targetTableVersion)
+    }
+    val dataGen: HoodieTestDataGenerator = new HoodieTestDataGenerator(System.currentTimeMillis())
+    val records = recordsToStrings(dataGen.generateInserts("001", 5))
+    val inputDF: Dataset[Row] = spark.read.json(jsc.parallelize(records, 2))
+    // Create table, and validate.
+    val failSet = Set("1", "2", "3", "4", "5", "7")
+    if (failSet.contains(targetTableVersion)) {
+      val exception: IllegalArgumentException =
+        assertThrows(classOf[IllegalArgumentException])(
+          inputDF.write.format("hudi").partitionBy("partition")
+            .options(writeOptions).mode(SaveMode.Overwrite).save(basePath))
+      assertTrue(exception.getMessage.contains(
+        "The value of hoodie.write.table.version should be one of 6,8,9"))
+    } else {
+      inputDF.write.format("hudi").partitionBy("partition")
+        .options(writeOptions).mode(SaveMode.Overwrite).save(basePath)
+      metaClient = HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
+      // If no write version is specified, use current.
+      if (!targetTableVersion.equals("null")) {
+        assertEquals(
+          HoodieTableVersion.fromVersionCode(Integer.valueOf(targetTableVersion)),
+          metaClient.getTableConfig.getTableVersion)
+      } else {
+        // Otherwise, the table version is the target table version.
+        assertEquals(HoodieTableVersion.current, metaClient.getTableConfig.getTableVersion)
+      }
+    }
   }
 
   @ParameterizedTest
@@ -2037,5 +2074,13 @@ object TestCOWDataSource {
       //       one by pretending its value could be null in some execution paths
       df.withColumn(c, when(col(c).isNotNull, col(c)).otherwise(lit(null)))
     }
+  }
+
+  def tableVersionCreationTestCases = {
+    val autoUpgradeValues = Array("true", "false")
+    val targetVersions = Array("1", "2", "3", "4", "5", "6", "7", "8", "9", "null")
+    autoUpgradeValues.flatMap(
+      (autoUpgrade: String) => targetVersions.map(
+        (targetVersion: String) => Arguments.of(autoUpgrade, targetVersion)))
   }
 }
