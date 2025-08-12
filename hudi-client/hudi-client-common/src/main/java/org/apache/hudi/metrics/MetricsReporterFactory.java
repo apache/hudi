@@ -87,7 +87,8 @@ public class MetricsReporterFactory {
         reporter = new ConsoleMetricsReporter(registry);
         break;
       case CLOUDWATCH:
-        reporter = new CloudWatchMetricsReporter(config, registry);
+        reporter = (MetricsReporter) ReflectionUtils.loadClass("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter",
+            new Class[]{HoodieMetricsConfig.class, MetricRegistry.class}, metricsConfig, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");

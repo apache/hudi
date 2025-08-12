@@ -41,6 +41,9 @@ import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -617,6 +620,24 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("s3A://my-bucket/path/to/object"));
     assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("S3A://my-bucket/path/to/object"));
     assertEquals("s3://my-bucket/s3a://another-bucket/another/path", FSUtils.s3aToS3("s3a://my-bucket/s3a://another-bucket/another/path"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "gs://my-bucket/path/to/object",
+      "gs://my-bucket",
+      "gs://MY-BUCKET/PATH/TO/OBJECT",
+      "https://myaccount.blob.core.windows.net/mycontainer/path/to/blob",
+      "https://myaccount.blob.core.windows.net/MYCONTAINER/PATH/TO/BLOB",
+      "https://example.com/path/to/resource",
+      "http://example.com",
+      "ftp://example.com/resource",
+      "",
+      "gs://my-bucket/path/to/s3a://object",
+      "gs://my-bucket s3a://my-object",
+  })
+  void testUriDoesNotChange(String uri) {
+    assertEquals(uri, FSUtils.s3aToS3(uri));
   }
 
   @Test
