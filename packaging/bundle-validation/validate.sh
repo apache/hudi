@@ -361,14 +361,7 @@ if [[ "${FLINK_HOME}" == *"2.0"* ]]; then
     exit 0
 fi
 
-echo "::warning::validate.sh validating spark & hadoop-mr bundle"
-test_spark_hadoop_mr_bundles
-if [ "$?" -ne 0 ]; then
-    exit 1
-fi
-echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
-
-if [[ $SPARK_HOME == *"spark-3.5"* ]]
+if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* ]]
 then
   echo "::warning::validate.sh validating cli bundle"
   test_cli_bundle
@@ -377,10 +370,10 @@ then
   fi
   echo "::warning::validate.sh done validating cli bundle"
 else
-  echo "::warning::validate.sh skip validating cli bundle for non-spark3.5 build"
+  echo "::warning::validate.sh skip validating cli bundle for Spark < 3.5 build"
 fi
 
-if [[ $SPARK_HOME == *"spark-3.5"* ]]
+if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* ]]
 then
   echo "::warning::validate.sh validating utilities bundle"
   test_utilities_bundle $JARS_DIR/utilities.jar
@@ -389,7 +382,7 @@ then
   fi
   echo "::warning::validate.sh done validating utilities bundle"
 else
-  echo "::warning::validate.sh skip validating utilities bundle for non-spark3.5 build"
+  echo "::warning::validate.sh skip validating utilities bundle for Spark < 3.5 build"
 fi
 
 echo "::warning::validate.sh validating utilities slim bundle"
@@ -422,4 +415,11 @@ if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
       exit 1
   fi
   echo "::warning::validate.sh done validating metaserver bundle"
+
+  echo "::warning::validate.sh validating spark & hadoop-mr bundle"
+  test_spark_hadoop_mr_bundles
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 fi
