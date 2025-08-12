@@ -96,7 +96,6 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger), orderingFieldNames,
     payloadClass, avroSchema, props, partialUpdateMode)
 
-
   private lazy val storage = metaClient.getStorage
 
   private lazy val basePath = metaClient.getBasePath

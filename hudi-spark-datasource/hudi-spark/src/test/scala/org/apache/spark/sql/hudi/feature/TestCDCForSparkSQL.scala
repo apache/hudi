@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.feature
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{ENABLE_MERGE_INTO_PARTIAL_UPDATES, SPARK_SQL_INSERT_INTO_OPERATION}
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, DATA_BEFORE_AFTER, OP_KEY_ONLY}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -312,11 +312,10 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     val databaseName = "hudi_database"
     spark.sql(s"create database if not exists $databaseName")
     spark.sql(s"use $databaseName")
-    withSQLConf(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key ->"0",
+    withSQLConf(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
       DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true",
-      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
       HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true") {
-      Seq(OP_KEY_ONLY, DATA_BEFORE).foreach { loggingMode =>
+      Seq(OP_KEY_ONLY, DATA_BEFORE, DATA_BEFORE_AFTER).foreach { loggingMode =>
         withTempDir { tmp =>
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
