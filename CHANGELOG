@@ -943,3 +943,7 @@ f5824e51ca7 [ENG-28779][INTERNAL] Add parallelism configs to AwsGlueSync (#1428)
 --- [2025-08-09 13:31:56] [release-v1.161.0] ---
 [ENG-31088][INTERNAL] Fix Storage LP shutdown hook race condition (#1483)
 [AUDIT-1071]: Changelog for release-v1.160.0 (#1481)
+
+--- [2025-08-12 16:04:32] [release-v1.162.0] ---
+[ENG-30726][INTERNAL] Add abstraction for CreateHandle to support loading custom CreateHandle class (#1482)
+[AUDIT-1654]: Changelog for release-v1.161.0 (#1484)
