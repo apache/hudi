@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import scala.collection.Seq
+import scala.collection.immutable.Seq
 
 class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
 

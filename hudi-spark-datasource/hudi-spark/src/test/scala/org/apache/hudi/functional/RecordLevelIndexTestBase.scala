@@ -163,7 +163,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     readDf.unpersist()
   }
 
-  protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
+  protected def checkAnswer(sql: String)(expects: collection.immutable.Seq[Any]*): Unit = {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
   }
 }
