@@ -24,16 +24,21 @@ import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
@@ -76,13 +81,15 @@ public class FileGroupReaderSchemaHandler<T> {
 
   protected final TypedProperties properties;
   private final DeleteContext deleteContext;
+  private final HoodieTableMetaClient metaClient;
 
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                       Schema tableSchema,
                                       Schema requestedSchema,
                                       Option<InternalSchema> internalSchemaOpt,
                                       HoodieTableConfig hoodieTableConfig,
-                                      TypedProperties properties) {
+                                      TypedProperties properties,
+                                      HoodieTableMetaClient metaClient) {
     this.properties = properties;
     this.readerContext = readerContext;
     this.tableSchema = tableSchema;
@@ -92,6 +99,7 @@ public class FileGroupReaderSchemaHandler<T> {
     this.requiredSchema = AvroSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
+    this.metaClient = metaClient;
   }
 
   public Schema getTableSchema() {
@@ -123,6 +131,18 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public DeleteContext getDeleteContext() {
     return deleteContext;
+  }
+
+  public Pair<Schema, Map<String, String>> getRequiredSchemaForFileAndRenamedColumns(StoragePath path) {
+    if (internalSchema.isEmptySchema()) {
+      return Pair.of(requiredSchema, Collections.emptyMap());
+    }
+    long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
+    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
+    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
+        true, false, false).mergeSchemaGetRenamed();
+    Schema mergedAvroSchema = AvroSchemaCache.intern(AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));
+    return Pair.of(mergedAvroSchema, mergedInternalSchema.getRight());
   }
 
   private InternalSchema pruneInternalSchema(Schema requiredSchema, Option<InternalSchema> internalSchemaOption) {

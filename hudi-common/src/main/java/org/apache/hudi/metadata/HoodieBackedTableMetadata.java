@@ -561,7 +561,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     readerContext.initRecordMerger(metadataConfig.getProps());
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.setHasLogFiles(fileSlice.hasLogFiles());
-    readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, SCHEMA, SCHEMA, Option.empty(), metadataMetaClient.getTableConfig(), metadataConfig.getProps()));
+    readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, SCHEMA, SCHEMA, Option.empty(),
+        metadataMetaClient.getTableConfig(), metadataConfig.getProps(), metadataMetaClient));
     readerContext.setShouldMergeUseRecordPosition(false);
     readerContext.setLatestCommitTime(latestMetadataInstantTime);
     return FileGroupRecordBufferLoader.createReusable(readerContext);

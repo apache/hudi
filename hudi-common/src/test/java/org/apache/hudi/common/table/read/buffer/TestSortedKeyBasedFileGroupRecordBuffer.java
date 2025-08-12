@@ -124,7 +124,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
-        properties);
+        properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     readerContext.initRecordMerger(properties);
     List<HoodieRecord> inputRecords =

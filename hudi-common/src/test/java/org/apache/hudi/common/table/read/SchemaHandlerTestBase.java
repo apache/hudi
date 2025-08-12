@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
@@ -67,6 +68,7 @@ public abstract class SchemaHandlerTestBase {
       .map(Schema.Field::name).filter(f -> !f.equals("_hoodie_is_deleted")).toArray(String[]::new));
   protected static final Schema DATA_COLS_ONLY_SCHEMA = generateProjectionSchema("begin_lat", "tip_history", "rider");
   protected static final Schema META_COLS_ONLY_SCHEMA = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key");
+  protected final HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
 
   static Stream<Arguments> testMorParams(boolean supportsParquetRowIndex) {
     Stream.Builder<Arguments> b = Stream.builder();

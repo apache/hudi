@@ -106,6 +106,6 @@ public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase
   FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema, HoodieTableConfig hoodieTableConfig,
                                                    boolean supportsParquetRowIndex) {
     return new ParquetRowIndexBasedSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties());
+        Option.empty(), hoodieTableConfig, new TypedProperties(), metaClient);
   }
 }

@@ -509,7 +509,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerContext.setHasLogFiles(true)
     readerContext.setSchemaHandler(
       new FileGroupReaderSchemaHandler[InternalRow](readerContext, avroSchema, avroSchema,
-        Option.empty(), metaClient.getTableConfig, readerProperties))
+        Option.empty(), metaClient.getTableConfig, readerProperties, metaClient))
     val stats = new HoodieReadStats
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
     keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,

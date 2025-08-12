@@ -23,7 +23,9 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
@@ -64,6 +66,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> {
   private final Map<StoragePath, HoodieAvroFileReader> reusableFileReaders;
+  private final boolean isMultiFormat;
 
   /**
    * Constructs an instance of the reader context that will read data into Avro records.
@@ -125,6 +128,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       boolean requiresPayloadRecords) {
     super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName, requiresPayloadRecords));
     this.reusableFileReaders = reusableFileReaders;
+    this.isMultiFormat = tableConfig.isMultipleBaseFileFormatsEnabled();
   }
 
   @Override
@@ -136,15 +140,27 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Schema requiredSchema,
       HoodieStorage storage) throws IOException {
     HoodieAvroFileReader reader;
+    boolean isLogFile = FSUtils.isLogFile(filePath);
+    Schema fileOutputSchema;
+    Map<String, String> renamedColumns;
+    if (isLogFile) {
+      fileOutputSchema = dataSchema;
+      renamedColumns = Collections.emptyMap();
+    } else {
+      Pair<Schema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
+      fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
+      renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
+    }
     if (reusableFileReaders.containsKey(filePath)) {
       reader = reusableFileReaders.get(filePath);
     } else {
+      HoodieFileFormat fileFormat = isMultiFormat && !isLogFile ? HoodieFileFormat.fromFileExtension(filePath.getFileExtension()) : baseFileFormat;
       reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
           .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
-              filePath, baseFileFormat, Option.empty());
+              filePath, fileFormat, Option.empty());
     }
     if (keyFilterOpt.isEmpty()) {
-      return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+      return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
     }
     if (reader.supportKeyPredicate()) {
       List<String> keys = reader.extractKeys(keyFilterOpt);
@@ -158,7 +174,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         return reader.getIndexedRecordsByKeyPrefixIterator(keyPrefixes, requiredSchema);
       }
     }
-    return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
+    return reader.getIndexedRecordIterator(dataSchema, fileOutputSchema, renamedColumns);
   }
 
   @Override
