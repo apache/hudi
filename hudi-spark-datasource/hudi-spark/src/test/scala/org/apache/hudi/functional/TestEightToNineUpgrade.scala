@@ -20,7 +20,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, RECORDKEY_FIELD, RECORD_MERGE_IMPL_CLASSES, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, RECORD_MERGE_IMPL_CLASSES, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{AWSDmsAvroPayload, HoodieRecordMerger, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}

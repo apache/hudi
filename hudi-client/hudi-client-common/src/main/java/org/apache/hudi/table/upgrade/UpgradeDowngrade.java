@@ -250,6 +250,7 @@ public class UpgradeDowngrade {
     // Remove properties.
     Set<String> propertiesToRemove =
         tablePropsToRemove.stream().map(ConfigProperty::key).collect(Collectors.toSet());
+    metaClient.getTableConfig().setTableVersion(toVersion);
     // Update modified properties.
     HoodieTableConfig.updateDeleteProps(
         metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps(), propertiesToRemove);
