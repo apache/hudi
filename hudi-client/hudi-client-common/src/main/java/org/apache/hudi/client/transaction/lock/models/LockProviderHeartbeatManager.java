@@ -167,7 +167,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private static ScheduledExecutorService createThreadScheduler(String shortUuid) {
     return Executors.newSingleThreadScheduledExecutor(
-            r -> new Thread(r, "LockProvider-HeartbeatManager-Thread-" + shortUuid));
+        r -> new Thread(r, "LockProvider-HeartbeatManager-Thread-" + shortUuid));
   }
 
   /**
