@@ -417,6 +417,35 @@
                             "name": "isTightBound",
                             "type": "boolean",
                             "default": false
+                        },
+                        {
+                            "doc": "Value type information containing enum ordinal and optional additional information",
+                            "name": "valueType",
+                            "type": [
+                                "null",
+                                {
+                                    "type": "record",
+                                    "name": "HoodieValueTypeInfo",
+                                    "namespace": "org.apache.hudi.avro.model",
+                                    "fields": [
+                                        {
+                                            "doc": "Enum type ordinal representing the value type",
+                                            "name": "typeOrdinal",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "doc": "Optional additional information about the value type",
+                                            "name": "additionalInfo",
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ],
+                                            "default": null
+                                        }
+                                    ]
+                                }
+                            ],
+                            "default": null
                         }
                     ]
                 }
