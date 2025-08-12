@@ -156,13 +156,13 @@ public class TestLockProviderHeartbeatManager {
     when(semaphore.tryAcquire()).thenReturn(false);
     when(semaphore.tryAcquire(eq(DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS), eq(TimeUnit.MILLISECONDS))).thenReturn(true);
     manager = new LockProviderHeartbeatManager(
-            LOGGER_ID,
-            mockScheduler,
-            100L,
-            DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
-            () -> true,
-            semaphore,
-            mockLogger);
+        LOGGER_ID,
+        mockScheduler,
+        100L,
+        DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
+        () -> true,
+        semaphore,
+        mockLogger);
     assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
     t.get().start();
     assertTrue(latch.await(1000, TimeUnit.MILLISECONDS));
