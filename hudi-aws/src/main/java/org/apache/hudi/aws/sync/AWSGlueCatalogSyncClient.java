@@ -91,7 +91,7 @@ import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
+import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.ALL_PARTITIONS_READ_PARALLELISM;

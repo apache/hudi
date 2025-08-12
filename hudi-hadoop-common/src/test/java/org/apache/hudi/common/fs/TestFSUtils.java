@@ -48,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -579,6 +580,37 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         new StoragePath(baseUri.toString(), ".hoodie/.temp"),
         new HashSet<>(Collections.singletonList("file4.txt")),
         false));
+  }
+
+  @Test
+  void testS3aToS3_AWS() {
+    // Test cases for AWS S3 URLs
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("s3a://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket", FSUtils.s3aToS3("s3a://my-bucket"));
+    assertEquals("s3://MY-BUCKET/PATH/TO/OBJECT", FSUtils.s3aToS3("s3a://MY-BUCKET/PATH/TO/OBJECT"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("S3a://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("s3A://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("S3A://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/s3a://another-bucket/another/path", FSUtils.s3aToS3("s3a://my-bucket/s3a://another-bucket/another/path"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "gs://my-bucket/path/to/object",
+      "gs://my-bucket",
+      "gs://MY-BUCKET/PATH/TO/OBJECT",
+      "https://myaccount.blob.core.windows.net/mycontainer/path/to/blob",
+      "https://myaccount.blob.core.windows.net/MYCONTAINER/PATH/TO/BLOB",
+      "https://example.com/path/to/resource",
+      "http://example.com",
+      "ftp://example.com/resource",
+      "",
+      "gs://my-bucket/path/to/s3a://object",
+      "gs://my-bucket s3a://my-object",
+  })
+  
+  void testUriDoesNotChange(String uri) {
+    assertEquals(uri, FSUtils.s3aToS3(uri));
   }
 
   private StoragePath getHoodieTempDir() {

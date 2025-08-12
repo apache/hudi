@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metrics.cloudwatch;
+package org.apache.hudi.aws.metrics.cloudwatch;
 
-import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporterFactory;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -40,6 +40,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class TestCloudWatchMetricsReporter {
+
+  @Mock
+  private HoodieWriteConfig writeConfig;
 
   @Mock
   private HoodieMetricsConfig metricsConfig;
@@ -66,6 +69,22 @@ public class TestCloudWatchMetricsReporter {
   }
 
   @Test
+  public void testReporterUsingMetricsConfig() {
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(metricsConfig.getCloudWatchReportPeriodSeconds()).thenReturn(30);
+    CloudWatchMetricsReporter metricsReporter = new CloudWatchMetricsReporter(writeConfig, registry, reporter);
+
+    metricsReporter.start();
+    verify(reporter, times(1)).start(30, TimeUnit.SECONDS);
+
+    metricsReporter.report();
+    verify(reporter, times(1)).report();
+
+    metricsReporter.stop();
+    verify(reporter, times(1)).stop();
+  }
+
+  @Test
   public void testReporterViaReporterFactory() {
     try {
       when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CLOUDWATCH);
@@ -75,7 +94,7 @@ public class TestCloudWatchMetricsReporter {
     } catch (Exception e) {
       assertTrue(e.getCause() instanceof InvocationTargetException);
       assertTrue(Arrays.stream(((InvocationTargetException) e.getCause()).getTargetException().getStackTrace()).anyMatch(
-          ste -> ste.toString().contains("org.apache.hudi.aws.cloudwatch.CloudWatchReporter.getAmazonCloudWatchClient")));
+          ste -> ste.toString().contains("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.getAmazonCloudWatchClient")));
     }
   }
 }
