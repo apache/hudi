@@ -116,21 +116,13 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
   }
 
-  private def tableVersionCreationTestCases = {
-    val autoUpgradeValues = Array("true", "false")
-    val targetVersions = Array("1", "2", "3", "4", "5", "6", "7", "8", "9", "null")
-    autoUpgradeValues.flatMap((autoUpgrade: String)
-    => targetVersions.map(
-        (targetVersion: String) => Arguments.of(autoUpgrade, targetVersion)))
-  }
-
   @ParameterizedTest
   @MethodSource(Array("tableVersionCreationTestCases"))
-  def testTableVersionDuringTableCreation(autoUpgrade: Boolean, targetTableVersion: String): Unit = {
+  def testTableVersionDuringTableCreation(autoUpgrade: String, targetTableVersion: String): Unit = {
     val writeOptions = scala.collection.mutable.Map(
       HoodieWriteConfig.TBL_NAME.key -> "testTableCreation",
-      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> autoUpgrade.toString)
-    if (targetTableVersion != "null") {
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> autoUpgrade)
+    if (!targetTableVersion.equals("null")) {
       writeOptions += (HoodieWriteConfig.WRITE_TABLE_VERSION.key -> targetTableVersion)
     }
     val dataGen: HoodieTestDataGenerator = new HoodieTestDataGenerator(System.currentTimeMillis())
@@ -141,17 +133,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     if (failSet.contains(targetTableVersion)) {
       val exception: IllegalArgumentException =
         assertThrows(classOf[IllegalArgumentException])(
-          () => inputDF.write.format("hudi").partitionBy("partition")
-            .options(writeOptions).mode(SaveMode.Append).save(basePath)
-        )
+          inputDF.write.format("hudi").partitionBy("partition")
+            .options(writeOptions).mode(SaveMode.Overwrite).save(basePath))
       assertTrue(exception.getMessage.contains(
         "The value of hoodie.write.table.version should be one of 6,8,9"))
     } else {
       inputDF.write.format("hudi").partitionBy("partition")
-        .options(writeOptions).mode(SaveMode.Append).save(basePath)
+        .options(writeOptions).mode(SaveMode.Overwrite).save(basePath)
       metaClient = HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
       // If no write version is specified, use current.
-      if (targetTableVersion != "null") {
+      if (!targetTableVersion.equals("null")) {
         assertEquals(
           HoodieTableVersion.fromVersionCode(Integer.valueOf(targetTableVersion)),
           metaClient.getTableConfig.getTableVersion)
@@ -2083,5 +2074,13 @@ object TestCOWDataSource {
       //       one by pretending its value could be null in some execution paths
       df.withColumn(c, when(col(c).isNotNull, col(c)).otherwise(lit(null)))
     }
+  }
+
+  def tableVersionCreationTestCases = {
+    val autoUpgradeValues = Array("true", "false")
+    val targetVersions = Array("1", "2", "3", "4", "5", "6", "7", "8", "9", "null")
+    autoUpgradeValues.flatMap(
+      (autoUpgrade: String) => targetVersions.map(
+        (targetVersion: String) => Arguments.of(autoUpgrade, targetVersion)))
   }
 }
