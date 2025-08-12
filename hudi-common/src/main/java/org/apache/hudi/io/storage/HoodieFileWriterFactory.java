@@ -128,4 +128,8 @@ public class HoodieFileWriterFactory {
         config.getIntOrDefault(HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES),
         config.getStringOrDefault(HoodieStorageConfig.BLOOM_FILTER_TYPE));
   }
+
+  public static boolean isHoodieBloomEnabled(boolean populateMetaFields) {
+    return populateMetaFields;
+  }
 }

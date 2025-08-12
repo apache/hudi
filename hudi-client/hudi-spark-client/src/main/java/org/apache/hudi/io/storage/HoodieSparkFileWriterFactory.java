@@ -45,7 +45,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
       String instantTime, Path path, Configuration conf, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-    boolean enableBloomFilter = populateMetaFields;
+    boolean enableBloomFilter = isHoodieBloomEnabled(populateMetaFields);
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
     // Support PARQUET_COMPRESSION_CODEC_NAME is ""
     if (compressionCodecName.isEmpty()) {

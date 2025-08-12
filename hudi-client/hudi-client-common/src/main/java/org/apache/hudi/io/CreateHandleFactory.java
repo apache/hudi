@@ -19,12 +19,18 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
 public class CreateHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K, O> implements Serializable {
+  private static final Logger LOG = LoggerFactory.getLogger(CreateHandleFactory.class);
 
   private boolean preserveMetadata = false;
 
@@ -40,8 +46,30 @@ public class CreateHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
   public HoodieWriteHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
                                               final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
                                               final String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
+    boolean isFallbackEnabled = hoodieConfig.isCreateHandleFallbackEnabled();
+    String createHandleClass = hoodieConfig.getCreateHandleClassName();
+    LOG.info("Create CreateHandle implementation {} for fileIdPrefix {} and partition path {} at commit {}",
+        createHandleClass, fileIdPrefix, partitionPath, commitTime);
 
-    return new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        getNextFileId(fileIdPrefix), taskContextSupplier, preserveMetadata);
+    Class<?>[] constructorArgTypes = new Class<?>[] {HoodieWriteConfig.class, String.class, HoodieTable.class, String.class,
+      String.class, Option.class, TaskContextSupplier.class, boolean.class};
+    String nextFileId = getNextFileId(fileIdPrefix);
+    try {
+      return ReflectionUtils.loadClass(createHandleClass, constructorArgTypes,
+          hoodieConfig, commitTime, hoodieTable, partitionPath, nextFileId, Option.empty(), taskContextSupplier, preserveMetadata);
+    } catch (Throwable e1) {
+      if (isFallbackEnabled) {
+        String fallbackCreateHandleClass = HoodieWriteConfig.CREATE_HANDLE_CLASS_NAME.defaultValue();
+        try {
+          LOG.warn("HoodieCreateHandle implementation {} failed, now creating fallback implementation {} for fileIdPrefix {} and partitionPath {} at commit {}",
+              createHandleClass, fallbackCreateHandleClass, fileIdPrefix, partitionPath, commitTime);
+          return ReflectionUtils.loadClass(fallbackCreateHandleClass, constructorArgTypes,
+              hoodieConfig, commitTime, hoodieTable, partitionPath, nextFileId, Option.empty(), taskContextSupplier, preserveMetadata);
+        } catch (Throwable e2) {
+          throw new HoodieException("Could not instantiate the fallback HoodieCreateHandle implementation: " + fallbackCreateHandleClass, e2);
+        }
+      }
+      throw new HoodieException("Could not instantiate the HoodieCreateHandle implementation: " + createHandleClass, e1);
+    }
   }
 }

@@ -44,6 +44,8 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
 
   public static final String OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "com.uber.hoodie.bloomfilter";
   public static final String HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY = "org.apache.hudi.bloomfilter";
+  // Default value in parquet-avro dependency
+  public static final boolean PARQUET_AVRO_WRITE_OLD_LIST_STRUCTURE_DEFAULT = true;
 
   public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt,
                                 Properties properties) {
@@ -54,13 +56,7 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
 
   @Override
   public WriteSupport.FinalizedWriteContext finalizeWrite() {
-    Map<String, String> extraMetadata =
-        CollectionUtils.combine(footerMetadata,
-            bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
-                .orElse(Collections.emptyMap())
-        );
-
-    return new WriteSupport.FinalizedWriteContext(extraMetadata);
+    return new WriteSupport.FinalizedWriteContext(getFooterMetadataWithBloom());
   }
 
   public void add(String recordKey) {
@@ -81,5 +77,12 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     protected byte[] getUTF8Bytes(String key) {
       return key.getBytes(StandardCharsets.UTF_8);
     }
+  }
+
+  public Map<String, String> getFooterMetadataWithBloom() {
+    return CollectionUtils.combine(
+        footerMetadata,
+        bloomFilterWriteSupportOpt.map(HoodieBloomFilterWriteSupport::finalizeMetadata)
+            .orElse(Collections.emptyMap()));
   }
 }

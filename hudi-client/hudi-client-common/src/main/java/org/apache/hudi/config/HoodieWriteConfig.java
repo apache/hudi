@@ -66,6 +66,7 @@ import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieRowConcatHandle;
 import org.apache.hudi.io.HoodieRowMergeHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -864,6 +865,21 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
               + " enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
 
+  public static final ConfigProperty<String> CREATE_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.write.create.handle.class")
+      .defaultValue(HoodieCreateHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("0.14.2")
+      .withDocumentation("The create handle class to use.");
+
+  public static final ConfigProperty<Boolean> CREATE_HANDLE_PERFORM_FALLBACK = ConfigProperty
+      .key("hoodie.write.create.handle.fallback.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("0.14.2")
+      .withDocumentation("When using a custom Hoodie Create Handle Implementation controlled by the config " + CREATE_HANDLE_CLASS_NAME.key()
+          + " enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
+
   public static final ConfigProperty<String> FREEZE_WRITE_CONFIGS = ConfigProperty
       .key("hoodie.write.config.freeze")
       .defaultValue("")
@@ -1408,6 +1424,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieWriteConfig.MERGE_HANDLE_PERFORM_FALLBACK, HoodieWriteConfig.MERGE_HANDLE_PERFORM_FALLBACK.defaultValue());
   }
 
+  public boolean isCreateHandleFallbackEnabled() {
+    return getBooleanOrDefault(HoodieWriteConfig.CREATE_HANDLE_PERFORM_FALLBACK, HoodieWriteConfig.CREATE_HANDLE_PERFORM_FALLBACK.defaultValue());
+  }
+
   public boolean isConsistentLogicalTimestampEnabled() {
     return getBooleanOrDefault(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED);
   }
@@ -1518,6 +1538,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getConcatHandleClassName() {
     return getStringOrDefault(CONCAT_HANDLE_CLASS_NAME);
+  }
+
+  public String getCreateHandleClassName() {
+    return getStringOrDefault(CREATE_HANDLE_CLASS_NAME);
   }
 
   public int getFinalizeWriteParallelism() {
