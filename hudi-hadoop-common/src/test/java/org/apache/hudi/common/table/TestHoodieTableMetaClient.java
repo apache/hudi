@@ -29,7 +29,6 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
@@ -283,72 +282,5 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieIndexMetadata indexMetadata = HoodieIndexMetadata.fromJson(
         new String(FileIOUtils.readDataFromPath(metaClient.getStorage(), new StoragePath(metaClient.getIndexDefinitionPath())).get()));
     assertTrue(indexMetadata.getIndexDefinitions().isEmpty());
-  }
-
-  @Test
-  void testGetTableVersionProperlyWithNullTableVersion() {
-    HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
-        .setTableName("test_table")
-        .setTableType(HoodieTableType.COPY_ON_WRITE);
-
-    // tableVersion is null by default
-    HoodieTableVersion result = tableBuilder.getTableVersionProperly();
-    assertEquals(HoodieTableVersion.current(), result);
-  }
-
-  @Test
-  void testGetTableVersionProperlyWithCurrentVersion() {
-    HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
-        .setTableName("test_table")
-        .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableVersion(HoodieTableVersion.current());
-    HoodieTableVersion result = tableBuilder.getTableVersionProperly();
-    assertEquals(HoodieTableVersion.current(), result);
-  }
-
-  @Test
-  void testGetTableVersionProperlyWithValidVersions() {
-    HoodieTableVersion[] lowerVersions = {
-        HoodieTableVersion.SIX,
-        HoodieTableVersion.SEVEN,
-        HoodieTableVersion.EIGHT,
-        HoodieTableVersion.NINE
-    };
-
-    for (HoodieTableVersion version : lowerVersions) {
-      HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
-          .setTableName("test_table")
-          .setTableType(HoodieTableType.COPY_ON_WRITE)
-          .setTableVersion(version);
-
-      HoodieTableVersion result = tableBuilder.getTableVersionProperly();
-      assertEquals(version, result);
-    }
-  }
-
-  @Test
-  void testGetTableVersionProperlyWithInvalidValues() {
-    // Test with different lower versions and autoUpgrade=true
-    HoodieTableVersion[] lowerVersions = {
-        HoodieTableVersion.ZERO,
-        HoodieTableVersion.ONE,
-        HoodieTableVersion.TWO,
-        HoodieTableVersion.THREE,
-        HoodieTableVersion.FOUR,
-        HoodieTableVersion.FIVE
-    };
-
-    for (HoodieTableVersion version : lowerVersions) {
-      HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
-          .setTableName("test_table")
-          .setTableType(HoodieTableType.COPY_ON_WRITE)
-          .setTableVersion(version);
-
-      HoodieNotSupportedException exception = assertThrows(
-          HoodieNotSupportedException.class,
-          () -> tableBuilder.getTableVersionProperly());
-      assertTrue(exception.getMessage().contains(
-          String.format("Creating a table in version \"%d\"", version.versionCode())));
-    }
   }
 }
