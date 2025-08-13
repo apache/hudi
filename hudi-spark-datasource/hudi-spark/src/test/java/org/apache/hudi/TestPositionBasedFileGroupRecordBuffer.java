@@ -139,8 +139,8 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
       ctx.setRecordMerger(Option.empty());
     }
     ctx.setSchemaHandler(HoodieSparkUtils.gteqSpark3_5()
-        ? new ParquetRowIndexBasedSchemaHandler<>(ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig(), new TypedProperties(), metaClient)
-        : new FileGroupReaderSchemaHandler<>(ctx, avroSchema, avroSchema, Option.empty(), metaClient.getTableConfig(), new TypedProperties(), metaClient));
+        ? new ParquetRowIndexBasedSchemaHandler<>(ctx, avroSchema, avroSchema, Option.empty(), new TypedProperties(), metaClient)
+        : new FileGroupReaderSchemaHandler<>(ctx, avroSchema, avroSchema, Option.empty(), new TypedProperties(), metaClient));
     TypedProperties props = new TypedProperties();
     props.put("hoodie.write.record.merge.mode", mergeMode.name());
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));

@@ -154,7 +154,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
         properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate, testRecord7));
@@ -221,7 +221,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
         properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
@@ -300,7 +300,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
         properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate));
@@ -375,7 +375,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
         properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate));

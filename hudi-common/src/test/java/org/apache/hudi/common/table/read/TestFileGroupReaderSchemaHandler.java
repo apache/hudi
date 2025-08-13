@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -72,29 +71,27 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
 
   @Test
   public void testCow() {
-    HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, false, false, null);
     Schema requestedSchema = DATA_SCHEMA;
-    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
     assertEquals(requestedSchema, schemaHandler.getRequiredSchema());
 
     //read subset of columns
     requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "rider");
-    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
+    schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
     assertEquals(requestedSchema, schemaHandler.getRequiredSchema());
     assertFalse(readerContext.getNeedsBootstrapMerge());
   }
 
   @Test
   public void testCowBootstrap() {
-    HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     Schema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
 
     //meta cols must go first in the required schema
-    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, hoodieTableConfig, false);
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, false);
     assertTrue(readerContext.getNeedsBootstrapMerge());
     Schema expectedRequiredSchema = generateProjectionSchema("_hoodie_record_key", "begin_lat", "tip_history", "rider");
     assertEquals(expectedRequiredSchema, schemaHandler.getRequiredSchema());
@@ -105,7 +102,6 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
 
   @Test
   void testGetRequiredSchemaForFileAndRenameColumns() {
-    HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     Schema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
@@ -119,7 +115,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
       return field;
     }).collect(Collectors.toList())));
     FileGroupReaderSchemaHandler<String> schemaHandler = new FileGroupReaderSchemaHandler<>(readerContext, DATA_SCHEMA, requestedSchema,
-        Option.of(internalSchema), hoodieTableConfig, new TypedProperties(), metaClient);
+        Option.of(internalSchema), new TypedProperties(), metaClient);
 
     try (MockedStatic<InternalSchemaCache> mockedStatic = Mockito.mockStatic(InternalSchemaCache.class)) {
       String instantTime = "20231010101010";
@@ -159,10 +155,10 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
   }
 
   @Override
-  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema, HoodieTableConfig hoodieTableConfig,
+  FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema, Schema requestedSchema,
                                                    boolean supportsParquetRowIndex) {
     return new FileGroupReaderSchemaHandler(readerContext, dataSchema, requestedSchema,
-        Option.empty(), hoodieTableConfig, new TypedProperties(), metaClient);
+        Option.empty(), new TypedProperties(), metaClient);
   }
 
   @ParameterizedTest
@@ -230,23 +226,22 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     Schema dataSchema = SchemaTestUtil.getSchemaFromFields(dataSchemaFields);
     Schema requestedSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
 
-    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
-    when(tableConfig.getRecordMergeMode()).thenReturn(mergeMode);
-    when(tableConfig.populateMetaFields()).thenReturn(true);
-    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.of(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING));
-    when(tableConfig.getPreCombineFields()).thenReturn(setPrecombine ? Collections.singletonList(preCombineField) : Collections.emptyList());
-    when(tableConfig.getTableVersion()).thenReturn(tableVersion);
-    if (tableConfig.getTableVersion() == HoodieTableVersion.SIX) {
+    when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
+    when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.of(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING));
+    when(hoodieTableConfig.getPreCombineFields()).thenReturn(setPrecombine ? Collections.singletonList(preCombineField) : Collections.emptyList());
+    when(hoodieTableConfig.getTableVersion()).thenReturn(tableVersion);
+    if (hoodieTableConfig.getTableVersion() == HoodieTableVersion.SIX) {
       if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
-        when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+        when(hoodieTableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
       } else if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
-        when(tableConfig.getPayloadClass()).thenReturn(OverwriteWithLatestAvroPayload.class.getName());
+        when(hoodieTableConfig.getPayloadClass()).thenReturn(OverwriteWithLatestAvroPayload.class.getName());
       } else {
-        when(tableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+        when(hoodieTableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
       }
     }
     if (mergeMode != null) {
-      when(tableConfig.getRecordMergeStrategyId()).thenReturn(mergeStrategyId);
+      when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn(mergeStrategyId);
     }
 
     TypedProperties props = new TypedProperties();
@@ -268,7 +263,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
       expectedFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
     Schema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
-    when(recordMerger.getMandatoryFieldsForMerging(dataSchema, tableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
+    when(recordMerger.getMandatoryFieldsForMerging(dataSchema, hoodieTableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
     DeleteContext deleteContext = new DeleteContext(props, dataSchema);
     assertEquals(addHoodieIsDeleted, deleteContext.hasBuiltInDeleteField());
@@ -276,7 +271,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
             ? Option.of(Pair.of(customDeleteKey, customDeleteValue)) : Option.empty(),
         deleteContext.getCustomDeleteMarkerKeyValue());
     FileGroupReaderSchemaHandler fileGroupReaderSchemaHandler = new FileGroupReaderSchemaHandler(readerContext,
-        dataSchema, requestedSchema, Option.empty(), tableConfig, props, metaClient);
+        dataSchema, requestedSchema, Option.empty(), props, metaClient);
     Schema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
     assertEquals(expectedSchema, actualSchema);
   }
