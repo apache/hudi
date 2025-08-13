@@ -1151,7 +1151,9 @@ public class TestHoodieAvroUtils {
 
     return Stream.of(
         Arguments.of(intSchema, longSchema, false),
+        Arguments.of(intSchema, floatSchema, false),
         Arguments.of(longSchema, intSchema, true),
+        Arguments.of(longSchema, floatSchema, false),
         Arguments.of(decimal1, decimal2, true),
         Arguments.of(doubleSchema, decimal1, true),
         Arguments.of(decimal1, doubleSchema, true),

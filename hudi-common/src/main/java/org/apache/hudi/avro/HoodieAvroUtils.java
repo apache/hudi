@@ -1439,6 +1439,7 @@ public class HoodieAvroUtils {
       case STRING:
         return needsRewriteToString(writerSchema, false);
       case DOUBLE:
+      case FLOAT:
       case LONG:
         return !(writerSchema.getType().equals(Schema.Type.INT) || writerSchema.getType().equals(Schema.Type.LONG));
       default:
