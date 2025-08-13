@@ -328,15 +328,30 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
+  private static Stream<Arguments> testArgsForDifferentBaseAndLogFormats() {
+    boolean supportsORC = supportedFileFormats.contains(HoodieFileFormat.ORC);
+    List<Arguments> args = new ArrayList<>();
+    
+    if (supportsORC) {
+      args.add(arguments(HoodieFileFormat.ORC, "avro"));
+    }
+    
+    args.add(arguments(HoodieFileFormat.PARQUET, "avro"));
+    args.add(arguments(HoodieFileFormat.PARQUET, "parquet"));
+    
+    return args.stream();
+  }
+  
   /**
    * Write a base file with schema A, then write a log file with schema A, then write another base file with schema B.
    */
   @ParameterizedTest
-  @MethodSource("supportedBaseFileFormatArgs")
-  public void testSchemaEvolutionWhenBaseFileHasDifferentSchemaThanLogFiles(HoodieFileFormat fileFormat) throws Exception {
+  @MethodSource("testArgsForDifferentBaseAndLogFormats")
+  public void testSchemaEvolutionWhenBaseFileHasDifferentSchemaThanLogFiles(HoodieFileFormat fileFormat, String logFileFormat) throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(
         getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
     writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
+    writeConfigs.put(HoodieTableConfig.LOG_FILE_FORMAT.key(), logFileFormat);
     HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
     if (fileFormat == HoodieFileFormat.ORC) {
       // ORC can support reading float as string, but it converts float to double to string causing differences in precision
