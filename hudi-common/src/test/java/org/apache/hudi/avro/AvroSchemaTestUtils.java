@@ -95,10 +95,9 @@ public class AvroSchemaTestUtils {
       }
       GenericRecord expectedRecord = (GenericRecord) expected;
       GenericRecord actualRecord = (GenericRecord) actual;
-      // TODO: add this check when schema evolution has the more flexible schema comparison
-      // if (!Objects.equals(expectedRecord.getSchema(), actualRecord.getSchema())) {
-      //   throw new HoodieAvroSchemaException("Expected record schema " + expectedRecord.getSchema() + " but got " + actualRecord.getSchema() + " for " + createFullName(fieldNames));
-      // }
+       if (!AvroSchemaUtils.areSchemasProjectionEquivalent(expectedRecord.getSchema(), actualRecord.getSchema())) {
+         throw new HoodieAvroSchemaException("Expected record schema " + expectedRecord.getSchema() + " but got " + actualRecord.getSchema() + " for " + createFullName(fieldNames));
+       }
       for (Schema.Field field : expectedRecord.getSchema().getFields()) {
         fieldNames.push(field.name());
         validateRecordsHaveSameData(expectedRecord.get(field.name()), actualRecord.get(field.name()), fieldNames);
