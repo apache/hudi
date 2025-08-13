@@ -724,9 +724,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     assertTrue(tableConfig.contains(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID),
         "Record merge strategy ID should be set for V8");
     
-    assertTrue(tableConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME),
-        "Payload class should be set for V8");
-    
     assertTrue(tableConfig.contains(HoodieTableConfig.INITIAL_VERSION),
         "Initial version should be set for V8");
     

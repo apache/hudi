@@ -17,15 +17,20 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -42,5 +47,68 @@ class TestHoodieWriterUtils extends HoodieClientTestBase {
     TypedProperties properties = TypedProperties.copy(tableConfig.getProps());
     properties.put(HoodieTableConfig.DATABASE_NAME.key(), "databaseFromCatalog");
     Assertions.assertDoesNotThrow(() -> HoodieWriterUtils.validateTableConfig(sparkSession, JavaScalaConverters.convertJavaPropertiesToScalaMap(properties), tableConfig));
+  }
+
+  @Test
+  void testGetKeyInTableConfigTableVersion9PayloadClassKeyWithoutLegacyPayloadClass() {
+    try (MockedStatic<HoodieTableVersion> mockedHoodieTableVersion = Mockito.mockStatic(HoodieTableVersion.class)) {
+      mockedHoodieTableVersion.when(HoodieTableVersion::current).thenReturn(HoodieTableVersion.NINE);
+      HoodieConfig config = new HoodieConfig();
+      String result = HoodieWriterUtils.getKeyInTableConfig(
+          HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);
+      // Should return original key since legacy payload class is not configured
+      Assertions.assertEquals(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), result);
+    }
+  }
+
+  @Test
+  void testGetKeyInTableConfigTableVersion9NonPayloadClassKey() {
+    try (MockedStatic<HoodieTableVersion> mockedHoodieTableVersion = Mockito.mockStatic(HoodieTableVersion.class)) {
+      mockedHoodieTableVersion.when(HoodieTableVersion::current).thenReturn(HoodieTableVersion.NINE);
+      HoodieConfig config = new HoodieConfig();
+      config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME,
+          "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+      // Test with a different key (not PAYLOAD_CLASS_NAME)
+      String testKey = "hoodie.datasource.write.recordkey.field";
+      String result = HoodieWriterUtils.getKeyInTableConfig(testKey, config);
+      Assertions.assertEquals(testKey, result);
+    }
+  }
+
+  @Test
+  void testGetKeyInTableConfigTableVersionNot9PayloadClassKeyWithLegacyPayloadClass() {
+    try (MockedStatic<HoodieTableVersion> mockedHoodieTableVersion = Mockito.mockStatic(HoodieTableVersion.class)) {
+      mockedHoodieTableVersion.when(HoodieTableVersion::current).thenReturn(HoodieTableVersion.EIGHT);
+      HoodieConfig config = new HoodieConfig();
+      config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+      // Test with PAYLOAD_CLASS_NAME key
+      String result = HoodieWriterUtils.getKeyInTableConfig(
+          HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);
+      Assertions.assertEquals(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), result);
+    }
+  }
+
+  @Test
+  void testGetKeyInTableConfigTableVersion9PayloadClassKeyEmptyLegacyPayloadClass() {
+    try (MockedStatic<HoodieTableVersion> mockedHoodieTableVersion = Mockito.mockStatic(HoodieTableVersion.class)) {
+      mockedHoodieTableVersion.when(HoodieTableVersion::current).thenReturn(HoodieTableVersion.NINE);
+      HoodieConfig config = new HoodieConfig();
+      config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, "");
+      String result = HoodieWriterUtils.getKeyInTableConfig(
+          HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);
+      Assertions.assertEquals(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), result);
+    }
+  }
+
+  @Test
+  void testGetKeyInTableConfigTableVersion9PayloadClassKeyWhitespaceLegacyPayloadClass() {
+    try (MockedStatic<HoodieTableVersion> mockedHoodieTableVersion = Mockito.mockStatic(HoodieTableVersion.class)) {
+      mockedHoodieTableVersion.when(HoodieTableVersion::current).thenReturn(HoodieTableVersion.NINE);
+      HoodieConfig config = new HoodieConfig();
+      config.setValue(HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, "   ");
+      String result = HoodieWriterUtils.getKeyInTableConfig(
+          HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), config);
+      Assertions.assertEquals(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), result);
+    }
   }
 }

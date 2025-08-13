@@ -128,6 +128,7 @@ public class TestFlinkWriteClients {
     assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID));
     assertThat(tableConfig.getPayloadClass(), is(OverwriteWithLatestAvroPayload.class.getName()));
 
+
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
     assertThat(mergerClasses, is(CommitTimeFlinkRecordMerger.class.getName()));

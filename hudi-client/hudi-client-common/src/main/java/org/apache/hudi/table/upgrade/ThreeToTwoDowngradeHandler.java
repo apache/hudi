@@ -19,15 +19,9 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Downgrade handler to assist in downgrading hoodie table from version 3 to 2.
@@ -35,13 +29,13 @@ import java.util.Map;
 public class ThreeToTwoDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     if (config.isMetadataTableEnabled()) {
       // Metadata Table in version 3 is synchronous and in version 2 is asynchronous. Downgrading to asynchronous
       // removes the checks in code to decide whether to use a LogBlock or not. Also, the schema for the
       // table has been updated and is not forward compatible. Hence, we need to delete the table.
       HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
     }
-    return Pair.of(Collections.emptyMap(), Collections.emptyList());
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 }
