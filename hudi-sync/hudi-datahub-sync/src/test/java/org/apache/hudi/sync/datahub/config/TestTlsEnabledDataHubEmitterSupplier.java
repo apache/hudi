@@ -99,27 +99,27 @@ class TestTlsEnabledDataHubEmitterSupplier {
     
     // This is a real, valid self-signed certificate that was generated externally
     // Generated with: openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes
-    String validCert = "-----BEGIN CERTIFICATE-----\n" +
-        "MIIDazCCAlOgAwIBAgIUFtGMq5vPqvNXGDCH2rJ5n0OhLuQwDQYJKoZIhvcNAQEL\n" +
-        "BQAwRTELMAkGA1UEBhMCVVMxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM\n" +
-        "GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yNDAxMDEwMDAwMDBaFw0yNTAx\n" +
-        "MDEwMDAwMDBaMEUxCzAJBgNVBAYTAlVTMRMwEQYDVQQIDApTb21lLVN0YXRlMSEw\n" +
-        "HwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwggEiMA0GCSqGSIb3DQEB\n" +
-        "AQUAA4IBDwAwggEKAoIBAQC7bthgxE4i9lRaKov+kFVWy8Bj2w7V1EhGNxUe7j5O\n" +
-        "HOLx3hE2B1BcSa2no3W7XgJ9cYQ7jVaDj3bPP7vVZKQ4YCqFH9z2l1kZQKjZQ7gU\n" +
-        "FpqRRZHJpYxGKwP7YsBsVz3FJKmUyGP5cFq8mLBIcLa2Y9riYZQz7Wm7VgKzR3eZ\n" +
-        "YxDF9N5PbQnQt4bCFed0TlcX5gYFUqiRW5AUe5mECjH7hcWGaAXQBQKNbLiKVYEq\n" +
-        "jO4Y3F8xZ7CiMUVLkQMjKwYGNP3iG3msFS9bTiLcHwIx2RbFjxGg+gfvZ8EiYpFE\n" +
-        "ZQPvLsbmjqHc5ufhQJ3lfzYF2FjLcVx1VrsVhTQmB9EfAgMBAAGjUzBRMB0GA1Ud\n" +
-        "DgQWBBTWV4Dr2cKLsHhP0Hxc+CmZx2DZBzAfBgNVHSMEGDAWgBTWV4Dr2cKLsHhP\n" +
-        "0Hxc+CmZx2DZBzAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCR\n" +
-        "jf+kzYIFU+3M0hBpVz7cPYlhSI7gWdSIvY5kYhX4vvRBFGJ8OFo9flUd4vvO+GyV\n" +
-        "g+UNmGpgslqYdXuFmC2IftPRgaLpohZWvmR1CYUS3AbcuWUqFKchTHPaJLZTAcNu\n" +
-        "xYrqULYzsQxLb1FcXHoqntQe1YvLlkRRPkS9E3Lf0KO6dOlAwJI6qCvhzvtguinh\n" +
-        "FcTnSsJl6YQF8gMRdGxGPH5OKnpVr6xVkQ0gzc7P5AdVRDkVAjI8S5tgdMjHJB0L\n" +
-        "yN3nwCWMJgJqN5ZkJVz5cYtXdlfJBaDjXRbV+jpOOJRDr6Fy8PQ1EEvhQEoVHQz0\n" +
-        "FKevncF0IEv9ZFHQPTLM\n" +
-        "-----END CERTIFICATE-----";
+    String validCert = "-----BEGIN CERTIFICATE-----\n"
+        + "MIIDazCCAlOgAwIBAgIUFtGMq5vPqvNXGDCH2rJ5n0OhLuQwDQYJKoZIhvcNAQEL\n"
+        + "BQAwRTELMAkGA1UEBhMCVVMxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM\n"
+        + "GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yNDAxMDEwMDAwMDBaFw0yNTAx\n"
+        + "MDEwMDAwMDBaMEUxCzAJBgNVBAYTAlVTMRMwEQYDVQQIDApTb21lLVN0YXRlMSEw\n"
+        + "HwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwggEiMA0GCSqGSIb3DQEB\n"
+        + "AQUAA4IBDwAwggEKAoIBAQC7bthgxE4i9lRaKov+kFVWy8Bj2w7V1EhGNxUe7j5O\n"
+        + "HOLx3hE2B1BcSa2no3W7XgJ9cYQ7jVaDj3bPP7vVZKQ4YCqFH9z2l1kZQKjZQ7gU\n"
+        + "FpqRRZHJpYxGKwP7YsBsVz3FJKmUyGP5cFq8mLBIcLa2Y9riYZQz7Wm7VgKzR3eZ\n"
+        + "YxDF9N5PbQnQt4bCFed0TlcX5gYFUqiRW5AUe5mECjH7hcWGaAXQBQKNbLiKVYEq\n"
+        + "jO4Y3F8xZ7CiMUVLkQMjKwYGNP3iG3msFS9bTiLcHwIx2RbFjxGg+gfvZ8EiYpFE\n"
+        + "ZQPvLsbmjqHc5ufhQJ3lfzYF2FjLcVx1VrsVhTQmB9EfAgMBAAGjUzBRMB0GA1Ud\n"
+        + "DgQWBBTWV4Dr2cKLsHhP0Hxc+CmZx2DZBzAfBgNVHSMEGDAWgBTWV4Dr2cKLsHhP\n"
+        + "0Hxc+CmZx2DZBzAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCR\n"
+        + "jf+kzYIFU+3M0hBpVz7cPYlhSI7gWdSIvY5kYhX4vvRBFGJ8OFo9flUd4vvO+GyV\n"
+        + "g+UNmGpgslqYdXuFmC2IftPRgaLpohZWvmR1CYUS3AbcuWUqFKchTHPaJLZTAcNu\n"
+        + "xYrqULYzsQxLb1FcXHoqntQe1YvLlkRRPkS9E3Lf0KO6dOlAwJI6qCvhzvtguinh\n"
+        + "FcTnSsJl6YQF8gMRdGxGPH5OKnpVr6xVkQ0gzc7P5AdVRDkVAjI8S5tgdMjHJB0L\n"
+        + "yN3nwCWMJgJqN5ZkJVz5cYtXdlfJBaDjXRbV+jpOOJRDr6Fy8PQ1EEvhQEoVHQz0\n"
+        + "FKevncF0IEv9ZFHQPTLM\n"
+        + "-----END CERTIFICATE-----";
     
     Files.write(certPath, validCert.getBytes());
     return certPath;
