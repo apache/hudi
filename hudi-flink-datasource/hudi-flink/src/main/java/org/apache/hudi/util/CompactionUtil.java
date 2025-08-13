@@ -100,10 +100,10 @@ public class CompactionUtil {
    *
    * @param conf The configuration
    */
-  public static void setPreCombineField(Configuration conf, HoodieTableMetaClient metaClient) {
+  public static void setPreCombineFields(Configuration conf, HoodieTableMetaClient metaClient) {
     String preCombineField = metaClient.getTableConfig().getPreCombineFieldsStr().orElse(null);
     if (preCombineField != null) {
-      conf.set(FlinkOptions.PRECOMBINE_FIELD, preCombineField);
+      conf.set(FlinkOptions.PRECOMBINE_FIELDS, preCombineField);
     }
   }
 

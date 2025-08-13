@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -206,7 +207,7 @@ public class DataSourceUtils {
             .withPayloadClass(parameters.getOrDefault(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
                 parameters.getOrDefault(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME)))
             .withPayloadOrderingFields(parameters.getOrDefault(DataSourceWriteOptions.PRECOMBINE_FIELD().key(),
-                parameters.get(HoodieTableConfig.PRECOMBINE_FIELDS)))
+                ConfigUtils.getStringWithAltKeys(parameters, HoodieTableConfig.PRECOMBINE_FIELDS)))
             .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();

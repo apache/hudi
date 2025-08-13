@@ -1174,7 +1174,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", "COPY_ON_WRITE")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option("hoodie.datasource.write.precombine.fields", "ts")
           .option("hoodie.datasource.write.operation", "upsert")
           .option("hoodie.schema.on.read.enable", "true")
           .mode("append")

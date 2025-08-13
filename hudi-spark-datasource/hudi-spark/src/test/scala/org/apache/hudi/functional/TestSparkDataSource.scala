@@ -312,7 +312,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     var (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
     writeOpts = writeOpts ++ Map("hoodie.write.table.version" -> tableVersion.toString,
       "hoodie.datasource.write.table.type" -> tableType.name(),
-      "hoodie.datasource.write.precombine.field" -> "ts",
+      "hoodie.datasource.write.precombine.fields" -> "ts",
       "hoodie.write.record.merge.mode" -> mergeMode.name(),
       "hoodie.index.type" -> indexType.name(),
       "hoodie.metadata.record.index.enable" -> "true",
