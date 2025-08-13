@@ -114,7 +114,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
-    this.readerContext.initRecordMergerForIngestion(properties);
     this.maxInstantTime = instantTime;
     initRecordTypeAndCdcLogger(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.props = TypedProperties.copy(config.getProps());
@@ -231,9 +230,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    */
   public void setReaderContext(HoodieReaderContext<T> readerContext) {
     this.readerContext = readerContext;
-    TypedProperties properties = config.getProps();
-    properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
-    this.readerContext.initRecordMergerForIngestion(properties);
   }
 
   /**
@@ -242,6 +238,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    */
   @Override
   public void doMerge() {
+    // For non-compaction operations, the merger needs to be initialized with the writer properties to handle cases like Merge-Into commands
+    if (operation.isEmpty()) {
+      this.readerContext.initRecordMergerForIngestion(config.getProps());
+    }
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
