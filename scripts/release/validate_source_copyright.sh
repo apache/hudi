@@ -46,10 +46,17 @@ echo -e "\t\tNotice file exists ? [OK]\n"
 
 ### Licensing Check
 echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v emptyFile | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'banner.txt' | grep -v '.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
-if [ "$numfilesWithNoLicense" -gt  "0" ]; then
-  echo "There were some source files that did not have Apache License [ERROR]"
-  find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v emptyFile | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v '.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"
+# ---
+# Exclude the 'hudi-trino-plugin' directory. Its license checks are handled by airlift:
+# https://github.com/airlift/airbase/blob/823101482dbc60600d7862f0f5c93aded6190996/airbase/pom.xml#L1239
+# ---
+numfilesWithNoLicense=$(find . -path './hudi-trino-plugin' -prune -o -type f -iname '*' | grep -v './hudi-trino-plugin' | grep -v NOTICE | grep -v LICENSE | grep -v '.jpg' | grep -v '.json' | grep -v '.hfile' | grep -v '.data' | grep -v '.commit' | grep -v emptyFile | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'banner.txt' | grep -v '.txt' | grep -v "fixtures" | xargs grep -L "Licensed to the Apache Software Foundation (ASF)")
+# Check if the variable holding the list of files is non-empty
+if [ -n "$numfilesWithNoLicense" ]; then
+  # If the list isn't empty, count the files and report the error
+  numFiles=$(echo "$numfilesWithNoLicense" | wc -l)
+  echo "There were ${numFiles} source files that did not have Apache License [ERROR]"
+  echo "$numfilesWithNoLicense"
   exit 1
 fi
 echo -e "\t\tLicensing Check Passed [OK]\n"

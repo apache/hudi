@@ -22,19 +22,16 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -59,14 +56,9 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void getRecordKeyWithSingleKey() {
-    JobConf jobConf = getJobConf();
-
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
-
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"field_1"}));
-    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
     assertEquals("value1", avroReaderContext.getRecordContext().getRecordKey(row, getBaseSchema()));
@@ -74,14 +66,9 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void getRecordKeyWithMultipleKeys() {
-    JobConf jobConf = getJobConf();
-
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
-
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"field_1", "field_3.nested_field"}));
-    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
     assertEquals("field_1:value1,field_3.nested_field:value3", avroReaderContext.getRecordContext().getRecordKey(row, getBaseSchema()));
@@ -89,13 +76,8 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void getNestedField() {
-    JobConf jobConf = getJobConf();
-
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
-
     when(tableConfig.populateMetaFields()).thenReturn(true);
-    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
     assertEquals("value3", avroReaderContext.getRecordContext().getValue(row, getBaseSchema(), "field_3.nested_field").toString());
@@ -103,18 +85,15 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithNoUpdates() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
     ArrayWritable base = createBaseRecord(new Writable[]{
         new IntWritable(1),
         new Text("Alice"),
         new BooleanWritable(true)});
-    BufferedRecord<ArrayWritable> buffered = new BufferedRecord<>("anyKey", 1, base, 1, false);
+    BufferedRecord<ArrayWritable> buffered = new BufferedRecord<>("anyKey", 1, base, 1, null);
 
     Map<Integer, Object> updates = new HashMap<>();
     ArrayWritable result = avroReaderContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, buffered);
@@ -127,18 +106,15 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithUpdates() {
-    JobConf jobConf = getJobConf();
-    Schema schema = getBaseSchema();
-    ObjectInspectorCache objectInspectorCache = new ObjectInspectorCache(schema, jobConf);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
-        readerCreator, Collections.emptyList(), objectInspectorCache, storageConfiguration, tableConfig);
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
     ArrayWritable base = createBaseRecord(new Writable[]{
         new IntWritable(1),
         new Text("Alice"),
         new BooleanWritable(true)});
-    BufferedRecord<ArrayWritable> buffered = new BufferedRecord<>("anyKey", 1, base, 1, false);
+    BufferedRecord<ArrayWritable> buffered = new BufferedRecord<>("anyKey", 1, base, 1, null);
 
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(0, new IntWritable(2));
@@ -149,13 +125,6 @@ class TestHiveHoodieReaderContext {
     assertEquals(2, ((IntWritable) values[0]).get());
     assertEquals("Bob", values[1].toString());
     assertTrue(((BooleanWritable) values[2]).get());
-  }
-
-  private JobConf getJobConf() {
-    JobConf jobConf = new JobConf(storageConfiguration.unwrapAs(Configuration.class));
-    jobConf.set("columns", "field_1,field_2,field_3,datestr");
-    jobConf.set("columns.types", "string,string,struct<nested_field:string>,string");
-    return jobConf;
   }
 
   private static Schema getBaseSchema() {

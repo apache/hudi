@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -34,16 +35,22 @@ import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RowDataUtils;
+import org.apache.hudi.util.RowProjection;
+import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.binary.BinaryRowData;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 public class FlinkRecordContext extends RecordContext<RowData> {
 
@@ -55,7 +62,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   private RecordKeyToRowDataConverter recordKeyRowConverter;
 
   public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf) {
-    super(tableConfig);
+    super(tableConfig, new DefaultJavaTypeConverter());
     this.utcTimezone = storageConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE.key(),
         FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
   }
@@ -87,10 +94,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData getDeleteRow(RowData record, String recordKey) {
-    if (record != null) {
-      return record;
-    }
+  public RowData getDeleteRow(String recordKey) {
     // don't need to emit record key row if primary key semantic is lost
     if (recordKeyRowConverter == null) {
       return null;
@@ -114,15 +118,14 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public HoodieRecord<RowData> constructHoodieRecord(BufferedRecord<RowData> bufferedRecord) {
+  public HoodieRecord<RowData> constructHoodieRecord(BufferedRecord<RowData> bufferedRecord, String partitionPath) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     // delete record
     if (bufferedRecord.isDelete()) {
-      return new HoodieEmptyRecord<>(hoodieKey, HoodieOperation.DELETE, bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
+      return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
     }
     RowData rowData = bufferedRecord.getRecord();
-    HoodieOperation operation = HoodieOperation.fromValue(rowData.getRowKind().toByteValue());
-    return new HoodieFlinkRecord(hoodieKey, operation, bufferedRecord.getOrderingValue(), rowData);
+    return new HoodieFlinkRecord(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), rowData, bufferedRecord.isDelete());
   }
 
   @Override
@@ -157,6 +160,42 @@ public class FlinkRecordContext extends RecordContext<RowData> {
       Comparable finalOrderingVal = (Comparable) context.getValAsJava(record, false);
       return finalOrderingVal;
     });
+  }
+
+  @Override
+  public RowData seal(RowData rowData) {
+    if (rowData instanceof BinaryRowData) {
+      return ((BinaryRowData) rowData).copy();
+    }
+    return rowData;
+  }
+
+  @Override
+  public RowData toBinaryRow(Schema avroSchema, RowData record) {
+    if (record instanceof BinaryRowData) {
+      return record;
+    }
+    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(avroSchema);
+    return rowDataSerializer.toBinaryRow(record);
+  }
+
+  /**
+   * Creates a function that will reorder records of schema "from" to schema of "to".
+   * It's possible there exist fields in `to` schema, but not in `from` schema because of schema
+   * evolution.
+   *
+   * @param from           the schema of records to be passed into UnaryOperator
+   * @param to             the schema of records produced by UnaryOperator
+   * @param renamedColumns map of renamed columns where the key is the new name from the query and
+   *                       the value is the old name that exists in the file
+   * @return a function that takes in a record and returns the record with reordered columns
+   */
+  @Override
+  public UnaryOperator<RowData> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    RowType fromType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(from).getRowType().getLogicalType();
+    RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to).getRowType().getLogicalType();
+    RowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
+    return rowProjection::project;
   }
 
   public void setRecordKeyRowConverter(RecordKeyToRowDataConverter recordKeyRowConverter) {

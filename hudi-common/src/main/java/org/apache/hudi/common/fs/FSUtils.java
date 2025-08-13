@@ -741,4 +741,32 @@ public class FSUtils {
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
   }
+  
+  public static Map<String, Boolean> deleteFilesParallelize(
+      HoodieTableMetaClient metaClient,
+      List<String> paths,
+      HoodieEngineContext context,
+      int parallelism,
+      boolean ignoreFailed) {
+    return parallelizeFilesProcess(context,
+        metaClient.getStorage(),
+        parallelism,
+        pairOfSubPathAndConf -> {
+          StoragePath file = new StoragePath(pairOfSubPathAndConf.getKey());
+          try {
+            if (metaClient.getStorage().exists(file)) {
+              return metaClient.getStorage().deleteFile(file);
+            }
+            return true;
+          } catch (IOException e) {
+            if (!ignoreFailed) {
+              throw new HoodieIOException("Failed to delete : " + file, e);
+            } else {
+              LOG.warn("Ignore failed deleting : " + file);
+              return true;
+            }
+          }
+        },
+        paths);
+  }
 }

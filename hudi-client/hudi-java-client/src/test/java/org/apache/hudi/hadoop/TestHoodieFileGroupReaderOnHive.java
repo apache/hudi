@@ -28,7 +28,6 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaOnReadEvolutionTestUtils;
 import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -59,7 +58,6 @@ import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getS
 public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJavaTestBase<ArrayWritable> {
 
   private static final String PARTITION_COLUMN = "datestr";
-  private static JobConf baseJobConf;
   private static HdfsTestService hdfsTestService;
   private static HoodieStorage storage;
   private static FileSystem fs;
@@ -75,7 +73,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     hdfsTestService = new HdfsTestService();
     fs = hdfsTestService.start(true).getFileSystem();
     storageConf = HoodieTestUtils.getDefaultStorageConf();
-    baseJobConf = new JobConf(storageConf.unwrap());
+    JobConf baseJobConf = new JobConf(storageConf.unwrap());
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     fs.setConf(baseJobConf);
     storage = new HoodieHadoopStorage(fs);
@@ -101,8 +99,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     setupJobconf(jobConf, avroSchema);
     return new HiveHoodieReaderContext(readerCreator,
-        getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema),
-        new ObjectInspectorCache(avroSchema, jobConf), storageConf, metaClient.getTableConfig());
+        getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema), storageConf, metaClient.getTableConfig());
   }
 
   @Override
@@ -117,24 +114,7 @@ public class TestHoodieFileGroupReaderOnHive extends HoodieFileGroupReaderOnJava
 
   @Override
   public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaOnWriteConfigs() {
-    SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs = new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
-    configs.nestedSupport = false;
-    configs.arraySupport = false;
-    configs.mapSupport = false;
-    configs.addNewFieldSupport = false;
-    configs.intToLongSupport = false;
-    configs.intToFloatSupport = false;
-    configs.intToDoubleSupport = false;
-    configs.intToStringSupport = false;
-    configs.longToFloatSupport = false;
-    configs.longToDoubleSupport = false;
-    configs.longToStringSupport = false;
-    configs.floatToDoubleSupport = false;
-    configs.floatToStringSupport = false;
-    configs.doubleToStringSupport = false;
-    configs.stringToBytesSupport = false;
-    configs.bytesToStringSupport = false;
-    return configs;
+    return new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
   }
 
   @Override

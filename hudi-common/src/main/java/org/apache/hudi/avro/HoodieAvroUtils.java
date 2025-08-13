@@ -632,7 +632,7 @@ public class HoodieAvroUtils {
   public static GenericRecord rewriteRecord(GenericRecord oldRecord, Schema newSchema) {
     boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
     Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldRecord.getSchema(), newSchema, Collections.emptyMap(), new LinkedList<>(), isSpecificRecord);
-    return (GenericData.Record) newRecord;
+    return (GenericRecord) newRecord;
   }
 
   /**
@@ -1022,12 +1022,12 @@ public class HoodieAvroUtils {
    */
   public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols) {
     Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), false);
-    return (GenericData.Record) newRecord;
+    return (GenericRecord) newRecord;
   }
 
   public static GenericRecord rewriteRecordWithNewSchema(IndexedRecord oldRecord, Schema newSchema, Map<String, String> renameCols, boolean validate) {
     Object newRecord = rewriteRecordWithNewSchema(oldRecord, oldRecord.getSchema(), newSchema, renameCols, new LinkedList<>(), validate);
-    return (GenericData.Record) newRecord;
+    return (GenericRecord) newRecord;
   }
 
   /**
@@ -1084,7 +1084,7 @@ public class HoodieAvroUtils {
         GenericData.Record newRecord = new GenericData.Record(newSchema);
         // if no renaming, skip building the full name string.
         boolean noFieldsRenaming = renameCols.isEmpty();
-        String namePrefix = createNamePredix(noFieldsRenaming, fieldNames);
+        String namePrefix = createNamePrefix(noFieldsRenaming, fieldNames);
         for (int i = 0; i < newSchema.getFields().size(); i++) {
           Schema.Field newField = newSchema.getFields().get(i);
           String newFieldName = newField.name();
@@ -1146,12 +1146,11 @@ public class HoodieAvroUtils {
     }
   }
 
-  @VisibleForTesting
-  public static String createNamePredix(boolean noFieldsRenaming, Deque<String> fieldNames) {
-    return noFieldsRenaming ? null : fieldNames.isEmpty() ? null : createFullName(fieldNames);
+  public static String createNamePrefix(boolean noFieldsRenaming, Deque<String> fieldNames) {
+    return noFieldsRenaming || fieldNames.isEmpty() ? null : createFullName(fieldNames);
   }
 
-  private static String getOldFieldNameWithRenaming(String namePrefix, String newFieldName, Map<String, String> renameCols) {
+  public static String getOldFieldNameWithRenaming(String namePrefix, String newFieldName, Map<String, String> renameCols) {
     String renamed = renameCols.get(compositeName(namePrefix, newFieldName));
     return renamed == null ? newFieldName : renamed;
   }
@@ -1411,11 +1410,7 @@ public class HoodieAvroUtils {
       case RECORD:
         for (Schema.Field field : readerSchema.getFields()) {
           Schema.Field writerField = writerSchema.getField(field.name());
-          if (writerField != null) {
-            if (recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
-              return true;
-            }
-          } else {
+          if (writerField == null || recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
             return true;
           }
         }

@@ -53,7 +53,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -96,7 +95,34 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<InstantRange> instantRangeOpt,
       Option<Predicate> filterOpt,
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig));
+    this(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, reusableFileReaders, tableConfig.getPayloadClass(), false);
+  }
+
+  /**
+   * Constructs an instance of the reader context for writer workflows
+   *
+   * @param storageConfiguration   the storage configuration to use for reading files
+   * @param tableConfig            the configuration of the Hudi table being read
+   * @param payloadClassName       the payload class for the writer
+   * @param requiresPayloadRecords indicates whether the caller expects payloads as the data in any HoodieRecord returned by this context
+   */
+  public HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      String payloadClassName,
+      boolean requiresPayloadRecords) {
+    this(storageConfiguration, tableConfig, Option.empty(), Option.empty(), Collections.emptyMap(), payloadClassName, requiresPayloadRecords);
+  }
+
+  private HoodieAvroReaderContext(
+      StorageConfiguration<?> storageConfiguration,
+      HoodieTableConfig tableConfig,
+      Option<InstantRange> instantRangeOpt,
+      Option<Predicate> filterOpt,
+      Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
+      String payloadClassName,
+      boolean requiresPayloadRecords) {
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName, requiresPayloadRecords));
     this.reusableFileReaders = reusableFileReaders;
   }
 
@@ -153,16 +179,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public IndexedRecord seal(IndexedRecord record) {
-    return record;
-  }
-
-  @Override
-  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
-    return record;
-  }
-
-  @Override
   public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
     return new AvroRecordSizeEstimator(getSchemaHandler().getRequiredSchema());
   }
@@ -179,11 +195,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
                                                                Schema dataRequiredSchema,
                                                                List<Pair<String, Object>> partitionFieldAndValues) {
     return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema, partitionFieldAndValues);
-  }
-
-  @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
   }
 
   /**

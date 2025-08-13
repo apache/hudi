@@ -80,7 +80,7 @@ class TestBaseSparkInternalRowReaderContext {
     InternalRow base = new GenericInternalRow(new Object[]{1, UTF8String.fromString("Alice"), true});
     Map<Integer, Object> updates = new HashMap<>();
     BufferedRecord<InternalRow> record = new BufferedRecord<>(
-        "record_key", 1, base, 1, false);
+        "record_key", 1, base, 1, null);
     InternalRow engineRecord = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
     assertEquals(1, engineRecord.getInt(0));
     assertEquals("Alice", engineRecord.getString(1));
@@ -93,7 +93,7 @@ class TestBaseSparkInternalRowReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, UTF8String.fromString("Bob"));
     BufferedRecord<InternalRow> record = new BufferedRecord<>(
-        "record_key", 1, base, 1, false);
+        "record_key", 1, base, 1, null);
     InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
     assertEquals(1, result.getInt(0)); // from base
     assertEquals("Bob", result.getUTF8String(1).toString()); // updated
@@ -109,7 +109,7 @@ class TestBaseSparkInternalRowReaderContext {
 
     InternalRow base = new GenericInternalRow(new Object[]{1, UTF8String.fromString("Alice"), true});
     BufferedRecord<InternalRow> record = new BufferedRecord<>(
-        "record_key", 1, base, 1, false);
+        "record_key", 1, base, 1, null);
 
     InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
     assertEquals(42, result.getInt(0));
@@ -122,7 +122,7 @@ class TestBaseSparkInternalRowReaderContext {
     InternalRow base = new GenericInternalRow(new Object[]{null, UTF8String.fromString("Dan"), true});
     Map<Integer, Object> updates = new HashMap<>();
     BufferedRecord<InternalRow> record = new BufferedRecord<>(
-        "record_key", 1, base, 1, false);
+        "record_key", 1, base, 1, null);
 
     InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
     assertTrue(result.isNullAt(0));
@@ -163,12 +163,12 @@ class TestBaseSparkInternalRowReaderContext {
             return row.getBoolean(2);
           }
         }
-      });
-    }
 
-    @Override
-    public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
-      return internalRow;
+        @Override
+        public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
+          return internalRow;
+        }
+      });
     }
 
     @Override

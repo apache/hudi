@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -31,9 +32,11 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.IteratorMode;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableFilterIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -48,10 +51,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -86,6 +86,8 @@ public abstract class HoodieReaderContext<T> {
   private RecordMergeMode mergeMode;
   protected RecordContext<T> recordContext;
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
+  // the default iterator mode is engine-specific record mode
+  private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
                                 HoodieTableConfig tableConfig,
@@ -107,6 +109,15 @@ public abstract class HoodieReaderContext<T> {
 
   public void setSchemaHandler(FileGroupReaderSchemaHandler<T> schemaHandler) {
     this.schemaHandler = schemaHandler;
+  }
+
+  public void setIteratorMode(IteratorMode iteratorMode) {
+    this.iteratorMode = iteratorMode;
+  }
+
+  public IteratorMode getIteratorMode() {
+    ValidationUtils.checkArgument(iteratorMode != null, "iterator mode should not be null!");
+    return this.iteratorMode;
   }
 
   public String getTablePath() {
@@ -240,12 +251,33 @@ public abstract class HoodieReaderContext<T> {
    * @param properties the properties for the reader.
    */
   public void initRecordMerger(TypedProperties properties) {
+    initRecordMerger(properties, false);
+  }
+
+  public void initRecordMergerForIngestion(TypedProperties properties) {
+    initRecordMerger(properties, true);
+  }
+
+  /**
+   * Initializes the record merger based on the table configuration and properties.
+   * @param properties the properties for the reader.
+   * @param isIngestion indicates if the context is used in ingestion path.
+   */
+  private void initRecordMerger(TypedProperties properties, boolean isIngestion) {
+    Option<String> providedPayloadClass = HoodieRecordPayload.getPayloadClassNameIfPresent(properties);
     RecordMergeMode recordMergeMode = tableConfig.getRecordMergeMode();
     String mergeStrategyId = tableConfig.getRecordMergeStrategyId();
-    if (!tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+    HoodieTableVersion tableVersion = tableConfig.getTableVersion();
+    // If the provided payload class differs from the table's payload class, we need to infer the correct merging behavior.
+    if (isIngestion && providedPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
+      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(null, providedPayloadClass.get(), null,
+          tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
+      recordMergeMode = triple.getLeft();
+      mergeStrategyId = triple.getRight();
+    } else if (!tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
           recordMergeMode, tableConfig.getPayloadClass(),
-          mergeStrategyId, null, tableConfig.getTableVersion());
+          mergeStrategyId, tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
       recordMergeMode = triple.getLeft();
       mergeStrategyId = triple.getRight();
     }
@@ -287,24 +319,6 @@ public abstract class HoodieReaderContext<T> {
   }
 
   /**
-   * Seals the engine-specific record to make sure the data referenced in memory do not change.
-   *
-   * @param record The record.
-   * @return The record containing the same data that do not change in memory over time.
-   */
-  public abstract T seal(T record);
-
-  /**
-   * Converts engine specific row into binary format.
-   *
-   * @param avroSchema The avro schema of the row
-   * @param record     The engine row
-   *
-   * @return row in binary format
-   */
-  public abstract T toBinaryRow(Schema avroSchema, T record);
-
-  /**
    * Merge the skeleton file and data file iterators into a single iterator that will produce rows that contain all columns from the
    * skeleton file iterator, followed by all columns in the data file iterator
    *
@@ -320,20 +334,4 @@ public abstract class HoodieReaderContext<T> {
                                                             ClosableIterator<T> dataFileIterator,
                                                             Schema dataRequiredSchema,
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
-
-  /**
-   * Creates a function that will reorder records of schema "from" to schema of "to"
-   * all fields in "to" must be in "from", but not all fields in "from" must be in "to"
-   *
-   * @param from           the schema of records to be passed into UnaryOperator
-   * @param to             the schema of records produced by UnaryOperator
-   * @param renamedColumns map of renamed columns where the key is the new name from the query and
-   *                       the value is the old name that exists in the file
-   * @return a function that takes in a record and returns the record with reordered columns
-   */
-  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
-
-  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
-    return projectRecord(from, to, Collections.emptyMap());
-  }
 }

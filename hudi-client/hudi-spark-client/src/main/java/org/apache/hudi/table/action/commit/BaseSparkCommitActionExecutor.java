@@ -18,12 +18,11 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.utils.SparkPartitionUtils;
-import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -47,8 +46,9 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;

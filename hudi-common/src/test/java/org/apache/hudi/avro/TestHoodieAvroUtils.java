@@ -886,10 +886,10 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testCreateNamePrefix() {
-    assertNull(HoodieAvroUtils.createNamePredix(true, new ArrayDeque<>(Collections.singletonList("field1"))));
-    assertEquals("field1", HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>(Collections.singletonList("field1"))));
-    assertNull(HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>()));
-    assertEquals("parent.child", HoodieAvroUtils.createNamePredix(false, new ArrayDeque<>(Arrays.asList("child", "parent"))));
+    assertNull(HoodieAvroUtils.createNamePrefix(true, new ArrayDeque<>(Collections.singletonList("field1"))));
+    assertEquals("field1", HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>(Collections.singletonList("field1"))));
+    assertNull(HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>()));
+    assertEquals("parent.child", HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>(Arrays.asList("child", "parent"))));
   }
 
   @ParameterizedTest

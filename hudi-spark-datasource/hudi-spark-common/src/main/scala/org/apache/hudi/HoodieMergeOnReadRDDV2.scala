@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
+import org.apache.hudi.expression.{Predicate => HPredicate}
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
@@ -166,7 +167,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
         if (metaClient.isMetadataTable) {
           val requestedSchema = new Schema.Parser().parse(requiredSchema.avroSchemaStr)
           val instantRange = InstantRange.builder().rangeType(RangeType.EXACT_MATCH).explicitInstants(validInstants.value).build()
-          val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty())
+          val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty().asInstanceOf[HOption[HPredicate]])
           val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.newBuilder()
             .withReaderContext(readerContext)
             .withHoodieTableMetaClient(metaClient)

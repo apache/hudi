@@ -25,14 +25,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.Collections;
 import java.util.Map;
-
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
 
 public class EightToNineUpgradeHandler implements UpgradeHandler {
 
@@ -42,17 +38,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
                                              String instantTime,
                                              SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-    // Rollback and run compaction in one step
-    rollbackFailedWritesAndCompact(
-        table, context, config, upgradeDowngradeHelper,
-        HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
-        HoodieTableVersion.NINE);
 
-    // If auto upgrade is disabled, set writer version to 8 and return
-    if (!config.autoUpgrade()) {
-      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
-      return Collections.emptyMap();
-    }
     HoodieTableMetaClient metaClient = table.getMetaClient();
 
     // Populate missing index versions indexes

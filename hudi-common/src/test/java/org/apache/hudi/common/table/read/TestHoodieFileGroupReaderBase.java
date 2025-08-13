@@ -78,9 +78,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UncheckedIOException;
@@ -98,8 +97,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
@@ -297,11 +294,33 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   }
 
   @ParameterizedTest
+  @ValueSource(strings = {"avro", "parquet"})
+  public void testSchemaOnReadLogBlocks(String logDataBlockFormat) throws Exception {
+    try (SchemaOnReadTestExecutor executor = new SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.BASE_FILE_HAS_DIFFERENT_SCHEMA_THAN_LOG_FILES,
+        getSchemaOnReadConfigs(),
+        HoodieFileFormat.PARQUET,
+        Option.of(logDataBlockFormat))) {
+      executor.execute();
+    }
+  }
+
+  @ParameterizedTest
   @EnumSource(value = SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.class)
   public void testSchemaOnWrite(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) throws Exception {
     try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(testType,
         getSchemaOnWriteConfigs(),
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue())) {
+      executor.execute();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"avro", "parquet"})
+  public void testSchemaOnWriteLogBlocks(String logDataBlockFormat) throws Exception {
+    try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.BASE_FILE_HAS_DIFFERENT_SCHEMA_THAN_LOG_FILES,
+        getSchemaOnWriteConfigs(),
+        HoodieFileFormat.PARQUET,
+        Option.of(logDataBlockFormat))) {
       executor.execute();
     }
   }
@@ -331,16 +350,21 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     public AbstractSchemaEvolutionTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
                                                C evolutionConfigs,
-                                               HoodieFileFormat baseFileFormat) {
+                                               HoodieFileFormat baseFileFormat,
+                                               Option<String> logFileFormat) {
       this.maxIterations = testType.getScenario().getMaxIterations();
       this.scenario = testType.getScenario();
       this.dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF);
       this.evolutionConfigs = evolutionConfigs;
       if (baseFileFormat.equals(HoodieFileFormat.ORC)) {
+        this.evolutionConfigs.floatToDoubleSupport = false;
         this.evolutionConfigs.floatToStringSupport = false;
       }
       this.writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING, true));
       writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
+      if (logFileFormat.isPresent()) {
+        writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFileFormat.get());
+      }
       initializeSchema();
       dataGen.addExtendedSchema(extendedSchema);
     }
@@ -415,12 +439,19 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     public SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
                                     SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs,
-                                    HoodieFileFormat baseFileFormat) {
-      super(testType, configs, baseFileFormat);
+                                    HoodieFileFormat baseFileFormat,
+                                    Option<String> logFileFormat) {
+      super(testType, configs, baseFileFormat, logFileFormat);
       writeConfigs.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
       // TODO fix schema evolution on col stats
       writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
       writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
+    }
+
+    public SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs,
+                                    HoodieFileFormat baseFileFormat) {
+      this(testType, configs, baseFileFormat, Option.empty());
     }
 
     @Override
@@ -464,7 +495,14 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     public SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
                                      SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs,
                                      HoodieFileFormat baseFileFormat) {
-      super(testType, configs, baseFileFormat);
+      this(testType, configs, baseFileFormat, Option.empty());
+    }
+
+    public SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                     SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs,
+                                     HoodieFileFormat baseFileFormat,
+                                     Option<String> logFileFormat) {
+      super(testType, configs, baseFileFormat, logFileFormat);
     }
 
     @Override
@@ -489,7 +527,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @Test
   public void testReadFileGroupInBootstrapMergeOnReadTable() throws Exception {
     Path zipOutput = Paths.get(new URI(getBasePath()));
-    extract(zipOutput);
+    HoodieTestUtils.extractZipToDirectory("file-group-reader/bootstrap_data.zip", zipOutput, getClass());
     ObjectMapper objectMapper = new ObjectMapper();
     Path basePath = zipOutput.resolve("bootstrap_data");
     List<HoodieTestDataGenerator.RecordIdentifier> expectedRecords = new ArrayList<>();
@@ -529,11 +567,11 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
           for (T record : records) {
             String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
             //test key based
-            BufferedRecord<T> bufferedRecord = BufferedRecord.forRecordWithContext(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
-            spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
+            BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
+            spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext.getRecordContext()));
 
             //test position based
-            spillableMap.put(position++, bufferedRecord.toBinary(readerContext));
+            spillableMap.put(position++, bufferedRecord.toBinary(readerContext.getRecordContext()));
           }
 
           assertEquals(records.size() * 2, spillableMap.size());
@@ -941,25 +979,4 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return partitionPath;
   }
 
-  private void extract(Path target) throws IOException {
-    try (ZipInputStream zip = new ZipInputStream(this.getClass().getClassLoader().getResourceAsStream("file-group-reader/bootstrap_data.zip"))) {
-      ZipEntry entry;
-
-      while ((entry = zip.getNextEntry()) != null) {
-        File file = target.resolve(entry.getName()).toFile();
-        if (entry.isDirectory()) {
-          file.mkdirs();
-          continue;
-        }
-        byte[] buffer = new byte[10000];
-        file.getParentFile().mkdirs();
-        try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(file.toPath()))) {
-          int count;
-          while ((count = zip.read(buffer)) != -1) {
-            out.write(buffer, 0, count);
-          }
-        }
-      }
-    }
-  }
 }

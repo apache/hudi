@@ -68,7 +68,7 @@ class TestFlinkRowDataReaderContext {
   @Test
   void testConstructEngineRecordWithNoUpdates() {
     RowData base = createBaseRow(1, "Alice", true);
-    BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, false);
+    BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);
     Map<Integer, Object> updates = new HashMap<>();
     RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
 
@@ -80,7 +80,7 @@ class TestFlinkRowDataReaderContext {
   @Test
   void testConstructEngineRecordWithUpdateOneField() {
     RowData base = createBaseRow(1, "Alice", true);
-    BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, false);
+    BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, StringData.fromString("Bob"));
 
@@ -94,7 +94,7 @@ class TestFlinkRowDataReaderContext {
   @Test
   void testConstructEngineRecordWithUpdateAllFields() {
     RowData base = createBaseRow(1, "Alice", true);
-    BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, false);
+    BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(0, 42);
     updates.put(1, StringData.fromString("Zoe"));
@@ -109,7 +109,7 @@ class TestFlinkRowDataReaderContext {
   @Test
   void testConstructEngineRecordWithNullUpdate() {
     RowData base = createBaseRow(5, "Eve", true);
-    BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, false);
+    BufferedRecord<RowData> record = new BufferedRecord<>("anyKey", 1, base, 1, null);
     Map<Integer, Object> updates = new HashMap<>();
     updates.put(1, null);
     RowData result = readerContext.getRecordContext().mergeWithEngineRecord(AVRO_SCHEMA, updates, record);
