@@ -43,15 +43,11 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
-import org.apache.hudi.util.RowProjection;
-import org.apache.hudi.util.SchemaEvolvingRowDataProjection;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
 
 import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
-import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
@@ -60,7 +56,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -73,11 +68,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final List<ExpressionPredicates.Predicate> predicates;
   private final Supplier<InternalSchemaManager> internalSchemaManager;
   private final HoodieTableConfig tableConfig;
-  // the converter is used to create a RowData contains primary key fields only
-  // for DELETE cases, it'll not be initialized if primary key semantics is lost.
-  // For e.g, if the pk fields are [a, b] but user only select a, then the pk
-  // semantics is lost.
-  private RecordKeyToRowDataConverter recordKeyRowConverter;
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
@@ -129,23 +119,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   }
 
   @Override
-  public RowData seal(RowData rowData) {
-    if (rowData instanceof BinaryRowData) {
-      return ((BinaryRowData) rowData).copy();
-    }
-    return rowData;
-  }
-
-  @Override
-  public RowData toBinaryRow(Schema avroSchema, RowData record) {
-    if (record instanceof BinaryRowData) {
-      return record;
-    }
-    RowDataSerializer rowDataSerializer = RowDataAvroQueryContexts.getRowDataSerializer(avroSchema);
-    return rowDataSerializer.toBinaryRow(record);
-  }
-
-  @Override
   public ClosableIterator<RowData> mergeBootstrapReaders(
       ClosableIterator<RowData> skeletonFileIterator,
       Schema skeletonRequiredSchema,
@@ -191,25 +164,6 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     };
   }
 
-  /**
-   * Creates a function that will reorder records of schema "from" to schema of "to".
-   * It's possible there exist fields in `to` schema, but not in `from` schema because of schema
-   * evolution.
-   *
-   * @param from           the schema of records to be passed into UnaryOperator
-   * @param to             the schema of records produced by UnaryOperator
-   * @param renamedColumns map of renamed columns where the key is the new name from the query and
-   *                       the value is the old name that exists in the file
-   * @return a function that takes in a record and returns the record with reordered columns
-   */
-  @Override
-  public UnaryOperator<RowData> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    RowType fromType = (RowType) RowDataAvroQueryContexts.fromAvroSchema(from).getRowType().getLogicalType();
-    RowType toType =  (RowType) RowDataAvroQueryContexts.fromAvroSchema(to).getRowType().getLogicalType();
-    RowProjection rowProjection = SchemaEvolvingRowDataProjection.instance(fromType, toType, renamedColumns);
-    return rowProjection::project;
-  }
-
   @Override
   public void setSchemaHandler(FileGroupReaderSchemaHandler<RowData> schemaHandler) {
     super.setSchemaHandler(schemaHandler);
@@ -229,7 +183,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         .map(k -> Option.ofNullable(requiredSchema.getField(k)).map(Schema.Field::pos).orElse(-1))
         .mapToInt(Integer::intValue)
         .toArray();
-    recordKeyRowConverter = new RecordKeyToRowDataConverter(
+    // the converter is used to create a RowData contains primary key fields only
+    // for DELETE cases, it'll not be initialized if primary key semantics is lost.
+    // For e.g, if the pk fields are [a, b] but user only select a, then the pk
+    // semantics is lost.
+    RecordKeyToRowDataConverter recordKeyRowConverter = new RecordKeyToRowDataConverter(
         pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
     ((FlinkRecordContext) recordContext).setRecordKeyRowConverter(recordKeyRowConverter);
   }
