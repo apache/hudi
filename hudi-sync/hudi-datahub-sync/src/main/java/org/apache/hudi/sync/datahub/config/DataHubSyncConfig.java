@@ -136,6 +136,14 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .markAdvanced()
       .withDocumentation("The name of the destination table that we should sync the hudi table to.");
 
+  // TLS Configuration Properties
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_CA_CERT_PATH = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.ca.cert.path")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Path to the CA certificate file for TLS verification. "
+          + "Used when connecting to DataHub over HTTPS with custom CA certificates.");
+
   public DataHubSyncConfig(Properties props) {
     super(props);
     // Log warning if the domain identifier is provided but is not in urn form
