@@ -52,8 +52,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   private final ObjectInspectorCache objectInspectorCache;
 
   public HiveRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf, ObjectInspectorCache objectInspectorCache) {
-    super(tableConfig);
-    this.typeConverter = new HiveJavaTypeConverter();
+    super(tableConfig, new HiveJavaTypeConverter());
     this.objectInspectorCache = objectInspectorCache;
   }
 

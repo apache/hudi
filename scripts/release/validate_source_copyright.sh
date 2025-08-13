@@ -55,7 +55,7 @@ numfilesWithNoLicense=$(find . -path './hudi-trino-plugin' -prune -o -type f -in
 if [ -n "$numfilesWithNoLicense" ]; then
   # If the list isn't empty, count the files and report the error
   numFiles=$(echo "$numfilesWithNoLicense" | wc -l)
-  echo "There were ${num_files} source files that did not have Apache License [ERROR]"
+  echo "There were ${numFiles} source files that did not have Apache License [ERROR]"
   echo "$numfilesWithNoLicense"
   exit 1
 fi

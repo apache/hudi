@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
-import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.JavaTypeConverter;
 import org.apache.hudi.common.util.LocalAvroSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
@@ -61,13 +60,23 @@ public abstract class RecordContext<T> implements Serializable {
   // for encoding and decoding schemas to the spillable map
   private final LocalAvroSchemaCache localAvroSchemaCache = LocalAvroSchemaCache.getInstance();
 
-  protected JavaTypeConverter typeConverter;
+  protected final JavaTypeConverter typeConverter;
   protected String partitionPath;
 
-  protected RecordContext(HoodieTableConfig tableConfig) {
-    this.typeConverter = new DefaultJavaTypeConverter();
+  protected RecordContext(HoodieTableConfig tableConfig, JavaTypeConverter typeConverter) {
+    this.typeConverter = typeConverter;
     this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
         .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
+  }
+
+  /**
+   * Constructs an instance of {@link RecordContext} that provides field accessor methods but cannot compute the record key for records.
+   */
+  protected RecordContext(JavaTypeConverter typeConverter) {
+    this.recordKeyExtractor = (record, schema) -> {
+      throw new UnsupportedOperationException("Record key extractor is not initialized");
+    };
+    this.typeConverter = typeConverter;
   }
 
   public void setPartitionPath(String partitionPath) {
@@ -233,7 +242,7 @@ public abstract class RecordContext<T> implements Serializable {
    * Check if the value of column "_hoodie_is_deleted" is true.
    */
   private boolean isBuiltInDeleteRecord(T record, DeleteContext deleteContext) {
-    if (!deleteContext.getCustomDeleteMarkerKeyValue().isPresent()) {
+    if (!deleteContext.hasBuiltInDeleteField()) {
       return false;
     }
     Object columnValue = getValue(record, deleteContext.getReaderSchema(), HOODIE_IS_DELETED_FIELD);

@@ -35,10 +35,10 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.HoodieAvroParquetReader;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -338,14 +338,14 @@ public class LSMTimelineWriter {
           manifestFilesToClean.add(fileStatus.getPath().toString());
         }
       });
-      HadoopFSUtils.deleteFilesParallelize(metaClient, manifestFilesToClean, context, config.getArchiveDeleteParallelism(),
+      FSUtils.deleteFilesParallelize(metaClient, manifestFilesToClean, context, config.getArchiveDeleteParallelism(),
           false);
       // delete the data files
       List<String> dataFilesToClean = LSMTimeline.listAllMetaFiles(metaClient, archivePath).stream()
           .filter(fileStatus -> !filesToKeep.contains(fileStatus.getPath().getName()))
           .map(fileStatus -> fileStatus.getPath().toString())
           .collect(Collectors.toList());
-      HadoopFSUtils.deleteFilesParallelize(metaClient, dataFilesToClean, context,
+      FSUtils.deleteFilesParallelize(metaClient, dataFilesToClean, context,
           config.getArchiveDeleteParallelism(), false);
     }
   }

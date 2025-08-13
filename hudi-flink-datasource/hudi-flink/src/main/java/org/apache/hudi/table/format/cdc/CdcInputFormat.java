@@ -22,18 +22,24 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -48,6 +54,7 @@ import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.table.format.FlinkReaderContextFactory;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -188,7 +195,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
         MergeOnReadInputSplit split = singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getSplitRecordIterator(split);
-        return new DataLogFileIterator(conf, maxCompactionMemoryInBytes, imageManager, fileSplit, tableState, recordIterator);
+        return new DataLogFileIterator(maxCompactionMemoryInBytes, imageManager, fileSplit, tableState, recordIterator, metaClient);
       case REPLACE_COMMIT:
         return new ReplaceCommitIterator(conf, tablePath, tableState, fileSplit, this::getFileSliceIterator);
       default:
@@ -333,29 +340,44 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     private final long maxCompactionMemoryInBytes;
     private final ImageManager imageManager;
     private final RowDataProjection projection;
-    private final HoodieRecordMerger recordMerger;
-    private final TypedProperties payloadProps;
+    private final BufferedRecordMerger recordMerger;
     private final ClosableIterator<HoodieRecord<RowData>> logRecordIterator;
 
     private ExternalSpillableMap<String, byte[]> beforeImages;
     private RowData currentImage;
     private RowData sideImage;
+    private HoodieReaderContext<RowData> readerContext;
+    private String[] orderingFields;
+    private TypedProperties props;
 
     DataLogFileIterator(
-        Configuration flinkConf,
         long maxCompactionMemoryInBytes,
         ImageManager imageManager,
         HoodieCDCFileSplit cdcFileSplit,
         MergeOnReadTableState tableState,
-        ClosableIterator<HoodieRecord<RowData>> logRecordIterator) throws IOException {
+        ClosableIterator<HoodieRecord<RowData>> logRecordIterator,
+        HoodieTableMetaClient metaClient) throws IOException {
       this.tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.imageManager = imageManager;
       this.projection = tableState.getRequiredRowType().equals(tableState.getRowType())
           ? null
           : RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
-      this.recordMerger = imageManager.writeConfig.getRecordMerger();
-      this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
+      HoodieWriteConfig writeConfig = this.imageManager.writeConfig;
+      this.props = writeConfig.getProps();
+      this.readerContext = new FlinkReaderContextFactory(metaClient).getContext();
+      readerContext.initRecordMerger(props);
+      this.orderingFields = ConfigUtils.getOrderingFields(props);
+      this.recordMerger = BufferedRecordMergerFactory.create(
+          readerContext,
+          readerContext.getMergeMode(),
+          false,
+          Option.of(imageManager.writeConfig.getRecordMerger()),
+          Arrays.asList(orderingFields),
+          tableSchema,
+          Option.ofNullable(Pair.of(metaClient.getTableConfig().getPayloadClass(), writeConfig.getPayloadClass())),
+          props,
+          metaClient.getTableConfig().getPartialUpdateMode());
       this.logRecordIterator = logRecordIterator;
       initImages(cdcFileSplit);
     }
@@ -397,8 +419,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
             this.currentImage = newRow;
             return true;
           } else {
-            // an existed record is updated.
-            HoodieRecord<RowData> historyRecord = new HoodieFlinkRecord(existed);
+            // an existed record is updated, assuming new record and existing record share the same hoodie key
+            HoodieRecord<RowData> historyRecord = new HoodieFlinkRecord(record.getKey(), existed);
             HoodieRecord<RowData> merged = mergeRowWithLog(historyRecord, record).get();
             if (merged.getData() != existed) {
               // update happens
@@ -431,7 +453,10 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     @SuppressWarnings("unchecked")
     private Option<HoodieRecord<RowData>> mergeRowWithLog(HoodieRecord<RowData> historyRecord, HoodieRecord<RowData> newRecord) {
       try {
-        return recordMerger.merge(historyRecord, tableSchema, newRecord, tableSchema, payloadProps).map(Pair::getLeft);
+        BufferedRecord<RowData> historyBufferedRecord = BufferedRecords.fromHoodieRecord(historyRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields);
+        BufferedRecord<RowData> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, tableSchema, readerContext.getRecordContext(), props, orderingFields);
+        BufferedRecord<RowData> mergedRecord = recordMerger.finalMerge(historyBufferedRecord, newBufferedRecord);
+        return Option.ofNullable(readerContext.getRecordContext().constructHoodieRecord(mergedRecord, historyRecord.getPartitionPath()));
       } catch (IOException e) {
         throw new HoodieIOException("Merge base and delta payloads exception", e);
       }
