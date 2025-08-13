@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +35,7 @@ class TestBufferedRecords {
   @Test
   void testGetOrderingValueFromDeleteRecord() {
     RecordContext recordContext = mock(RecordContext.class);
+    when(recordContext.getOrderingValue(any(DeleteRecord.class))).thenCallRealMethod();
     DeleteRecord deleteRecord = mock(DeleteRecord.class);
     mockDeleteRecord(deleteRecord, null);
     assertEquals(OrderingValues.getDefault(), recordContext.getOrderingValue(deleteRecord));

@@ -57,7 +57,7 @@ public interface UpdateProcessor<T> {
                                        TypedProperties properties) {
     UpdateProcessor<T> handler;
     Option<String> payloadClass = readerContext.getPayloadClasses(properties).map(Pair::getRight);
-    boolean isNotMetadataPayload = payloadClass.map(className -> !className.equals(HoodieMetadataPayload.class.getName())).orElse(false);
+    boolean isNotMetadataPayload = payloadClass.map(className -> !className.equals(HoodieMetadataPayload.class.getName())).orElse(true);
     if (readerContext.getMergeMode() == RecordMergeMode.CUSTOM && isNotMetadataPayload) {
       if (payloadClass.isEmpty()) {
         handler = new CustomMergerUpdateProcessor<>(readStats, readerContext, emitDeletes, properties);

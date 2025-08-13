@@ -205,7 +205,7 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public final Comparable convertOrderingValueToEngineType(Comparable value) {
     return value instanceof ArrayComparable
-        ? ((ArrayComparable) value).apply(comparable -> convertValueToEngineType(comparable))
+        ? ((ArrayComparable) value).apply(this::convertValueToEngineType)
         : convertValueToEngineType(value);
   }
 
