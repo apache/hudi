@@ -105,7 +105,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param fileId file ID of the base file.
    * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
    * @param keyGeneratorOpt optional instance of {@link BaseKeyGenerator} to use for extracting keys from records.
-   * @param readerContext instance of {@link HoodieReaderContext} to use while merging for accessing fields and transforming records.
    */
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
