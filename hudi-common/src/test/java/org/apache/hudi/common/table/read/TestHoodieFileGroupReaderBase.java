@@ -330,10 +330,16 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private static Stream<Arguments> testArgsForDifferentBaseAndLogFormats() {
     boolean supportsORC = supportedFileFormats.contains(HoodieFileFormat.ORC);
-    return Stream.of(
-        arguments(supportsORC ? HoodieFileFormat.ORC : HoodieFileFormat.PARQUET, "avro"),
-        arguments(HoodieFileFormat.PARQUET, "parquet")
-    );
+    List<Arguments> args = new ArrayList<>();
+    
+    if (supportsORC) {
+      args.add(arguments(HoodieFileFormat.ORC, "avro"));
+    }
+    
+    args.add(arguments(HoodieFileFormat.PARQUET, "avro"));
+    args.add(arguments(HoodieFileFormat.PARQUET, "parquet"));
+    
+    return args.stream();
   }
   
   /**
