@@ -149,6 +149,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
   public static final String COLUMN_STATS_FIELD_IS_TIGHT_BOUND = "isTightBound";
   public static final String COLUMN_STATS_FIELD_VALUE_TYPE = "valueType";
+  public static final String COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL = "typeOrdinal";
+  public static final String COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO = "additionalInfo";
 
   /**
    * HoodieMetadata record index payload field ids

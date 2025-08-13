@@ -1671,36 +1671,47 @@ public class HoodieAvroUtils {
       }
       throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
     } else if (value instanceof Boolean) {
-      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.BOOLEAN
+          && valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
         throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
       }
       return BooleanWrapper.newBuilder(BOOLEAN_WRAPPER_BUILDER_STUB.get()).setValue((Boolean) value).build();
     } else if (value instanceof Integer) {
-      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.INT
+          && valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
         throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
       }
       return IntWrapper.newBuilder(INT_WRAPPER_BUILDER_STUB.get()).setValue((Integer) value).build();
     } else if (value instanceof Long) {
-      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.LONG
+          && valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
         throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
       }
       return LongWrapper.newBuilder(LONG_WRAPPER_BUILDER_STUB.get()).setValue((Long) value).build();
     } else if (value instanceof Float) {
-      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.FLOAT
+          && valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
         throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
       }
       return FloatWrapper.newBuilder(FLOAT_WRAPPER_BUILDER_STUB.get()).setValue((Float) value).build();
     } else if (value instanceof Double) {
-      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.DOUBLE
+          && valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
         throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
       }
       return DoubleWrapper.newBuilder(DOUBLE_WRAPPER_BUILDER_STUB.get()).setValue((Double) value).build();
     } else if (value instanceof ByteBuffer) {
-      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.BYTES
+          && valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
         throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
       }
       return BytesWrapper.newBuilder(BYTES_WRAPPER_BUILDER_STUB.get()).setValue((ByteBuffer) value).build();
     } else if (value instanceof String || value instanceof Utf8 || value instanceof UUID) {
+      if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.STRING
+          && valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.UUID
+          && valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+        throw new UnsupportedOperationException("Unsupported type: " + value.getClass());
+      }
       return StringWrapper.newBuilder(STRING_WRAPPER_BUILDER_STUB.get()).setValue(value.toString()).build();
     } else if (value instanceof ArrayComparable) {
       List<Object> avroValues = OrderingValues.getValues((ArrayComparable) value).stream().map(element -> wrapValueIntoAvro(element,valueMetadata)).collect(Collectors.toList());

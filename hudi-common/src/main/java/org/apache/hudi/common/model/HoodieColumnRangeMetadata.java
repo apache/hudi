@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.parquet.schema.LogicalTypeTokenParser;
 import org.apache.parquet.schema.PrimitiveType;
 
@@ -33,6 +34,9 @@ import java.io.Serializable;
 import java.util.Objects;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
@@ -241,6 +245,26 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return NoneMetadata.INSTANCE;
     } else if (valueType == ValueType.DECIMAL) {
       return DecimalMetadata.create(valueTypeInfo.getAdditionalInfo());
+    } else {
+      return new ValueMetadata(valueType);
+    }
+  }
+
+  public static ValueMetadata getValueMetadata(GenericRecord columnStatsRecord) {
+    if (columnStatsRecord == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    GenericRecord valueTypeInfo = (GenericRecord) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_TYPE);
+    if (valueTypeInfo == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    ValueType valueType = ValueType.fromInt((Integer) valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL));
+    if (valueType == ValueType.NONE) {
+      return NoneMetadata.INSTANCE;
+    } else if (valueType == ValueType.DECIMAL) {
+      return DecimalMetadata.create((String) valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO));
     } else {
       return new ValueMetadata(valueType);
     }
