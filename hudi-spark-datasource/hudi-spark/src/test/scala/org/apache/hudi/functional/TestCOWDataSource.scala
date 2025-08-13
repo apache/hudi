@@ -2112,7 +2112,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .save(basePath)
   }
 
-
   @Test
   def testReadOfAnEmptyTable(): Unit = {
     val (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)
@@ -2414,45 +2413,43 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @ParameterizedTest
   @MethodSource(Array("provideParamsForKeyGenTest"))
-  def testUserProvidedKeyGeneratorClass(keyGenClass: String,
-                                        keyGenType: String): Unit = {
+  def testUserProvidedKeyGeneratorClass(keyGenClass: Option[String],
+                                        keyGenType: Option[String]): Unit = {
     val recordType = HoodieRecordType.AVRO
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType,
-      CommonOptionUtils.commonOpts ++ Map(
-        HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> keyGenClass,
-        HoodieWriteConfig.KEYGENERATOR_TYPE.key -> keyGenType,
-        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition"))
-    val expectedKeyGenType = if (StringUtils.isNullOrEmpty(keyGenClass)) {
-      KeyGeneratorType.USER_PROVIDED.name
+    var opts: Map[String, String] = Map()
+    if (keyGenClass.isPresent) {
+      opts = opts ++ Map(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> keyGenClass.get)
+    }
+    if (keyGenType.isPresent) {
+      opts = opts ++ Map(HoodieWriteConfig.KEYGENERATOR_TYPE.key -> keyGenType.get)
+    }
+    val (writeOpts, readOpts) = getWriterReaderOpts(
+      recordType,
+      CommonOptionUtils.commonOpts ++ opts ++ Map(
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition")
+    )
+    val expectedKeyGenType = if (keyGenClass.isEmpty) {
+      // By default SIMPLE type is returned when no class is provided.
+      KeyGeneratorType.SIMPLE.name
     } else {
-      KeyGeneratorType.fromClassName(keyGenClass).name
+      KeyGeneratorType.fromClassName(keyGenClass.get()).name
     }
 
     // Insert.
     val records = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-
-    // Make sure the initial configurations set properly for USER_PROVIDED type.
-    if (StringUtils.isNullOrEmpty(keyGenClass) && keyGenType.equals(KeyGeneratorType.USER_PROVIDED.name)) {
-      assertThrows(classOf[IllegalArgumentException])({
-        writeToHudi(writeOpts, inputDF)
-      })
-      // scalastyle:off return
-      return
-      // scalastyle:on return
-    } else { // Otherwise, the data is properly ingested.
-      writeToHudi(writeOpts, inputDF)
-    }
+    writeToHudi(writeOpts, inputDF)
     var actualDF = spark.read.format("hudi").options(readOpts).load(basePath)
     val inputKeyDF = inputDF.select("_row_key").sort("_row_key")
     var actualKeyDF = actualDF.select("_row_key").sort("_row_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
     val metaClient = getHoodieMetaClient(storageConf, basePath)
-    val actualKeyGenType = metaClient.getTableConfig.getKeyGeneratorType
+    val actualKeyGenType = metaClient.getTableConfig
+      .getProps.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key, null)
     assertEquals(expectedKeyGenType, actualKeyGenType)
     // For USER_PROVIDED type, the class should exist in table config.
     if (KeyGeneratorType.USER_PROVIDED.name == actualKeyGenType) {
-      assertEquals(keyGenClass, metaClient.getTableConfig.getKeyGeneratorClassName)
+      assertEquals(keyGenClass.get(), metaClient.getTableConfig.getKeyGeneratorClassName)
     }
 
     // First update.
@@ -2494,20 +2491,20 @@ object TestCOWDataSource {
   def provideParamsForKeyGenTest(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
       Arguments.of(
-        "org.apache.hudi.keygen.MockUserProvidedKeyGenerator",
-        KeyGeneratorType.USER_PROVIDED.name()),
+        Option.of("org.apache.hudi.keygen.MockUserProvidedKeyGenerator"),
+        Option.of(KeyGeneratorType.USER_PROVIDED.name())),
       Arguments.of(
-        "",
-        KeyGeneratorType.USER_PROVIDED.name()),
+        Option.empty(),
+        Option.of(KeyGeneratorType.USER_PROVIDED.name())),
       Arguments.of(
-        "org.apache.hudi.keygen.SimpleKeyGenerator",
-        KeyGeneratorType.SIMPLE.name()),
+        Option.of("org.apache.hudi.keygen.SimpleKeyGenerator"),
+        Option.of(KeyGeneratorType.SIMPLE.name())),
       Arguments.of(
-        "org.apache.hudi.keygen.SimpleAvroKeyGenerator",
-        KeyGeneratorType.SIMPLE.name()),
+        Option.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator"),
+        Option.of(KeyGeneratorType.SIMPLE.name())),
       Arguments.of(
-        "org.apache.hudi.keygen.ComplexKeyGenerator",
-        "")
+        Option.of("org.apache.hudi.keygen.ComplexKeyGenerator"),
+        Option.empty())
     )
   }
 }

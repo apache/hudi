@@ -104,6 +104,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import static org.apache.hudi.keygen.constant.KeyGeneratorType.USER_PROVIDED;
 import static org.apache.hudi.metadata.HoodieIndexVersion.isValidIndexDefinition;
 
 /**
@@ -1564,18 +1565,15 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
-        // An invalid class name may be provided when type is `USER_PROVIDED`.
-        // The runtime exception should be thrown when this class value is used, e.g., in class loading.
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+        if (USER_PROVIDED == type) {
+          tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, keyGeneratorClassProp);
+        }
       } else if (null != keyGeneratorType) {
-        checkArgument(!keyGeneratorType.equals(KeyGeneratorType.USER_PROVIDED.name()),
+        checkArgument(!keyGeneratorType.equals(USER_PROVIDED.name()),
             String.format("When key generator type is %s, the key generator class must be set properly",
-                KeyGeneratorType.USER_PROVIDED.name()));
-        // When `keyGeneratorType` does not match any types, it throws; no extra check
-        // is needed for confirming the validity of `keyGeneratorType`.
+                USER_PROVIDED.name()));
         KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
-        tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, type.getClassName());
       }
       if (null != hiveStylePartitioningEnable) {
         tableConfig.setValue(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE, Boolean.toString(hiveStylePartitioningEnable));

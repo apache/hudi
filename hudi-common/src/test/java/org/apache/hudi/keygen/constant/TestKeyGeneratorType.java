@@ -117,7 +117,6 @@ public class TestKeyGeneratorType {
         Arguments.of("org.apache.spark.sql.hudi.command.SqlKeyGenerator", KeyGeneratorType.SPARK_SQL),
         Arguments.of("org.apache.spark.sql.hudi.command.UuidKeyGenerator", KeyGeneratorType.SPARK_SQL_UUID),
         Arguments.of("org.apache.spark.sql.hudi.command.MergeIntoKeyGenerator", KeyGeneratorType.SPARK_SQL_MERGE_INTO),
-        Arguments.of("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator", KeyGeneratorType.STREAMER_TEST),
         Arguments.of("org.apache.hudi.keygen.CustomUserProvidedKeyGenerator", KeyGeneratorType.USER_PROVIDED),
         Arguments.of("com.example.CustomKeyGenerator", KeyGeneratorType.USER_PROVIDED)
     );
