@@ -129,7 +129,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private void initRecordIterators() throws IOException {
     ClosableIterator<T> iter = makeBaseFileIterator();
     if (inputSplit.hasNoRecordsToMerge()) {
-      this.baseFileIterator = new CloseableMappingIterator<>(iter, readerContext::seal);
+      this.baseFileIterator = new CloseableMappingIterator<>(iter, rec -> readerContext.getRecordContext().seal(rec));
     } else {
       this.baseFileIterator = iter;
       Pair<HoodieFileGroupRecordBuffer<T>, List<String>> initializationResult = recordBufferLoader.getRecordBuffer(

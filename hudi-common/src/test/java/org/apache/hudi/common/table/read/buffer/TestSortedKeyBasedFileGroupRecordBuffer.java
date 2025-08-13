@@ -195,8 +195,8 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     });
     when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
     when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenReturn(0);
-    when(mockReaderContext.toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
-    when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+    when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
     PartialUpdateMode partialUpdateMode = PartialUpdateMode.NONE;

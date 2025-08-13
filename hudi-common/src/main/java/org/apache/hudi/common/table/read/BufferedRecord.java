@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.util.OrderingValues;
 
@@ -88,16 +88,16 @@ public class BufferedRecord<T> implements Serializable {
     return this.hoodieOperation;
   }
 
-  public BufferedRecord<T> toBinary(HoodieReaderContext<T> readerContext) {
+  public BufferedRecord<T> toBinary(RecordContext<T> recordContext) {
     if (record != null) {
-      record = readerContext.seal(readerContext.toBinaryRow(readerContext.getRecordContext().getSchemaFromBufferRecord(this), record));
+      record = recordContext.seal(recordContext.toBinaryRow(recordContext.getSchemaFromBufferRecord(this), record));
     }
     return this;
   }
 
-  public BufferedRecord<T> seal(HoodieReaderContext<T> readerContext) {
+  public BufferedRecord<T> seal(RecordContext<T> recordContext) {
     if (record != null) {
-      this.record = readerContext.seal(record);
+      this.record = recordContext.seal(record);
     }
     return this;
   }

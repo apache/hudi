@@ -41,6 +41,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.UnaryOperator;
 
 /**
  * Record context for reading and transforming avro indexed records.
@@ -164,5 +165,20 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public IndexedRecord getDeleteRow(String recordKey) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
+  public IndexedRecord seal(IndexedRecord record) {
+    return record;
+  }
+
+  @Override
+  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
+    return record;
+  }
+
+  @Override
+  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
   }
 }

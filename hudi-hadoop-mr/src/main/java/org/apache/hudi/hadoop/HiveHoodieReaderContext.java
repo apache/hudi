@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -60,14 +59,11 @@ import org.apache.hadoop.mapred.RecordReader;
 import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -159,7 +155,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       return recordIterator;
     }
     // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
-    return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
+    return new CloseableMappingIterator<>(recordIterator, recordContext.projectRecord(modifiedDataSchema, requiredSchema));
   }
 
   @Override
@@ -180,16 +176,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         }
         return recordMerger;
     }
-  }
-
-  @Override
-  public ArrayWritable seal(ArrayWritable record) {
-    return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
-  }
-
-  @Override
-  public ArrayWritable toBinaryRow(Schema schema, ArrayWritable record) {
-    return record;
   }
 
   @Override
@@ -237,11 +223,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         dataFileIterator.close();
       }
     };
-  }
-
-  @Override
-  public UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from, to, renamedColumns);
   }
 
   public long getPos() throws IOException {

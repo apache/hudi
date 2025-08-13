@@ -85,8 +85,8 @@ class TestReusableKeyBasedRecordBuffer {
       // otherwise return an older value
       return 1;
     });
-    when(mockReaderContext.toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
-    when(mockReaderContext.seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
+    when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     ReusableKeyBasedRecordBuffer<TestRecord> buffer = new ReusableKeyBasedRecordBuffer<>(mockReaderContext, metaClient,
         RecordMergeMode.EVENT_TIME_ORDERING, PartialUpdateMode.NONE, new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);

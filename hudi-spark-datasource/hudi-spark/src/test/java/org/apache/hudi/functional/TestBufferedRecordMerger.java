@@ -856,6 +856,22 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         throw new RuntimeException("Schema id is illegal: " + id);
       }
     }
+
+    @Override
+    public InternalRow seal(InternalRow record) {
+      return null;
+    }
+
+    @Override
+    public InternalRow toBinaryRow(Schema avroSchema, InternalRow record) {
+      return null;
+    }
+
+    @Override
+    public UnaryOperator<InternalRow> projectRecord(
+        Schema from, Schema to, Map<String, String> renamedColumns) {
+      return null;
+    }
   }
 
   static class DummyInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
@@ -885,28 +901,12 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public InternalRow seal(InternalRow record) {
-      return null;
-    }
-
-    @Override
-    public InternalRow toBinaryRow(Schema avroSchema, InternalRow record) {
-      return null;
-    }
-
-    @Override
     public ClosableIterator<InternalRow> mergeBootstrapReaders(
         ClosableIterator<InternalRow> skeletonFileIterator,
         Schema skeletonRequiredSchema,
         ClosableIterator<InternalRow> dataFileIterator,
         Schema dataRequiredSchema,
         List<Pair<String, Object>> requiredPartitionFieldAndValues) {
-      return null;
-    }
-
-    @Override
-    public UnaryOperator<InternalRow> projectRecord(
-        Schema from, Schema to, Map<String, String> renamedColumns) {
       return null;
     }
   }
