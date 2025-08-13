@@ -71,7 +71,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr) throws IOException {
+      Iterator<HoodieRecord<T>> recordItr) throws IOException {
     LOG.info("Merging updates for commit {} for file {}", instantTime, fileId);
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {

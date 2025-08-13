@@ -207,7 +207,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   }
 
   @SuppressWarnings("unchecked")
-  protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr, Partitioner partitioner) {
+  protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
+                                                              Partitioner partitioner) {
     JavaUpsertPartitioner javaUpsertPartitioner = (JavaUpsertPartitioner) partitioner;
     BucketInfo binfo = javaUpsertPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
@@ -226,7 +227,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     }
   }
 
-  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr, Partitioner partitioner) {
+  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr,
+                                                              Partitioner partitioner) {
     return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
   }
 
@@ -236,8 +238,8 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
-      LOG.info("Empty partition with fileId => {}", fileId);
-      return Collections.singletonList(Collections.<WriteStatus>emptyList()).iterator();
+      LOG.info("Empty partition with fileId => " + fileId);
+      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
     HoodieMergeHandle<?, ?, ?, ?> mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr);

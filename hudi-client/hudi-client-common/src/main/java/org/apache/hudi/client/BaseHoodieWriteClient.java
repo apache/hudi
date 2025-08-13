@@ -383,7 +383,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
                                                HoodieTableMetaClient metaClient,
                                                TriFunction<HoodieWriteConfig, HoodieEngineContext,
-                                               HoodieTableMetaClient, HoodieTable> createTableFn) {
+                                                   HoodieTableMetaClient, HoodieTable> createTableFn) {
     HoodieTable table = createTableFn.apply(writeConfig, context, metaClient);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
     return table;

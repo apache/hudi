@@ -32,8 +32,8 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
 import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.HoodieCreateHandle;
-import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -194,7 +194,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
     HoodieWriteMergeHandle<?, ?, ?, ?> upsertHandle = (HoodieWriteMergeHandle<?, ?, ?, ?>) this.writeHandle;
     if (upsertHandle.isEmptyNewRecords() && !recordItr.hasNext()) {
       LOG.info("Empty partition with fileId => {}.", fileId);
-      return Collections.singletonList(Collections.<WriteStatus>emptyList()).iterator();
+      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
     return IOUtils.runMerge(upsertHandle, instantTime, fileId);
@@ -206,7 +206,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");
-      return Collections.singletonList(Collections.<WriteStatus>emptyList()).iterator();
+      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     return new FlinkLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
         taskContextSupplier, new ExplicitWriteHandleFactory<>(writeHandle));
