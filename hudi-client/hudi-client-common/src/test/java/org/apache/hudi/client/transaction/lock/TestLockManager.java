@@ -16,17 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.transaction;
+package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.LockManager;
-import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
-import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.curator.test.TestingServer;
@@ -41,10 +40,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class TestLockManager extends HoodieCommonTestHarness {
 
@@ -94,7 +96,7 @@ public class TestLockManager extends HoodieCommonTestHarness {
       mockLockManager.unlock();
     });
 
-    Mockito.verify(mockLockManager).close();
+    verify(mockLockManager, times(1)).closeQuietly(false);
   }
 
   private HoodieWriteConfig getMultiWriterWriteConfig() {
@@ -165,5 +167,139 @@ public class TestLockManager extends HoodieCommonTestHarness {
             .withLockProvider(StorageBasedLockProvider.class)
             .build())
         .build();
+  }
+
+  @Test
+  void testMetricsReportedOnceWhenUnlockCalled() throws Exception {
+    // Create write config with metrics enabled
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .withLockingMetrics(true)
+            .build())
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(ZookeeperBasedLockProvider.class)
+            .withZkBasePath(ZK_BASE_PATH)
+            .withZkLockKey(KEY)
+            .withZkQuorum(server.getConnectString())
+            .build())
+        .build();
+
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getFs());
+    
+    // Create a mock HoodieLockMetrics and inject it
+    HoodieLockMetrics mockMetrics = Mockito.mock(HoodieLockMetrics.class);
+    Field metricsField = LockManager.class.getDeclaredField("metrics");
+    metricsField.setAccessible(true);
+    metricsField.set(lockManager, mockMetrics);
+
+    // Perform lock and unlock
+    lockManager.lock();
+    lockManager.unlock();
+
+    // Verify updateLockHeldTimerMetrics is called exactly once (only in unlock)
+    verify(mockMetrics, times(1)).updateLockHeldTimerMetrics();
+  }
+
+  @Test
+  void testMetricsReportedOnceWhenCloseCalledWithoutUnlock() throws Exception {
+    // Create write config with metrics enabled
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .withLockingMetrics(true)
+            .build())
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(ZookeeperBasedLockProvider.class)
+            .withZkBasePath(ZK_BASE_PATH)
+            .withZkLockKey(KEY)
+            .withZkQuorum(server.getConnectString())
+            .build())
+        .build();
+
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getFs());
+    
+    // Create a mock HoodieLockMetrics and inject it
+    HoodieLockMetrics mockMetrics = Mockito.mock(HoodieLockMetrics.class);
+    Field metricsField = LockManager.class.getDeclaredField("metrics");
+    metricsField.setAccessible(true);
+    metricsField.set(lockManager, mockMetrics);
+
+    // Perform lock and then close directly (simulating error scenario or shutdown)
+    lockManager.lock();
+    lockManager.close();
+
+    // Verify updateLockHeldTimerMetrics is called exactly once (only in close)
+    verify(mockMetrics, times(1)).updateLockHeldTimerMetrics();
+  }
+
+  @Test
+  void testMetricsIdempotencyWithMultipleCalls() throws Exception {
+    // Create write config with metrics enabled
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .withLockingMetrics(true)
+            .build())
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(ZookeeperBasedLockProvider.class)
+            .withZkBasePath(ZK_BASE_PATH)
+            .withZkLockKey(KEY)
+            .withZkQuorum(server.getConnectString())
+            .build())
+        .build();
+
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getFs());
+    
+    // Create a mock HoodieLockMetrics and inject it
+    HoodieLockMetrics mockMetrics = Mockito.mock(HoodieLockMetrics.class);
+    Field metricsField = LockManager.class.getDeclaredField("metrics");
+    metricsField.setAccessible(true);
+    metricsField.set(lockManager, mockMetrics);
+
+    // Perform lock and unlock
+    lockManager.lock();
+    lockManager.unlock();
+    
+    // Try to close again (should not call updateLockHeldTimerMetrics again)
+    lockManager.close();
+    
+    // Verify updateLockHeldTimerMetrics is still called exactly once
+    verify(mockMetrics, times(1)).updateLockHeldTimerMetrics();
+  }
+
+  @Test
+  void testMetricsCalledWhenLockNotAcquired() throws Exception {
+    // Create write config with metrics enabled
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .withLockingMetrics(true)
+            .build())
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(ZookeeperBasedLockProvider.class)
+            .withZkBasePath(ZK_BASE_PATH)
+            .withZkLockKey(KEY)
+            .withZkQuorum(server.getConnectString())
+            .build())
+        .build();
+
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getFs());
+    
+    // Initialize the lock provider by calling getLockProvider (but don't acquire lock)
+    lockManager.getLockProvider();
+    
+    // Create a mock HoodieLockMetrics and inject it
+    HoodieLockMetrics mockMetrics = Mockito.mock(HoodieLockMetrics.class);
+    Field metricsField = LockManager.class.getDeclaredField("metrics");
+    metricsField.setAccessible(true);
+    metricsField.set(lockManager, mockMetrics);
+
+    // Close without acquiring lock (but lockProvider is initialized)
+    lockManager.close();
+    
+    // Verify updateLockHeldTimerMetrics is called (but will be a no-op internally
+    // since no timer was started - lockDurationTimer.tryEndTimer() returns Option.empty())
+    verify(mockMetrics, times(1)).updateLockHeldTimerMetrics();
   }
 }

@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieLockException;
@@ -109,7 +110,7 @@ public class LockManager implements Serializable, AutoCloseable {
   public void unlock() {
     getLockProvider().unlock();
     metrics.updateLockHeldTimerMetrics();
-    close();
+    closeQuietly(false);
   }
 
   public synchronized LockProvider getLockProvider() {
@@ -135,13 +136,20 @@ public class LockManager implements Serializable, AutoCloseable {
 
   @Override
   public void close() {
-    closeQuietly();
+    closeQuietly(true);
   }
 
-  private void closeQuietly() {
+  @VisibleForTesting
+  void closeQuietly(boolean updateMetric) {
     try {
       if (lockProvider != null) {
         lockProvider.close();
+        if (updateMetric) {
+          // This API will no-op if the timer has already been updated.
+          // This means unlock() followed by close() will not cause errors.
+          // However if close() is called without unlock() we need to update the metric still.
+          metrics.updateLockHeldTimerMetrics();
+        }
         LOG.info("Released connection created for acquiring lock");
         lockProvider = null;
       }
