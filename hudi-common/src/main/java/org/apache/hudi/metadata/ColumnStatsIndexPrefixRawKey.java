@@ -44,10 +44,6 @@ import java.util.Objects;
  *   key = base64("user_id") + base64("2023/01/15")
  *   Example encoded: "dXNlcl9pZA==" + "MjAyMy8wMS8xNQ=="
  * <p>
- * - To find all stats for column "revenue" in non-partitioned table:
- *   key = base64("revenue") + base64("__HIVE_DEFAULT_PARTITION__")
- *   Example encoded: "cmV2ZW51ZQ==" + "X19ISVZFX0RFRkFVTFRfUEFSVElUSU9OX18="
- * <p>
  * This prefix key enables range scans to retrieve all column stats matching the prefix,
  * which is useful for query optimization and partition pruning.
  */
