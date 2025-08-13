@@ -108,7 +108,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     BufferedRecord<T> existingRecord = records.get(recordKey);
     totalLogRecords++;
     bufferedRecordMerger.deltaMerge(record, existingRecord).ifPresent(bufferedRecord ->
-        records.put(recordKey, bufferedRecord.toBinary(readerContext)));
+        records.put(recordKey, bufferedRecord.toBinary(readerContext.getRecordContext())));
   }
 
   @Override
@@ -155,5 +155,9 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Handle records solely from log files.
     return hasNextLogRecord();
+  }
+
+  public boolean isPartialMergingEnabled() {
+    return enablePartialMerging;
   }
 }

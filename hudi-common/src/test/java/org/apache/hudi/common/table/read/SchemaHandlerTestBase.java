@@ -346,6 +346,21 @@ public abstract class SchemaHandlerTestBase {
         public String mergeWithEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
           return "";
         }
+
+        @Override
+        public String seal(String record) {
+          return "";
+        }
+
+        @Override
+        public String toBinaryRow(Schema avroSchema, String record) {
+          return "";
+        }
+
+        @Override
+        public UnaryOperator<String> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+          return null;
+        }
       });
     }
 
@@ -360,23 +375,8 @@ public abstract class SchemaHandlerTestBase {
     }
 
     @Override
-    public String seal(String record) {
-      return "";
-    }
-
-    @Override
-    public String toBinaryRow(Schema avroSchema, String record) {
-      return "";
-    }
-
-    @Override
     public ClosableIterator<String> mergeBootstrapReaders(ClosableIterator<String> skeletonFileIterator, Schema skeletonRequiredSchema, ClosableIterator<String> dataFileIterator,
                                                           Schema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues) {
-      return null;
-    }
-
-    @Override
-    public UnaryOperator<String> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
       return null;
     }
   }
