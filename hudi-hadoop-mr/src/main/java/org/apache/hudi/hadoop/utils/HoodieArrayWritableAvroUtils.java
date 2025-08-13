@@ -53,7 +53,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
-import static org.apache.hudi.avro.AvroSchemaUtils.areSchemasProjectionEquivalent;
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 import static org.apache.hudi.avro.HoodieAvroUtils.createFullName;
 import static org.apache.hudi.avro.HoodieAvroUtils.createNamePrefix;
@@ -73,7 +72,7 @@ public class HoodieArrayWritableAvroUtils {
     }
     Schema oldSchema = AvroSchemaUtils.resolveNullableSchema(oldAvroSchema);
     Schema newSchema = AvroSchemaUtils.resolveNullableSchema(newAvroSchema);
-    if (areSchemasProjectionEquivalent(oldSchema, newSchema)) {
+    if (oldSchema.equals(newSchema)) {
       return writable;
     }
     return rewriteRecordWithNewSchemaInternal(writable, oldSchema, newSchema, renameCols, fieldNames);
