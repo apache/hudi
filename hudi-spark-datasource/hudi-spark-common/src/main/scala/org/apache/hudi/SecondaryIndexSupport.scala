@@ -79,7 +79,7 @@ class SecondaryIndexSupport(spark: SparkSession,
    * @return Sequence of file names which need to be queried
    */
   private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
-    val secondaryIndexData = metadataTable.readSecondaryIndexKeysAndLocation(
+    val secondaryIndexData = metadataTable.readSecondaryIndexKeysAndLocations(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName)
     try {
       val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(secondaryIndexData)

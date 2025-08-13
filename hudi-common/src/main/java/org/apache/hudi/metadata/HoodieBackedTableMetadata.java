@@ -383,7 +383,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param secondaryKeys The list of secondary keys to read
    */
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocation(HoodieData<String> secondaryKeys, String partitionName) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocations(HoodieData<String> secondaryKeys, String partitionName) {
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(partitionName, dataMetaClient);
 
     return dataCleanupManager.ensureDataCleanupOnException(v -> {

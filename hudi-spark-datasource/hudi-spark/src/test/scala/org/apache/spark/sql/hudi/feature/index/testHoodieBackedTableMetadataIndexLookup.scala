@@ -21,14 +21,14 @@ package org.apache.spark.sql.hudi.feature.index
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.data.{HoodieListData, HoodiePairData}
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.HoodieRecordLocation
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.data.{HoodieJavaPairRDD, HoodieJavaRDD}
+import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 

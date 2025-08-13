@@ -162,11 +162,11 @@ public class TestHoodieBackedTableMetadataDataCleanup {
       when(mockPairData.mapToPair(any())).thenReturn(mockResult);
       
       // Call real method on the mock
-      when(mockMetadata.readSecondaryIndexKeysAndLocation(secondaryKeys, partitionName)).thenCallRealMethod();
+      when(mockMetadata.readSecondaryIndexKeysAndLocations(secondaryKeys, partitionName)).thenCallRealMethod();
       
       // Execute the method - it may throw NPE due to mocks, but we just want to verify cleanup manager is called
       try {
-        mockMetadata.readSecondaryIndexKeysAndLocation(secondaryKeys, partitionName);
+        mockMetadata.readSecondaryIndexKeysAndLocations(secondaryKeys, partitionName);
       } catch (Exception e) {
         // Expected - we're testing with mocks
       }

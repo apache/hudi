@@ -256,14 +256,14 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Returns pairs of (secondary key, location of secondary key) which the provided secondary keys maps to.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocation(HoodieData<String> secondaryKeys, String partitionName);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocations(HoodieData<String> secondaryKeys, String partitionName);
 
   /**
    * Returns the location of secondary keys which are found in the secondary index.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
   default HoodieData<HoodieRecordGlobalLocation> readSecondaryIndexLocations(HoodieData<String> secondaryKeys, String partitionName) {
-    return readSecondaryIndexKeysAndLocation(secondaryKeys, partitionName).values();
+    return readSecondaryIndexKeysAndLocations(secondaryKeys, partitionName).values();
   }
 
   /**

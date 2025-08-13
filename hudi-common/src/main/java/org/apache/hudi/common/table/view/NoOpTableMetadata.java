@@ -116,7 +116,7 @@ class NoOpTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocation(HoodieData<String> secondaryKeys, String partitionName) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocations(HoodieData<String> secondaryKeys, String partitionName) {
     return HoodieListPairData.eager(Collections.emptyMap());
   }
 
