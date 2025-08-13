@@ -104,11 +104,11 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     when(mockPairData.mapToPair(any())).thenReturn(mockResult);
     
     // Call real method on the mock
-    when(mockMetadata.readRecordIndexKeysAndLocation(recordKeys)).thenCallRealMethod();
-    when(mockMetadata.readRecordIndexKeysAndLocation(recordKeys, Option.empty())).thenCallRealMethod();
+    when(mockMetadata.readRecordIndexKeysAndLocations(recordKeys)).thenCallRealMethod();
+    when(mockMetadata.readRecordIndexKeysAndLocations(recordKeys, Option.empty())).thenCallRealMethod();
     
     // Execute the method
-    HoodiePairData result = mockMetadata.readRecordIndexKeysAndLocation(recordKeys);
+    HoodiePairData result = mockMetadata.readRecordIndexKeysAndLocations(recordKeys);
     
     // Verify cleanup manager was invoked
     verify(spyCleanupManager).ensureDataCleanupOnException(any());
@@ -224,13 +224,13 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     doThrow(testException).when(mockCleanupManager).ensureDataCleanupOnException(any());
     
     // Call real method on the mock
-    when(mockMetadata.readRecordIndexKeysAndLocation(any())).thenCallRealMethod();
-    when(mockMetadata.readRecordIndexKeysAndLocation(any(), any())).thenCallRealMethod();
+    when(mockMetadata.readRecordIndexKeysAndLocations(any())).thenCallRealMethod();
+    when(mockMetadata.readRecordIndexKeysAndLocations(any(), any())).thenCallRealMethod();
     
     // Execute and verify exception is propagated
     HoodieData<String> recordKeys = HoodieListData.eager(Arrays.asList("key1"));
     try {
-      mockMetadata.readRecordIndexKeysAndLocation(recordKeys);
+      mockMetadata.readRecordIndexKeysAndLocations(recordKeys);
       fail("Expected exception was not thrown");
     } catch (HoodieException e) {
       assertEquals("Test exception from cleanup manager", e.getMessage());

@@ -331,12 +331,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * @param recordKeys List of mapping from keys to the record location.
    */
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocation(HoodieData<String> recordKeys) {
-    return readRecordIndexKeysAndLocation(recordKeys, Option.empty());
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocations(HoodieData<String> recordKeys) {
+    return readRecordIndexKeysAndLocations(recordKeys, Option.empty());
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocation(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocations(HoodieData<String> recordKeys, Option<String> dataTablePartition) {
     // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
     // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
     // to existing records being inserted again causing duplicates.
@@ -441,7 +441,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocationV2(HoodieData<String> secondaryKeys, String partitionName) {
-    return readRecordIndexKeysAndLocation(readSecondaryIndexDataTableRecordKeysV2(secondaryKeys, partitionName));
+    return readRecordIndexKeysAndLocations(readSecondaryIndexDataTableRecordKeysV2(secondaryKeys, partitionName));
   }
 
   private HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexKeysAndLocationV1(HoodieData<String> secondaryKeys, String partitionName) {
@@ -458,7 +458,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Now collect the record-keys and fetch the RLI records
     List<String> recordKeys = new ArrayList<>();
     secondaryKeyRecords.values().forEach(recordKeys::addAll);
-    return readRecordIndexKeysAndLocation(HoodieListData.eager(recordKeys));
+    return readRecordIndexKeysAndLocations(HoodieListData.eager(recordKeys));
   }
 
   protected HoodieData<HoodieRecord<HoodieMetadataPayload>> readIndexRecords(HoodieData<? extends MetadataRawKey> rawKeys,

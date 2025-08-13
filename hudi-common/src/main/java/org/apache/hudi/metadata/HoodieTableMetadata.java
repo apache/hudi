@@ -230,7 +230,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Returns pairs of (record key, location of record key) which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocation(HoodieData<String> recordKeys);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocations(HoodieData<String> recordKeys);
 
   /**
    * Returns pairs of (record key, location of record key) which are found in the record index.
@@ -242,14 +242,14 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * @return map from recordkey to the location of the record that was read from the index
    *
    */
-  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocation(HoodieData<String> recordKeys, Option<String> dataTablePartition);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexKeysAndLocations(HoodieData<String> recordKeys, Option<String> dataTablePartition);
 
   /**
    * Returns the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
   default HoodieData<HoodieRecordGlobalLocation> readRecordIndexLocations(HoodieData<String> recordKeys) {
-    return readRecordIndexKeysAndLocation(recordKeys).values();
+    return readRecordIndexKeysAndLocations(recordKeys).values();
   }
 
   /**

@@ -127,7 +127,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     readDf.cache()
     val rowArr = readDf.collect()
-    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndexKeysAndLocation(
+    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndexKeysAndLocations(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava)))
 
     assertTrue(rowArr.length > 0)
@@ -141,7 +141,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     }
 
     val deletedRows = deletedDf.collect()
-    val recordIndexMapForDeletedRows = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndexKeysAndLocation(
+    val recordIndexMapForDeletedRows = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndexKeysAndLocations(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava)))
 
     assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")
