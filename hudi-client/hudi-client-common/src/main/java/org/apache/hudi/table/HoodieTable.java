@@ -151,7 +151,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
-  private final ReaderContextFactory<T> readerContextFactoryForWrite;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
@@ -163,7 +162,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
     this.taskContextSupplier = context.getTaskContextSupplier();
-    this.readerContextFactoryForWrite = createReaderContextFactoryForWrite(context, metaClient, config);
   }
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
@@ -177,7 +175,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = viewManager;
     this.metaClient = metaClient;
     this.taskContextSupplier = supplier;
-    this.readerContextFactoryForWrite = createReaderContextFactoryForWrite(context, metaClient, config);
   }
 
   public boolean isMetadataTable() {
@@ -1285,12 +1282,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return new HashSet<>(Arrays.asList(partitionFields.get()));
   }
 
-  private ReaderContextFactory<T> createReaderContextFactoryForWrite(HoodieEngineContext context, HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig) {
-    return (ReaderContextFactory<T>) context.getReaderContextFactoryForWrite(metaClient, writeConfig.getRecordMerger().getRecordType(),
-        writeConfig.getProps(), false);
-  }
-
   public ReaderContextFactory<T> getReaderContextFactoryForWrite() {
-    return readerContextFactoryForWrite;
+    // question: should we just return null when context is serialized as null? the mismatch reader context would throw anyway.
+    return (ReaderContextFactory<T>) getContext().getReaderContextFactoryForWrite(metaClient, config.getRecordMerger().getRecordType(),
+        config.getProps(), false);
   }
 }

@@ -27,10 +27,12 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -48,6 +50,7 @@ import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.IOUtils;
@@ -91,6 +94,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseSparkCommitActionExecutor.class);
   protected final Option<BaseKeyGenerator> keyGeneratorOpt;
+  private final ReaderContextFactory<T> readerContextFactory;
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
@@ -108,6 +112,8 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
                                        Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
     keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
+    readerContextFactory = (WriteOperationType.isChangingRecords(operationType) && table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE)
+        ? table.getReaderContextFactoryForWrite() : null;
   }
 
   protected HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
@@ -396,6 +402,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           mergeHandle.getWriterSchema(), (Configuration) table.getStorageConf().unwrap());
       mergeHandle.setPartitionFields(partitionFields);
       mergeHandle.setPartitionValues(partitionValues);
+    }
+    if (readerContextFactory != null && mergeHandle instanceof FileGroupReaderBasedMergeHandle) {
+      ((FileGroupReaderBasedMergeHandle) mergeHandle).setReaderContext(readerContextFactory.getContext());
     }
     return mergeHandle;
   }

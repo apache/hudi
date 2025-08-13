@@ -86,7 +86,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   private final Option<CompactionOperation> operation;
   private final String maxInstantTime;
-  private final HoodieReaderContext<T> readerContext;
+  private HoodieReaderContext<T> readerContext;
   private HoodieReadStats readStats;
   private HoodieRecord.HoodieRecordType recordType;
   private Option<HoodieCDCLogger> cdcLogger;
@@ -223,6 +223,17 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   @Override
   protected void populateIncomingRecordsMap(Iterator<HoodieRecord<T>> newRecordsItr) {
     // no op.
+  }
+
+  /**
+   * This is only for spark, the engine context fetched from a serialized hoodie table is always local,
+   * overrides it to spark specific reader context.
+   */
+  public void setReaderContext(HoodieReaderContext<T> readerContext) {
+    this.readerContext = readerContext;
+    TypedProperties properties = config.getProps();
+    properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
+    this.readerContext.initRecordMergerForIngestion(properties);
   }
 
   /**
