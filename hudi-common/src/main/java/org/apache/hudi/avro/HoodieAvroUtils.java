@@ -52,7 +52,6 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
@@ -1234,99 +1233,86 @@ public class HoodieAvroUtils {
   }
 
   private static Object rewritePrimaryTypeWithDiffSchemaType(Object oldValue, Schema oldSchema, Schema newSchema) {
-    return rewritePrimaryTypeWithDiffSchemaType(oldValue, oldSchema.getType(), newSchema.getType(), oldSchema.getLogicalType(), newSchema.getLogicalType());
-  }
-
-  public static Object rewritePrimaryTypeWithDiffSchemaType(Object oldValue,
-                                                            Schema.Type oldType,
-                                                            Schema.Type newType,
-                                                            LogicalType oldLogicalType,
-                                                            LogicalType newLogicalType) {
-    switch (newType) {
+    switch (newSchema.getType()) {
       case NULL:
       case BOOLEAN:
         break;
       case INT:
-        if (LogicalTypes.date().equals(newLogicalType) && oldType == Schema.Type.STRING) {
+        if (newSchema.getLogicalType() == LogicalTypes.date() && oldSchema.getType() == Schema.Type.STRING) {
           return fromJavaDate(java.sql.Date.valueOf(oldValue.toString()));
         }
         break;
       case LONG:
-        if (oldType == Schema.Type.INT) {
+        if (oldSchema.getType() == Schema.Type.INT) {
           return ((Integer) oldValue).longValue();
         }
         break;
       case FLOAT:
-        if (oldType == Schema.Type.INT) {
-          return ((Integer) oldValue).floatValue();
-        } else if (oldType == Schema.Type.LONG) {
-          return ((Long) oldValue).floatValue();
+        if ((oldSchema.getType() == Schema.Type.INT)
+            || (oldSchema.getType() == Schema.Type.LONG)) {
+          return oldSchema.getType() == Schema.Type.INT ? ((Integer) oldValue).floatValue() : ((Long) oldValue).floatValue();
         }
         break;
       case DOUBLE:
-        if (oldType == Schema.Type.FLOAT) {
+        if (oldSchema.getType() == Schema.Type.FLOAT) {
           // java float cannot convert to double directly, deal with float precision change
           return Double.valueOf(oldValue + "");
-        } else if (oldType == Schema.Type.INT) {
+        } else if (oldSchema.getType() == Schema.Type.INT) {
           return ((Integer) oldValue).doubleValue();
-        } else if (oldType == Schema.Type.LONG) {
+        } else if (oldSchema.getType() == Schema.Type.LONG) {
           return ((Long) oldValue).doubleValue();
         }
         break;
-
       case BYTES:
-        if (oldType == Schema.Type.STRING) {
+        if (oldSchema.getType() == Schema.Type.STRING) {
           return ByteBuffer.wrap(getUTF8Bytes(oldValue.toString()));
         }
         break;
       case STRING:
-        if (oldType == Schema.Type.ENUM) {
+        if (oldSchema.getType() == Schema.Type.ENUM) {
           return String.valueOf(oldValue);
         }
-        if (oldType == Schema.Type.BYTES) {
+        if (oldSchema.getType() == Schema.Type.BYTES) {
           return StringUtils.fromUTF8Bytes(((ByteBuffer) oldValue).array());
         }
-        if (LogicalTypes.date().equals(oldLogicalType)) {
+        if (oldSchema.getLogicalType() == LogicalTypes.date()) {
           return toJavaDate((Integer) oldValue).toString();
         }
-        if (oldType == Schema.Type.INT
-            || oldType == Schema.Type.LONG
-            || oldType == Schema.Type.FLOAT
-            || oldType == Schema.Type.DOUBLE) {
+        if (oldSchema.getType() == Schema.Type.INT
+            || oldSchema.getType() == Schema.Type.LONG
+            || oldSchema.getType() == Schema.Type.FLOAT
+            || oldSchema.getType() == Schema.Type.DOUBLE) {
           return oldValue.toString();
         }
-        if (oldType == Schema.Type.FIXED && oldLogicalType instanceof LogicalTypes.Decimal) {
-          final byte[] bytes = ((GenericFixed) oldValue).bytes();
-          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) oldLogicalType;
+        if (oldSchema.getType() == Schema.Type.FIXED && oldSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          final byte[] bytes;
+          bytes = ((GenericFixed) oldValue).bytes();
+          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) oldSchema.getLogicalType();
           BigDecimal bd = new BigDecimal(new BigInteger(bytes), decimal.getScale());
           return bd.toString();
         }
         break;
       case FIXED:
-        if (newLogicalType instanceof LogicalTypes.Decimal) {
-          LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newLogicalType;
+        // deal with decimal Type
+        if (newSchema.getLogicalType() instanceof LogicalTypes.Decimal) {
           // TODO: support more types
-          if (oldType == Schema.Type.STRING
-              || oldType == Schema.Type.DOUBLE
-              || oldType == Schema.Type.INT
-              || oldType == Schema.Type.LONG
-              || oldType == Schema.Type.FLOAT) {
-            BigDecimal bigDecimal = new BigDecimal(oldValue.toString())
-                .setScale(decimal.getScale(), RoundingMode.HALF_UP);
-            return DECIMAL_CONVERSION.toFixed(bigDecimal, Schema.createFixed("decimal", null, null, decimal.getPrecision()), newLogicalType);
-          } else if (oldType == Schema.Type.BYTES) {
-            return convertBytesToFixed(((ByteBuffer) oldValue).array(),
-                Schema.createFixed("decimal", null, null, decimal.getPrecision()));
+          if (oldSchema.getType() == Schema.Type.STRING
+              || oldSchema.getType() == Schema.Type.DOUBLE
+              || oldSchema.getType() == Schema.Type.INT
+              || oldSchema.getType() == Schema.Type.LONG
+              || oldSchema.getType() == Schema.Type.FLOAT) {
+            LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) newSchema.getLogicalType();
+            // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
+            BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
+            return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
+          } else if (oldSchema.getType() == Schema.Type.BYTES) {
+            return convertBytesToFixed(((ByteBuffer) oldValue).array(), newSchema);
           }
         }
         break;
-
       default:
     }
-
-    throw new HoodieAvroSchemaException(
-        String.format("Cannot support rewrite value for schema type: %s since the old schema type is: %s",
-            newType, oldType));
+    throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
   }
 
   /**
