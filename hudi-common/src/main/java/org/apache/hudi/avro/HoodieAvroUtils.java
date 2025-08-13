@@ -1408,6 +1408,9 @@ public class HoodieAvroUtils {
     }
     switch (readerSchema.getType()) {
       case RECORD:
+        if (readerSchema.getFields().size() > writerSchema.getFields().size()) {
+          return true;
+        }
         for (Schema.Field field : readerSchema.getFields()) {
           Schema.Field writerField = writerSchema.getField(field.name());
           if (writerField == null || recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
@@ -1431,10 +1434,18 @@ public class HoodieAvroUtils {
         return needsRewriteToString(writerSchema, true);
       case STRING:
       case BYTES:
+      case FIXED:
+        if (readerSchema.getLogicalType() != null) {
+          // check if logical types are equal
+          return !readerSchema.getLogicalType().equals(writerSchema.getLogicalType());
+        }
         return needsRewriteToString(writerSchema, false);
       case DOUBLE:
         // To maintain precision, you need to convert Float -> String -> Double
-        return writerSchema.getType().equals(Schema.Type.FLOAT);
+        return writerSchema.getType().equals(Schema.Type.FLOAT) && !writerSchema.getType().equals(Schema.Type.STRING);
+      case INT:
+      case LONG:
+        return writerSchema.getType().equals(Schema.Type.STRING);
       default:
         return false;
     }
