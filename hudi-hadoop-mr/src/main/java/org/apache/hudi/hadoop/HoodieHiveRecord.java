@@ -27,8 +27,7 @@ import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
+import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -37,7 +36,6 @@ import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
@@ -60,42 +58,37 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   private boolean copy;
 
-  private final ArrayWritableObjectInspector objectInspector;
-
-  private final ObjectInspectorCache objectInspectorCache;
+  private final HiveAvroSerializer avroSerializer;
 
   protected Schema schema;
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, ObjectInspectorCache objectInspectorCache) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer) {
     super(key, data);
-    this.objectInspector = objectInspectorCache.getObjectInspector(schema);
-    this.objectInspectorCache = objectInspectorCache;
+    this.avroSerializer = avroSerializer;
     this.schema = schema;
     this.copy = false;
     isDelete = data == null;
   }
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, ObjectInspectorCache objectInspectorCache, HoodieOperation hoodieOperation, boolean isDelete) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
-    this.objectInspector = objectInspectorCache.getObjectInspector(schema);
-    this.objectInspectorCache = objectInspectorCache;
+    this.avroSerializer = avroSerializer;
     this.schema = schema;
     this.copy = false;
   }
 
   private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
-                           ArrayWritableObjectInspector objectInspector, ObjectInspectorCache objectInspectorCache) {
+                           HiveAvroSerializer avroSerializer) {
     super(key, data, operation, Option.empty());
     this.schema = schema;
     this.copy = isCopy;
     isDelete = data == null;
-    this.objectInspector = objectInspector;
-    this.objectInspectorCache = objectInspectorCache;
+    this.avroSerializer = avroSerializer;
   }
 
   @Override
   public HoodieRecord<ArrayWritable> newInstance() {
-    return new HoodieHiveRecord(this.key, this.data, this.schema, this.operation, this.copy, this.objectInspector, this.objectInspectorCache);
+    return new HoodieHiveRecord(this.key, this.data, this.schema, this.operation, this.copy, this.avroSerializer);
   }
 
   @Override
@@ -174,7 +167,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    return HiveRecordContext.getFieldValueFromArrayWritable(data, schema, column, objectInspectorCache);
+    return avroSerializer.getValueAsJava(data, column);
   }
 
   @Override
@@ -252,7 +245,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   private Object getValue(String name) {
-    return HoodieArrayWritableAvroUtils.getWritableValue(data, objectInspector, name);
+    return avroSerializer.getValue(data, name);
   }
 
   protected Schema getSchema() {
