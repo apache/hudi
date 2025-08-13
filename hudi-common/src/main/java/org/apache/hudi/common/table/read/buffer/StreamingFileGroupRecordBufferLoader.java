@@ -84,7 +84,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
     DeleteContext deleteContext = new DeleteContext(props, recordSchema);
     deleteContext.withReaderSchema(recordSchema);
     while (recordIterator.hasNext()) {
-      HoodieRecord hoodieRecord = recordIterator.next();
+      HoodieRecord<T> hoodieRecord = recordIterator.next();
       T data = recordContext.extractDataFromRecord(hoodieRecord, recordSchema, props);
       try {
         // we use -U operation to represent the record should be ignored during updating index.

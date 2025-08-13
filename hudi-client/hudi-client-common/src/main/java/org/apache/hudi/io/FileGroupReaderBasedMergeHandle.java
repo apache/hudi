@@ -42,7 +42,6 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -87,14 +86,12 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   private final Option<CompactionOperation> operation;
   private final String maxInstantTime;
-  private HoodieReaderContext<T> readerContext;
+  private final HoodieReaderContext<T> readerContext;
   private HoodieReadStats readStats;
   private HoodieRecord.HoodieRecordType recordType;
   private Option<HoodieCDCLogger> cdcLogger;
-  private Option<RecordLevelIndexCallback> recordIndexCallbackOpt = Option.empty();
-  private Option<SecondaryIndexCallback> secondaryIndexCallbackOpt = Option.empty();
   private final TypedProperties props;
-  private Iterator<HoodieRecord> incomingRecordsItr;
+  private final Iterator<HoodieRecord<T>> incomingRecordsItr;
 
   /**
    * Constructor for Copy-On-Write (COW) merge path.
@@ -121,8 +118,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     this.maxInstantTime = instantTime;
     initRecordTypeAndCdcLogger(hoodieTable.getConfig().getRecordMerger().getRecordType());
     this.props = TypedProperties.copy(config.getProps());
-    populateIncomingRecordsMapIterator(recordItr);
-    initRecordIndexCallback();
+    this.incomingRecordsItr = recordItr;
   }
 
   /**
@@ -150,6 +146,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     initRecordTypeAndCdcLogger(enginRecordType);
     init(operation, this.partitionPath);
     this.props = TypedProperties.copy(config.getProps());
+    this.incomingRecordsItr = null;
   }
 
   private void initRecordTypeAndCdcLogger(HoodieRecord.HoodieRecordType enginRecordType) {
@@ -167,15 +164,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config)));
     } else {
       this.cdcLogger = Option.empty();
-    }
-  }
-
-  private void initRecordIndexCallback() {
-    if (this.writeStatus.isTrackingSuccessfulWrites()) {
-      writeStatus.manuallyTrackSuccess();
-      this.recordIndexCallbackOpt = Option.of(new RecordLevelIndexCallback<>(writeStatus, newRecordLocation, partitionPath));
-    } else {
-      this.recordIndexCallbackOpt = Option.empty();
     }
   }
 
@@ -238,15 +226,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   /**
-   * For COW merge path, lets map the incoming records to another iterator which can be routed to {@link org.apache.hudi.common.table.read.buffer.StreamingFileGroupRecordBufferLoader}.
-   * @param newRecordsItr
-   */
-  private void populateIncomingRecordsMapIterator(Iterator<HoodieRecord<T>> newRecordsItr) {
-    // avoid populating external spillable in base {@link HoodieWriteMergeHandle)
-    this.incomingRecordsItr = new MappingIterator<>(newRecordsItr, record -> (HoodieRecord) record);
-  }
-
-  /**
    * Reads the file slice of a compaction operation using a file group reader,
    * by getting an iterator of the records; then writes the records to a new base file.
    */
@@ -301,7 +280,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   }
 
   private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
-                                                      Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord> incomingRecordsItr) {
+                                                      Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
     HoodieFileGroupReader.Builder<T> fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
         .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
@@ -312,7 +291,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     if (logFileStreamOpt.isPresent()) {
       fileGroupBuilder.withLogFiles(logFileStreamOpt.get());
     } else {
-      fileGroupBuilder.withRecordIterator(incomingRecordsItr, writeSchema);
+      fileGroupBuilder.withRecordIterator(incomingRecordsItr);
     }
     return fileGroupBuilder.build();
   }
@@ -356,20 +335,22 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     if (cdcLogger.isPresent()) {
       callbacks.add(new CDCCallback<>(cdcLogger.get(), readerContext));
     }
-    // record index callback
-    recordIndexCallbackOpt.ifPresent(callbacks::add);
-    // Stream secondary index stats.
-    if (isSecondaryIndexStatsStreamingWritesEnabled) {
-      this.secondaryIndexCallbackOpt = Option.of(new SecondaryIndexCallback<>(
-          partitionPath,
-          readerContext,
-          writeStatus,
-          secondaryIndexDefns
-      ));
-    } else {
-      this.secondaryIndexCallbackOpt = Option.empty();
+    // Indexes are not updated during compaction
+    if (operation.isEmpty()) {
+      // record index callback
+      if (this.writeStatus.isTrackingSuccessfulWrites()) {
+        writeStatus.manuallyTrackSuccess();
+        callbacks.add(new RecordLevelIndexCallback<>(writeStatus, newRecordLocation, partitionPath));
+      }
+      // Stream secondary index stats.
+      if (isSecondaryIndexStatsStreamingWritesEnabled) {
+        callbacks.add(new SecondaryIndexCallback<>(
+            partitionPath,
+            readerContext,
+            writeStatus,
+            secondaryIndexDefns));
+      }
     }
-    secondaryIndexCallbackOpt.ifPresent(callbacks::add);
     return callbacks.isEmpty() ? Option.empty() : Option.of(CompositeCallback.of(callbacks));
   }
 
