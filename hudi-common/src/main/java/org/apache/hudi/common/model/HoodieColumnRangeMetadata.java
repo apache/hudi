@@ -24,6 +24,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.parquet.schema.LogicalTypeTokenParser;
+import org.apache.parquet.schema.PrimitiveType;
 
 import javax.annotation.Nullable;
 
@@ -259,6 +261,21 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     }
   }
 
+  public static ValueMetadata getValueMetadata(PrimitiveType primitiveType) {
+    if (primitiveType == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    ValueType valueType = ValueType.fromPrimitiveType(primitiveType);
+    if (valueType == ValueType.NONE) {
+      return NoneMetadata.INSTANCE;
+    } else if (valueType == ValueType.DECIMAL) {
+      return DecimalMetadata.create(primitiveType);
+    } else {
+      return new ValueMetadata(valueType);
+    }
+  }
+
   public static class ValueMetadata {
 
 
@@ -306,6 +323,10 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
 
     public static DecimalMetadata create(LogicalTypes.Decimal decimal) {
       return new DecimalMetadata(decimal.getPrecision(), decimal.getScale());
+    }
+
+    public static DecimalMetadata create(PrimitiveType primitiveType) {
+      return new DecimalMetadata(LogicalTypeTokenParser.getPrecision(primitiveType), LogicalTypeTokenParser.getScale(primitiveType));
     }
 
     private final int precision;
@@ -370,6 +391,33 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
         ValueType.myEnumValues = ValueType.values();
       }
       return ValueType.myEnumValues[i];
+    }
+
+    public static ValueType fromPrimitiveType(PrimitiveType primitiveType) {
+      if (primitiveType.getLogicalTypeAnnotation() != null) {
+        return LogicalTypeTokenParser.fromLogicalTypeAnnotation(primitiveType);
+      }
+      switch (primitiveType.getPrimitiveTypeName()) {
+        case INT64:
+          return ValueType.LONG;
+        case INT32:
+          return ValueType.INT;
+        case BOOLEAN:
+          return ValueType.BOOLEAN;
+        case BINARY:
+          return ValueType.BYTES;
+        case FLOAT:
+          return ValueType.FLOAT;
+        case DOUBLE:
+          return ValueType.DOUBLE;
+        case INT96:
+          // TODO: probably wrong
+          return ValueType.DECIMAL;
+        case FIXED_LEN_BYTE_ARRAY:
+          return ValueType.FIXED;
+        default:
+          throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
+      }
     }
 
     public static ValueType fromSchema(Schema schema) {

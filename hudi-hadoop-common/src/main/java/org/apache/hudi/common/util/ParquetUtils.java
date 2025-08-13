@@ -287,7 +287,8 @@ public class ParquetUtils extends FileFormatUtils {
                           stats.isEmpty() ? columnChunkMetaData.getValueCount() : stats.getNumNulls(),
                           columnChunkMetaData.getValueCount(),
                           columnChunkMetaData.getTotalSize(),
-                          columnChunkMetaData.getTotalUncompressedSize());
+                          columnChunkMetaData.getTotalUncompressedSize(),
+                          HoodieColumnRangeMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType()));
                     })
         );
 
