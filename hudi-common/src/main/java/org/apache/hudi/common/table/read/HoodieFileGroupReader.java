@@ -100,7 +100,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.storage = storage;
     this.readerParameters = readerParameters;
     this.inputSplit = inputSplit;
-    readerContext.setHasLogFiles(!this.inputSplit.getLogFiles().isEmpty());
+    readerContext.setHasLogFiles(this.inputSplit.hasLogFiles());
     readerContext.getRecordContext().setPartitionPath(inputSplit.getPartitionPath());
     if (readerContext.getHasLogFiles() && inputSplit.getStart() != 0) {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
