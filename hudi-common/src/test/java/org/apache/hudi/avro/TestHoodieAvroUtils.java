@@ -1135,6 +1135,7 @@ public class TestHoodieAvroUtils {
   private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {
     Schema decimal1 = LogicalTypes.decimal(12, 2).addToSchema(Schema.create(Schema.Type.BYTES));
     Schema decimal2 = LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES));
+    Schema dateSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
     Schema doubleSchema = Schema.create(Schema.Type.DOUBLE);
     Schema intSchema = Schema.create(Schema.Type.INT);
     Schema longSchema = Schema.create(Schema.Type.LONG);
@@ -1157,17 +1158,19 @@ public class TestHoodieAvroUtils {
         Arguments.of(decimal1, decimal2, true),
         Arguments.of(doubleSchema, decimal1, true),
         Arguments.of(decimal1, doubleSchema, true),
-        Arguments.of(intSchema, stringSchema, true),
+        Arguments.of(intSchema, stringSchema, false),
         Arguments.of(longSchema, doubleSchema, false),
         Arguments.of(intSchema, doubleSchema, false),
-        Arguments.of(longSchema, stringSchema, true),
-        Arguments.of(floatSchema, stringSchema, true),
+        Arguments.of(longSchema, stringSchema, false),
+        Arguments.of(floatSchema, stringSchema, false),
+        Arguments.of(doubleSchema, stringSchema, false),
         Arguments.of(decimal1, stringSchema, true),
         Arguments.of(stringSchema, decimal2, true),
         Arguments.of(stringSchema, intSchema, true),
         Arguments.of(floatSchema, doubleSchema, true),
         Arguments.of(doubleSchema, floatSchema, true),
-        Arguments.of(recordSchema1, recordSchema2, false)
+        Arguments.of(recordSchema1, recordSchema2, false),
+        Arguments.of(dateSchema, stringSchema, true)
     );
   }
 

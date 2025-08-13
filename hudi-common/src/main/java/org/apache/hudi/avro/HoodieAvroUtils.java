@@ -1453,11 +1453,10 @@ public class HoodieAvroUtils {
    * string so some intervention is needed
    */
   private static boolean needsRewriteToString(Schema schema, boolean isEnum) {
+    if (schema.getLogicalType() != null) {
+      return true;
+    }
     switch (schema.getType()) {
-      case INT:
-      case LONG:
-      case FLOAT:
-      case DOUBLE:
       case BYTES:
       case FIXED:
         return true;
