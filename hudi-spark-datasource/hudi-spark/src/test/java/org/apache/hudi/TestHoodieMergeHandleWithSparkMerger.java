@@ -260,7 +260,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
       assertTrue(baseFileStream.findAny().isPresent());
 
       // Check metadata files.
-      Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+      Option<HoodieInstant> deltaCommit = reloadedMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().lastInstant();
       assertTrue(deltaCommit.isPresent());
       assertEquals(instantTime, deltaCommit.get().requestedTime(), "Delta commit should be specified value");
 
@@ -288,7 +288,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
       updateRecordsInMORTable(reloadedMetaClient, records2, writeClient, writeConfig, instantTime, false);
 
       // Check metadata files.
-      deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+      deltaCommit = reloadedMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().lastInstant();
       assertTrue(deltaCommit.isPresent());
 
       // Check data files.
