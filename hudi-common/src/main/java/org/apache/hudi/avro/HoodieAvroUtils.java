@@ -1406,6 +1406,10 @@ public class HoodieAvroUtils {
     if (writerSchema.equals(readerSchema)) {
       return false;
     }
+    if (readerSchema.getLogicalType() != null) {
+      // check if logical types are equal
+      return !readerSchema.getLogicalType().equals(writerSchema.getLogicalType());
+    }
     switch (readerSchema.getType()) {
       case RECORD:
         if (readerSchema.getFields().size() > writerSchema.getFields().size()) {
@@ -1433,21 +1437,12 @@ public class HoodieAvroUtils {
       case ENUM:
         return needsRewriteToString(writerSchema, true);
       case STRING:
-      case BYTES:
-      case FIXED:
-        if (readerSchema.getLogicalType() != null) {
-          // check if logical types are equal
-          return !readerSchema.getLogicalType().equals(writerSchema.getLogicalType());
-        }
         return needsRewriteToString(writerSchema, false);
       case DOUBLE:
-        // To maintain precision, you need to convert Float -> String -> Double
-        return writerSchema.getType().equals(Schema.Type.FLOAT) && !writerSchema.getType().equals(Schema.Type.STRING);
-      case INT:
       case LONG:
-        return writerSchema.getType().equals(Schema.Type.STRING);
+        return !(writerSchema.getType().equals(Schema.Type.INT) || writerSchema.getType().equals(Schema.Type.LONG));
       default:
-        return false;
+        return !writerSchema.getType().equals(readerSchema.getType());
     }
   }
 
@@ -1463,6 +1458,7 @@ public class HoodieAvroUtils {
       case FLOAT:
       case DOUBLE:
       case BYTES:
+      case FIXED:
         return true;
       case ENUM:
         return !isEnum;
