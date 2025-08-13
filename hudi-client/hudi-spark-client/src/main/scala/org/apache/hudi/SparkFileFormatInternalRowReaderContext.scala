@@ -130,7 +130,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       val rowIndexColumn = new java.util.HashSet[String]()
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       //always remove the row index column from the skeleton because the data file will also have the same column
-      val skeletonProjection = projectRecord(skeletonRequiredSchema,
+      val skeletonProjection = recordContext.projectRecord(skeletonRequiredSchema,
         HoodieAvroUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end

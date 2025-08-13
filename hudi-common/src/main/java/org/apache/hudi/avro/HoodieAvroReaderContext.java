@@ -180,16 +180,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public IndexedRecord seal(IndexedRecord record) {
-    return record;
-  }
-
-  @Override
-  public IndexedRecord toBinaryRow(Schema avroSchema, IndexedRecord record) {
-    return record;
-  }
-
-  @Override
   public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
     return new AvroRecordSizeEstimator(getSchemaHandler().getRequiredSchema());
   }
@@ -206,11 +196,6 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
                                                                Schema dataRequiredSchema,
                                                                List<Pair<String, Object>> partitionFieldAndValues) {
     return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema, partitionFieldAndValues);
-  }
-
-  @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
   }
 
   /**

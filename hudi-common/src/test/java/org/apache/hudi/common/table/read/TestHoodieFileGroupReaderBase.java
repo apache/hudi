@@ -596,10 +596,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
             String recordKey = readerContext.getRecordContext().getRecordKey(record, avroSchema);
             //test key based
             BufferedRecord<T> bufferedRecord = BufferedRecords.fromEngineRecord(record, avroSchema, readerContext.getRecordContext(), Collections.singletonList("timestamp"), false);
-            spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext));
+            spillableMap.put(recordKey, bufferedRecord.toBinary(readerContext.getRecordContext()));
 
             //test position based
-            spillableMap.put(position++, bufferedRecord.toBinary(readerContext));
+            spillableMap.put(position++, bufferedRecord.toBinary(readerContext.getRecordContext()));
           }
 
           assertEquals(records.size() * 2, spillableMap.size());

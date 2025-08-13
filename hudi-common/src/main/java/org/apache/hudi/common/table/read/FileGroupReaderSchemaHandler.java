@@ -116,7 +116,7 @@ public class FileGroupReaderSchemaHandler<T> {
 
   public Option<UnaryOperator<T>> getOutputConverter() {
     if (!AvroSchemaUtils.areSchemasProjectionEquivalent(requiredSchema, requestedSchema)) {
-      return Option.of(readerContext.projectRecord(requiredSchema, requestedSchema));
+      return Option.of(readerContext.getRecordContext().projectRecord(requiredSchema, requestedSchema));
     }
     return Option.empty();
   }

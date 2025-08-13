@@ -163,12 +163,12 @@ class TestBaseSparkInternalRowReaderContext {
             return row.getBoolean(2);
           }
         }
-      });
-    }
 
-    @Override
-    public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
-      return internalRow;
+        @Override
+        public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
+          return internalRow;
+        }
+      });
     }
 
     @Override

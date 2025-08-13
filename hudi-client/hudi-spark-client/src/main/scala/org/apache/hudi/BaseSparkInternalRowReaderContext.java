@@ -78,27 +78,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     }
   }
 
-  @Override
-  public InternalRow seal(InternalRow internalRow) {
-    return internalRow.copy();
-  }
-
-  @Override
-  public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
-    if (internalRow instanceof UnsafeRow) {
-      return internalRow;
-    }
-    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
-    return unsafeProjection.apply(internalRow);
-  }
-
-  @Override
-  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
-    return row -> (InternalRow) unsafeRowWriter.apply(row);
-  }
-
   /**
    * Constructs a transformation that will take a row and convert it to a new row with the given schema and adds in the values for the partition columns if they are missing in the returned row.
    * It is assumed that the `to` schema will contain the partition fields.

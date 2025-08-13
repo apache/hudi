@@ -159,7 +159,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       return recordIterator;
     }
     // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
-    return new CloseableMappingIterator<>(recordIterator, projectRecord(modifiedDataSchema, requiredSchema));
+    return new CloseableMappingIterator<>(recordIterator, recordContext.projectRecord(modifiedDataSchema, requiredSchema));
   }
 
   @Override
@@ -180,16 +180,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         }
         return recordMerger;
     }
-  }
-
-  @Override
-  public ArrayWritable seal(ArrayWritable record) {
-    return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
-  }
-
-  @Override
-  public ArrayWritable toBinaryRow(Schema schema, ArrayWritable record) {
-    return record;
   }
 
   @Override
@@ -237,11 +227,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         dataFileIterator.close();
       }
     };
-  }
-
-  @Override
-  public UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    return record -> HoodieArrayWritableAvroUtils.rewriteRecordWithNewSchema(record, from, to, renamedColumns);
   }
 
   public long getPos() throws IOException {
