@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.avro.AvroSchemaComparatorForRecordProjection.areSchemasProjectionEquivalent;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
@@ -179,7 +180,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     Option<Schema> promotedSchema = Option.empty();
-    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(getSchema(), schema)) {
+    if (!renamedColumns.isEmpty() || areSchemasProjectionEquivalent(getSchema(), schema)) {
       AvroReadSupport.setAvroReadSchema(hadoopConf, getSchema());
       AvroReadSupport.setRequestedProjection(hadoopConf, getSchema());
       promotedSchema = Option.of(schema);
