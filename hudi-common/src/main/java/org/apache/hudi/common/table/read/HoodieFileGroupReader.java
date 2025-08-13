@@ -280,22 +280,25 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  private ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator() throws IOException {
+  private ClosableIterator<BufferedRecord<T>> getBufferedRecordIterator(IteratorMode iteratorMode) throws IOException {
+    this.readerContext.setIteratorMode(iteratorMode);
     initRecordIterators();
     return new HoodieFileGroupReaderIterator<>(this);
   }
 
+  public ClosableIterator<BufferedRecord<T>> getClosableBufferedRecordIterator() throws IOException {
+    return getBufferedRecordIterator(IteratorMode.HOODIE_RECORD);
+  }
+
   public ClosableIterator<T> getClosableIterator() throws IOException {
-    this.readerContext.setIteratorMode(IteratorMode.ENGINE_RECORD);
-    return new CloseableMappingIterator<>(getBufferedRecordIterator(), BufferedRecord::getRecord);
+    return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.ENGINE_RECORD), BufferedRecord::getRecord);
   }
 
   /**
    * @return An iterator over the records that wraps the engine-specific record in a HoodieRecord.
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
-    this.readerContext.setIteratorMode(IteratorMode.HOODIE_RECORD);
-    return new CloseableMappingIterator<>(getBufferedRecordIterator(),
+    return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.HOODIE_RECORD),
         bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord));
   }
 
@@ -303,8 +306,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @return A record key iterator over the records.
    */
   public ClosableIterator<String> getClosableKeyIterator() throws IOException {
-    this.readerContext.setIteratorMode(IteratorMode.RECORD_KEY);
-    return new CloseableMappingIterator<>(getBufferedRecordIterator(), BufferedRecord::getRecordKey);
+    return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.RECORD_KEY), BufferedRecord::getRecordKey);
   }
 
   public ClosableIterator<BufferedRecord<T>> getLogRecordsOnly() throws IOException {

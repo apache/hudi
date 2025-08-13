@@ -28,11 +28,11 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 class TestInternalRowToJsonStringConverter {
-  private val converter = new InternalRowToJsonStringConverter(hoodieTableSchema)
+  private val converter = new InternalRowToJsonStringConverter(hoodieTableSchema.structTypeSchema)
 
   @Test
   def emptyRow(): Unit = {
-    val converter = new InternalRowToJsonStringConverter(emptyHoodieTableSchema)
+    val converter = new InternalRowToJsonStringConverter(emptyHoodieTableSchema.structTypeSchema)
     val row = InternalRow.empty
     val converted = converter.convert(row)
     assertEquals("{}", converted.toString)
