@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
 import org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager;
@@ -118,6 +119,23 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * @param conf              Storage config, ignored.
    */
   public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
+    this(
+            UUID.randomUUID().toString(),
+            lockConfiguration.getConfig(),
+            LockProviderHeartbeatManager::new,
+            getStorageLockClientClassName(),
+            LOGGER);
+  }
+
+  /**
+   * Default constructor for StorageBasedLockProvider, required by LockManager
+   * to instantiate it using reflection, supports 0.14.1 LP format.
+   * 
+   * @param lockConfiguration The lock configuration, should be transformable into
+   *                          StorageBasedLockConfig
+   * @param conf              Storage config, ignored.
+   */
+  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     this(
             UUID.randomUUID().toString(),
             lockConfiguration.getConfig(),
