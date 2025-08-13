@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
@@ -111,6 +112,21 @@ class TestStorageBasedLockProvider {
 
     HoodieLockException ex = assertThrows(HoodieLockException.class,
         () -> new StorageBasedLockProvider(lockConf, storageConf));
+    assertTrue(ex.getMessage().contains("Failed to load and initialize StorageLock"));
+  }
+
+  @Test
+  void testHadoopConstructorWithLockConfigurationAndConfiguration() {
+    TypedProperties props = new TypedProperties();
+    props.put(BASE_PATH.key(), "file:///tmp/lake/db/tbl-default");
+    props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "20");
+    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "2");
+
+    LockConfiguration lockConf = new LockConfiguration(props);
+
+    // Test that constructor throws expected exception when trying to load non-existent storage lock client
+    HoodieLockException ex = assertThrows(HoodieLockException.class,
+        () -> new StorageBasedLockProvider(lockConf, new Configuration()));
     assertTrue(ex.getMessage().contains("Failed to load and initialize StorageLock"));
   }
 
