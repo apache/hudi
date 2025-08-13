@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -116,14 +115,12 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     }
     Map<Integer, List<HoodieRecord<T>>> partitionedRecords = partition(inputRecords, partitioner);
 
-    ReaderContextFactory<T> readerContextFactory = (ReaderContextFactory<T>) context.getReaderContextFactoryForWrite(
-        table.getMetaClient(), HoodieRecord.HoodieRecordType.AVRO, config.getProps(), false);
     List<WriteStatus> writeStatuses = new LinkedList<>();
     partitionedRecords.forEach((partition, records) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
-        handleUpsertPartition(instantTime, partition, records.iterator(), partitioner, readerContextFactory).forEachRemaining(writeStatuses::addAll);
+        handleUpsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
       } else {
-        handleInsertPartition(instantTime, partition, records.iterator(), partitioner, readerContextFactory).forEachRemaining(writeStatuses::addAll);
+        handleInsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
       }
     });
     updateIndex(writeStatuses, result);
@@ -210,8 +207,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   }
 
   @SuppressWarnings("unchecked")
-  protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Partitioner partitioner, ReaderContextFactory<T> readerContextFactory) {
+  protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr, Partitioner partitioner) {
     JavaUpsertPartitioner javaUpsertPartitioner = (JavaUpsertPartitioner) partitioner;
     BucketInfo binfo = javaUpsertPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
@@ -219,7 +215,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       if (btype.equals(BucketType.INSERT)) {
         return handleInsert(binfo.fileIdPrefix, recordItr);
       } else if (btype.equals(BucketType.UPDATE)) {
-        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr, readerContextFactory);
+        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr);
       } else {
         throw new HoodieUpsertException("Unknown bucketType " + btype + " for partition :" + partition);
       }
@@ -230,15 +226,13 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     }
   }
 
-  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Partitioner partitioner, ReaderContextFactory<T> readerContextFactory) {
-    return handleUpsertPartition(instantTime, partition, recordItr, partitioner, readerContextFactory);
+  protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr, Partitioner partitioner) {
+    return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
   }
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr,
-                                                  ReaderContextFactory<T> readerContextFactory)
+                                                  Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
@@ -246,12 +240,11 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       return Collections.singletonList(Collections.<WriteStatus>emptyList()).iterator();
     }
     // these are updates
-    HoodieMergeHandle<?, ?, ?, ?> mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr, readerContextFactory);
+    HoodieMergeHandle<?, ?, ?, ?> mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr);
     return IOUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
-  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
-                                                          ReaderContextFactory<T> readerContextFactory) {
+  protected HoodieMergeHandle<?, ?, ?, ?> getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
     if (!config.populateMetaFields()) {
       try {
@@ -262,7 +255,7 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
       }
     }
     return HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-        taskContextSupplier, keyGeneratorOpt, readerContextFactory.getContext());
+        taskContextSupplier, keyGeneratorOpt);
   }
 
   @Override

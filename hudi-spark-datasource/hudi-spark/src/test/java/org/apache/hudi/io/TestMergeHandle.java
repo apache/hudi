@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -26,7 +25,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -59,7 +57,6 @@ import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -219,18 +216,9 @@ public class TestMergeHandle extends BaseTestHandle {
       return (!validUpdatesRecordsMap.containsKey(kv.getKey()) && !validDeletesMap.containsKey(kv.getKey()));
     }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), Option.empty(), Option.empty());
-    TypedProperties typedProperties = new TypedProperties();
-    typedProperties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergeMode);
-    if (mergeMode.equals("CUSTOM_MERGER")) {
-      readerContext.setRecordMerger(Option.of(new CustomMerger()));
-    } else {
-      readerContext.initRecordMergerForIngestion(properties);
-    }
-
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table, inputAndExpectedDataSet.getRecordsToMerge().iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        Option.empty(), readerContext);
+        Option.empty());
 
     fileGroupReaderBasedMergeHandle.doMerge();
     List<WriteStatus> writeStatuses = fileGroupReaderBasedMergeHandle.close();

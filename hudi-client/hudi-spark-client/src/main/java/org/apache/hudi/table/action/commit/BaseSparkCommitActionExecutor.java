@@ -27,7 +27,6 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -289,13 +288,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     Broadcast<SparkBucketInfoGetter> bucketInfoGetter = ((HoodieSparkEngineContext) this.context)
         .getJavaSparkContext().broadcast(((SparkHoodiePartitioner) partitioner).getSparkBucketInfoGetter());
-    ReaderContextFactory<T> readerContextFactory = (ReaderContextFactory<T>) context.getReaderContextFactoryForWrite(
-        table.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps(), false);
     return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
-        return handleUpsertPartition(instantTime, partition, recordItr, bucketInfoGetter, readerContextFactory);
+        return handleUpsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
       } else {
-        return handleInsertPartition(instantTime, partition, recordItr, bucketInfoGetter, readerContextFactory);
+        return handleInsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
       }
     }, true).flatMap(List::iterator));
   }
@@ -345,15 +342,14 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Broadcast<SparkBucketInfoGetter> bucketInfoGetter,
-                                                              ReaderContextFactory<T> readerContextFactory) {
+                                                              Broadcast<SparkBucketInfoGetter> bucketInfoGetter) {
     BucketInfo binfo = bucketInfoGetter.getValue().getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
       if (btype.equals(BucketType.INSERT)) {
         return handleInsert(binfo.fileIdPrefix, recordItr);
       } else if (btype.equals(BucketType.UPDATE)) {
-        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr, readerContextFactory);
+        return handleUpdate(binfo.partitionPath, binfo.fileIdPrefix, recordItr);
       } else {
         throw new HoodieUpsertException("Unknown bucketType " + btype + " for partition :" + partition);
       }
@@ -365,15 +361,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   }
 
   protected Iterator<List<WriteStatus>> handleInsertPartition(String instantTime, Integer partition, Iterator recordItr,
-                                                              Broadcast<SparkBucketInfoGetter> bucketInfoGetter,
-                                                              ReaderContextFactory<T> readerContextFactory) {
-    return handleUpsertPartition(instantTime, partition, recordItr, bucketInfoGetter, readerContextFactory);
+                                                              Broadcast<SparkBucketInfoGetter> bucketInfoGetter) {
+    return handleUpsertPartition(instantTime, partition, recordItr, bucketInfoGetter);
   }
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Iterator<HoodieRecord<T>> recordItr,
-                                                  ReaderContextFactory<T> readerContextFactory)
+                                                  Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
@@ -388,13 +382,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     }
 
     // these are updates
-    HoodieMergeHandle mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr, readerContextFactory);
+    HoodieMergeHandle mergeHandle = getUpdateHandle(partitionPath, fileId, recordItr);
     return IOUtils.runMerge(mergeHandle, instantTime, fileId);
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, ReaderContextFactory<T> readerContextFactory) {
+  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-          taskContextSupplier, keyGeneratorOpt, readerContextFactory.getContext());
+          taskContextSupplier, keyGeneratorOpt);
     if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
       Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
       Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),

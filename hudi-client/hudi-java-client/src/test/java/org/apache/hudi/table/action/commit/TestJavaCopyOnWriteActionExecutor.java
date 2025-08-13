@@ -452,8 +452,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     taskContextSupplier.reset();
     final List<List<WriteStatus>> updateStatus = new ArrayList<>();
-    newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator(),
-            context.getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, config.getProps(), false))
+    newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator())
         .forEachRemaining(x -> updateStatus.add((List<WriteStatus>)x));
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }

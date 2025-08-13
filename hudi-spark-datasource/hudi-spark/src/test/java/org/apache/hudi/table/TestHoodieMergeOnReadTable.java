@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -901,10 +900,9 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       BaseSparkDeltaCommitActionExecutor actionExecutor = new SparkDeleteDeltaCommitActionExecutor(context(), cfg, hoodieTable,
           newDeleteTime, HoodieJavaRDD.of(deleteRDD));
       actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
-      ReaderContextFactory readerContextFactory = context().getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, cfg.getProps(), false);
       final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Arrays.asList(1))
           .map(x -> (Iterator<List<WriteStatus>>)
-              actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator(), readerContextFactory))
+              actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator()))
           .map(Transformations::flatten).collect();
 
       // Verify there are  errors because records are from multiple partitions (but handleUpdate is invoked for

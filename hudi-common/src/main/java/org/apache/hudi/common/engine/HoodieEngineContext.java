@@ -150,15 +150,15 @@ public abstract class HoodieEngineContext {
       String payloadClass = ConfigUtils.getPayloadClass(properties);
       return new AvroReaderContextFactory(metaClient, payloadClass, outputsCustomPayloads);
     }
-    return getDefaultContextFactory(metaClient);
+    return getEngineReaderContextFactory(metaClient);
   }
 
   /**
-   * Returns default reader context factory for the engine.
+   * Returns reader context factory specific for the engine.
    *
-   * @param metaClient          Table metadata client
+   * @param metaClient Table metadata client
    */
-  public abstract ReaderContextFactory<?> getDefaultContextFactory(HoodieTableMetaClient metaClient);
+  public abstract ReaderContextFactory<?> getEngineReaderContextFactory(HoodieTableMetaClient metaClient);
 
   /**
    * Groups values by key and applies a processing function to each group.

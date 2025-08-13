@@ -60,8 +60,7 @@ public class HoodieMergeHandleFactory {
       String partitionPath,
       String fileId,
       TaskContextSupplier taskContextSupplier,
-      Option<BaseKeyGenerator> keyGeneratorOpt,
-      HoodieReaderContext<T> readerContext) {
+      Option<BaseKeyGenerator> keyGeneratorOpt) {
 
     boolean isFallbackEnabled = writeConfig.isMergeHandleFallbackEnabled();
     Pair<String, String> mergeHandleClasses = getMergeHandleClassesWrite(operationType, writeConfig, table);
@@ -70,25 +69,12 @@ public class HoodieMergeHandleFactory {
 
     Class<?>[] constructorParamTypes = new Class<?>[] {
         HoodieWriteConfig.class, String.class, HoodieTable.class, Iterator.class,
-        String.class, String.class, TaskContextSupplier.class, Option.class, HoodieReaderContext.class
-    };
-
-    Class<?>[] legacyConstructorParamTypes = new Class<?>[] {
-        HoodieWriteConfig.class, String.class, HoodieTable.class, Iterator.class,
         String.class, String.class, TaskContextSupplier.class, Option.class
     };
 
-    try {
-      return instantiateMergeHandle(
-          isFallbackEnabled, mergeHandleClasses.getLeft(), mergeHandleClasses.getRight(), logContext, constructorParamTypes,
-          writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt, readerContext);
-    } catch (Exception e) {
-      // Fallback to legacy constructor if the new one fails
-      LOG.warn("Failed to instantiate HoodieMergeHandle with new constructor, falling back to legacy constructor: {}", e.getMessage());
-      return instantiateMergeHandle(
-          isFallbackEnabled, mergeHandleClasses.getLeft(), mergeHandleClasses.getRight(), logContext, legacyConstructorParamTypes,
-          writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    }
+    return instantiateMergeHandle(
+        isFallbackEnabled, mergeHandleClasses.getLeft(), mergeHandleClasses.getRight(), logContext, constructorParamTypes,
+        writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
   }
 
   /**

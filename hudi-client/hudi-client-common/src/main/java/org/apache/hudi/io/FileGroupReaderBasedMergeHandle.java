@@ -96,6 +96,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   /**
    * Constructor for Copy-On-Write (COW) merge path.
    * Takes in a base path and an iterator of records to be merged with that file.
+   *
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @param instantTime instant time of the current commit.
    * @param hoodieTable instance of {@link HoodieTable} being updated.
@@ -108,10 +109,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    */
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                         TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieReaderContext<T> readerContext) {
+                                         TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     this.operation = Option.empty();
-    this.readerContext = readerContext;
+    this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.readerContext.initRecordMergerForIngestion(properties);
@@ -124,12 +125,12 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   /**
    * Constructor used for Compaction flows.
    * Take in a base path and list of log files, to merge them together to produce a new base file.
+   *
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @param instantTime instant time of interest.
    * @param hoodieTable instance of {@link HoodieTable} to use.
    * @param operation compaction operation containing info about base and log files.
    * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
-   * @param readerContext instance of {@link HoodieReaderContext} to use while merging.
    * @param maxInstantTime max instant time to use.
    * @param enginRecordType engine record type.
    */

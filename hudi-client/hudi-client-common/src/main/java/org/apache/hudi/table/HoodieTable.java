@@ -38,6 +38,7 @@ import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
@@ -150,6 +151,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
+  private final ReaderContextFactory<T> readerContextFactoryForWrite;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
@@ -161,6 +163,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
     this.taskContextSupplier = context.getTaskContextSupplier();
+    this.readerContextFactoryForWrite = createReaderContextFactoryForWrite(context, metaClient, config);
   }
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
@@ -174,6 +177,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = viewManager;
     this.metaClient = metaClient;
     this.taskContextSupplier = supplier;
+    this.readerContextFactoryForWrite = createReaderContextFactoryForWrite(context, metaClient, config);
   }
 
   public boolean isMetadataTable() {
@@ -1279,5 +1283,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       return Collections.emptySet();
     }
     return new HashSet<>(Arrays.asList(partitionFields.get()));
+  }
+
+  private ReaderContextFactory<T> createReaderContextFactoryForWrite(HoodieEngineContext context, HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig) {
+    return (ReaderContextFactory<T>) context.getReaderContextFactoryForWrite(metaClient, writeConfig.getRecordMerger().getRecordType(),
+        writeConfig.getProps(), false);
+  }
+
+  public ReaderContextFactory<T> getReaderContextFactoryForWrite() {
+    return readerContextFactoryForWrite;
   }
 }
