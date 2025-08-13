@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.OrderingValues;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.common.table.read.BufferedRecords.getOrderingValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -37,14 +36,14 @@ class TestBufferedRecords {
     RecordContext recordContext = mock(RecordContext.class);
     DeleteRecord deleteRecord = mock(DeleteRecord.class);
     mockDeleteRecord(deleteRecord, null);
-    assertEquals(OrderingValues.getDefault(), getOrderingValue(recordContext, deleteRecord));
+    assertEquals(OrderingValues.getDefault(), recordContext.getOrderingValue(deleteRecord));
     mockDeleteRecord(deleteRecord, OrderingValues.getDefault());
-    assertEquals(OrderingValues.getDefault(), getOrderingValue(recordContext, deleteRecord));
+    assertEquals(OrderingValues.getDefault(), recordContext.getOrderingValue(deleteRecord));
     Comparable orderingValue = "xyz";
     Comparable convertedValue = "_xyz";
     mockDeleteRecord(deleteRecord, orderingValue);
     when(recordContext.convertOrderingValueToEngineType(orderingValue)).thenReturn(convertedValue);
-    assertEquals(convertedValue, getOrderingValue(recordContext, deleteRecord));
+    assertEquals(convertedValue, recordContext.getOrderingValue(deleteRecord));
   }
 
   private void mockDeleteRecord(DeleteRecord deleteRecord,

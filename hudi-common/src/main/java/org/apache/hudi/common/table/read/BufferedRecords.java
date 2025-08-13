@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 
@@ -67,12 +66,12 @@ public class BufferedRecords {
   }
 
   public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, RecordContext<T> recordContext) {
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), getOrderingValue(recordContext, deleteRecord), null, null, HoodieOperation.DELETE);
+    return new BufferedRecord<>(deleteRecord.getRecordKey(), recordContext.getOrderingValue(deleteRecord), null, null, HoodieOperation.DELETE);
   }
 
   public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, RecordContext<T> recordContext, HoodieOperation hoodieOperation) {
     hoodieOperation = HoodieOperation.isUpdateBefore(hoodieOperation) ? HoodieOperation.UPDATE_BEFORE : HoodieOperation.DELETE;
-    return new BufferedRecord<>(deleteRecord.getRecordKey(), getOrderingValue(recordContext, deleteRecord), null, null, hoodieOperation);
+    return new BufferedRecord<>(deleteRecord.getRecordKey(), recordContext.getOrderingValue(deleteRecord), null, null, hoodieOperation);
   }
 
   public static <T> BufferedRecord<T> createDelete(String recordKey) {
@@ -90,16 +89,5 @@ public class BufferedRecords {
    */
   public static HoodieOperation inferOperation(boolean isDelete, HoodieOperation operation) {
     return isDelete ? HoodieOperation.isUpdateBefore(operation) ? operation : HoodieOperation.DELETE : operation;
-  }
-
-  private static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
-    return orderingValue == null || OrderingValues.isDefault(orderingValue);
-  }
-
-  static <T> Comparable getOrderingValue(RecordContext<T> readerContext, DeleteRecord deleteRecord) {
-    Comparable orderingValue = deleteRecord.getOrderingValue();
-    return isCommitTimeOrderingValue(orderingValue)
-        ? OrderingValues.getDefault()
-        : readerContext.convertOrderingValueToEngineType(orderingValue);
   }
 }

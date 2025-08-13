@@ -122,8 +122,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         partitionPath,
         fileId,
         bucketType,
-        recordItr,
-        (ReaderContextFactory<T>) context.getReaderContextFactoryForWrite(table.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps(), false))
+        recordItr)
         .forEachRemaining(writeStatuses::addAll);
     setUpWriteMetadata(writeStatuses, result);
     return result;
@@ -158,8 +157,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
       String partitionPath,
       String fileIdHint,
       BucketType bucketType,
-      Iterator recordItr,
-      ReaderContextFactory<T> readerContextFactory) {
+      Iterator recordItr) {
     try {
       if (this.writeHandle instanceof HoodieCreateHandle) {
         // During one checkpoint interval, an insert record could also be updated,
@@ -171,13 +169,13 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         // and append instead of UPDATE.
         return handleInsert(fileIdHint, recordItr);
       } else if (this.writeHandle instanceof HoodieWriteMergeHandle) {
-        return handleUpdate(partitionPath, fileIdHint, recordItr, readerContextFactory);
+        return handleUpdate(partitionPath, fileIdHint, recordItr, null);
       } else {
         switch (bucketType) {
           case INSERT:
             return handleInsert(fileIdHint, recordItr);
           case UPDATE:
-            return handleUpdate(partitionPath, fileIdHint, recordItr, readerContextFactory);
+            return handleUpdate(partitionPath, fileIdHint, recordItr, null);
           default:
             throw new AssertionError();
         }
@@ -210,7 +208,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");
-      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+      return Collections.singletonList(Collections.<WriteStatus>emptyList()).iterator();
     }
     return new FlinkLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
         taskContextSupplier, new ExplicitWriteHandleFactory<>(writeHandle));

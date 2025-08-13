@@ -20,6 +20,7 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -48,6 +49,7 @@ import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.util.OrderingValues.isCommitTimeOrderingValue;
 
 /**
  * Record context provides the APIs for record related operations. Record context is associated with
@@ -330,6 +332,20 @@ public abstract class RecordContext<T> implements Serializable {
       // API getDefaultOrderingValue is only used inside Comparables constructor
       return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
     });
+  }
+
+  /**
+   * Gets the ordering value from given delete record.
+   *
+   * @param deleteRecord The delete record
+   *
+   * @return The ordering value.
+   */
+  public Comparable getOrderingValue(DeleteRecord deleteRecord) {
+    Comparable orderingValue = deleteRecord.getOrderingValue();
+    return isCommitTimeOrderingValue(orderingValue)
+        ? OrderingValues.getDefault()
+        : convertOrderingValueToEngineType(orderingValue);
   }
 
   /**
