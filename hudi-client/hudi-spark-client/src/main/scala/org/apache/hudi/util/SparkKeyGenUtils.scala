@@ -52,8 +52,7 @@ object SparkKeyGenUtils {
    * @return partition column names only, concatenated by ","
    */
   def getPartitionColumns(KeyGenClassNameOption: Option[String], props: TypedProperties): String = {
-    val keyGenerator = if (KeyGenClassNameOption.isEmpty
-      || KeyGeneratorType.USER_PROVIDED.getClassName.equals(KeyGenClassNameOption.get)) {
+    val keyGenerator = if (KeyGenClassNameOption.isEmpty) {
       HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
     } else {
       HoodieSparkKeyGeneratorFactory.createKeyGenerator(KeyGenClassNameOption.get, props)

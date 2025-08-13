@@ -36,6 +36,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * in other ways.
  */
 public class MockUserProvidedKeyGenerator extends BuiltinKeyGenerator {
+  private static final String PREFIX = "MOCK_";
 
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
@@ -61,12 +62,12 @@ public class MockUserProvidedKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return simpleAvroKeyGenerator.getRecordKey(record);
+    return PREFIX + simpleAvroKeyGenerator.getRecordKey(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return simpleAvroKeyGenerator.getPartitionPath(record);
+    return PREFIX + simpleAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override
