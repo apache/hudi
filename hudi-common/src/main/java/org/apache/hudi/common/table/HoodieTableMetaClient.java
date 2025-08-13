@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.InstantFileNameParser;
@@ -1562,7 +1563,11 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.URL_ENCODE_PARTITIONING, Boolean.toString(urlEncodePartitioning));
       }
       if (null != commitTimeZone) {
+        // check either TIMELINE_TIMEZONE is not present or it is same as the one being set
+        checkState(!tableConfig.contains(HoodieTableConfig.TIMELINE_TIMEZONE) || commitTimeZone.equals(HoodieTimelineTimeZone.valueOf(tableConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE))),
+            "Commit timezone is already set to " + tableConfig.getString(HoodieTableConfig.TIMELINE_TIMEZONE));
         tableConfig.setValue(HoodieTableConfig.TIMELINE_TIMEZONE, commitTimeZone.toString());
+        HoodieInstantTimeGenerator.setCommitTimeZone(commitTimeZone);
       }
       if (null != partitionMetafileUseBaseFormat) {
         tableConfig.setValue(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT, partitionMetafileUseBaseFormat.toString());

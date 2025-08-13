@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
@@ -62,7 +63,7 @@ public class HoodieInstantTimeGenerator {
   // when performing comparisons such as LESS_THAN_OR_EQUAL_TO
   public static final String DEFAULT_MILLIS_EXT = "999";
 
-  private static HoodieTimelineTimeZone commitTimeZone = HoodieTimelineTimeZone.LOCAL;
+  private static HoodieTimelineTimeZone commitTimeZone = HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue();
 
   /**
    * Returns next instant time in the correct format.
