@@ -126,7 +126,6 @@ public class IOUtils {
       LOG.info("Upsert Handle has partition path as null " + mergeHandle.getOldFilePath() + ", " + mergeHandle.getWriteStatuses());
     }
 
-    mergeHandle.close();
-    return Collections.singletonList(mergeHandle.getWriteStatuses()).iterator();
+    return Collections.singletonList(mergeHandle.close()).iterator();
   }
 }
