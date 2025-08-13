@@ -169,7 +169,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     AtomicInteger finalCounter1 = counter;
     minMaxValues.forEach(entry -> {
       columnRangeMetadata.add(HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColNamePrefix + "_" + (finalCounter1.getAndIncrement()),
-          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456));
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
     });
 
     // create mdt records
@@ -320,24 +320,34 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     long totalUncompressedSize = 1000;
 
     // Integer vals
-    HoodieColumnRangeMetadata aIntegerVal = HoodieColumnRangeMetadata.create(fileName, colName, (Integer)1, (Integer)1000, nullCount, valueCount, totalSize, totalUncompressedSize);
-    HoodieColumnRangeMetadata bIntegerVal = HoodieColumnRangeMetadata.create(fileName, colName, (Integer)(-1), (Integer)10000, nullCount, valueCount, totalSize, totalUncompressedSize);
+    HoodieColumnRangeMetadata aIntegerVal = HoodieColumnRangeMetadata.create(fileName, colName, (Integer)1, (Integer)1000, nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+    HoodieColumnRangeMetadata bIntegerVal = HoodieColumnRangeMetadata.create(fileName, colName, (Integer)(-1), (Integer)10000, nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     // Long vals
-    HoodieColumnRangeMetadata aLongVal = HoodieColumnRangeMetadata.create(fileName, colName, (Long)1L, (Long)1000L, nullCount, valueCount, totalSize, totalUncompressedSize);
-    HoodieColumnRangeMetadata bLongVal = HoodieColumnRangeMetadata.create(fileName, colName, (Long)(-1L), (Long)10000L, nullCount, valueCount, totalSize, totalUncompressedSize);
+    HoodieColumnRangeMetadata aLongVal = HoodieColumnRangeMetadata.create(fileName, colName, (Long)1L, (Long)1000L, nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+    HoodieColumnRangeMetadata bLongVal = HoodieColumnRangeMetadata.create(fileName, colName, (Long)(-1L), (Long)10000L, nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     // Float vals
-    HoodieColumnRangeMetadata aFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, new Float(1), new Float(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize);
-    HoodieColumnRangeMetadata bFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, new Float(-1.0), new Float(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize);
+    HoodieColumnRangeMetadata aFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, new Float(1), new Float(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+    HoodieColumnRangeMetadata bFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, new Float(-1.0), new Float(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     // Double vals
-    HoodieColumnRangeMetadata aDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, new Double(0.1), new Double(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize);
-    HoodieColumnRangeMetadata bDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, new Double(-1.0), new Double(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize);
+    HoodieColumnRangeMetadata aDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, new Double(0.1), new Double(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+    HoodieColumnRangeMetadata bDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, new Double(-1.0), new Double(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     // String vals
-    HoodieColumnRangeMetadata aStringVal = HoodieColumnRangeMetadata.create(fileName, colName, new String("1"), new String("1000"), nullCount, valueCount, totalSize, totalUncompressedSize);
-    HoodieColumnRangeMetadata bStringVal = HoodieColumnRangeMetadata.create(fileName, colName, new String("-1"), new String("10000"), nullCount, valueCount, totalSize, totalUncompressedSize);
+    HoodieColumnRangeMetadata aStringVal = HoodieColumnRangeMetadata.create(fileName, colName, new String("1"), new String("1000"), nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+    HoodieColumnRangeMetadata bStringVal = HoodieColumnRangeMetadata.create(fileName, colName, new String("-1"), new String("10000"), nullCount, valueCount, totalSize, totalUncompressedSize,
+        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     // Merging Integer and Integer.
     HoodieColumnRangeMetadata actualColumnRange = mergeAndAssert(aIntegerVal, bIntegerVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize,
@@ -473,7 +483,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
     minMaxValues.forEach(entry -> {
       columnRangeMetadata.add(HoodieColumnRangeMetadata.<Comparable>create(fileName, colName,
-          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456));
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
     });
 
     HoodieColumnRangeMetadata<Comparable> mergedColStatsRangeMetadata = (HoodieColumnRangeMetadata<Comparable>) columnRangeMetadata.stream()

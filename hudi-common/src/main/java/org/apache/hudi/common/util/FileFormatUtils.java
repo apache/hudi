@@ -91,7 +91,7 @@ public abstract class FileFormatUtils {
     return fileColumnRanges.stream()
         .map(e -> HoodieColumnRangeMetadata.create(
             relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
-            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize()))
+            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize(), e.getValueMetadata()))
         .reduce((a,b) -> {
           if (colsWithSchemaEvolved.isEmpty() || colsToIndexSchemaMap.isEmpty()
               || a.getMinValue() == null || a.getMaxValue() == null || b.getMinValue() == null || b.getMaxValue() == null
@@ -100,14 +100,15 @@ public abstract class FileFormatUtils {
           } else {
             // schema is evolving for the column of interest.
             Schema schema = colsToIndexSchemaMap.get(a.getColumnName());
+            HoodieColumnRangeMetadata.ValueMetadata valueMetadata = HoodieColumnRangeMetadata.getValueMetadata(schema);
             HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),
-                a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize());
+                a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize(), valueMetadata);
             HoodieColumnRangeMetadata<T> right = HoodieColumnRangeMetadata.create(b.getFilePath(), b.getColumnName(),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMinValue()),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMaxValue()), b.getNullCount(),
-                b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize());
+                b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize(), valueMetadata);
             return HoodieColumnRangeMetadata.merge(left, right);
           }
         }).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));

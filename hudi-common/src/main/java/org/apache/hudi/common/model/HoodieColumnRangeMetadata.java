@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
 import org.apache.hudi.common.util.ValidationUtils;
 
-import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
@@ -250,7 +249,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return NoneMetadata.INSTANCE;
     }
 
-    ValueType valueType = ValueType.fromLogicalType(fieldSchema.getLogicalType());
+    ValueType valueType = ValueType.fromSchema(fieldSchema);
     if (valueType == ValueType.NONE) {
       return NoneMetadata.INSTANCE;
     } else if (valueType == ValueType.DECIMAL) {
@@ -334,6 +333,23 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
 
   public enum ValueType {
     NONE,
+    // primitive types
+    NULL,
+    BOOLEAN,
+    INT,
+    LONG,
+    FLOAT,
+    DOUBLE,
+    BYTES,
+    STRING,
+    // complex types
+    RECORD,
+    ENUM,
+    ARRAY,
+    MAP,
+    UNION, // maybe get rid of this
+    FIXED,
+    // logical types
     DECIMAL,
     UUID,
     DATE,
@@ -356,35 +372,69 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return ValueType.myEnumValues[i];
     }
 
-    public static ValueType fromLogicalType(LogicalType logicalType) {
-      if (logicalType == null) {
-        return ValueType.NONE;
-      } else if (logicalType instanceof LogicalTypes.Decimal) {
-        return ValueType.DECIMAL;
-      } else if (Objects.equals(logicalType.getName(), LogicalTypes.uuid().getName())) {
-        return ValueType.UUID;
-      } else if (logicalType instanceof LogicalTypes.Date) {
-        return ValueType.DATE;
-      } else if (logicalType instanceof LogicalTypes.TimeMillis) {
-        return ValueType.TIME_MILLIS;
-      } else if (logicalType instanceof LogicalTypes.TimeMicros) {
-        return ValueType.TIME_MICROS;
-      } else if (logicalType instanceof LogicalTypes.TimestampMillis) {
-        return ValueType.TIMESTAMP_MILLIS;
-      } else if (logicalType instanceof LogicalTypes.TimestampMicros) {
-        return ValueType.TIMESTAMP_MICROS;
-//      } else if (logicalType instanceof LogicalTypes.TimestampNanos) {
-//        return ValueType.TIMESTAMP_NANOS;
-      } else if (logicalType instanceof LogicalTypes.LocalTimestampMillis) {
-        return ValueType.LOCAL_TIMESTAMP_MILLIS;
-      } else if (logicalType instanceof LogicalTypes.LocalTimestampMicros) {
-        return ValueType.LOCAL_TIMESTAMP_MICROS;
-//      } else if (logicalType instanceof LogicalTypes.LocalTimestampNanos) {
-//        return ValueType.LOCAL_TIMESTAMP_NANOS;
-//      } else if (logicalType instanceof LogicalTypes.Duration) {
-//        return ValueType.DURATION;
+    public static ValueType fromSchema(Schema schema) {
+      switch (schema.getType()) {
+        case NULL:
+          if (schema.getLogicalType() == null) {
+            return ValueType.NULL;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Null: " + schema.getLogicalType());
+        case BOOLEAN:
+          if (schema.getLogicalType() == null) {
+            return ValueType.BOOLEAN;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Boolean: " + schema.getLogicalType());
+        case INT:
+          if (schema.getLogicalType() == null) {
+            return ValueType.INT;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.Date) {
+            return ValueType.DATE;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.TimeMillis) {
+            return ValueType.TIME_MILLIS;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Int: " + schema.getLogicalType());
+        case LONG:
+          if (schema.getLogicalType() == null) {
+            return ValueType.LONG;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.TimeMicros) {
+            return ValueType.TIME_MICROS;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+            return ValueType.TIMESTAMP_MILLIS;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+            return ValueType.TIMESTAMP_MICROS;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+            return ValueType.LOCAL_TIMESTAMP_MILLIS;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+            return ValueType.LOCAL_TIMESTAMP_MICROS;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Long: " + schema.getLogicalType());
+        case FLOAT:
+          if (schema.getLogicalType() == null) {
+            return ValueType.FLOAT;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Float: " + schema.getLogicalType());
+        case DOUBLE:
+          if (schema.getLogicalType() == null) {
+            return ValueType.DOUBLE;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Double: " + schema.getLogicalType());
+        case BYTES:
+          if (schema.getLogicalType() == null) {
+            return ValueType.BYTES;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+            return ValueType.DECIMAL;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Bytes: " + schema.getLogicalType());
+        case STRING:
+          if (schema.getLogicalType() == null) {
+            return ValueType.STRING;
+          } else if (Objects.equals(schema.getLogicalType().getName(), LogicalTypes.uuid().getName())) {
+            return ValueType.UUID;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for String: " + schema.getLogicalType());
+        default:
+          return ValueType.NONE;
       }
-      return ValueType.NONE;
     }
   }
 }

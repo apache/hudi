@@ -293,7 +293,7 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
     String targetColName = "c1";
 
     HoodieColumnRangeMetadata<Comparable> columnStatsRecord =
-        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 500, 0, 100, 12345, 12345);
+        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 500, 0, 100, 12345, 12345, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     HoodieRecord<HoodieMetadataPayload> hoodieMetadataPayload =
         HoodieMetadataPayload.createColumnStatsRecords(partitionPath, Collections.singletonList(columnStatsRecord), false)

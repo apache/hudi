@@ -25,6 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -231,12 +232,13 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     List<Pair<String, BloomIndexFileInfo>> result = new ArrayList<>(fileToColumnStatsMap.size());
 
     for (Map.Entry<Pair<String, String>, HoodieMetadataColumnStats> entry : fileToColumnStatsMap.entrySet()) {
+      HoodieColumnRangeMetadata.ValueMetadata valueMetadata = HoodieColumnRangeMetadata.getValueMetadata(entry.getValue().getValueType());
       result.add(Pair.of(entry.getKey().getLeft(),
           new BloomIndexFileInfo(
               partitionAndFileNameToFileId.get(entry.getKey()),
               // NOTE: Here we assume that the type of the primary key field is string
-              unwrapAvroValueWrapper(entry.getValue().getMinValue(), entry.getValue().getValueType()).toString(),
-              unwrapAvroValueWrapper(entry.getValue().getMaxValue(), entry.getValue().getValueType()).toString()
+              unwrapAvroValueWrapper(entry.getValue().getMinValue(), valueMetadata).toString(),
+              unwrapAvroValueWrapper(entry.getValue().getMaxValue(), valueMetadata).toString()
           )));
     }
 

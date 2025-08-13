@@ -141,7 +141,7 @@ public class TestHoodieWriteStat {
     minMaxValues.forEach(entry -> {
       String colName = targetColNamePrefix + "_" + (finalCounter1.getAndIncrement());
       columnRangeMetadataMap.put(colName, HoodieColumnRangeMetadata.<Comparable>create(fileName, colName,
-          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456));
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
     });
 
     Map<String, HoodieColumnRangeMetadata<Comparable>> clonedInput = new HashMap<>();

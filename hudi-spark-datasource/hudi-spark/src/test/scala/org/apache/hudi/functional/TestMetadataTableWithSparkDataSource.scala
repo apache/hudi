@@ -166,8 +166,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     assertEquals(metadataColStats.getValueCount, columnRangeMetadata.getValueCount)
     assertEquals(metadataColStats.getTotalSize, columnRangeMetadata.getTotalSize)
-    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMaxValue), columnRangeMetadata.getMaxValue)
-    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMinValue), columnRangeMetadata.getMinValue)
+    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMaxValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE), columnRangeMetadata.getMaxValue)
+    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMinValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE), columnRangeMetadata.getMinValue)
     assertEquals(metadataColStats.getFileName, fileName)
   }
 
@@ -224,8 +224,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     assertEquals(metadataColStats.getValueCount, columnRangeMetadata.getValueCount)
     assertEquals(metadataColStats.getTotalSize, columnRangeMetadata.getTotalSize)
-    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMaxValue), columnRangeMetadata.getMaxValue)
-    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMinValue), columnRangeMetadata.getMinValue)
+    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMaxValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE), columnRangeMetadata.getMaxValue)
+    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMinValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE), columnRangeMetadata.getMinValue)
     assertEquals(metadataColStats.getFileName, fileName)
   }
 

@@ -300,12 +300,11 @@ public class SparkMetadataWriterUtils {
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
       Option<Schema> schemaToIndexOpt = AvroSchemaUtils.findNestedFieldSchema(readerSchema, columnToIndex);
       if (schemaToIndexOpt.isEmpty()) {
-          throw new HoodieMetadataException("Failed to find schema for column " + columnToIndex);
+        throw new HoodieMetadataException("Failed to find schema for column " + columnToIndex);
       }
       return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex,schemaToIndexOpt.get(), partitionRecordsFunctionOpt);
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-      return getExpressionIndexRecordsUsingBloomFilter(
-          rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
+      return getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
     } else {
       throw new UnsupportedOperationException(indexDefinition.getIndexType() + " is not yet supported");
     }
