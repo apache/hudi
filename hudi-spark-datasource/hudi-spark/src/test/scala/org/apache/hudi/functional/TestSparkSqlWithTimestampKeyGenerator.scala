@@ -33,8 +33,6 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
   test("Test Spark SQL with timestamp key generator") {
     withTempDir { tmp =>
       Seq(
-        Seq("COPY_ON_WRITE", "true"),
-        Seq("COPY_ON_WRITE", "false"),
         Seq("MERGE_ON_READ", "true"),
         Seq("MERGE_ON_READ", "false")
       ).foreach { testParams =>

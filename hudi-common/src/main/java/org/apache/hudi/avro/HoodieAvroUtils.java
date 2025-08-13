@@ -1456,15 +1456,10 @@ public class HoodieAvroUtils {
     if (schema.getLogicalType() != null) {
       return true;
     }
-    switch (schema.getType()) {
-      case BYTES:
-      case FIXED:
-        return true;
-      case ENUM:
-        return !isEnum;
-      default:
-        return false;
+    if (schema.getType() == Schema.Type.ENUM) {
+      return !isEnum;
     }
+    return true;
   }
 
   /**
