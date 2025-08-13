@@ -140,7 +140,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Override
   public void commitToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
-    conf.set(FlinkOptions.PRECOMBINE_FIELD, writeConfigs.get("hoodie.datasource.write.precombine.field"));
+    conf.set(FlinkOptions.PRECOMBINE_FIELDS, writeConfigs.get("hoodie.datasource.write.precombine.fields"));
     conf.set(FlinkOptions.OPERATION, operation);
     Schema localSchema = getRecordAvroSchema(schemaStr);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());

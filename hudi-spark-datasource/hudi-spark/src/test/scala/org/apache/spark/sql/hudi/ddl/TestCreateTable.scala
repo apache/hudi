@@ -1448,7 +1448,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  hoodie.table.recordkey.fields ='id',
              |  hoodie.table.type = '$tableType',
-             |  hoodie.table.precombine.field = 'ts'
+             |  hoodie.table.precombine.fields = 'ts'
              | )
        """.stripMargin)
         val hoodieCatalogTable = HoodieCatalogTable(spark, TableIdentifier(tableName))

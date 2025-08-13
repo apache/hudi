@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
-import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{ConfigUtils, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory
 
 import java.util.Locale
 
+import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -190,8 +191,8 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineField = combinedOpts.getOrElse(HoodieTableConfig.PRECOMBINE_FIELDS.key,
-      combinedOpts.getOrElse(PRECOMBINE_FIELD.key, ""))
+    val preCombineField = Option.apply(ConfigUtils.getStringWithAltKeys(JavaConverters.mapAsJavaMap(combinedOpts), HoodieTableConfig.PRECOMBINE_FIELDS))
+      .getOrElse(combinedOpts.getOrElse(PRECOMBINE_FIELD.key, ""))
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")

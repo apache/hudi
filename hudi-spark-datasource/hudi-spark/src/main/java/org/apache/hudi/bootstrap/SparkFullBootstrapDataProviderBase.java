@@ -72,7 +72,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
     HoodieRecordType recordType =  config.getRecordMerger().getRecordType();
     Dataset inputDataset = sparkSession.read().format(getFormat()).option("basePath", sourceBasePath).load(filePaths);
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-    String precombineKey = props.getString("hoodie.datasource.write.precombine.field");
+    String precombineKey = props.getString("hoodie.datasource.write.precombine.fields");
     String structName = tableName + "_record";
     String namespace = "hoodie." + tableName;
     if (recordType == HoodieRecordType.AVRO) {

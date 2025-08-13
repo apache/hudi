@@ -181,7 +181,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     if (preCombineFields != null) {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, preCombineFields);
       props.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), preCombineFields);
-      props.setProperty("hoodie.datasource.write.precombine.field", preCombineFields);
+      props.setProperty("hoodie.datasource.write.precombine.fields", preCombineFields);
     }
     this.tableVersion = tableConfig.getTableVersion();
     this.payloadProps = props;

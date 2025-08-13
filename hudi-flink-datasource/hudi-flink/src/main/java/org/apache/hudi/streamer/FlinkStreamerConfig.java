@@ -114,9 +114,10 @@ public class FlinkStreamerConfig extends Configuration {
       + "By default `SIMPLE`.")
   public String keygenType = KeyGeneratorType.SIMPLE.name();
 
-  @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
-      + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record.")
-  public String sourceOrderingField = "ts";
+  @Parameter(names = {"--source-ordering-fields", "--source-ordering-field"}, description = "Field within source record to decide how"
+      + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record. "
+      + "Option --source-ordering-field is deprecated, please use --source-ordering-fields instead.")
+  public String sourceOrderingFields = "ts";
 
   @Parameter(names = {"--write-table-version"}, description = "Version of table written")
   public Integer writeTableVersion = HoodieTableVersion.current().versionCode();
@@ -425,7 +426,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.set(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());
     conf.set(FlinkOptions.INSERT_CLUSTER, config.insertCluster);
     conf.set(FlinkOptions.OPERATION, config.operation.value());
-    conf.set(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
+    conf.set(FlinkOptions.PRECOMBINE_FIELDS, config.sourceOrderingFields);
     conf.set(FlinkOptions.WRITE_TABLE_VERSION, config.writeTableVersion);
     conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
     conf.set(FlinkOptions.RECORD_MERGER_IMPLS, config.recordMergerImpls);

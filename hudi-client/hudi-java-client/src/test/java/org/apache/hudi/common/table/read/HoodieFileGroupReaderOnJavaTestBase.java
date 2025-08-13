@@ -89,7 +89,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
             .setKeyGeneratorType(KeyGeneratorType.SIMPLE.name())
             .setRecordKeyFields(writeConfigs.get(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()))
             .setPartitionFields(writeConfigs.get(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
-            .setPreCombineFields(writeConfigs.get("hoodie.datasource.write.precombine.field"))
+            .setPreCombineFields(writeConfigs.get("hoodie.datasource.write.precombine.fields"))
             .setBaseFileFormat(writeConfigs.get(HoodieTableConfig.BASE_FILE_FORMAT.key()))
             .set(initConfigs);
         if (writeConfigs.containsKey("hoodie.datasource.write.payload.class")) {

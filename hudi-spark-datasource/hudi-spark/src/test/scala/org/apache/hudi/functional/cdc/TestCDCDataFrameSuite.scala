@@ -649,7 +649,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val options = Map(
       "hoodie.table.name" -> "test",
       "hoodie.datasource.write.recordkey.field" -> "id",
-      "hoodie.datasource.write.precombine.field" -> "replicadmstimestamp",
+      "hoodie.datasource.write.precombine.fields" -> "replicadmstimestamp",
       "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
       "hoodie.datasource.write.partitionpath.field" -> "",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
@@ -708,7 +708,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       "hoodie.bulkinsert.shuffle.parallelism" -> "2",
       "hoodie.delete.shuffle.parallelism" -> "1",
       "hoodie.datasource.write.recordkey.field" -> "_row_key",
-      "hoodie.datasource.write.precombine.field" -> "timestamp",
+      "hoodie.datasource.write.precombine.fields" -> "timestamp",
       "hoodie.table.name" -> ("hoodie_test" + loggingMode.name()),
       "hoodie.clean.automatic" -> "true",
       "hoodie.clean.commits.retained" -> "1"

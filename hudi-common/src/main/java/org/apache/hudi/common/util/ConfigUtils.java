@@ -83,10 +83,12 @@ public class ConfigUtils {
   @Nullable
   public static String[] getOrderingFields(Properties properties) {
     String orderField = null;
-    if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+    if (properties.containsKey("hoodie.datasource.write.precombine.fields")) {
+      orderField = properties.getProperty("hoodie.datasource.write.precombine.fields");
+    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
       orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
-    } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELDS.key())) {
-      orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key());
+    } else if (containsConfigProperty(properties, HoodieTableConfig.PRECOMBINE_FIELDS)) {
+      orderField = getStringWithAltKeys(properties, HoodieTableConfig.PRECOMBINE_FIELDS);
     } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
@@ -102,7 +104,7 @@ public class ConfigUtils {
     String orderingFieldsAsString = String.join(",", orderingFields);
     props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
     props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELDS.key(), orderingFieldsAsString);
-    props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingFieldsAsString);
+    props.putIfAbsent("hoodie.datasource.write.precombine.fields", orderingFieldsAsString);
     return props;
   }
 
@@ -450,8 +452,8 @@ public class ConfigUtils {
    * and there is default value defined in the {@link ConfigProperty} config and is convertible to
    * String type; {@code null} otherwise.
    */
-  public static String getStringWithAltKeys(Map<String, Object> props,
-                                            ConfigProperty<?> configProperty) {
+  public static <V> String getStringWithAltKeys(Map<String, V> props,
+                                                ConfigProperty<?> configProperty) {
     return getStringWithAltKeys(props::get, configProperty);
   }
 

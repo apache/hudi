@@ -90,13 +90,13 @@ public class TableOptionProperties {
 
     KEY_MAPPING.put("type", FlinkOptions.TABLE_TYPE.key());
     KEY_MAPPING.put("primaryKey", FlinkOptions.RECORD_KEY_FIELD.key());
-    KEY_MAPPING.put("preCombineField", FlinkOptions.PRECOMBINE_FIELD.key());
+    KEY_MAPPING.put("preCombineField", FlinkOptions.PRECOMBINE_FIELDS.key());
     KEY_MAPPING.put("payloadClass", FlinkOptions.PAYLOAD_CLASS_NAME.key());
     KEY_MAPPING.put(SPARK_SOURCE_PROVIDER, CONNECTOR.key());
     KEY_MAPPING.put(FlinkOptions.KEYGEN_CLASS_NAME.key(), FlinkOptions.KEYGEN_CLASS_NAME.key());
     KEY_MAPPING.put(FlinkOptions.TABLE_TYPE.key(), "type");
     KEY_MAPPING.put(FlinkOptions.RECORD_KEY_FIELD.key(), "primaryKey");
-    KEY_MAPPING.put(FlinkOptions.PRECOMBINE_FIELD.key(), "preCombineField");
+    KEY_MAPPING.put(FlinkOptions.PRECOMBINE_FIELDS.key(), "preCombineField");
     KEY_MAPPING.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), "payloadClass");
   }
 

@@ -35,7 +35,7 @@ class ExamplePySpark:
             'hoodie.datasource.write.recordkey.field': 'uuid',
             'hoodie.datasource.write.partitionpath.field': 'partitionpath',
             'hoodie.datasource.write.operation': 'upsert',
-            'hoodie.datasource.write.precombine.field': 'ts',
+            'hoodie.datasource.write.precombine.fields': 'ts',
             'hoodie.upsert.shuffle.parallelism': 2,
             'hoodie.insert.shuffle.parallelism': 2
         }
@@ -162,7 +162,7 @@ class ExamplePySpark:
         'hoodie.datasource.write.recordkey.field': 'uuid',
         'hoodie.datasource.write.partitionpath.field': 'partitionpath',
         'hoodie.datasource.write.operation': 'upsert',
-        'hoodie.datasource.write.precombine.field': 'ts',
+        'hoodie.datasource.write.precombine.fields': 'ts',
         'hoodie.upsert.shuffle.parallelism': 2, 
         'hoodie.insert.shuffle.parallelism': 2
         }
@@ -196,7 +196,7 @@ class ExamplePySpark:
             'hoodie.datasource.write.recordkey.field': 'uuid',
             'hoodie.datasource.write.partitionpath.field': 'partitionpath',
             'hoodie.datasource.write.operation': 'delete',
-            'hoodie.datasource.write.precombine.field': 'ts',
+            'hoodie.datasource.write.precombine.fields': 'ts',
             'hoodie.upsert.shuffle.parallelism': 2, 
             'hoodie.insert.shuffle.parallelism': 2
         }
@@ -223,7 +223,7 @@ class ExamplePySpark:
             'hoodie.datasource.write.recordkey.field': 'uuid',
             'hoodie.datasource.write.partitionpath.field': 'partitionpath',
             'hoodie.datasource.write.operation': 'insert_overwrite',
-            'hoodie.datasource.write.precombine.field': 'ts',
+            'hoodie.datasource.write.precombine.fields': 'ts',
             'hoodie.upsert.shuffle.parallelism': 2,
             'hoodie.insert.shuffle.parallelism': 2
         }

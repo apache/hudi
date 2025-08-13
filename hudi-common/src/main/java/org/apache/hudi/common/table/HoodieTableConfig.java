@@ -194,8 +194,9 @@ public class HoodieTableConfig extends HoodieConfig {
 
   // TODO: is this this called precombine in 1.0. ..
   public static final ConfigProperty<String> PRECOMBINE_FIELDS = ConfigProperty
-      .key("hoodie.table.precombine.field")
+      .key("hoodie.table.precombine.fields")
       .noDefaultValue()
+      .withAlternatives("hoodie.table.precombine.field")
       .withDocumentation("Comma separated fields used in preCombining before actual write. By default, when two records have the same key value, "
           + "the largest value for the precombine field determined by Object.compareTo(..), is picked. If there are multiple fields configured, "
           + "comparison is made on the first field. If the first field values are same, comparison is made on the second field and so on.");

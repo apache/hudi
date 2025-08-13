@@ -182,7 +182,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
       properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
       properties.put("hoodie.datasource.write.keygenerator.class", RawTripTestPayloadKeyGenerator.class.getName());
       properties.put("hoodie.datasource.write.partitionpath.field", "time");
-      properties.put("hoodie.datasource.write.precombine.field", "number");
+      properties.put("hoodie.datasource.write.precombine.fields", "number");
       properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "time");
       properties.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "number");
     }

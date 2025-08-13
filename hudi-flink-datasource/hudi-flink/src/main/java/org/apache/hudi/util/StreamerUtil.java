@@ -175,8 +175,8 @@ public class StreamerUtil {
   public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
     return HoodiePayloadConfig.newBuilder()
         .withPayloadClass(conf.get(FlinkOptions.PAYLOAD_CLASS_NAME))
-        .withPayloadOrderingFields(conf.get(FlinkOptions.PRECOMBINE_FIELD))
-        .withPayloadEventTimeField(conf.get(FlinkOptions.PRECOMBINE_FIELD))
+        .withPayloadOrderingFields(conf.get(FlinkOptions.PRECOMBINE_FIELDS))
+        .withPayloadEventTimeField(conf.get(FlinkOptions.PRECOMBINE_FIELDS))
         .build();
   }
 
@@ -296,7 +296,7 @@ public class StreamerUtil {
           .setPayloadClassName(getPayloadClass(conf))
           .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
-          .setPreCombineFields(OptionsResolver.getPreCombineField(conf))
+          .setPreCombineFields(OptionsResolver.getPreCombineFieldsStr(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
           .setKeyGeneratorClassProp(
@@ -404,7 +404,7 @@ public class StreamerUtil {
    */
   public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
     return HoodieTableConfig.inferMergingConfigsForWrites(
-        getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineField(conf), HoodieTableVersion.EIGHT);
+        getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineFieldsStr(conf), HoodieTableVersion.EIGHT);
   }
 
   /**
@@ -657,17 +657,17 @@ public class StreamerUtil {
    * Validate pre_combine key.
    */
   public static void checkPreCombineKey(Configuration conf, List<String> fields) {
-    String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
-    if (!fields.contains(preCombineField)) {
+    String preCombineFields = conf.get(FlinkOptions.PRECOMBINE_FIELDS);
+    if (!fields.contains(preCombineFields)) {
       if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
-        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
+        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELDS.key()
                 + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
       }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.set(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
-      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
-                + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
+      if (preCombineFields.equals(FlinkOptions.PRECOMBINE_FIELDS.defaultValue())) {
+        conf.set(FlinkOptions.PRECOMBINE_FIELDS, FlinkOptions.NO_PRE_COMBINE);
+      } else if (!preCombineFields.equals(FlinkOptions.NO_PRE_COMBINE)) {
+        throw new HoodieValidationException("Field " + preCombineFields + " does not exist in the table schema."
+                + "Please check '" + FlinkOptions.PRECOMBINE_FIELDS.key() + "' option.");
       }
     }
   }
