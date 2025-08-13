@@ -383,7 +383,7 @@ public class TestHoodieCatalog {
             + "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
 
     Map<String, String> options2 = getDefaultCatalogOption();
-    options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
+    options2.put(FlinkOptions.PRECOMBINE_FIELDS.key(), "not_exists");
     catalog = new HoodieCatalog("hudi", Configuration.fromMap(options2));
     catalog.open();
     ObjectPath tablePath2 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb2");

@@ -272,8 +272,8 @@ public class HoodieStreamer implements Serializable {
             + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
     public String sourceClassName = JsonDFSSource.class.getName();
 
-    @Parameter(names = {"--source-ordering-field"}, description = "Comma separated list of fields within source record to decide how"
-        + " to break ties between records with same key in input data.")
+    @Parameter(names = {"--source-ordering-fields", "--source-ordering-field"}, description = "Comma separated list of fields within source record to decide how"
+        + " to break ties between records with same key in input data. --source-ordering-field is deprecated, please use --source-ordering-fields instead")
     public String sourceOrderingFields = null;
 
     @Parameter(names = {"--payload-class"}, description = "Deprecated. "

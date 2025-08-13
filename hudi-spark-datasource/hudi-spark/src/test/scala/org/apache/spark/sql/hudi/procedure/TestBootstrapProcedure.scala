@@ -246,7 +246,7 @@ class TestBootstrapProcedure extends HoodieSparkProcedureTestBase {
       }
 
       spark.sql("set hoodie.bootstrap.parallelism = 20")
-      spark.sql("set hoodie.datasource.write.precombine.field=timestamp")
+      spark.sql("set hoodie.datasource.write.precombine.fields=timestamp")
       spark.sql("set hoodie.metadata.index.column.stats.enable = false")
 
       checkAnswer(

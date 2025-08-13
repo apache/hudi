@@ -307,7 +307,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "city").
     option(HoodieWriteConfig.TBL_NAME.key(), hoodieFooTableName).
     option("hoodie.datasource.write.recordkey.field", "uuid").
-    option("hoodie.datasource.write.precombine.field", "rider").
+    option("hoodie.datasource.write.precombine.fields", "rider").
     option("hoodie.datasource.write.operation", "bulk_insert").
     option("hoodie.datasource.write.hive_style_partitioning", "true").
     option("hoodie.populate.meta.fields", "false").
