@@ -772,7 +772,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     }
 
     val mergeMode = if (tableConfig.getTableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
-      val inferredMergeConfigs = HoodieTableConfig.inferBasicMergingBehavior(
+      val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
         tableConfig.getRecordMergeMode,
         tableConfig.getPayloadClass,
         tableConfig.getRecordMergeStrategyId,

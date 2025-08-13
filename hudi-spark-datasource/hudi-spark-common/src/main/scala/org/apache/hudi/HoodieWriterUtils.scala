@@ -218,7 +218,7 @@ object HoodieWriterUtils {
   }
 
   /**
-   * This function adds specific rules to choose config key in table config for a given writer key.
+   * This function adds specific rules to choose the right config key for payload class for version 9 tables.
    *
    * RULE 1: When
    *   1. table version is 9,
@@ -230,7 +230,7 @@ object HoodieWriterUtils {
    * Basic rule:
    *   return writer key.
    */
-  def getKeyInTableConfig(key: String, tableConfig: HoodieConfig): String = {
+  def getPayloadClassConfigKeyFromTableConfig(key: String, tableConfig: HoodieConfig): String = {
     if (tableConfig == null) {
       key
     } else {
@@ -256,7 +256,11 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          val keyInTableConfig = getKeyInTableConfig(key, tableConfig)
+          val keyInTableConfig = if (key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key))  {
+            getPayloadClassConfigKeyFromTableConfig(key, tableConfig)
+          } else {
+            key
+          }
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")

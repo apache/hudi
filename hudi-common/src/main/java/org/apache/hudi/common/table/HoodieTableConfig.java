@@ -100,7 +100,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
-import static org.apache.hudi.common.model.AWSDmsAvroPayload.D_VALUE;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.DELETE_OPERATION_VALUE;
 import static org.apache.hudi.common.model.AWSDmsAvroPayload.OP_FIELD;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
@@ -133,9 +133,8 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
   // This prefix is used to set merging related properties.
   // A reader might need to read some writer properties to function as expected,
-  // and Hudi stores properties with this prefix so the reader parses these properties,
-  // and produces a map of key value pairs (Key1->Value1, Key2->Value2, ...) to use.
-  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.prefix.";
+  // and Hudi stores properties with this prefix so the reader parses these properties to fetch any custom property.
+  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.";
   public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           AWSDmsAvroPayload.class.getName(),
@@ -856,21 +855,21 @@ public class HoodieTableConfig extends HoodieConfig {
    * which is based on the logic of table version < 9, and then tuned for version 9 logic.
    * This approach fits the same behavior of upgrade from 8 to 9.
    */
-  public static Map<String, String> inferMergingConfigsForVersion9(RecordMergeMode recordMergeMode,
-                                                                   String payloadClassName,
-                                                                   String recordMergeStrategyId,
-                                                                   String orderingFieldName,
-                                                                   HoodieTableVersion tableVersion) {
+  public static Map<String, String> inferCorrectMergingBehaviorV9TblCreation(RecordMergeMode recordMergeMode,
+                                                                             String payloadClassName,
+                                                                             String recordMergeStrategyId,
+                                                                             String orderingFieldName,
+                                                                             HoodieTableVersion tableVersion) {
     Map<String, String> reconciledConfigs = new HashMap<>();
-    if (tableVersion.versionCode() != HoodieTableVersion.NINE.versionCode()) {
-      return reconciledConfigs;
+    if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      throw new HoodieIOException("Unsupported flow for table versions less than 9");
     }
 
     // Step 1: Infer merging configs based on input information.
     // This step is important since it provides the same configs before we do table upgrade.
     // Then additional logic for table version 9 could be verified.
-    Triple<RecordMergeMode, String, String> inferredConfigs = inferBasicMergingBehavior(
-        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+    Triple<RecordMergeMode, String, String> inferredConfigs = inferCorrectMergingBehavior(
+        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion, true);
     recordMergeMode = inferredConfigs.getLeft();
     recordMergeStrategyId = inferredConfigs.getRight();
 
@@ -902,18 +901,22 @@ public class HoodieTableConfig extends HoodieConfig {
           reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
         }
         // Partial update mode config.
+        // Certain payloads are migrated to non payload way from 1.1 Hudi binary.
+        // Hence we need to set the right value for partial update mode for some of the cases.
         if (payloadClassName.equals(PartialUpdateAvroPayload.class.getName())
             || payloadClassName.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
           reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
         } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
           reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_MARKERS.name());
         }
-        // Additional custom properties.
+        // Additional custom merge properties.
+        // Cretain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
+        // merge to function as expected. Handing such special cases here.
         if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
           reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER, DEBEZIUM_UNAVAILABLE_VALUE);
         } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
           reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
-          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER, D_VALUE);
+          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
         }
       }
     }
@@ -925,11 +928,28 @@ public class HoodieTableConfig extends HoodieConfig {
    * Validates that the user has not set an illegal combination of configs.
    * This function infers basic merging properties used by table version <= 8.
    */
-  public static Triple<RecordMergeMode, String, String> inferBasicMergingBehavior(RecordMergeMode recordMergeMode,
-                                                                                  String payloadClassName,
-                                                                                  String recordMergeStrategyId,
-                                                                                  String orderingFieldNamesAsString,
-                                                                                  HoodieTableVersion tableVersion) {
+  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
+                                                                                    String payloadClassName,
+                                                                                    String recordMergeStrategyId,
+                                                                                    String orderingFieldNamesAsString,
+                                                                                    HoodieTableVersion tableVersion) {
+    return inferCorrectMergingBehavior(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion, false);
+  }
+
+  /**
+   * Infers the merging behavior based on what the user sets (or doesn't set).
+   * Validates that the user has not set an illegal combination of configs.
+   * This function infers basic merging properties used by table version <= 8.
+   */
+  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
+                                                                                    String payloadClassName,
+                                                                                    String recordMergeStrategyId,
+                                                                                    String orderingFieldNamesAsString,
+                                                                                    HoodieTableVersion tableVersion,
+                                                                                    boolean inferForVersion9) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE) && !inferForVersion9) {
+      return Triple.of(recordMergeMode, payloadClassName, recordMergeStrategyId);
+    }
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;

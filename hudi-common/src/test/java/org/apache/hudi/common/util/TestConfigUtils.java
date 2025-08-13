@@ -235,7 +235,7 @@ public class TestConfigUtils {
     TypedProperties props = new TypedProperties();
     props.setProperty(MERGE_CUSTOM_PROPERTY_PREFIX + "mergeKey", "mergeValue");
     props.setProperty("other.prefix.key", "otherValue");
-    props.setProperty("hoodie.merge.custom.property.prefix", "directPrefixValue");
+    props.setProperty("hoodie.merge.custom.property", "directPrefixValue");
 
     Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX);
     assertEquals(1, result.size());

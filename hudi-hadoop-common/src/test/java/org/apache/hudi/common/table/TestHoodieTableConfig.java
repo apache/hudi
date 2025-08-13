@@ -508,12 +508,12 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
           }
           if (shouldThrow) {
             assertThrows(IllegalArgumentException.class,
-                () -> HoodieTableConfig.inferBasicMergingBehavior(
+                () -> HoodieTableConfig.inferCorrectMergingBehavior(
                     inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
                     tableVersion));
           } else {
             Triple<RecordMergeMode, String, String> inferredConfigs =
-                HoodieTableConfig.inferBasicMergingBehavior(
+                HoodieTableConfig.inferCorrectMergingBehavior(
                     inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
                     tableVersion);
             assertEquals(expectedMergeMode, inferredConfigs.getLeft());
@@ -591,42 +591,70 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
                                           String expectedMergeStrategyId, String expectedLegacyPayloadClass,
                                           String expectedPartialUpdateMode, String expectedDebeziumMarker,
                                           String expectedDeleteKey, String expectedDeleteMarker) {
-    Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForVersion9(
-        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+    if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      assertExceptionWithInferCorrectMergingBehaviorV9TblCreation(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+    } else {
+      Map<String, String> configs = HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+          recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
 
-    assertEquals(expectedConfigSize, configs.size(), "Config size mismatch for: " + testName);
-    if (expectedMergeMode != null) {
-      assertEquals(expectedMergeMode, configs.get(RECORD_MERGE_MODE.key()),
-          "Merge mode mismatch for: " + testName);
-    }
-    if (expectedPayloadClass != null) {
-      assertEquals(expectedPayloadClass, configs.get(PAYLOAD_CLASS_NAME.key()),
-          "Payload class mismatch for: " + testName);
-    }
-    if (expectedMergeStrategyId != null) {
-      assertEquals(expectedMergeStrategyId, configs.get(RECORD_MERGE_STRATEGY_ID.key()),
-          "Merge strategy ID mismatch for: " + testName);
-    }
-    if (expectedLegacyPayloadClass != null) {
-      assertEquals(expectedLegacyPayloadClass, configs.get(LEGACY_PAYLOAD_CLASS_NAME.key()),
-          "Legacy payload class mismatch for: " + testName);
-    }
-    if (expectedPartialUpdateMode != null) {
-      assertEquals(expectedPartialUpdateMode, configs.get(HoodieTableConfig.PARTIAL_UPDATE_MODE.key()),
-          "Partial update mode mismatch for: " + testName);
-    }
-    if (expectedDebeziumMarker != null) {
-      assertEquals(expectedDebeziumMarker, configs.get(
-          HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
-          "Debezium marker mismatch for: " + testName);
-    }
-    if (expectedDeleteKey != null) {
-      assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY),
-          "Delete key mismatch for: " + testName);
-    }
-    if (expectedDeleteMarker != null) {
-      assertEquals(expectedDeleteMarker, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER),
-          "Delete marker mismatch for: " + testName);
+      assertEquals(expectedConfigSize, configs.size(), "Config size mismatch for: " + testName);
+      if (expectedMergeMode != null) {
+        assertEquals(expectedMergeMode, configs.get(RECORD_MERGE_MODE.key()),
+            "Merge mode mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(RECORD_MERGE_MODE.key()), "Record merge mode not expected to be set");
+      }
+      if (expectedPayloadClass != null) {
+        assertEquals(expectedPayloadClass, configs.get(PAYLOAD_CLASS_NAME.key()),
+            "Payload class mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(PAYLOAD_CLASS_NAME.key()), "Payload class not expected to be set");
+      }
+      if (expectedMergeStrategyId != null) {
+        assertEquals(expectedMergeStrategyId, configs.get(RECORD_MERGE_STRATEGY_ID.key()),
+            "Merge strategy ID mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(RECORD_MERGE_STRATEGY_ID.key()), "Record merge strategy id not expected to be set");
+      }
+
+      if (expectedLegacyPayloadClass != null) {
+        assertEquals(expectedLegacyPayloadClass, configs.get(LEGACY_PAYLOAD_CLASS_NAME.key()),
+            "Legacy payload class mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(LEGACY_PAYLOAD_CLASS_NAME.key()), "Legacy payload class not expected to be set");
+      }
+
+      if (expectedPartialUpdateMode != null) {
+        assertEquals(expectedPartialUpdateMode, configs.get(HoodieTableConfig.PARTIAL_UPDATE_MODE.key()),
+            "Partial update mode mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(HoodieTableConfig.PARTIAL_UPDATE_MODE.key()), HoodieTableConfig.PARTIAL_UPDATE_MODE.key() + " not expected to be set");
+      }
+
+      if (expectedDebeziumMarker != null) {
+        assertEquals(expectedDebeziumMarker, configs.get(
+                HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
+            "Debezium marker mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
+            "Custom merge property " + HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER + " not expected to be set");
+      }
+
+      if (expectedDeleteKey != null) {
+        assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY),
+            "Delete key mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY),
+            "Custom merge property " + HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY + "  not expected to be set");
+      }
+
+      if (expectedDeleteMarker != null) {
+        assertEquals(expectedDeleteMarker, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER),
+            "Delete marker mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER),
+            "Custom merge property " + HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER + "  not expected to be set");
+      }
     }
   }
 
@@ -634,15 +662,15 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testInferMergingConfigsForVersion9WithInconsistentConfigs() {
     // Test case: Inconsistent merge mode and strategy should throw exception
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieTableConfig.inferMergingConfigsForVersion9(
+      HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
           EVENT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
     });
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieTableConfig.inferMergingConfigsForVersion9(
+      HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
           COMMIT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
     });
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieTableConfig.inferMergingConfigsForVersion9(
+      HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
           CUSTOM, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
     });
   }
@@ -650,20 +678,18 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testInferMergingConfigsForVersion9EdgeCases() {
     // Test case: Empty string payload class should be treated as null
-    Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForVersion9(
+    Map<String, String> configs = HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
         EVENT_TIME_ORDERING, "", EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
     assertEquals(2, configs.size());
     assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
     assertEquals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID, configs.get(RECORD_MERGE_STRATEGY_ID.key()));
 
-    // Test case: Non-version 9 table with all parameters should return empty configs
-    configs = HoodieTableConfig.inferMergingConfigsForVersion9(
-        EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
+    // Test case: Non-version 9 table with all parameters should throw
+    assertExceptionWithInferCorrectMergingBehaviorV9TblCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
         EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.EIGHT);
-    assertEquals(0, configs.size());
 
     // Test case: Version 9 table with null ordering field for event time ordering should still work
-    configs = HoodieTableConfig.inferMergingConfigsForVersion9(
+    configs = HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
         EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
     assertEquals(2, configs.size());
     assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
@@ -672,16 +698,29 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
   @Test
   void testInferMergingConfigsForVersion9WithAllTableVersions() {
-    // Test that only version 9 returns configs, others return empty
+    // Test that only version 9 returns configs, others throw exception
     for (HoodieTableVersion version : HoodieTableVersion.values()) {
-      Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForVersion9(
-          EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(), 
-          EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", version);
-      if (version == HoodieTableVersion.NINE) {
-        assertTrue(configs.size() > 0, "Version 9 should return configs");
+      if (version.lesserThan(HoodieTableVersion.NINE)) {
+        assertExceptionWithInferCorrectMergingBehaviorV9TblCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
+            EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", version);
       } else {
-        assertEquals(0, configs.size(), "Non-version 9 should return empty configs");
+        Map<String, String> configs = HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+            EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
+            EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", version);
+        assertEquals(3, configs.size(), "Table version 9 and above should return 3 configs");
       }
     }
+  }
+
+  private void assertExceptionWithInferCorrectMergingBehaviorV9TblCreation(RecordMergeMode recordMergeMode,
+                                                                           String payloadClassName,
+                                                                           String recordMergeStrategyId,
+                                                                           String orderingFieldName,
+                                                                           HoodieTableVersion tableVersion) {
+    HoodieIOException ioException = assertThrows(HoodieIOException.class, () -> {
+      HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(recordMergeMode, payloadClassName,
+          recordMergeStrategyId, orderingFieldName, tableVersion);
+    });
+    assertEquals("Unsupported flow for table versions less than 9", ioException.getMessage().toString());
   }
 }

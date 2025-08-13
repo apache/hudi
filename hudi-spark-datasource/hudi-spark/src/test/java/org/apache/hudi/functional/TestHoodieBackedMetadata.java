@@ -435,7 +435,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     assertTrue(metadataWriter.isPresent());
     Triple<RecordMergeMode, String, String> inferredMergeConfs =
-        HoodieTableConfig.inferBasicMergingBehavior(
+        HoodieTableConfig.inferCorrectMergingBehavior(
             writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(),
             writeConfig.getRecordMergeStrategyId(), String.join(",", writeConfig.getPreCombineFields()),
             metaClient.getTableConfig().getTableVersion());
@@ -458,7 +458,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertFalse(metadataWriter2.isPresent());
 
     Triple<RecordMergeMode, String, String> inferredMergeConfs2 =
-        HoodieTableConfig.inferBasicMergingBehavior(
+        HoodieTableConfig.inferCorrectMergingBehavior(
             writeConfig2.getRecordMergeMode(), writeConfig2.getPayloadClass(),
             writeConfig2.getRecordMergeStrategyId(), String.join(",", writeConfig2.getPreCombineFields()),
             metaClient.getTableConfig().getTableVersion());
