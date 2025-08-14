@@ -293,6 +293,10 @@ test_metaserver_bundle () {
 test_cli_bundle() {
     echo "::warning::validate.sh setting up CLI bundle validation"
 
+    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+        change_java_runtime_version
+    fi
+
     # Create a temporary directory for CLI commands output
     CLI_TEST_DIR="/tmp/hudi-bundles/tests/log"
     mkdir -p $CLI_TEST_DIR
