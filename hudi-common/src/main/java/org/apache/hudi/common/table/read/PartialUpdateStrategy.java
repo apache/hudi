@@ -32,8 +32,8 @@ import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDefaultValue;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
 
 /**
@@ -179,6 +179,6 @@ public class PartialUpdateStrategy<T> implements Serializable {
   }
 
   static Map<String, String> parseMergeProperties(TypedProperties props) {
-    return extractWithPrefix(props, MERGE_CUSTOM_PROPERTY_PREFIX);
+    return extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
   }
 }

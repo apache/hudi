@@ -185,7 +185,7 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PostgresDebeziumAvroPayload].getName,
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_MARKERS",
-          HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX
             + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER -> "__debezium_unavailable_value"),
       Arguments.of(
         "MERGE_ON_READ",
@@ -194,8 +194,8 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[AWSDmsAvroPayload].getName,
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-          HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY -> "Op",
-          HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER -> "D"),
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY -> "Op",
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER -> "D"),
       Arguments.of(
         "MERGE_ON_READ",
         classOf[MySqlDebeziumAvroPayload].getName,

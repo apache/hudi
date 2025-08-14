@@ -330,8 +330,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
     // no merge props
-    props.setProperty(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + "key1", "value1");
-    props.setProperty(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + "key2", "value2");
+    props.setProperty(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + "key1", "value1");
+    props.setProperty(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + "key2", "value2");
     // add some random property which does not match the prefix.
     props.setProperty("key3", "value3");
 
@@ -633,27 +633,27 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
       if (expectedDebeziumMarker != null) {
         assertEquals(expectedDebeziumMarker, configs.get(
-                HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
+                HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
             "Debezium marker mismatch for: " + testName);
       } else {
-        assertFalse(configs.containsKey(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
-            "Custom merge property " + HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER + " not expected to be set");
+        assertFalse(configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
+            "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER + " not expected to be set");
       }
 
       if (expectedDeleteKey != null) {
-        assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY),
+        assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY),
             "Delete key mismatch for: " + testName);
       } else {
-        assertFalse(configs.containsKey(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY),
-            "Custom merge property " + HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY + "  not expected to be set");
+        assertFalse(configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY),
+            "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "  not expected to be set");
       }
 
       if (expectedDeleteMarker != null) {
-        assertEquals(expectedDeleteMarker, configs.get(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER),
+        assertEquals(expectedDeleteMarker, configs.get(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER),
             "Delete marker mismatch for: " + testName);
       } else {
-        assertFalse(configs.containsKey(HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER),
-            "Custom merge property " + HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER + "  not expected to be set");
+        assertFalse(configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER),
+            "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "  not expected to be set");
       }
     }
   }

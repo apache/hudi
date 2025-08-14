@@ -134,7 +134,7 @@ public class HoodieTableConfig extends HoodieConfig {
   // This prefix is used to set merging related properties.
   // A reader might need to read some writer properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties to fetch any custom property.
-  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.record.merge.custom.property.";
+  public static final String RECORD_MERGE_PROPERTY_PREFIX = "hoodie.record.merge.property.";
   public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           AWSDmsAvroPayload.class.getName(),
@@ -913,10 +913,10 @@ public class HoodieTableConfig extends HoodieConfig {
         // Cretain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
         // merge to function as expected. Handing such special cases here.
         if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
-          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER, DEBEZIUM_UNAVAILABLE_VALUE);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER, DEBEZIUM_UNAVAILABLE_VALUE);
         } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
-          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
-          reconciledConfigs.put(MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
         }
       }
     }
@@ -1351,7 +1351,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Map<String, String> getTableMergeProperties() {
-    return ConfigUtils.extractWithPrefix(this.props, MERGE_CUSTOM_PROPERTY_PREFIX);
+    return ConfigUtils.extractWithPrefix(this.props, RECORD_MERGE_PROPERTY_PREFIX);
   }
 
   public Map<String, String> propsMap() {
