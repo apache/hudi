@@ -1129,7 +1129,6 @@ class HoodieSparkSqlWriterInternal {
     if (!mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_MODE.key())
       || !mergedParams.contains(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key())
       || !mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key())) {
-      // TODO: We should remove this inference since it anyways will be done when creating metaClient.
       val inferredMergeConfigs = HoodieTableConfig.inferMergingConfigsForWrites(
         RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
         mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
