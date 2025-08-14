@@ -65,7 +65,7 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineFields = tableConfig.getPreCombineFieldsStr.orElse("")
+    val preCombineFields = tableConfig.getOrderingFieldsStr.orElse("")
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
@@ -91,7 +91,7 @@ trait ProvidesHoodieConfig extends Logging {
   def buildBucketRescaleHoodieConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
     val tableConfig = hoodieCatalogTable.tableConfig
-    val preCombineFields = tableConfig.getPreCombineFieldsStr.orElse("")
+    val preCombineFields = tableConfig.getOrderingFieldsStr.orElse("")
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
@@ -191,7 +191,7 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineField = Option.apply(ConfigUtils.getStringWithAltKeys(JavaConverters.mapAsJavaMap(combinedOpts), HoodieTableConfig.PRECOMBINE_FIELDS))
+    val preCombineField = Option.apply(ConfigUtils.getStringWithAltKeys(JavaConverters.mapAsJavaMap(combinedOpts), HoodieTableConfig.ORDERING_FIELDS))
       .getOrElse(combinedOpts.getOrElse(PRECOMBINE_FIELD.key, ""))
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")

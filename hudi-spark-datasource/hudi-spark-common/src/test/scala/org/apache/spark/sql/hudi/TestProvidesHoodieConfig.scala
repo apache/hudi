@@ -103,7 +103,7 @@ class TestProvidesHoodieConfig {
       CatalogStorageFormat.empty,
       StructType(Nil)))
     val props = new TypedProperties()
-    props.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key, "segment")
+    props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key, "segment")
     val mockTableConfig = spy(classOf[HoodieTableConfig])
     when(mockTableConfig.getProps).thenReturn(props)
     when(mockCatalog.tableConfig).thenReturn(mockTableConfig)
@@ -140,7 +140,7 @@ class TestProvidesHoodieConfig {
 
     assertEquals(
       "segment",
-      combinedConfig.getOrElse(HoodieTableConfig.PRECOMBINE_FIELDS.key, "")
+      combinedConfig.getOrElse(HoodieTableConfig.ORDERING_FIELDS.key, "")
     )
 
     // write config precombine field should be inferred from table config

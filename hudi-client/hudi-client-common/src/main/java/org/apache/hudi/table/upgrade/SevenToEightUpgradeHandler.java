@@ -148,7 +148,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
 
   static void upgradeMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     String payloadClass = tableConfig.getPayloadClass();
-    String preCombineFields = tableConfig.getPreCombineFieldsStr().orElse(null);
+    String preCombineFields = tableConfig.getOrderingFieldsStr().orElse(null);
     if (isCustomPayloadClass(payloadClass)) {
       // This contains a special case: HoodieMetadataPayload.
       tablePropsToAdd.put(

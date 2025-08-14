@@ -134,7 +134,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testUpdate() throws IOException {
     Properties updatedProps = new Properties();
     updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table2");
-    updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "new_field");
+    updatedProps.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "new_field");
     HoodieTableConfig.update(storage, metaPath, updatedProps);
 
     assertTrue(storage.exists(cfgPath));
@@ -142,8 +142,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
-    assertEquals(Collections.singletonList("new_field"), config.getPreCombineFields());
-    assertEquals(Option.of("new_field"), config.getPreCombineFieldsStr());
+    assertEquals(Collections.singletonList("new_field"), config.getOrderingFields());
+    assertEquals(Option.of("new_field"), config.getOrderingFieldsStr());
   }
 
   @Test
@@ -272,7 +272,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
       for (int i = 0; i < 100; i++) {
         Properties updatedProps = new Properties();
         updatedProps.setProperty(HoodieTableConfig.NAME.key(), "test-table" + i);
-        updatedProps.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "new_field" + i);
+        updatedProps.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "new_field" + i);
         HoodieTableConfig.update(storage, metaPath, updatedProps);
       }
     });

@@ -192,11 +192,16 @@ public class HoodieTableConfig extends HoodieConfig {
           + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
           + "when the table is initially setup.");
 
-  // TODO: is this this called precombine in 1.0. ..
-  public static final ConfigProperty<String> PRECOMBINE_FIELDS = ConfigProperty
-      .key("hoodie.table.precombine.fields")
+  /**
+   * @deprecated Use {@link #ORDERING_FIELDS} instead
+   */
+  @Deprecated
+  public static final String PRECOMBINE_FIELD = "hoodie.table.precombine.field";
+
+  public static final ConfigProperty<String> ORDERING_FIELDS = ConfigProperty
+      .key("hoodie.table.ordering.fields")
       .noDefaultValue()
-      .withAlternatives("hoodie.table.precombine.field")
+      .withAlternatives(PRECOMBINE_FIELD)
       .withDocumentation("Comma separated fields used in preCombining before actual write. By default, when two records have the same key value, "
           + "the largest value for the precombine field determined by Object.compareTo(..), is picked. If there are multiple fields configured, "
           + "comparison is made on the first field. If the first field values are same, comparison is made on the second field and so on.");
@@ -1019,14 +1024,14 @@ public class HoodieTableConfig extends HoodieConfig {
     }
   }
 
-  public List<String> getPreCombineFields() {
-    return getPreCombineFieldsStr()
+  public List<String> getOrderingFields() {
+    return getOrderingFieldsStr()
         .map(preCombine -> Arrays.stream(preCombine.split(",")).filter(StringUtils::nonEmpty).collect(Collectors.toList()))
         .orElse(Collections.emptyList());
   }
 
-  public Option<String> getPreCombineFieldsStr() {
-    return Option.ofNullable(getString(PRECOMBINE_FIELDS));
+  public Option<String> getOrderingFieldsStr() {
+    return Option.ofNullable(getString(ORDERING_FIELDS));
   }
 
   public Option<String[]> getRecordKeyFields() {
@@ -1336,11 +1341,13 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String HOODIE_TABLE_VERSION_PROP_NAME = VERSION.key();
+
   /**
-   * @deprecated Use {@link #PRECOMBINE_FIELDS} and its methods.
+   * @deprecated Use {@link #ORDERING_FIELDS} and its methods.
    */
   @Deprecated
-  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = PRECOMBINE_FIELDS.key();
+  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = PRECOMBINE_FIELD;
+
   /**
    * @deprecated Use {@link #BASE_FILE_FORMAT} and its methods.
    */

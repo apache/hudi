@@ -59,7 +59,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
 
     assertTrue(tableConfigs.size == 5)
     assertTrue(tableConfigs(HoodieTableConfig.RECORDKEY_FIELDS.key) == "id,addr")
-    assertTrue(tableConfigs(HoodieTableConfig.PRECOMBINE_FIELDS.key) == "timestamp")
+    assertTrue(tableConfigs(HoodieTableConfig.ORDERING_FIELDS.key) == "timestamp")
     assertTrue(tableConfigs(HoodieTableConfig.TYPE.key) == "MERGE_ON_READ")
     assertTrue(tableConfigs("hoodie.index.type") == "INMEMORY")
     assertTrue(tableConfigs("hoodie.compact.inline") == "true")

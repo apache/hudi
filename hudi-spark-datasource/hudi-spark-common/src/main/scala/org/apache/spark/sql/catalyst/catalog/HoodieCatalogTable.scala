@@ -130,7 +130,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   /**
    * Comparables Field
    */
-  lazy val preCombineKeys: java.util.List[String] = tableConfig.getPreCombineFields
+  lazy val preCombineKeys: java.util.List[String] = tableConfig.getOrderingFields
 
   /**
    * Partition Fields

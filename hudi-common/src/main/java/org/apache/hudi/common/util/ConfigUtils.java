@@ -87,8 +87,8 @@ public class ConfigUtils {
       orderField = properties.getProperty("hoodie.datasource.write.precombine.fields");
     } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
       orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
-    } else if (containsConfigProperty(properties, HoodieTableConfig.PRECOMBINE_FIELDS)) {
-      orderField = getStringWithAltKeys(properties, HoodieTableConfig.PRECOMBINE_FIELDS);
+    } else if (containsConfigProperty(properties, HoodieTableConfig.ORDERING_FIELDS)) {
+      orderField = getStringWithAltKeys(properties, HoodieTableConfig.ORDERING_FIELDS);
     } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
@@ -103,7 +103,7 @@ public class ConfigUtils {
   public static TypedProperties supplementOrderingFields(TypedProperties props, List<String> orderingFields) {
     String orderingFieldsAsString = String.join(",", orderingFields);
     props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
-    props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELDS.key(), orderingFieldsAsString);
+    props.putIfAbsent(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFieldsAsString);
     props.putIfAbsent("hoodie.datasource.write.precombine.fields", orderingFieldsAsString);
     return props;
   }

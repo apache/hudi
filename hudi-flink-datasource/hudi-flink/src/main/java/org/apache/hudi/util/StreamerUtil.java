@@ -296,7 +296,7 @@ public class StreamerUtil {
           .setPayloadClassName(getPayloadClass(conf))
           .setDatabaseName(conf.get(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD.key(), null))
-          .setPreCombineFields(OptionsResolver.getPreCombineFieldsStr(conf))
+          .setOrderingFields(OptionsResolver.getPreCombineFieldsStr(conf))
           .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
           .setKeyGeneratorClassProp(

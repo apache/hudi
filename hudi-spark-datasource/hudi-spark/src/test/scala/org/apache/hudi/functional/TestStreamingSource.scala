@@ -61,7 +61,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -112,7 +112,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -157,7 +157,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -188,7 +188,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -220,7 +220,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -262,7 +262,7 @@ class TestStreamingSource extends StreamTest {
           .setTableType(MERGE_ON_READ)
           .setTableName(getTableName(tablePath))
           .setRecordKeyFields("id")
-          .setPreCombineFields("ts")
+          .setOrderingFields("ts")
           .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
         addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -305,7 +305,7 @@ class TestStreamingSource extends StreamTest {
         .setTableName(getTableName(tablePath))
         .setTableVersion(writeTableVersion)
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       // Add initial data

@@ -206,14 +206,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         Map(HoodieTableConfig.VERSION.key -> HoodieTableVersion.SIX.versionCode().toString)
       } ++
       (if (hasPreCombineField && !isNullOrEmpty(precombineField)) {
-        Map(HoodieTableConfig.PRECOMBINE_FIELDS.key -> precombineField)
+        Map(HoodieTableConfig.ORDERING_FIELDS.key -> precombineField)
       } else {
         Map()
       })).asJava
     val nonExistentConfigs: java.util.List[String] = (if (hasPreCombineField) {
       Seq[String]()
     } else {
-      Seq(HoodieTableConfig.PRECOMBINE_FIELDS.key)
+      Seq(HoodieTableConfig.ORDERING_FIELDS.key)
     }).asJava
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val commit1CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {

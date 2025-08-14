@@ -61,7 +61,7 @@ object HoodieOptionConfig {
   val SQL_KEY_PRECOMBINE_FIELD: HoodieSQLOption[String] = buildConf()
     .withSqlKey("preCombineField")
     .withHoodieKey(DataSourceWriteOptions.PRECOMBINE_FIELD.key)
-    .withTableConfigKey(HoodieTableConfig.PRECOMBINE_FIELDS.key)
+    .withTableConfigKey(HoodieTableConfig.ORDERING_FIELDS.key)
     .build()
 
   val SQL_PAYLOAD_CLASS: HoodieSQLOption[String] = buildConf()

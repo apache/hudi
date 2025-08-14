@@ -778,7 +778,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
         tableConfig.getRecordMergeMode,
         tableConfig.getPayloadClass,
         tableConfig.getRecordMergeStrategyId,
-        tableConfig.getPreCombineFieldsStr.orElse(null),
+        tableConfig.getOrderingFieldsStr.orElse(null),
         tableConfig.getTableVersion)
       inferredMergeConfigs.getLeft.name()
     } else {

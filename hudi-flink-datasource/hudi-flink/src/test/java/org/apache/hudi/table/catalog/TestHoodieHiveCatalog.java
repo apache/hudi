@@ -331,12 +331,12 @@ public class TestHoodieHiveCatalog {
     options.put(FactoryUtil.CONNECTOR.key(), "hudi");
 
     TypedProperties props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb1"));
-    assertFalse(props.containsKey("hoodie.table.precombine.fields"));
+    assertFalse(props.containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
 
     options.put(PRECOMBINE_FIELDS.key(), "ts_3");
     props = createTableAndReturnTableProperties(options, new ObjectPath(db, "tmptb2"));
-    assertTrue(props.containsKey("hoodie.table.precombine.fields"));
-    assertEquals("ts_3", props.get("hoodie.table.precombine.fields"));
+    assertTrue(props.containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals("ts_3", props.get(HoodieTableConfig.ORDERING_FIELDS.key()));
   }
 
   private TypedProperties createTableAndReturnTableProperties(Map<String, String> options, ObjectPath tablePath)
