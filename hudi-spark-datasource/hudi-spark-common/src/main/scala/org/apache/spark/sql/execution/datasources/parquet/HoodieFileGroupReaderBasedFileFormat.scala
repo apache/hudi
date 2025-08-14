@@ -35,6 +35,7 @@ import org.apache.hudi.io.IOUtils
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
@@ -83,6 +84,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                            isMultipleBaseFileFormatsEnabled: Boolean,
                                            hoodieFileFormat: HoodieFileFormat)
   extends ParquetFileFormat with SparkAdapterSupport with HoodieFormatTrait with Logging with Serializable {
+
+  private lazy val avroTableSchema = new Schema.Parser().parse(tableSchema.avroSchemaStr)
 
   override def shortName(): String = "HudiFileGroup"
 
@@ -192,9 +195,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val fixedPartitionIndexes = fixedPartitionIndexesArr.toSet
 
     // schema that we want fg reader to output to us
+    val exclusionFields = new java.util.HashSet[String]()
+    exclusionFields.add("op")
+    partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
-    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
-    val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
+    val requestedAvroSchema = AvroSchemaUtils.pruneDataSchema(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName), exclusionFields)
+    val dataAvroSchema = AvroSchemaUtils.pruneDataSchema(avroTableSchema, AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName), exclusionFields)
 
     val baseFileReader = spark.sparkContext.broadcast(buildBaseFileReader(spark, options, augmentedStorageConf.unwrap(), dataSchema, supportVectorizedRead))
     val fileGroupBaseFileReader = if (isMOR && supportVectorizedRead) {

@@ -24,15 +24,23 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.Utf8;
 import org.apache.parquet.schema.LogicalTypeTokenParser;
 import org.apache.parquet.schema.PrimitiveType;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.Objects;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO;
@@ -78,6 +86,95 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     this.totalSize = totalSize;
     this.totalUncompressedSize = totalUncompressedSize;
     this.valueMetadata = valueMetadata;
+    if (valueMetadata.getValueType() == ValueType.NONE) {
+      // TODO: get rid of this when we add backwards compat
+      throw new IllegalArgumentException("Value type should not be NONE");
+    }
+
+    switch (valueMetadata.getValueType()) {
+      case BOOLEAN:
+        validateMinMaxTypes(minValue, maxValue, Boolean.class);
+        break;
+      case INT:
+        validateMinMaxTypes(minValue, maxValue, Integer.class);
+        break;
+      case LONG:
+        validateMinMaxTypes(minValue, maxValue, Long.class);
+        break;
+      case FLOAT:
+        validateMinMaxTypes(minValue, maxValue, Float.class);
+        break;
+      case DOUBLE:
+        validateMinMaxTypes(minValue, maxValue, Double.class);
+        break;
+      case STRING:
+        validateMinMaxTypes(minValue, maxValue, new Class<?>[]{String.class, Utf8.class}, "String or Utf8");
+        break;
+      case BYTES:
+        validateMinMaxTypes(minValue, maxValue, ByteBuffer.class);
+        break;
+      case FIXED:
+        validateMinMaxTypes(minValue, maxValue, GenericData.Fixed.class);
+        break;
+      case DECIMAL:
+        validateMinMaxTypes(minValue, maxValue, BigDecimal.class);
+        break;
+      case TIMESTAMP_MILLIS:
+      case TIMESTAMP_MICROS:
+        validateMinMaxTypes(minValue, maxValue, Instant.class);
+        break;
+      case LOCAL_TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+        validateMinMaxTypes(minValue, maxValue, LocalDateTime.class);
+        break;
+      case DATE:
+        validateMinMaxTypes(minValue, maxValue, Date.class);
+        break;
+
+      default:
+        throw new IllegalArgumentException("Unsupported value type: " + valueMetadata.getValueType());
+    }
+  }
+
+  // Helper method to validate both min and max values
+  private static void validateMinMaxTypes(Object minValue, Object maxValue, Class<?> expectedType) {
+    validateValueType(minValue, expectedType, "Min value");
+    validateValueType(maxValue, expectedType, "Max value");
+  }
+
+  // Helper method to validate value types
+  private static void validateValueType(Object value, Class<?> expectedType, String valueName) {
+    if (value != null && !expectedType.isInstance(value)) {
+      throw new IllegalArgumentException(String.format(
+          "%s should be %s, but got %s",
+          valueName,
+          expectedType.getSimpleName(),
+          value.getClass().getSimpleName()
+      ));
+    }
+  }
+
+  // Helper method to validate both min and max values with multiple allowed types
+  private static void validateMinMaxTypes(Object minValue, Object maxValue, Class<?>[] allowedTypes, String typeDescription) {
+    validateValueType(minValue, allowedTypes, "Min value", typeDescription);
+    validateValueType(maxValue, allowedTypes, "Max value", typeDescription);
+  }
+
+  // Helper method to validate value types with multiple allowed types
+  private static void validateValueType(Object value, Class<?>[] allowedTypes, String valueName, String typeDescription) {
+    if (value != null) {
+      for (Class<?> allowedType : allowedTypes) {
+        if (allowedType.isInstance(value)) {
+          return; // Valid type found
+        }
+      }
+      throw new IllegalArgumentException(String.format(
+          "%s should be %s, but got %s",
+          valueName,
+          typeDescription,
+          value.getClass().getSimpleName()
+      ));
+    }
   }
 
   public String getFilePath() {
@@ -201,6 +298,14 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return left == null ? right : left;
     }
 
+    if (left.getValueMetadata().getValueType() != right.getValueMetadata().getValueType()) {
+      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+    } else if (left.minValue != null && right.minValue != null && left.minValue.getClass() != right.minValue.getClass()) {
+      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+    } else if (left.maxValue != null && right.maxValue != null && left.maxValue.getClass() != right.maxValue.getClass()) {
+      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+    }
+
     ValidationUtils.checkArgument(left.getColumnName().equals(right.getColumnName()),
         "Column names should be the same for merging column ranges");
     String filePath = left.getFilePath();
@@ -271,15 +376,16 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   }
 
   public static ValueMetadata getValueMetadata(Schema fieldSchema) {
-    if (fieldSchema == null) {
+    Schema valueSchema = resolveNullableSchema(fieldSchema);
+    if (valueSchema == null) {
       return NoneMetadata.INSTANCE;
     }
 
-    ValueType valueType = ValueType.fromSchema(fieldSchema);
+    ValueType valueType = ValueType.fromSchema(valueSchema);
     if (valueType == ValueType.NONE) {
       return NoneMetadata.INSTANCE;
     } else if (valueType == ValueType.DECIMAL) {
-      return DecimalMetadata.create((LogicalTypes.Decimal) fieldSchema.getLogicalType());
+      return DecimalMetadata.create((LogicalTypes.Decimal) valueSchema.getLogicalType());
     } else {
       return new ValueMetadata(valueType);
     }
@@ -317,7 +423,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return new HoodieValueTypeInfo(valueType.ordinal(), getAdditionalInfo());
     }
 
-    protected String getAdditionalInfo() {
+    public String getAdditionalInfo() {
       return null;
     }
   }
@@ -371,7 +477,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     }
 
     @Override
-    protected String getAdditionalInfo() {
+    public String getAdditionalInfo() {
       return String.format("%d,%d", precision, scale);
     }
   }
@@ -504,8 +610,17 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
             return ValueType.UUID;
           }
           throw new IllegalArgumentException("Unsupported logical type for String: " + schema.getLogicalType());
+        case FIXED:
+          if (schema.getLogicalType() == null) {
+            return ValueType.FIXED;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+            return ValueType.DECIMAL;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Fixed: " + schema.getLogicalType());
         default:
-          return ValueType.NONE;
+          // TODO: decide if we want to throw or return NONE
+          throw new IllegalArgumentException("Unsupported type: " + schema.getType());
+          //return ValueType.NONE;
       }
     }
   }

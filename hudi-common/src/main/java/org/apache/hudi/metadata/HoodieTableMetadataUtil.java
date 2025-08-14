@@ -93,6 +93,7 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
@@ -122,6 +123,7 @@ import org.apache.avro.AvroTypeException;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.IndexedRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,7 +136,12 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
+import java.sql.Date;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -334,8 +341,8 @@ public class HoodieTableMetadataUtil {
             return HoodieColumnRangeMetadata.<Comparable>create(
                 filePath,
                 fieldName,
-                (Comparable) colStats.minValue,
-                (Comparable) colStats.maxValue,
+                coerceToComparable(fieldSchema, colStats.minValue),
+                coerceToComparable(fieldSchema, colStats.maxValue),
                 colStats.nullCount,
                 colStats.valueCount,
                 // NOTE: Size and compressed size statistics are set to 0 to make sure we're not
@@ -1862,33 +1869,79 @@ public class HoodieTableMetadataUtil {
         return coerceToComparable(resolveNullableSchema(schema), val);
 
       case FIXED:
+        if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+          if (val instanceof GenericData.Fixed) {
+            return HoodieAvroUtils.convertBytesToBigDecimal(((GenericData.Fixed) val).bytes(), (LogicalTypes.Decimal) schema.getLogicalType());
+          } else if (val instanceof BigDecimal) {
+            return (Comparable<?>) val;
+          } else {
+            throw new UnsupportedOperationException("Expected GenericData.Fixed but got " + val.getClass());
+          }
+        }
+        return (Comparable<?>) val;
+
       case BYTES:
         if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
-          return (Comparable<?>) val;
+          if (val instanceof ByteBuffer) {
+            return HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) val).array(), (LogicalTypes.Decimal) schema.getLogicalType());
+          } else if (val instanceof BigDecimal) {
+            return (Comparable<?>) val;
+          } else {
+            throw new UnsupportedOperationException("Expected ByteBuffer but got " + val.getClass());
+          }
         }
         return (ByteBuffer) val;
 
-
       case INT:
-        if (schema.getLogicalType() == LogicalTypes.date()
-            || schema.getLogicalType() == LogicalTypes.timeMillis()) {
-          // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
-          //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
-          return (Comparable<?>) val;
+        if (schema.getLogicalType() == LogicalTypes.date()) {
+          if (val instanceof Date) {
+            return (Comparable<?>) val;
+          }
+          return Date.valueOf(LocalDate.ofEpochDay(castToInteger(val)));
+        } else if (schema.getLogicalType() == LogicalTypes.timeMillis()) {
+          if (val instanceof LocalTime) {
+            return (Comparable<?>) val;
+          }
+          return LocalTime.ofNanoOfDay(castToInteger(val) * 1_000_000L);
         }
         return castToInteger(val);
 
       case LONG:
-        if (schema.getLogicalType() == LogicalTypes.timeMicros()
-            || schema.getLogicalType() == LogicalTypes.timestampMicros()
-            || schema.getLogicalType() == LogicalTypes.timestampMillis()) {
-          // NOTE: This type will be either {@code java.sql.Date} or {org.joda.LocalDate}
-          //       depending on the Avro version. Hence, we simply cast it to {@code Comparable<?>}
-          return (Comparable<?>) val;
+        if (schema.getLogicalType() == LogicalTypes.timeMicros()) {
+          if (val instanceof LocalTime) {
+            return (Comparable<?>) val;
+          }
+          return LocalTime.ofNanoOfDay(castToLong(val) * 1_000L);
+        } else if (schema.getLogicalType() == LogicalTypes.timestampMillis()) {
+          if (val instanceof Instant) {
+            return (Comparable<?>) val;
+          }
+          return Instant.ofEpochMilli(castToLong(val));
+        } else if (schema.getLogicalType() == LogicalTypes.timestampMicros()) {
+          if (val instanceof Instant) {
+            return (Comparable<?>) val;
+          }
+          return DateTimeUtils.microsToInstant(castToLong(val));
+        } else if (schema.getLogicalType() == LogicalTypes.localTimestampMillis()) {
+          if (val instanceof LocalDateTime) {
+            return (Comparable<?>) val;
+          }
+          return LocalDateTime.ofInstant(Instant.ofEpochMilli(castToLong(val)), ZoneOffset.UTC);
+        } else if (schema.getLogicalType() == LogicalTypes.localTimestampMicros()) {
+          if (val instanceof LocalDateTime) {
+            return (Comparable<?>) val;
+          }
+          return LocalDateTime.ofInstant(DateTimeUtils.microsToInstant(castToLong(val)), ZoneOffset.UTC);
         }
         return castToLong(val);
 
       case STRING:
+        if (schema.getLogicalType() == LogicalTypes.uuid()) {
+          if (val instanceof UUID) {
+            return (Comparable<?>) val;
+          }
+          return UUID.fromString(val.toString());
+        }
         // unpack the avro Utf8 if possible
         return val.toString();
       case FLOAT:
