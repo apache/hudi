@@ -940,22 +940,6 @@ public class HoodieTableConfig extends HoodieConfig {
    * Validates that the user has not set an illegal combination of configs.
    * This function infers basic merging properties used by table version <= 8.
    */
-  public static Triple<RecordMergeMode, String, String> inferMergingConfigs(RecordMergeMode recordMergeMode,
-                                                                            String payloadClassName,
-                                                                            String recordMergeStrategyId,
-                                                                            String orderingFieldNamesAsString,
-                                                                            HoodieTableVersion tableVersion) {
-    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
-      return Triple.of(recordMergeMode, payloadClassName, recordMergeStrategyId);
-    }
-    return inferMergingConfigsForPreV9Table(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
-  }
-
-  /**
-   * Infers the merging behavior based on what the user sets (or doesn't set).
-   * Validates that the user has not set an illegal combination of configs.
-   * This function infers basic merging properties used by table version <= 8.
-   */
   public static Triple<RecordMergeMode, String, String> inferMergingConfigsForPreV9Table(RecordMergeMode recordMergeMode,
                                                                                          String payloadClassName,
                                                                                          String recordMergeStrategyId,
