@@ -58,6 +58,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
  * This class is responsible for handling the schema for the file group reader.
@@ -209,7 +210,7 @@ public class FileGroupReaderSchemaHandler<T> {
                                                        boolean hasInstantRange) {
     RecordMergeMode mergeMode = cfg.getRecordMergeMode();
     if (cfg.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
-      Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferMergingConfigs(
+      Triple<RecordMergeMode, String, String> mergingConfigs = inferMergingConfigsForPreV9Table(
           cfg.getRecordMergeMode(),
           cfg.getPayloadClass(),
           cfg.getRecordMergeStrategyId(),
