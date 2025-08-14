@@ -90,6 +90,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForV9TableCreation;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -1484,7 +1485,7 @@ public class HoodieTableMetaClient implements Serializable {
       // For table version <= 8
       if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
         Triple<RecordMergeMode, String, String> mergeConfigs =
-            HoodieTableConfig.inferMergingConfigs(
+            inferMergingConfigsForPreV9Table(
                 recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields,
                 tableVersion);
         tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());

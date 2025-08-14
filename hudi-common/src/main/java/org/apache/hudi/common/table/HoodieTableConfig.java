@@ -855,7 +855,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * which is based on the logic of table version < 9, and then tuned for version 9 logic.
    * This approach fits the same behavior of upgrade from 8 to 9.
    */
-  public static Map<String, String> inferMergingConfigsForV9TableCreation(RecordMergeMode recordMergeMode,
+  static Map<String, String> inferMergingConfigsForV9TableCreation(RecordMergeMode recordMergeMode,
                                                                           String payloadClassName,
                                                                           String recordMergeStrategyId,
                                                                           String orderingFieldName,
@@ -956,7 +956,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * Validates that the user has not set an illegal combination of configs.
    * This function infers basic merging properties used by table version <= 8.
    */
-  private static Triple<RecordMergeMode, String, String> inferMergingConfigsForPreV9Table(RecordMergeMode recordMergeMode,
+  static Triple<RecordMergeMode, String, String> inferMergingConfigsForPreV9Table(RecordMergeMode recordMergeMode,
                                                                                           String payloadClassName,
                                                                                           String recordMergeStrategyId,
                                                                                           String orderingFieldNamesAsString,
