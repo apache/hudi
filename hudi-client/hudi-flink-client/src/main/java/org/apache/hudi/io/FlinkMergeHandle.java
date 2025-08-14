@@ -179,10 +179,11 @@ public class FlinkMergeHandle<T, I, K, O>
   @Override
   public List<WriteStatus> close() {
     try {
-      List<WriteStatus> writeStatus = super.close();
-      if (!isClosed()) {
-        finalizeWrite();
+      if (isClosed()) {
+        return getWriteStatuses();
       }
+      List<WriteStatus> writeStatus = super.close();
+      finalizeWrite();
       return writeStatus;
     } finally {
       this.isClosed = true;
