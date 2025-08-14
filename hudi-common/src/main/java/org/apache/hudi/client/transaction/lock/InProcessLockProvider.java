@@ -83,7 +83,8 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   public boolean tryLock(long time, TimeUnit unit) {
     LOG.info(getLogMessage(LockState.ACQUIRING));
     if (lock.isWriteLockedByCurrentThread()) {
-      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
+      // allow lock to be re-entrant.
+      return true;
     }
 
     boolean isLockAcquired;
