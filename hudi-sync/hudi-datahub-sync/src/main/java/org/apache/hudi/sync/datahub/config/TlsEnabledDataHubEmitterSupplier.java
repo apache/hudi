@@ -90,7 +90,6 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
         }
       });
     } catch (Exception e) {
-      LOG.error("Failed to create TLS-enabled DataHub emitter", e);
       throw new DataHubEmitterConfigurationException("Failed to create TLS-enabled DataHub emitter", e);
     }
   }
