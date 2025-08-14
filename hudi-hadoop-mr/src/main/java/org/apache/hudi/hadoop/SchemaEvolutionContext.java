@@ -319,6 +319,9 @@ public class SchemaEvolutionContext {
       case DOUBLE:
       case DATE:
       case TIMESTAMP:
+      case TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+      case LOCAL_TIMESTAMP_MILLIS:
       case STRING:
       case UUID:
       case FIXED:
@@ -326,6 +329,7 @@ public class SchemaEvolutionContext {
       case DECIMAL:
         return typeInfo;
       case TIME:
+      case TIME_MILLIS:
         throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", type));
       default:
         LOG.error("cannot convert unknown type: {} to Hive", type);

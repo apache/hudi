@@ -24,7 +24,7 @@ import org.apache.hudi.avro.model._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked}
-import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieColumnRangeMetadata, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.BinaryUtil.toBytes
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -262,8 +262,8 @@ class ColumnStatsIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = sortedTargetColDataTypeMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType)
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType)
+          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType, HoodieColumnRangeMetadata.getValueMetadata(r.getValueType))
+          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType, HoodieColumnRangeMetadata.getValueMetadata(r.getValueType))
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)
@@ -468,7 +468,7 @@ object ColumnStatsIndexSupport {
 
   val decConv = new DecimalConversion()
 
-  def deserialize(value: Any, dataType: DataType): Any = {
+  def deserialize(value: Any, dataType: DataType, valueMetadata: HoodieColumnRangeMetadata.ValueMetadata): Any = {
     dataType match {
       // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
       //       manually encoding corresponding values as int and long w/in the Column Stats Index and
@@ -476,12 +476,61 @@ object ColumnStatsIndexSupport {
       case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
       case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
       // Standard types
-      case StringType => value
-      case BooleanType => value
+      case StringType =>
+        if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.NONE)
+          || valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.STRING)
+          || valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.UUID)) {
+          value
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for StringType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
+
+      case BooleanType =>
+        if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.NONE)
+          || valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.BOOLEAN)) {
+          value
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for BooleanType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
+
       // Numeric types
-      case FloatType => value
-      case DoubleType => value
-      case LongType => value
+      case FloatType =>
+        if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.NONE)
+          || valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.FLOAT)) {
+          value
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for FloatType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
+      case DoubleType =>
+        if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.NONE)
+          || valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.DOUBLE)) {
+          value
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for DoubleType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
+      case LongType =>
+        if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.NONE)
+          || valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.LONG)) {
+          value
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIME_MICROS)) {
+          // TODO: not sure what type it's supposed to be after looking at avro serde
+          value
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MILLIS)) {
+          // TODO fix potential overflow
+          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long] * 1000)
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MICROS)) {
+          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MILLIS)) {
+          // TODO fix potential overflow
+          // might need to do something for local as well
+          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long] * 1000)
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MICROS)) {
+          // todo fix local issue if needed
+          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
+
       case IntegerType => value
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case ShortType => value.asInstanceOf[Int].toShort

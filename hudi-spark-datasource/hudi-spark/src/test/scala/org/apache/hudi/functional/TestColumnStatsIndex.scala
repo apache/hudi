@@ -26,7 +26,7 @@ import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.{HoodieColumnRangeMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1
 import org.apache.hudi.common.table.view.FileSystemViewManager
@@ -1107,7 +1107,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       assertTrue(unwrapped.isInstanceOf[ByteBuffer], "Expected a ByteBuffer")
     }
     // Deserialize into a java.math.BigDecimal.
-    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt)
+    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE)
     assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
     assertEquals(expected, deserialized.asInstanceOf[JBigDecimal],
       s"Decimal value from $description does not match")

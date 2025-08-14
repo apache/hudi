@@ -64,8 +64,11 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -79,6 +82,7 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -148,6 +152,18 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
+  public static final String EXTENDED_LOGICAL_TYPES_SCHEMA = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
+          + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+          //+ "{\"name\":\"time_millis\",\"type\":{\"type\":\"int\",\"logicalType\":\"time-millis\"}},"
+          //+ "{\"name\":\"time_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"time-micros\"}},"
+          + "{\"name\":\"local_ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
+          + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
+          + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
+          + "{\"name\":\"dec_plain_small\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
+          + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":18,\"scale\":6}},"
+          + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":4,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
+          + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":6}},";
+
   public static final String EXTRA_COL_SCHEMA1 = "{\"name\": \"extra_column1\", \"type\": [\"null\", \"string\"], \"default\": null },";
   public static final String EXTRA_COL_SCHEMA2 = "{\"name\": \"extra_column2\", \"type\": [\"null\", \"string\"], \"default\": null},";
   public static final String TRIP_EXAMPLE_SCHEMA =
@@ -158,6 +174,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_COL_SCHEMA2 + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_FLATTENED_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_FLATTENED_SCHEMA + TRIP_SCHEMA_SUFFIX;
+  public static final String TRIP_LOGICAL_TYPES_SCHEMA =
+      TRIP_SCHEMA_PREFIX + EXTENDED_LOGICAL_TYPES_SCHEMA + TRIP_SCHEMA_SUFFIX;
+
 
   public static final String TRIP_NESTED_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
@@ -185,6 +204,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_ENCODED_DECIMAL_SCHEMA = new Schema.Parser().parse(TRIP_ENCODED_DECIMAL_SCHEMA);
+  public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
@@ -307,19 +327,34 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
-    if (TRIP_FLATTENED_SCHEMA.equals(schemaStr)) {
-      return generateRandomValue(key, commitTime, true);
-    } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
-      return generateRandomValue(key, commitTime, isFlattened);
-    } else if (TRIP_ENCODED_DECIMAL_SCHEMA.equals(schemaStr)) {
-      return generatePayloadForTripEncodedDecimalSchema(key, commitTime);
-    } else if (TRIP_SCHEMA.equals(schemaStr)) {
-      return generatePayloadForTripSchema(key, commitTime);
-    } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
-      return generatePayloadForShortTripSchema(key, commitTime);
-    } else if (TRIP_NESTED_EXAMPLE_SCHEMA.equals(schemaStr)) {
-      return generateNestedExampleRandomValue(key, commitTime);
+    return generateRandomValueAsPerSchema(schemaStr, key, commitTime, isFlattened, false);
+  }
+
+  public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened, boolean isDelete) throws IOException {
+    if (!isDelete) {
+      if (TRIP_FLATTENED_SCHEMA.equals(schemaStr)) {
+        return generateRandomValue(key, commitTime, true);
+      } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+        return generateRandomValue(key, commitTime, isFlattened);
+      } else if (TRIP_ENCODED_DECIMAL_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForTripEncodedDecimalSchema(key, commitTime);
+      } else if (TRIP_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForTripSchema(key, commitTime);
+      } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForShortTripSchema(key, commitTime);
+      } else if (TRIP_NESTED_EXAMPLE_SCHEMA.equals(schemaStr)) {
+        return generateNestedExampleRandomValue(key, commitTime);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchema(key, commitTime, false);
+      }
+    } else {
+      if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
+        return generateRandomDeleteValue(key, commitTime);
+      } else if (TRIP_LOGICAL_TYPES_SCHEMA.equals(schemaStr)) {
+        return generatePayloadForLogicalTypesSchema(key, commitTime, true);
+      }
     }
+
 
     return null;
   }
@@ -381,6 +416,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         generateRecordForTripEncodedDecimalSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(),
         TRIP_ENCODED_DECIMAL_SCHEMA);
+  }
+
+  public RawTripTestPayload generatePayloadForLogicalTypesSchema(HoodieKey key, String commitTime, boolean isDelete)
+      throws IOException {
+    GenericRecord rec =
+        generateRecordForTripLogicalTypesSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0, isDelete);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(),
+        TRIP_LOGICAL_TYPES_SCHEMA);
   }
 
   /**
@@ -563,6 +606,73 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     rec.put("driver", driverName);
     rec.put("fare", rand.nextDouble() * 100);
     rec.put("_hoodie_is_deleted", false);
+    return rec;
+  }
+
+  public GenericRecord generateRecordForTripLogicalTypesSchema(String rowKey, String riderName, String driverName,
+                                                               long timestamp, boolean isDeleteRecord) {
+    GenericRecord rec = new GenericData.Record(AVRO_TRIP_LOGICAL_TYPES_SCHEMA);
+    generateTripPrefixValues(rec, rowKey, "partition_path", riderName, driverName, timestamp);
+
+    int hash = rowKey.hashCode();
+    boolean above = (hash & 1) == 0; // half above, half below threshold
+
+    // -------------------
+    // Threshold definitions
+    // -------------------
+    Instant tsMillisThreshold = Instant.parse("2020-01-01T00:00:00Z");
+    Instant tsMicrosThreshold = Instant.parse("2020-06-01T12:00:00Z");
+
+    //LocalTime timeMillisThreshold = LocalTime.of(12, 0, 0);  // noon
+    //LocalTime timeMicrosThreshold = LocalTime.of(6, 0, 0);   // 6 AM
+
+    Instant localTsMillisThreshold = ZonedDateTime.of(
+        2015, 5, 20, 12, 34, 56, 0, ZoneId.systemDefault()).toInstant();
+    Instant localTsMicrosThreshold = ZonedDateTime.of(
+        2017, 7, 7, 7, 7, 7, 0, ZoneId.systemDefault()).toInstant();
+
+    LocalDate dateThreshold = LocalDate.of(2000, 1, 1);
+
+    // -------------------
+    // Assign edge values
+    // -------------------
+
+    // ts_millis
+    long tsMillisBase = tsMillisThreshold.toEpochMilli();
+    rec.put("ts_millis", above ? tsMillisBase + 1 : tsMillisBase - 1);
+
+    // ts_micros
+    long tsMicrosBase = TimeUnit.SECONDS.toMicros(tsMicrosThreshold.getEpochSecond()) + tsMicrosThreshold.getNano() / 1_000L;
+    rec.put("ts_micros", above ? tsMicrosBase + 1 : tsMicrosBase - 1);
+
+    // time_millis
+    //int timeMillisBase = (int) TimeUnit.SECONDS.toMillis(timeMillisThreshold.toSecondOfDay());
+    //rec.put("time_millis", above ? timeMillisBase + 1 : timeMillisBase - 1);
+
+    // time_micros
+    //long timeMicrosBase = TimeUnit.SECONDS.toMicros(timeMicrosThreshold.toSecondOfDay());
+    //rec.put("time_micros", above ? timeMicrosBase + 1 : timeMicrosBase - 1);
+
+    // local_ts_millis
+    long localTsMillisBase = localTsMillisThreshold.toEpochMilli();
+    rec.put("local_ts_millis", above ? localTsMillisBase + 1 : localTsMillisBase - 1);
+
+    // local_ts_micros
+    long localTsMicrosBase = TimeUnit.SECONDS.toMicros(localTsMicrosThreshold.getEpochSecond()) + localTsMicrosThreshold.getNano() / 1_000L;
+    rec.put("local_ts_micros", above ? localTsMicrosBase + 1 : localTsMicrosBase - 1);
+
+    // event_date
+    int eventDateBase = (int) dateThreshold.toEpochDay();
+    rec.put("event_date", above ? eventDateBase + 1 : eventDateBase - 1);
+
+
+    rec.put("dec_plain_small", getNonzeroEncodedBigDecimal(rand, 2, 5));
+    rec.put("dec_plain_large", getNonzeroEncodedBigDecimal(rand, 6, 18));
+
+    rec.put("dec_fixed_small", getNonzeroEncodedBigDecimal(rand, 2, 5));
+    rec.put("dec_fixed_large", getNonzeroEncodedBigDecimal(rand, 6, 18));
+
+    generateTripSuffixValues(rec, isDeleteRecord);
     return rec;
   }
 
@@ -1109,9 +1219,13 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return stream of hoodie records for delete
    */
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
+    return generateUniqueDeleteRecordStream(instantTime, n, TRIP_EXAMPLE_SCHEMA);
+  }
+
+  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, String schemaStr) {
     final Set<KeyPartition> used = new HashSet<>();
-    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
+    Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
+    Integer numExistingKeys = numKeysBySchema.get(schemaStr);
     if (n > numExistingKeys) {
       throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
     }
@@ -1129,12 +1243,12 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       numExistingKeys--;
       used.add(kp);
       try {
-        result.add(new HoodieAvroRecord(kp.key, generateRandomDeleteValue(kp.key, instantTime)));
+        result.add(new HoodieAvroRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false, true)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
     }
-    numKeysBySchema.put(TRIP_EXAMPLE_SCHEMA, numExistingKeys);
+    numKeysBySchema.put(schemaStr, numExistingKeys);
     return result.stream();
   }
 

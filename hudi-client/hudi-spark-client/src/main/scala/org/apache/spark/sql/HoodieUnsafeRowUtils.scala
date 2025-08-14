@@ -18,12 +18,15 @@
 
 package org.apache.spark.sql
 
+import org.apache.hudi.SparkAdapterSupport
+
+import org.apache.avro.Schema
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import scala.collection.mutable.ArrayBuffer
 
-object HoodieUnsafeRowUtils {
+object HoodieUnsafeRowUtils extends SparkAdapterSupport {
 
   /**
    * Fetches (nested) value w/in provided [[Row]] uniquely identified by the provided nested-field path
@@ -41,6 +44,30 @@ object HoodieUnsafeRowUtils {
       } else if (idx == nestedFieldPath.parts.length - 1) {
         // scalastyle:off return
         return curRow.get(ord)
+        // scalastyle:on return
+      } else {
+        curRow = f.dataType match {
+          case _: StructType =>
+            curRow.getStruct(ord)
+          case dt@_ =>
+            throw new IllegalArgumentException(s"Invalid nested-field path: expected StructType, but was $dt")
+        }
+      }
+    }
+  }
+
+  def getNestedRowValueAsJava(row: Row, nestedFieldPath: NestedFieldPath, nestedFieldSchema: Schema): Any = {
+    var curRow = row
+    for (idx <- nestedFieldPath.parts.indices) {
+      val (ord, f) = nestedFieldPath.parts(idx)
+      if (curRow.isNullAt(ord)) {
+        // scalastyle:off return
+        if (f.nullable) return null
+        else throw new IllegalArgumentException(s"Found null value for the field that is declared as non-nullable: $f")
+        // scalastyle:on return
+      } else if (idx == nestedFieldPath.parts.length - 1) {
+        // scalastyle:off return
+        return sparkAdapter.createAvroDeserializer(nestedFieldSchema, f.dataType).deserialize(curRow.get(ord))
         // scalastyle:on return
       } else {
         curRow = f.dataType match {
@@ -74,6 +101,36 @@ object HoodieUnsafeRowUtils {
       } else if (idx == nestedFieldPath.parts.length - 1) {
         // scalastyle:off return
         return curRow.get(ord, f.dataType)
+        // scalastyle:on return
+      } else {
+        curRow = f.dataType match {
+          case st: StructType =>
+            curRow.getStruct(ord, st.fields.length)
+          case dt@_ =>
+            throw new IllegalArgumentException(s"Invalid nested-field path: expected StructType, but was $dt")
+        }
+      }
+      idx += 1
+    }
+  }
+
+  def getNestedInternalRowValueAsJava(row: InternalRow, nestedFieldPath: NestedFieldPath, nestedFieldSchema: Schema): Any = {
+    if (nestedFieldPath.parts.length == 0) {
+      throw new IllegalArgumentException("Nested field-path could not be empty")
+    }
+
+    var curRow = row
+    var idx = 0
+    while (idx < nestedFieldPath.parts.length) {
+      val (ord, f) = nestedFieldPath.parts(idx)
+      if (curRow.isNullAt(ord)) {
+        // scalastyle:off return
+        if (f.nullable) return null
+        else throw new IllegalArgumentException(s"Found null value for the field that is declared as non-nullable: $f")
+        // scalastyle:on return
+      } else if (idx == nestedFieldPath.parts.length - 1) {
+        // scalastyle:off return
+        return sparkAdapter.createAvroDeserializer(nestedFieldSchema, f.dataType).deserialize(curRow.get(ord, f.dataType))
         // scalastyle:on return
       } else {
         curRow = f.dataType match {

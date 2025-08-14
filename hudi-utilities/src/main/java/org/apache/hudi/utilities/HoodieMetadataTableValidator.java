@@ -1075,7 +1075,8 @@ public class HoodieMetadataTableValidator implements Serializable {
     TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = new TreeSet<>(Comparator.comparing(HoodieColumnRangeMetadata::getColumnName));
     for (HoodieColumnRangeMetadata<Comparable> colStat : colStats) {
       HoodieColumnRangeMetadata<Comparable> partitionStat = HoodieColumnRangeMetadata.create(partitionPath, colStat.getColumnName(),
-          colStat.getMinValue(), colStat.getMaxValue(), colStat.getNullCount(), colStat.getValueCount(), colStat.getTotalSize(), colStat.getTotalUncompressedSize());
+          colStat.getMinValue(), colStat.getMaxValue(), colStat.getNullCount(), colStat.getValueCount(), colStat.getTotalSize(), colStat.getTotalUncompressedSize(),
+          colStat.getValueMetadata());
       HoodieColumnRangeMetadata<Comparable> storedPartitionStat = aggregatedColumnStats.floor(partitionStat);
       if (storedPartitionStat == null || !storedPartitionStat.getColumnName().equals(partitionStat.getColumnName())) {
         aggregatedColumnStats.add(partitionStat);
@@ -1860,7 +1861,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                   .stream()
                   // We need to convert file path and use only the file name instead of the complete file path
                   .map(m -> (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.create(filename, m.getColumnName(), m.getMinValue(), m.getMaxValue(),
-                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize()));
+                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize(), m.getValueMetadata()));
             } catch (IOException e) {
               throw new HoodieIOException(String.format("Failed to get column stats for file: %s", filePath), e);
             }

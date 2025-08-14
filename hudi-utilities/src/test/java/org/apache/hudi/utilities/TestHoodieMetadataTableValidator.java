@@ -146,13 +146,13 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   @Test
   public void testAggregateColumnStats() {
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col1", 1, 5, 0, 10, 100, 200);
+        "path/to/file1", "col1", 1, 5, 0, 10, 100, 200, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200);
+        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     HoodieColumnRangeMetadata<Comparable> fileColumn2Range1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250);
+        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     HoodieColumnRangeMetadata<Comparable> fileColumn2Range2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150);
+        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     List<HoodieColumnRangeMetadata<Comparable>> colStats = new ArrayList<>();
     colStats.add(fileColumn1Range1);
     colStats.add(fileColumn1Range2);
@@ -1116,34 +1116,34 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         HoodieColumnRangeMetadata<Integer> intMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             RANDOM.nextInt() % 30, RANDOM.nextInt() % 1000_000_000 + 30,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
         return Pair.of(intMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(intMetadata.getFilePath()), new String(intMetadata.getColumnName()),
                 (int) intMetadata.getMinValue(), (int) intMetadata.getMaxValue(),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
       case 1:
         HoodieColumnRangeMetadata<Long> longMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             RANDOM.nextLong() % 30L, RANDOM.nextInt() % 1000_000_000_000_000L + 30L,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
         return Pair.of(longMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(longMetadata.getFilePath()), new String(longMetadata.getColumnName()),
                 (long) longMetadata.getMinValue(), (long) longMetadata.getMaxValue(),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
       default:
         String stringValue1 = generateRandomString(20);
         String stringValue2 = generateRandomString(20);
         HoodieColumnRangeMetadata<String> stringMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             stringValue1, stringValue2,
-            count / 3L, count, size, size / 8L);
+            count / 3L, count, size, size / 8L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
         return Pair.of(stringMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(stringMetadata.getFilePath()), new String(stringMetadata.getColumnName()),
                 new String(stringValue1), new String(stringValue2),
-                count / 3L, count, size, size / 8L));
+                count / 3L, count, size, size / 8L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
     }
   }
 

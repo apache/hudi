@@ -30,6 +30,7 @@ import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.avro.model.TimestampMicrosWrapper;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -693,14 +694,14 @@ public class TestHoodieAvroUtils {
 
     for (String fieldName : fieldValueMapping.keySet()) {
       Object value = fieldValueMapping.get(fieldName);
-      Object wrapperValue = wrapValueIntoAvro((Comparable) value);
+      Object wrapperValue = wrapValueIntoAvro((Comparable) value, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
       assertTrue(expectedWrapperClass.get(fieldName).isInstance(wrapperValue));
       if (value instanceof Utf8) {
         assertEquals(value.toString(), ((GenericRecord) wrapperValue).get(0));
-        assertEquals(value.toString(), unwrapAvroValueWrapper(wrapperValue));
+        assertEquals(value.toString(), unwrapAvroValueWrapper(wrapperValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
       } else {
         assertEquals(value, ((GenericRecord) wrapperValue).get(0));
-        assertEquals(value, unwrapAvroValueWrapper(wrapperValue));
+        assertEquals(value, unwrapAvroValueWrapper(wrapperValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
       }
     }
   }
@@ -763,26 +764,26 @@ public class TestHoodieAvroUtils {
   @ParameterizedTest
   @MethodSource("javaValueParams")
   public void testWrapAndUnwrapJavaValues(Comparable value, Class expectedWrapper) {
-    Object wrapperValue = wrapValueIntoAvro(value);
+    Object wrapperValue = wrapValueIntoAvro(value, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     assertTrue(expectedWrapper.isInstance(wrapperValue));
     if (value instanceof Timestamp) {
       assertEquals(((Timestamp) value).getTime() * 1000L,
           ((GenericRecord) wrapperValue).get(0));
       assertEquals(((Timestamp) value).getTime(),
-          ((Timestamp) unwrapAvroValueWrapper(wrapperValue)).getTime());
+          ((Timestamp) unwrapAvroValueWrapper(wrapperValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE)).getTime());
     } else if (value instanceof Date) {
       assertEquals((int) ChronoUnit.DAYS.between(
               LocalDate.ofEpochDay(0), ((Date) value).toLocalDate()),
           ((GenericRecord) wrapperValue).get(0));
-      assertEquals(((Date)value).toString(), ((Date)unwrapAvroValueWrapper(wrapperValue)).toString());
+      assertEquals(((Date)value).toString(), ((Date)unwrapAvroValueWrapper(wrapperValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE)).toString());
     } else if (value instanceof LocalDate) {
       assertEquals((int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), (LocalDate) value),
           ((GenericRecord) wrapperValue).get(0));
-      assertEquals(value, unwrapAvroValueWrapper(wrapperValue));
+      assertEquals(value, unwrapAvroValueWrapper(wrapperValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
     } else {
       assertEquals("0.000000000000000",
           ((BigDecimal) value)
-              .subtract((BigDecimal) unwrapAvroValueWrapper(wrapperValue)).toPlainString());
+              .subtract((BigDecimal) unwrapAvroValueWrapper(wrapperValue, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE)).toPlainString());
     }
   }
 

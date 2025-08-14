@@ -52,6 +52,12 @@ public class DateTimeUtils {
     return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
   }
 
+  public static Instant nanosToInstant(long nanosFromEpoch) {
+    long epochSeconds = nanosFromEpoch / (1_000_000_000L);
+    long nanoAdjustment = nanosFromEpoch % (1_000_000_000L);
+    return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
+  }
+
   /**
    * Converts provided {@link Instant} to microseconds (from epoch)
    */
@@ -68,6 +74,21 @@ public class DateTimeUtils {
       long micros = Math.multiplyExact(seconds, 1_000_000L);
 
       return Math.addExact(micros, nanos / 1_000L);
+    }
+  }
+
+  public static long instantToNanos(Instant instant) {
+    long seconds = instant.getEpochSecond();
+    int nanos = instant.getNano();
+
+    if (seconds < 0 && nanos > 0) {
+      // Shift seconds by +1, then subtract a full second in nanos
+      long totalNanos = Math.multiplyExact(seconds + 1, 1_000_000_000L);
+      long adjustment = nanos - 1_000_000_000L;
+      return Math.addExact(totalNanos, adjustment);
+    } else {
+      long totalNanos = Math.multiplyExact(seconds, 1_000_000_000L);
+      return Math.addExact(totalNanos, nanos);
     }
   }
 

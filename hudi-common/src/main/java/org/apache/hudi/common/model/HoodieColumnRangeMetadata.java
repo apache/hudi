@@ -19,14 +19,32 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.avro.model.HoodieValueTypeInfo;
 import org.apache.hudi.common.util.ValidationUtils;
+
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.Utf8;
+import org.apache.parquet.schema.LogicalTypeTokenParser;
+import org.apache.parquet.schema.PrimitiveType;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.Objects;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO;
+import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
@@ -48,6 +66,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   private final long totalSize;
   private final long totalUncompressedSize;
 
+  private final ValueMetadata valueMetadata;
+
   private HoodieColumnRangeMetadata(String filePath,
                                     String columnName,
                                     @Nullable T minValue,
@@ -55,7 +75,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                     long nullCount,
                                     long valueCount,
                                     long totalSize,
-                                    long totalUncompressedSize) {
+                                    long totalUncompressedSize,
+                                    ValueMetadata valueMetadata) {
     this.filePath = filePath;
     this.columnName = columnName;
     this.minValue = minValue;
@@ -64,6 +85,96 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     this.valueCount = valueCount;
     this.totalSize = totalSize;
     this.totalUncompressedSize = totalUncompressedSize;
+    this.valueMetadata = valueMetadata;
+    if (valueMetadata.getValueType() == ValueType.NONE) {
+      // TODO: get rid of this when we add backwards compat
+      throw new IllegalArgumentException("Value type should not be NONE");
+    }
+
+    switch (valueMetadata.getValueType()) {
+      case BOOLEAN:
+        validateMinMaxTypes(minValue, maxValue, Boolean.class);
+        break;
+      case INT:
+        validateMinMaxTypes(minValue, maxValue, Integer.class);
+        break;
+      case LONG:
+        validateMinMaxTypes(minValue, maxValue, Long.class);
+        break;
+      case FLOAT:
+        validateMinMaxTypes(minValue, maxValue, Float.class);
+        break;
+      case DOUBLE:
+        validateMinMaxTypes(minValue, maxValue, Double.class);
+        break;
+      case STRING:
+        validateMinMaxTypes(minValue, maxValue, new Class<?>[]{String.class, Utf8.class}, "String or Utf8");
+        break;
+      case BYTES:
+        validateMinMaxTypes(minValue, maxValue, ByteBuffer.class);
+        break;
+      case FIXED:
+        validateMinMaxTypes(minValue, maxValue, GenericData.Fixed.class);
+        break;
+      case DECIMAL:
+        validateMinMaxTypes(minValue, maxValue, BigDecimal.class);
+        break;
+      case TIMESTAMP_MILLIS:
+      case TIMESTAMP_MICROS:
+        validateMinMaxTypes(minValue, maxValue, Instant.class);
+        break;
+      case LOCAL_TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+        validateMinMaxTypes(minValue, maxValue, LocalDateTime.class);
+        break;
+      case DATE:
+        validateMinMaxTypes(minValue, maxValue, Date.class);
+        break;
+
+      default:
+        throw new IllegalArgumentException("Unsupported value type: " + valueMetadata.getValueType());
+    }
+  }
+
+  // Helper method to validate both min and max values
+  private static void validateMinMaxTypes(Object minValue, Object maxValue, Class<?> expectedType) {
+    validateValueType(minValue, expectedType, "Min value");
+    validateValueType(maxValue, expectedType, "Max value");
+  }
+
+  // Helper method to validate value types
+  private static void validateValueType(Object value, Class<?> expectedType, String valueName) {
+    if (value != null && !expectedType.isInstance(value)) {
+      throw new IllegalArgumentException(String.format(
+          "%s should be %s, but got %s",
+          valueName,
+          expectedType.getSimpleName(),
+          value.getClass().getSimpleName()
+      ));
+    }
+  }
+
+  // Helper method to validate both min and max values with multiple allowed types
+  private static void validateMinMaxTypes(Object minValue, Object maxValue, Class<?>[] allowedTypes, String typeDescription) {
+    validateValueType(minValue, allowedTypes, "Min value", typeDescription);
+    validateValueType(maxValue, allowedTypes, "Max value", typeDescription);
+  }
+
+  // Helper method to validate value types with multiple allowed types
+  private static void validateValueType(Object value, Class<?>[] allowedTypes, String valueName, String typeDescription) {
+    if (value != null) {
+      for (Class<?> allowedType : allowedTypes) {
+        if (allowedType.isInstance(value)) {
+          return; // Valid type found
+        }
+      }
+      throw new IllegalArgumentException(String.format(
+          "%s should be %s, but got %s",
+          valueName,
+          typeDescription,
+          value.getClass().getSimpleName()
+      ));
+    }
   }
 
   public String getFilePath() {
@@ -98,6 +209,10 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
 
   public long getTotalUncompressedSize() {
     return totalUncompressedSize;
+  }
+
+  public ValueMetadata getValueMetadata() {
+    return valueMetadata;
   }
 
   @Override
@@ -145,29 +260,32 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                                                               long nullCount,
                                                                               long valueCount,
                                                                               long totalSize,
-                                                                              long totalUncompressedSize) {
-    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize);
+                                                                              long totalUncompressedSize,
+                                                                              ValueMetadata valueMetadata) {
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize, valueMetadata);
   }
 
   /**
    * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
    */
   public static HoodieColumnRangeMetadata<Comparable> fromColumnStats(HoodieMetadataColumnStats columnStats) {
+    ValueMetadata valueMetadata = getValueMetadata(columnStats.getValueType());
     return HoodieColumnRangeMetadata.<Comparable>create(
         columnStats.getFileName(),
         columnStats.getColumnName(),
-        unwrapAvroValueWrapper(columnStats.getMinValue()), // misses for special handling.
-        unwrapAvroValueWrapper(columnStats.getMaxValue()), // misses for special handling.
+        unwrapAvroValueWrapper(columnStats.getMinValue(), valueMetadata),
+        unwrapAvroValueWrapper(columnStats.getMaxValue(), valueMetadata),
         columnStats.getNullCount(),
         columnStats.getValueCount(),
         columnStats.getTotalSize(),
-        columnStats.getTotalUncompressedSize());
+        columnStats.getTotalUncompressedSize(),
+        valueMetadata);
   }
 
   @SuppressWarnings("rawtype")
   public static HoodieColumnRangeMetadata<Comparable> stub(String filePath,
                                                            String columnName) {
-    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1);
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1, NoneMetadata.INSTANCE);
   }
 
   /**
@@ -180,6 +298,14 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return left == null ? right : left;
     }
 
+    if (left.getValueMetadata().getValueType() != right.getValueMetadata().getValueType()) {
+      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+    } else if (left.minValue != null && right.minValue != null && left.minValue.getClass() != right.minValue.getClass()) {
+      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+    } else if (left.maxValue != null && right.maxValue != null && left.maxValue.getClass() != right.maxValue.getClass()) {
+      throw new IllegalArgumentException("Value types should be the same for merging column ranges");
+    }
+
     ValidationUtils.checkArgument(left.getColumnName().equals(right.getColumnName()),
         "Column names should be the same for merging column ranges");
     String filePath = left.getFilePath();
@@ -190,7 +316,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     long valueCount = left.getValueCount() + right.getValueCount();
     long totalSize = left.getTotalSize() + right.getTotalSize();
     long totalUncompressedSize = left.getTotalUncompressedSize() + right.getTotalUncompressedSize();
-    return create(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize);
+
+    return create(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize, left.getValueMetadata());
   }
 
   private static <T extends Comparable<T>> T minVal(T val1, T val2) {
@@ -211,5 +338,290 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return val1;
     }
     return val1.compareTo(val2) > 0 ? val1 : val2;
+  }
+
+  public static ValueMetadata getValueMetadata(HoodieValueTypeInfo valueTypeInfo) {
+    if (valueTypeInfo == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    ValueType valueType = ValueType.fromInt(valueTypeInfo.getTypeOrdinal());
+    if (valueType == ValueType.NONE) {
+      return NoneMetadata.INSTANCE;
+    } else if (valueType == ValueType.DECIMAL) {
+      return DecimalMetadata.create(valueTypeInfo.getAdditionalInfo());
+    } else {
+      return new ValueMetadata(valueType);
+    }
+  }
+
+  public static ValueMetadata getValueMetadata(GenericRecord columnStatsRecord) {
+    if (columnStatsRecord == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    GenericRecord valueTypeInfo = (GenericRecord) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_TYPE);
+    if (valueTypeInfo == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    ValueType valueType = ValueType.fromInt((Integer) valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL));
+    if (valueType == ValueType.NONE) {
+      return NoneMetadata.INSTANCE;
+    } else if (valueType == ValueType.DECIMAL) {
+      return DecimalMetadata.create((String) valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO));
+    } else {
+      return new ValueMetadata(valueType);
+    }
+  }
+
+  public static ValueMetadata getValueMetadata(Schema fieldSchema) {
+    Schema valueSchema = resolveNullableSchema(fieldSchema);
+    if (valueSchema == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    ValueType valueType = ValueType.fromSchema(valueSchema);
+    if (valueType == ValueType.NONE) {
+      return NoneMetadata.INSTANCE;
+    } else if (valueType == ValueType.DECIMAL) {
+      return DecimalMetadata.create((LogicalTypes.Decimal) valueSchema.getLogicalType());
+    } else {
+      return new ValueMetadata(valueType);
+    }
+  }
+
+  public static ValueMetadata getValueMetadata(PrimitiveType primitiveType) {
+    if (primitiveType == null) {
+      return NoneMetadata.INSTANCE;
+    }
+
+    ValueType valueType = ValueType.fromPrimitiveType(primitiveType);
+    if (valueType == ValueType.NONE) {
+      return NoneMetadata.INSTANCE;
+    } else if (valueType == ValueType.DECIMAL) {
+      return DecimalMetadata.create(primitiveType);
+    } else {
+      return new ValueMetadata(valueType);
+    }
+  }
+
+  public static class ValueMetadata {
+
+
+    private final ValueType valueType;
+
+    private ValueMetadata(ValueType valueType) {
+      this.valueType = valueType;
+    }
+
+    public ValueType getValueType() {
+      return valueType;
+    }
+
+    public HoodieValueTypeInfo getValueTypeInfo() {
+      return new HoodieValueTypeInfo(valueType.ordinal(), getAdditionalInfo());
+    }
+
+    public String getAdditionalInfo() {
+      return null;
+    }
+  }
+
+  public static class NoneMetadata extends ValueMetadata {
+    public static final ValueMetadata INSTANCE = new NoneMetadata();
+    private NoneMetadata() {
+      super(ValueType.NONE);
+    }
+
+    @Override
+    public HoodieValueTypeInfo getValueTypeInfo() {
+      return null;
+    }
+  }
+
+  public static class DecimalMetadata extends ValueMetadata {
+
+    public static DecimalMetadata create(String additionalInfo) {
+      if (additionalInfo == null) {
+        throw new IllegalArgumentException("additionalInfo cannot be null");
+      }
+      //TODO: decide if we want to store things in a better way
+      String[] splits = additionalInfo.split(",");
+      return new DecimalMetadata(Integer.parseInt(splits[0]), Integer.parseInt(splits[1]));
+    }
+
+    public static DecimalMetadata create(LogicalTypes.Decimal decimal) {
+      return new DecimalMetadata(decimal.getPrecision(), decimal.getScale());
+    }
+
+    public static DecimalMetadata create(PrimitiveType primitiveType) {
+      return new DecimalMetadata(LogicalTypeTokenParser.getPrecision(primitiveType), LogicalTypeTokenParser.getScale(primitiveType));
+    }
+
+    private final int precision;
+    private final int scale;
+
+    private DecimalMetadata(int precision, int scale) {
+      super(ValueType.DECIMAL);
+      this.precision = precision;
+      this.scale = scale;
+    }
+
+    public int getPrecision() {
+      return precision;
+    }
+
+    public int getScale() {
+      return scale;
+    }
+
+    @Override
+    public String getAdditionalInfo() {
+      return String.format("%d,%d", precision, scale);
+    }
+  }
+
+  public enum ValueType {
+    NONE,
+    // primitive types
+    NULL,
+    BOOLEAN,
+    INT,
+    LONG,
+    FLOAT,
+    DOUBLE,
+    BYTES,
+    STRING,
+    // complex types
+    RECORD,
+    ENUM,
+    ARRAY,
+    MAP,
+    UNION, // maybe get rid of this
+    FIXED,
+    // logical types
+    DECIMAL,
+    UUID,
+    DATE,
+    TIME_MILLIS,
+    TIME_MICROS,
+    TIMESTAMP_MILLIS,
+    TIMESTAMP_MICROS,
+    TIMESTAMP_NANOS,
+    LOCAL_TIMESTAMP_MILLIS,
+    LOCAL_TIMESTAMP_MICROS,
+    LOCAL_TIMESTAMP_NANOS,
+    DURATION;
+
+    private static ValueType[] myEnumValues;
+
+    public static ValueType fromInt(int i) {
+      if (ValueType.myEnumValues == null) {
+        ValueType.myEnumValues = ValueType.values();
+      }
+      return ValueType.myEnumValues[i];
+    }
+
+    public static ValueType fromPrimitiveType(PrimitiveType primitiveType) {
+      if (primitiveType.getLogicalTypeAnnotation() != null) {
+        return LogicalTypeTokenParser.fromLogicalTypeAnnotation(primitiveType);
+      }
+      switch (primitiveType.getPrimitiveTypeName()) {
+        case INT64:
+          return ValueType.LONG;
+        case INT32:
+          return ValueType.INT;
+        case BOOLEAN:
+          return ValueType.BOOLEAN;
+        case BINARY:
+          return ValueType.BYTES;
+        case FLOAT:
+          return ValueType.FLOAT;
+        case DOUBLE:
+          return ValueType.DOUBLE;
+        case INT96:
+          // TODO: probably wrong
+          return ValueType.DECIMAL;
+        case FIXED_LEN_BYTE_ARRAY:
+          return ValueType.FIXED;
+        default:
+          throw new IllegalArgumentException("Unsupported primitive type: " + primitiveType.getPrimitiveTypeName());
+      }
+    }
+
+    public static ValueType fromSchema(Schema schema) {
+      switch (schema.getType()) {
+        case NULL:
+          if (schema.getLogicalType() == null) {
+            return ValueType.NULL;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Null: " + schema.getLogicalType());
+        case BOOLEAN:
+          if (schema.getLogicalType() == null) {
+            return ValueType.BOOLEAN;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Boolean: " + schema.getLogicalType());
+        case INT:
+          if (schema.getLogicalType() == null) {
+            return ValueType.INT;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.Date) {
+            return ValueType.DATE;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.TimeMillis) {
+            return ValueType.TIME_MILLIS;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Int: " + schema.getLogicalType());
+        case LONG:
+          if (schema.getLogicalType() == null) {
+            return ValueType.LONG;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.TimeMicros) {
+            return ValueType.TIME_MICROS;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+            return ValueType.TIMESTAMP_MILLIS;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+            return ValueType.TIMESTAMP_MICROS;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.LocalTimestampMillis) {
+            return ValueType.LOCAL_TIMESTAMP_MILLIS;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.LocalTimestampMicros) {
+            return ValueType.LOCAL_TIMESTAMP_MICROS;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Long: " + schema.getLogicalType());
+        case FLOAT:
+          if (schema.getLogicalType() == null) {
+            return ValueType.FLOAT;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Float: " + schema.getLogicalType());
+        case DOUBLE:
+          if (schema.getLogicalType() == null) {
+            return ValueType.DOUBLE;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Double: " + schema.getLogicalType());
+        case BYTES:
+          if (schema.getLogicalType() == null) {
+            return ValueType.BYTES;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+            return ValueType.DECIMAL;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Bytes: " + schema.getLogicalType());
+        case STRING:
+          if (schema.getLogicalType() == null) {
+            return ValueType.STRING;
+          } else if (Objects.equals(schema.getLogicalType().getName(), LogicalTypes.uuid().getName())) {
+            return ValueType.UUID;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for String: " + schema.getLogicalType());
+        case FIXED:
+          if (schema.getLogicalType() == null) {
+            return ValueType.FIXED;
+          } else if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
+            return ValueType.DECIMAL;
+          }
+          throw new IllegalArgumentException("Unsupported logical type for Fixed: " + schema.getLogicalType());
+        default:
+          // TODO: decide if we want to throw or return NONE
+          throw new IllegalArgumentException("Unsupported type: " + schema.getType());
+          //return ValueType.NONE;
+      }
+    }
   }
 }

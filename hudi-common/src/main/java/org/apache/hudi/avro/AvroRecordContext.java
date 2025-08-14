@@ -34,11 +34,14 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.UnaryOperator;
@@ -86,6 +89,39 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
       }
       Object value = currentRecord.get(field.pos());
       if (i == path.length - 1) {
+        return value;
+      }
+      currentSchema = field.schema();
+      currentRecord = (IndexedRecord) value;
+    }
+    return null;
+  }
+
+  public static Object getFieldValueFromIndexedRecordAsJava(
+      IndexedRecord record,
+      String fieldName) {
+    Schema currentSchema = record.getSchema();
+    IndexedRecord currentRecord = record;
+    String[] path = fieldName.split("\\.");
+    for (int i = 0; i < path.length; i++) {
+      if (currentSchema.isUnion()) {
+        currentSchema = AvroSchemaUtils.resolveNullableSchema(currentSchema);
+      }
+      Schema.Field field = currentSchema.getField(path[i]);
+      if (field == null) {
+        return null;
+      }
+      Object value = currentRecord.get(field.pos());
+      if (i == path.length - 1) {
+        if (field.schema().getLogicalType() instanceof LogicalTypes.Decimal) {
+          if (value instanceof ByteBuffer) {
+            return HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) value).array(), (LogicalTypes.Decimal) field.schema().getLogicalType());
+          } else if (value instanceof GenericData.Fixed) {
+            return HoodieAvroUtils.convertBytesToBigDecimal(((GenericData.Fixed) value).bytes(), (LogicalTypes.Decimal) field.schema().getLogicalType());
+          } else {
+            throw new UnsupportedOperationException("Not supported for " + value.getClass());
+          }
+        }
         return value;
       }
       currentSchema = field.schema();

@@ -184,7 +184,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     String targetColName = "c1";
 
     HoodieColumnRangeMetadata<Comparable> c1Metadata =
-        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 100, 1000, 5, 1000, 123456, 123456);
+        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 100, 1000, 5, 1000, 123456, 123456, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     HoodieRecord<HoodieMetadataPayload> columnStatsRecord =
         HoodieMetadataPayload.createColumnStatsRecords(PARTITION_NAME, Collections.singletonList(c1Metadata), false)
@@ -197,7 +197,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     // NOTE: Column Stats record will only be merged in case existing file will be modified,
     //       which could only happen on storages schemes supporting appends
     HoodieColumnRangeMetadata<Comparable> c1AppendedBlockMetadata =
-        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 500, 0, 100, 12345, 12345);
+        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 500, 0, 100, 12345, 12345, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     HoodieRecord<HoodieMetadataPayload> updatedColumnStatsRecord =
         HoodieMetadataPayload.createColumnStatsRecords(PARTITION_NAME, Collections.singletonList(c1AppendedBlockMetadata), false)
@@ -207,7 +207,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
         columnStatsRecord.getData().preCombine(updatedColumnStatsRecord.getData());
 
     HoodieColumnRangeMetadata<Comparable> expectedColumnRangeMetadata =
-        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 1000, 5, 1100, 135801, 135801);
+        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 1000, 5, 1100, 135801, 135801, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
 
     HoodieRecord<HoodieMetadataPayload> expectedColumnStatsRecord =
         HoodieMetadataPayload.createColumnStatsRecords(PARTITION_NAME, Collections.singletonList(expectedColumnRangeMetadata), false)
@@ -253,17 +253,17 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
   @Test
   public void testPartitionStatsPayloadMerging() {
     HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file", "columnName", 1, 5, 0, 10, 100, 200);
+        "path/to/file", "columnName", 1, 5, 0, 10, 100, 200, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     HoodieRecord<HoodieMetadataPayload> firstPartitionStatsRecord =
         HoodieMetadataPayload.createPartitionStatsRecords(PARTITION_NAME, Collections.singletonList(fileColumnRange1), false, false, Option.empty()).findFirst().get();
     HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250);
+        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     HoodieRecord<HoodieMetadataPayload> updatedPartitionStatsRecord =
         HoodieMetadataPayload.createPartitionStatsRecords(PARTITION_NAME, Collections.singletonList(fileColumnRange2), false, false, Option.empty()).findFirst().get();
     HoodieMetadataPayload combinedPartitionStatsRecordPayload =
         updatedPartitionStatsRecord.getData().preCombine(firstPartitionStatsRecord.getData());
     HoodieColumnRangeMetadata<Comparable> expectedColumnRange = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file", "columnName", 1, 8, 1, 25, 220, 450);
+        "path/to/file", "columnName", 1, 8, 1, 25, 220, 450, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     HoodieMetadataPayload expectedColumnRangeMetadata = (HoodieMetadataPayload) HoodieMetadataPayload.createPartitionStatsRecords(
         PARTITION_NAME, Collections.singletonList(expectedColumnRange), false, false, Option.empty()).findFirst().get().getData();
     assertEquals(expectedColumnRangeMetadata, combinedPartitionStatsRecordPayload);
@@ -272,11 +272,11 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
   @Test
   public void testPartitionStatsPayloadMergingWithDelete() {
     HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file", "columnName", 1, 5, 0, 10, 100, 200);
+        "path/to/file", "columnName", 1, 5, 0, 10, 100, 200, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     HoodieRecord<HoodieMetadataPayload> firstPartitionStatsRecord =
         HoodieMetadataPayload.createPartitionStatsRecords(PARTITION_NAME, Collections.singletonList(fileColumnRange1), false, false, Option.empty()).findFirst().get();
     HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250);
+        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     // create delete payload
     HoodieRecord<HoodieMetadataPayload> deletedPartitionStatsRecord =
         HoodieMetadataPayload.createPartitionStatsRecords(PARTITION_NAME, Collections.singletonList(fileColumnRange2), true, false, Option.empty()).findFirst().get();
@@ -284,7 +284,7 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     HoodieMetadataPayload combinedPartitionStatsRecordPayload =
         deletedPartitionStatsRecord.getData().preCombine(firstPartitionStatsRecord.getData());
     HoodieColumnRangeMetadata<Comparable> expectedColumnRange = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250);
+        "path/to/file", "columnName", 3, 8, 1, 15, 120, 250, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
     HoodieMetadataPayload expectedColumnRangeMetadata = (HoodieMetadataPayload) HoodieMetadataPayload.createPartitionStatsRecords(
         PARTITION_NAME, Collections.singletonList(expectedColumnRange), true, false, Option.empty()).findFirst().get().getData();
     assertEquals(expectedColumnRangeMetadata, combinedPartitionStatsRecordPayload);

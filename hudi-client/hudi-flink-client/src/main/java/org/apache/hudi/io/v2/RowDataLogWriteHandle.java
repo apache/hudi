@@ -118,7 +118,7 @@ public class RowDataLogWriteHandle<T, I, K, O>
         columnRangeMetadata = new HashMap<>();
         for (String col: columnsToIndexSet) {
           columnRangeMetadata.put(col, HoodieColumnRangeMetadata.create(
-              stat.getPath(), col, null, null, 0L, 0L, 0L, 0L));
+              stat.getPath(), col, null, null, 0L, 0L, 0L, 0L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
         }
       } else {
         ValidationUtils.checkArgument(dataBlock.get() instanceof ColumnRangeMetadataProvider,

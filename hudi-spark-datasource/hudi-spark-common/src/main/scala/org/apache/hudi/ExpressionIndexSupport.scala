@@ -27,16 +27,13 @@ import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
-import org.apache.hudi.common.function.{SerializableFunction, SerializableFunctionUnchecked}
-import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieColumnRangeMetadata, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.{collection, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.hash.{ColumnIndexID, PartitionIndexID}
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.index.expression.HoodieExpressionIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil, MetadataPartitionType}
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
@@ -263,8 +260,8 @@ class ExpressionIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = tableSchemaFieldMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType)
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType)
+          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType, HoodieColumnRangeMetadata.getValueMetadata(r.getValueType))
+          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType, HoodieColumnRangeMetadata.getValueMetadata(r.getValueType))
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)

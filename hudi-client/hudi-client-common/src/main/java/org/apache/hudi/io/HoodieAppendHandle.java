@@ -435,7 +435,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
           .map(fieldName -> HoodieAvroUtils.getSchemaForField(writeSchemaWithMetaFields, fieldName)).collect(Collectors.toList());
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-            collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, storage.getConf());
+            collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, storage.getConf(),
+                this.config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.NINE));
         stat.putRecordsStats(columnRangeMetadataMap);
       } catch (HoodieException e) {
         throw new HoodieAppendException("Failed to extract append result", e);
