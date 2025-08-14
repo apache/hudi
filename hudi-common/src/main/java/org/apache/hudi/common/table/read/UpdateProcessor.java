@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -57,13 +56,9 @@ public interface UpdateProcessor<T> {
                                        TypedProperties properties) {
     UpdateProcessor<T> handler;
     Option<String> payloadClass = readerContext.getPayloadClasses(properties).map(Pair::getRight);
-    boolean isNotMetadataPayload = payloadClass.map(className -> !className.equals(HoodieMetadataPayload.class.getName())).orElse(true);
-    if (readerContext.getMergeMode() == RecordMergeMode.CUSTOM && isNotMetadataPayload) {
-      if (payloadClass.isEmpty()) {
-        handler = new CustomMergerUpdateProcessor<>(readStats, readerContext, emitDeletes, properties);
-      } else {
-        handler = new PayloadUpdateProcessor<>(readStats, readerContext, emitDeletes, properties, payloadClass.get());
-      }
+    boolean hasNonMetadataPayload = payloadClass.map(className -> !className.equals(HoodieMetadataPayload.class.getName())).orElse(false);
+    if (readerContext.getMergeMode() == RecordMergeMode.CUSTOM && hasNonMetadataPayload) {
+      handler = new PayloadUpdateProcessor<>(readStats, readerContext, emitDeletes, properties, payloadClass.get());
     } else {
       handler = new StandardUpdateProcessor<>(readStats, readerContext, emitDeletes);
     }
@@ -156,30 +151,6 @@ public interface UpdateProcessor<T> {
         }
       }
       return super.handleNonDeletes(previousRecord, mergedRecord);
-    }
-  }
-
-  class CustomMergerUpdateProcessor<T> extends StandardUpdateProcessor<T> {
-    private final HoodieRecordMerger merger;
-    private final TypedProperties properties;
-
-    CustomMergerUpdateProcessor(HoodieReadStats readStats, HoodieReaderContext<T> readerContext, boolean emitDeletes,
-                                TypedProperties properties) {
-      super(readStats, readerContext, emitDeletes);
-      this.merger = readerContext.getRecordMerger().get();
-      this.properties = properties;
-    }
-
-    @Override
-    protected BufferedRecord<T> handleNonDeletes(BufferedRecord<T> previousRecord, BufferedRecord<T> mergedRecord) {
-      try {
-        if (merger.shouldFlush(readerContext.getRecordContext().constructHoodieRecord(mergedRecord), readerContext.getRecordContext().getSchemaFromBufferRecord(mergedRecord), properties)) {
-          return super.handleNonDeletes(previousRecord, mergedRecord);
-        }
-        return null;
-      } catch (IOException e) {
-        throw new HoodieIOException("Error processing record with custom merger", e);
-      }
     }
   }
 

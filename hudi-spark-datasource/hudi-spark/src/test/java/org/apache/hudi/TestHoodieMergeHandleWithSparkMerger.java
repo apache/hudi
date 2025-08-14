@@ -103,21 +103,12 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   }
 
   @Test
-  public void testNoFlushMerger() throws Exception {
-    HoodieWriteConfig writeConfig = buildNoFlushWriteConfig(SCHEMA);
-    HoodieRecordMerger merger = writeConfig.getRecordMerger();
-    assertInstanceOf(NoFlushMerger.class, merger);
-    assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
-    insertAndUpdate(writeConfig, 64);
-  }
-
-  @Test
   public void testCustomMerger() throws Exception {
     HoodieWriteConfig writeConfig = buildCustomWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
     assertInstanceOf(CustomMerger.class, merger);
     assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
-    insertAndUpdate(writeConfig, 95);
+    insertAndUpdate(writeConfig, 114);
   }
 
   public List<HoodieRecord> generateRecords(int numOfRecords, String commitTime) throws Exception {
@@ -188,12 +179,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
   public HoodieWriteConfig buildDefaultWriteConfig(Schema avroSchema) {
     HoodieWriteConfig writeConfig = getWriteConfig(avroSchema, DefaultMerger.class.getName(), HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, RecordMergeMode.EVENT_TIME_ORDERING);
-    metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
-    return writeConfig;
-  }
-
-  public HoodieWriteConfig buildNoFlushWriteConfig(Schema avroSchema) {
-    HoodieWriteConfig writeConfig = getWriteConfig(avroSchema, NoFlushMerger.class.getName(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, RecordMergeMode.CUSTOM);
     metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
     return writeConfig;
   }
@@ -334,10 +319,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   }
 
   public static class CustomMerger extends DefaultSparkRecordMerger {
-    @Override
-    public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
-      return !((HoodieSparkRecord) record).getData().getString(0).equals("001");
-    }
 
     @Override
     public String getMergingStrategy() {
