@@ -64,7 +64,7 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     RECORDKEY_FIELD.key -> "_row_key",
     PARTITIONPATH_FIELD.key -> "partition",
-    PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
   ) ++ metadataOpts
   var mergedDfList: List[DataFrame] = List.empty

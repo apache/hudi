@@ -58,7 +58,8 @@ object HoodieCreateRecordUtils {
                                        instantTime: String,
                                        preppedSparkSqlWrites: Boolean,
                                        preppedSparkSqlMergeInto: Boolean,
-                                       preppedWriteOperation: Boolean)
+                                       preppedWriteOperation: Boolean,
+                                       orderingFields: java.util.List[String])
 
   def createHoodieRecordRdd(args: createHoodieRecordRddArgs) = {
     val df = args.df
@@ -73,6 +74,7 @@ object HoodieCreateRecordUtils {
     val preppedSparkSqlWrites = args.preppedSparkSqlWrites
     val preppedSparkSqlMergeInto = args.preppedSparkSqlMergeInto
     val preppedWriteOperation = args.preppedWriteOperation
+    val orderingFields = args.orderingFields
 
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
@@ -125,7 +127,6 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
-          val precombineFields = config.getPreCombineFields()
 
           // handle dropping partition columns
           it.map { avroRec =>
@@ -143,9 +144,9 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine && !precombineFields.isEmpty) {
+            val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
               val orderingVal = OrderingValues.create(
-                precombineFields,
+                orderingFields,
                 JFunction.toJavaFunction[String, Comparable[_]](
                   field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
                     consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))

@@ -23,7 +23,7 @@ import org.apache.hudi.client.{SparkRDDWriteClient, WriteClientTestUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.{HoodieFailedWritesCleaningPolicy, HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
@@ -39,7 +39,7 @@ class TestStreamSourceReadByStateTransitionTime extends StreamTest  {
 
   protected val commonOptions: Map[String, String] = Map(
     RECORDKEY_FIELD.key -> "id",
-    PRECOMBINE_FIELD.key -> "ts",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
     INSERT_PARALLELISM_VALUE.key -> "4",
     UPSERT_PARALLELISM_VALUE.key -> "4",
     DELETE_PARALLELISM_VALUE.key -> "4",

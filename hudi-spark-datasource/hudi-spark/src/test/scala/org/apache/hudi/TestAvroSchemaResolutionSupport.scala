@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
@@ -45,7 +46,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     "hoodie.insert.shuffle.parallelism" -> "1",
     "hoodie.upsert.shuffle.parallelism" -> "1",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "id",
+    HoodieTableConfig.ORDERING_FIELDS.key() -> "id",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "name",
     DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
     HoodieMetadataConfig.ENABLE.key -> "false"

@@ -107,7 +107,7 @@ public class HudiDataStreamWriter {
     options.put(FlinkOptions.PATH.key(), basePath);
     options.put(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), "s3a");
     options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-    options.put(FlinkOptions.PRECOMBINE_FIELDS.key(), "ts");
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
     options.put(FlinkOptions.IGNORE_FAILED.key(), "true");
     return options;

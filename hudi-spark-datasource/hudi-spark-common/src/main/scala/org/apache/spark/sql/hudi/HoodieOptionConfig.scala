@@ -181,11 +181,6 @@ object HoodieOptionConfig {
       DataSourceWriteOptions.TABLE_TYPE.defaultValue)
   }
 
-  def getPreCombineField(options: Map[String, String]): Option[String] = {
-    val params = mapSqlOptionsToDataSourceWriteConfigs(options)
-    params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key).filter(_.nonEmpty)
-  }
-
   def deleteHoodieOptions(options: Map[String, String]): Map[String, String] = {
     options.filterNot(_._1.startsWith("hoodie.")).filterNot(kv => sqlOptionKeyToWriteConfigKey.contains(kv._1))
   }

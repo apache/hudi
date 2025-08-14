@@ -625,7 +625,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
       .option("hoodie.datasource.write.keygenerator.class", keyGenClassName)
       .option("hoodie.datasource.write.partitionpath.field", writePartitionFields)
       .option("hoodie.datasource.write.recordkey.field", "id")
-      .option("hoodie.datasource.write.precombine.fields", "name")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key(), "name")
       .option("hoodie.table.name", tableName)
       .option("hoodie.insert.shuffle.parallelism", "1")
       .option("hoodie.upsert.shuffle.parallelism", "1")

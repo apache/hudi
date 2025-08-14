@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAsse
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieTableType}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -46,7 +46,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "version",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "version",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
@@ -177,7 +177,7 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
     val opts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "version",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "version",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt"
     )
 

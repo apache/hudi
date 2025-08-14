@@ -23,6 +23,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileForma
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
@@ -56,7 +57,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
     // Create the file with record positions.
     userToCountryDF.write.format("hudi")
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "userid")
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
       .option(HoodieWriteConfig.TBL_NAME.key, "user_to_country")
       .option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key, SPARK_MERGER)
       .option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key, "true")

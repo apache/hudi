@@ -69,7 +69,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       "hoodie.delete.shuffle.parallelism" -> "1",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
     )
@@ -79,7 +79,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
     var options: Map[String, String] = commonOpts +
       (HoodieMetadataConfig.ENABLE.key -> String.valueOf(isMetadataEnabled))
     if (!StringUtils.isNullOrEmpty(preCombineField)) {
-      options += (DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> preCombineField)
+      options += (HoodieTableConfig.ORDERING_FIELDS.key() -> preCombineField)
     }
     if (useFileGroupReader) {
       options += (HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> String.valueOf(useFileGroupReader))
@@ -155,7 +155,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       HoodieWriteConfig.WRITE_RECORD_POSITIONS.key -> "true",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
     )
 
@@ -207,7 +207,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
       HoodieWriteConfig.WRITE_RECORD_POSITIONS.key -> writeRecordPosition.toString,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       HoodieIndexConfig.INDEX_TYPE.key -> (if (enableNBCC) BUCKET.name else SIMPLE.name),
       HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,

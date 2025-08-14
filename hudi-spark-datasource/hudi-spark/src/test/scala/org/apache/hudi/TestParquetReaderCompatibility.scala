@@ -23,7 +23,7 @@ import org.apache.hudi.TestParquetReaderCompatibility.NullabilityEnum.{NotNullab
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.ParquetTableSchemaResolver
+import org.apache.hudi.common.table.{HoodieTableConfig, ParquetTableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
 import org.apache.hudi.config.HoodieWriteConfig
@@ -202,7 +202,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val path = tempBasePath + "_avro_list_update"
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
       "path" -> path

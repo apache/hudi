@@ -87,7 +87,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
         HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
         DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
         RECORDKEY_FIELD.key -> "c1",
-        PRECOMBINE_FIELD.key -> "c1",
+        HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
         HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
         "hoodie.compact.inline.max.delta.commits" -> "10",
         HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
@@ -212,7 +212,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
@@ -272,7 +272,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "5",
@@ -389,7 +389,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       "hoodie.write.markers.type" -> "DIRECT",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
@@ -520,7 +520,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "5",
@@ -577,7 +577,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1",
@@ -643,7 +643,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1",
@@ -712,7 +712,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts
@@ -763,7 +763,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true",
@@ -860,7 +860,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true",
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
@@ -975,7 +975,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts

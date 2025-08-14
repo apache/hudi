@@ -85,6 +85,7 @@ object DataSourceReadOptions {
     .markAdvanced()
     .withDocumentation("Comma separated list of file paths to read within a Hudi table.")
 
+  @Deprecated
   val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
   val ENABLE_HOODIE_FILE_INDEX: ConfigProperty[Boolean] = ConfigProperty
@@ -1031,9 +1032,6 @@ object DataSourceOptionsHelper {
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
     }
-    if (!params.contains(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()) && tableConfig.getOrderingFieldsStr.isPresent) {
-      missingWriteConfigs ++= Map(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key -> tableConfig.getOrderingFieldsStr.orElse(null))
-    }
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
     }
@@ -1073,6 +1071,7 @@ object DataSourceOptionsHelper {
   /**
    * Returns optional list of precombine fields from the provided parameteres.
    */
+  @deprecated("Use preCombine key in table config", "1.1.0")
   def getPreCombineFields(params: Map[String, String]): Option[java.util.List[String]] = params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key) match {
     // NOTE: This is required to compensate for cases when empty string is used to stub
     //       property value to avoid it being set with the default value

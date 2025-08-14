@@ -54,7 +54,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     RECORDKEY_FIELD.key -> "_row_key",
-    PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1",
     HoodieCleanConfig.AUTO_CLEAN.key -> "false",

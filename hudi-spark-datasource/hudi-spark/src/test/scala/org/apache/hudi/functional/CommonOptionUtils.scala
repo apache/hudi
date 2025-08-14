@@ -35,7 +35,7 @@ object CommonOptionUtils {
     HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key() -> "true",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
   )

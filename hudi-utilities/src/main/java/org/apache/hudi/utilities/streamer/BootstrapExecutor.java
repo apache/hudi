@@ -59,7 +59,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
-import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
@@ -207,7 +206,7 @@ public class BootstrapExecutor implements Serializable {
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
-        .setOrderingFields(props.getString(PRECOMBINE_FIELD_NAME.key(), null))
+        .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(props))
         .setTableVersion(ConfigUtils.getIntWithAltKeys(props, WRITE_TABLE_VERSION))
         .setTableFormat(props.getString(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
         .setPopulateMetaFields(props.getBoolean(

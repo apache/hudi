@@ -23,6 +23,7 @@ import org.apache.hudi.client.bootstrap.selector.{FullRecordBootstrapModeSelecto
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
@@ -57,7 +58,7 @@ class TestDataSourceForBootstrap {
     HoodieBootstrapConfig.PARALLELISM_VALUE.key -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
   )

@@ -40,7 +40,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
-import org.apache.hudi.common.util.{CommitUtils, Option => HOption, StringUtils}
+import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, Option => HOption, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
@@ -310,7 +310,7 @@ class HoodieSparkSqlWriterInternal {
           .setArchiveLogFolder(archiveLogFolder)
           // we can't fetch preCombine field from hoodieConfig object, since it falls back to "ts" as default value,
           // but we are interested in what user has set, hence fetching from optParams.
-          .setOrderingFields(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
+          .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(optParams.asJava))
           .setPartitionFields(partitionColumnsForKeyGenerator)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
@@ -517,7 +517,7 @@ class HoodieSparkSqlWriterInternal {
             val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
                 avroRecordNamespace, writerSchema, processedDataSchema, operation, instantTime, preppedSparkSqlWrites,
-                preppedSparkSqlMergeInto, preppedWriteOperation))) match {
+                preppedSparkSqlMergeInto, preppedWriteOperation, tableConfig.getOrderingFields))) match {
               case Success(recs) => recs
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }
@@ -772,7 +772,7 @@ class HoodieSparkSqlWriterInternal {
           .setPayloadClassName(payloadClass)
           .setRecordMergeMode(RecordMergeMode.getValue(hoodieConfig.getString(HoodieWriteConfig.RECORD_MERGE_MODE)))
           .setRecordMergeStrategyId(recordMergerStrategy)
-          .setOrderingFields(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
+          .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(hoodieConfig.getProps))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBaseFileFormat(baseFileFormat)
           .setBootstrapBasePath(bootstrapBasePath)

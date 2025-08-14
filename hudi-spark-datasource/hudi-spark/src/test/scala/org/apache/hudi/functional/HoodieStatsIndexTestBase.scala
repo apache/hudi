@@ -23,7 +23,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{ActionType, HoodieCommitMetadata, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.config.HoodieWriteConfig
@@ -53,7 +53,7 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     RECORDKEY_FIELD.key -> "_row_key",
-    PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS.key -> "10"
   )
 

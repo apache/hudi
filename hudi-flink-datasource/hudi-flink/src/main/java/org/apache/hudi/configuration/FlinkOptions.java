@@ -110,8 +110,8 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final String NO_PRE_COMBINE = "no_precombine";
-  public static final ConfigOption<String> PRECOMBINE_FIELDS = ConfigOptions
-      .key("precombine.fields")
+  public static final ConfigOption<String> ORDERING_FIELDS = ConfigOptions
+      .key("ordering.fields")
       .stringType()
       .defaultValue("ts")
       .withFallbackKeys("precombine.field", "write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())

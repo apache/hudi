@@ -72,7 +72,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
     HoodieRecordType recordType =  config.getRecordMerger().getRecordType();
     Dataset inputDataset = sparkSession.read().format(getFormat()).option("basePath", sourceBasePath).load(filePaths);
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-    String precombineKey = props.getString("hoodie.datasource.write.precombine.fields");
+    String orderingFieldsStr = ConfigUtils.getOrderingFieldsStrDuringWrite(props);
     String structName = tableName + "_record";
     String namespace = "hoodie." + tableName;
     if (recordType == HoodieRecordType.AVRO) {
@@ -80,7 +80,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
           Option.empty());
       return genericRecords.toJavaRDD().map(gr -> {
         String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
-            gr, precombineKey, false, props.getBoolean(
+            gr, orderingFieldsStr, false, props.getBoolean(
                 KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                 Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
         try {

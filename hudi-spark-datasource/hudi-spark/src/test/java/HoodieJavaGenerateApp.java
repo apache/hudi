@@ -20,6 +20,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -183,7 +184,7 @@ public class HoodieJavaGenerateApp {
         // this is the partition to place it into
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition")
         // use to combine duplicate records in input/with disk val
-        .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp")
         // Used by hive sync and queries
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         .mode(commitType);

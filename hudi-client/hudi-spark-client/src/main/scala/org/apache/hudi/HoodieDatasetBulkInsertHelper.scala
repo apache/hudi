@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{OrderingValues, ReflectionUtils}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.HoodieJavaRDD
@@ -36,7 +37,6 @@ import org.apache.hudi.keygen.{AutoRecordGenWrapperKeyGenerator, BuiltinKeyGener
 import org.apache.hudi.table.action.commit.{BucketBulkInsertDataInternalWriterHelper, BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
-
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -68,6 +68,7 @@ object HoodieDatasetBulkInsertHelper
    */
   def prepareForBulkInsert(df: DataFrame,
                            config: HoodieWriteConfig,
+                           tableConfig: HoodieTableConfig,
                            partitioner: BulkInsertPartitioner[Dataset[Row]],
                            instantTime: String): Dataset[Row] = {
     val populateMetaFields = config.populateMetaFields()
@@ -121,7 +122,7 @@ object HoodieDatasetBulkInsertHelper
       }
 
       val dedupedRdd = if (config.shouldCombineBeforeInsert) {
-        dedupeRows(prependedRdd, updatedSchema, config.getPreCombineFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
+        dedupeRows(prependedRdd, updatedSchema, tableConfig.getOrderingFields.asScala.toList, SparkHoodieIndexFactory.isGlobalIndex(config), targetParallelism)
       } else {
         prependedRdd
       }

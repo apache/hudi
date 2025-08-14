@@ -25,6 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -333,7 +334,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     options.put(DataSourceReadOptions.ENABLE_DATA_SKIPPING().key(), "true");
     options.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL());
     options.put(HoodieWriteConfig.TBL_NAME.key(), "testTable");
-    options.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    options.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     options.put("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.NonpartitionedKeyGenerator");
     options.put(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0");

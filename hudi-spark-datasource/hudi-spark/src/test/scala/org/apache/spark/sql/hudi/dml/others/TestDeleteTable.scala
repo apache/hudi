@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.dml.others
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.sql.SaveMode
@@ -337,7 +338,7 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
             .option(HoodieWriteConfig.TBL_NAME.key, tableName)
             .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
             .option(RECORDKEY_FIELD.key, "id")
-            .option(PRECOMBINE_FIELD.key, "ts")
+            .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
             .option(PARTITIONPATH_FIELD.key, "dt")
             .option(URL_ENCODE_PARTITIONING.key(), urlencode)
             .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")

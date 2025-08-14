@@ -23,7 +23,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSpa
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.model.WriteOperationType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -53,7 +53,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     RECORDKEY_FIELD.key -> "_row_key",
     PARTITIONPATH_FIELD.key -> "partition_path",
-    PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieClusteringConfig.INLINE_CLUSTERING.key -> "true",
     HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key -> "4",
     HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
@@ -1174,7 +1174,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", "COPY_ON_WRITE")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.fields", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.operation", "upsert")
           .option("hoodie.schema.on.read.enable", "true")
           .mode("append")

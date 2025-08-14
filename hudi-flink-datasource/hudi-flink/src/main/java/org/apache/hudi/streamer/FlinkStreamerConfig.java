@@ -426,7 +426,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.set(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());
     conf.set(FlinkOptions.INSERT_CLUSTER, config.insertCluster);
     conf.set(FlinkOptions.OPERATION, config.operation.value());
-    conf.set(FlinkOptions.PRECOMBINE_FIELDS, config.sourceOrderingFields);
+    conf.set(FlinkOptions.ORDERING_FIELDS, config.sourceOrderingFields);
     conf.set(FlinkOptions.WRITE_TABLE_VERSION, config.writeTableVersion);
     conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
     conf.set(FlinkOptions.RECORD_MERGER_IMPLS, config.recordMergerImpls);

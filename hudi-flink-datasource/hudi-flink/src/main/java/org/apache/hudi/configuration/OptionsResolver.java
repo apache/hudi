@@ -155,9 +155,9 @@ public class OptionsResolver {
    * Returns the preCombine fields as comma separated string
    * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
    */
-  public static String getPreCombineFieldsStr(Configuration conf) {
-    final String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELDS);
-    return preCombineField.equals(FlinkOptions.NO_PRE_COMBINE) ? null : preCombineField;
+  public static String getOrderingFieldsStr(Configuration conf) {
+    final String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
+    return orderingFields.equals(FlinkOptions.NO_PRE_COMBINE) ? null : orderingFields;
   }
 
   /**

@@ -21,6 +21,7 @@ package org.apache.hudi.examples.quickstart;
 import org.apache.hudi.QuickstartUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.examples.common.HoodieExampleDataGenerator;
 import org.apache.hudi.examples.common.HoodieExampleSparkUtils;
@@ -115,7 +116,7 @@ public final class HoodieSparkQuickstart {
 
     df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
@@ -136,7 +137,7 @@ public final class HoodieSparkQuickstart {
     df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
         .option("hoodie.datasource.write.operation", WriteOperationType.INSERT_OVERWRITE.name())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
@@ -183,7 +184,7 @@ public final class HoodieSparkQuickstart {
     Dataset<Row> df = spark.read().json(jsc.parallelize(updates, 1));
     df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
@@ -204,7 +205,7 @@ public final class HoodieSparkQuickstart {
 
     df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)
@@ -221,7 +222,7 @@ public final class HoodieSparkQuickstart {
     Dataset<Row> df = spark.emptyDataFrame();
     df.write().format("hudi")
         .options(QuickstartUtils.getQuickstartWriteConfigs())
-        .option(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
         .option(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid")
         .option(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partitionpath")
         .option(TBL_NAME.key(), tableName)

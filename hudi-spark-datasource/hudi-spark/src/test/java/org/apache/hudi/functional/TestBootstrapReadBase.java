@@ -25,6 +25,7 @@ import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelect
 import org.apache.hudi.client.bootstrap.translator.DecodedBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -105,7 +106,7 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
         options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), ComplexKeyGenerator.class.getName());
       }
     }
-    options.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    options.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     if (tableType.equals(MERGE_ON_READ)) {
       options.put(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
     }
