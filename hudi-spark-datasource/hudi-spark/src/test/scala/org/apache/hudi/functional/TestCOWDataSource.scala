@@ -191,7 +191,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "timestamp,rider",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "timestamp,rider",
       DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
     )
@@ -451,7 +451,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       "hoodie.upsert.shuffle.parallelism" -> "4",
       "hoodie.bulkinsert.shuffle.parallelism" -> "2",
       "hoodie.delete.shuffle.parallelism" -> "1",
-      "hoodie.datasource.write.precombine.fields" -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "timestamp",
       HoodieMetadataConfig.ENABLE.key -> "false" // this is testing table configs and write configs. disabling metadata to save on test run time.
     ))
 
@@ -1602,7 +1602,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option("hoodie.bulkinsert.shuffle.parallelism", "2")
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "data_date")
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, "org.apache.hudi.keygen.TimestampBasedKeyGenerator")
       .option(TIMESTAMP_TYPE_FIELD.key, "DATE_STRING")
       .option(TIMESTAMP_INPUT_DATE_FORMAT.key, "yyyy-MM-dd")
@@ -1730,7 +1730,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .options(writeOpts)
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "uuid")
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionpath")
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
       .option(HoodieMetricsConfig.TURN_METRICS_ON.key(), "true")
@@ -1859,7 +1859,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
       DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "id",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "precombine",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "precombine",
       DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key() -> "true"
     )
 
@@ -1871,7 +1871,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       DataSourceWriteOptions.TABLE_TYPE.key() -> "COPY_ON_WRITE",
       DataSourceWriteOptions.RECORDKEY_FIELD.key() -> "id",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "precombine"
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "precombine"
     )
 
     df.filter(df("id") === 1).

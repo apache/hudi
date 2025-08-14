@@ -179,7 +179,6 @@ public abstract class AbstractHoodieLogRecordScanner {
     if (orderingFieldsStr != null) {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsStr);
       props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFieldsStr);
-      props.setProperty("hoodie.datasource.write.precombine.fields", orderingFieldsStr);
     }
     this.tableVersion = tableConfig.getTableVersion();
     this.payloadProps = props;

@@ -133,7 +133,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
     val hudiOptions = Map[String, String](
       "hoodie.table.name" -> tableName,
       RECORDKEY_FIELD.key -> "id",
-      PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
       KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,

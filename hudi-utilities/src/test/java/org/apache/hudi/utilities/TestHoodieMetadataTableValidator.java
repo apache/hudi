@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -191,7 +192,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
 
     Dataset<Row> inserts = makeInsertDf("000", 5).cache();
@@ -250,7 +251,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
 
     Dataset<Row> inserts = makeInsertDf("000", 5).cache();
@@ -417,7 +418,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
     writeOptions.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
 
@@ -449,7 +450,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       writeOptions.put("hoodie.table.name", "test_table");
       writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), tableType);
       writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-      writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+      writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
       writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
       writeOptions.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
 
@@ -517,7 +518,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
 
     // constructor of HoodieMetadataValidator instantiates HoodieTableMetaClient. hence creating an actual table. but rest of tests is mocked.
@@ -598,7 +599,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
       writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
       writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-      writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+      writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
       writeOptions.put(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "2");
 
       Dataset<Row> inserts = makeInsertDf("000", 10).cache();
@@ -721,7 +722,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       writeOptions.put("hoodie.table.name", "test_table");
       writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
       writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-      writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+      writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
       writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(),"partition_path");
       writeOptions.put(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "2");
 
@@ -1178,7 +1179,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "COPY_ON_WRITE");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.OPERATION().key(),"bulk_insert");
     writeOptions.put(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true");
 
@@ -1275,7 +1276,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
       writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
       writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-      writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+      writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
       writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
 
       Dataset<Row> inserts = makeInsertDf("000", 5).cache();
@@ -1401,7 +1402,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
-    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
     writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
 
     // Create a large dataset to generate long validation messages

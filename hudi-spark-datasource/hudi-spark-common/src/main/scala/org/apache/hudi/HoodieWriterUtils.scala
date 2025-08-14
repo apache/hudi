@@ -56,7 +56,6 @@ object HoodieWriterUtils {
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
-    hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)

@@ -169,8 +169,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
+  @Deprecated
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
-      .key("hoodie.datasource.write.precombine.fields")
+      .key("hoodie.datasource.write.precombine.field")
       .noDefaultValue()
       .withAlternatives("hoodie.datasource.write.precombine.field")
       .withDocumentation("Comma separated list of fields used in preCombining before actual write. When two records have the same key value, "
@@ -1408,6 +1409,7 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
   }
 
+  @Deprecated
   public List<String> getPreCombineFields() {
     return Option.ofNullable(getString(PRECOMBINE_FIELD_NAME))
         .map(preCombine -> Arrays.asList(preCombine.split(",")))
@@ -3018,6 +3020,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    @Deprecated
     public Builder withPreCombineField(String preCombineField) {
       writeConfig.setValue(PRECOMBINE_FIELD_NAME, preCombineField);
       return this;

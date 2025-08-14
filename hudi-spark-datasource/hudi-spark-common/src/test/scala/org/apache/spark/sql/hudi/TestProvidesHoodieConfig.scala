@@ -94,7 +94,7 @@ class TestProvidesHoodieConfig {
     // catalogProperties won't be passed in correctly, because they were not synced properly
     when(mockCatalog.catalogProperties).thenReturn(Map.empty[String, String])
     when(mockCatalog.partitionFields).thenReturn(Array("partition"))
-    when(mockCatalog.preCombineKeys).thenCallRealMethod()
+    when(mockCatalog.orderingFields).thenCallRealMethod()
     when(mockCatalog.partitionSchema).thenReturn(StructType(Nil))
     when(mockCatalog.primaryKeys).thenReturn(Array("key"))
     when(mockCatalog.table).thenReturn(CatalogTable.apply(

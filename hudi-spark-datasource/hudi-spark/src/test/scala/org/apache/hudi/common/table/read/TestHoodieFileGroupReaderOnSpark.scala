@@ -239,7 +239,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").

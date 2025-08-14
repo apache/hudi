@@ -270,7 +270,7 @@ public class TestHoodieTableSource {
     final String f1 = "f_timestamp";
     conf1.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     conf1.set(FlinkOptions.RECORD_KEY_FIELD, f1);
-    conf1.set(FlinkOptions.PRECOMBINE_FIELDS, f1);
+    conf1.set(FlinkOptions.ORDERING_FIELDS, f1);
     conf1.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
     conf1.setString(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), logicalTimestamp + "");
     int numBuckets = (int)FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.defaultValue();
@@ -292,7 +292,7 @@ public class TestHoodieTableSource {
     String tablePath2 = new Path(tempFile.getAbsolutePath(), "tbl2").toString();
     conf2.set(FlinkOptions.PATH, tablePath2);
     conf2.set(FlinkOptions.RECORD_KEY_FIELD, f2);
-    conf2.set(FlinkOptions.PRECOMBINE_FIELDS, f2);
+    conf2.set(FlinkOptions.ORDERING_FIELDS, f2);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf2);
     HoodieTableSource tableSource2 = createHoodieTableSource(conf2);
     tableSource2.applyFilters(Collections.singletonList(
@@ -308,7 +308,7 @@ public class TestHoodieTableSource {
     String tablePath3 = new Path(tempFile.getAbsolutePath(), "tbl3").toString();
     conf3.set(FlinkOptions.PATH, tablePath3);
     conf3.set(FlinkOptions.RECORD_KEY_FIELD, f3);
-    conf3.set(FlinkOptions.PRECOMBINE_FIELDS, f3);
+    conf3.set(FlinkOptions.ORDERING_FIELDS, f3);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf3);
     HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
     tableSource3.applyFilters(Collections.singletonList(

@@ -82,17 +82,48 @@ public class ConfigUtils {
    */
   @Nullable
   public static String[] getOrderingFields(Properties properties) {
-    String orderField = null;
-    if (properties.containsKey("hoodie.datasource.write.precombine.fields")) {
-      orderField = properties.getProperty("hoodie.datasource.write.precombine.fields");
-    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
-      orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
-    } else if (containsConfigProperty(properties, HoodieTableConfig.ORDERING_FIELDS)) {
-      orderField = getStringWithAltKeys(properties, HoodieTableConfig.ORDERING_FIELDS);
-    } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
+    String orderField = getOrderingFieldsStr(properties);
+    return StringUtils.isNullOrEmpty(orderField) ? null : orderField.split(",");
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStr(Properties properties) {
+    String orderField = getOrderingFieldsStrDuringWrite(properties);
+    if (orderField == null && properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
-    return StringUtils.isNullOrEmpty(orderField) ? null : orderField.split(",");
+    return orderField;
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStrDuringWrite(Properties properties) {
+    String orderField = null;
+    if (containsConfigProperty(properties, HoodieTableConfig.ORDERING_FIELDS)) {
+      orderField = getStringWithAltKeys(properties, HoodieTableConfig.ORDERING_FIELDS);
+    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+      orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
+    }
+    return orderField;
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStrDuringWrite(Map<String, String> properties) {
+    String orderField = null;
+    if (containsConfigProperty(properties, HoodieTableConfig.ORDERING_FIELDS)) {
+      orderField = getStringWithAltKeys(properties, HoodieTableConfig.ORDERING_FIELDS);
+    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+      orderField = properties.get("hoodie.datasource.write.precombine.field");
+    }
+    return orderField;
   }
 
   /**
@@ -104,7 +135,6 @@ public class ConfigUtils {
     String orderingFieldsAsString = String.join(",", orderingFields);
     props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
     props.putIfAbsent(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFieldsAsString);
-    props.putIfAbsent("hoodie.datasource.write.precombine.fields", orderingFieldsAsString);
     return props;
   }
 
@@ -280,7 +310,7 @@ public class ConfigUtils {
    * @param configProperty Config to look up.
    * @return {@code true} if exists; {@code false} otherwise.
    */
-  public static boolean containsConfigProperty(Map<String, Object> props,
+  public static boolean containsConfigProperty(Map<String, ?> props,
                                                ConfigProperty<?> configProperty) {
     return containsConfigProperty(props::containsKey, configProperty);
   }

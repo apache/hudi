@@ -20,9 +20,9 @@ package org.apache.hudi.utilities.sources.processor.maxwell;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
@@ -124,7 +124,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
     // we can update the `update_time`(delete time) only when it is in timestamp format.
     if (!preCombineFieldType.equals(NON_TIMESTAMP)) {
-      String preCombineField = this.props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), null);
+      String preCombineField = ConfigUtils.getOrderingFieldsStrDuringWrite(props);
 
       // ts from maxwell
       long ts = inputJson.get(TS).longValue();

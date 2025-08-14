@@ -58,7 +58,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
@@ -87,7 +87,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       "hoodie.compact.inline.max.delta.commits" -> "10"
@@ -195,7 +195,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "3"
@@ -306,7 +306,7 @@ class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       "hoodie.write.markers.type" -> "DIRECT",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"

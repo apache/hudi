@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, Quicks
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -205,7 +205,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df = spark.createDataFrame(rowRdd, structType)
         df.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.fields", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())
@@ -224,7 +224,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df2 = spark.createDataFrame(rowRdd2, structType)
         df2.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.fields", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())
@@ -250,7 +250,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df3 = spark.createDataFrame(rowRdd3, structType3)
         df3.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.fields", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())

@@ -27,7 +27,7 @@ import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictReso
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -76,7 +76,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     RECORDKEY_FIELD.key -> "record_key_col",
     PARTITIONPATH_FIELD.key -> "partition_key_col",
     HIVE_STYLE_PARTITIONING.key -> "true",
-    PRECOMBINE_FIELD.key -> "ts",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
     HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
     DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
   ) ++ metadataOpts

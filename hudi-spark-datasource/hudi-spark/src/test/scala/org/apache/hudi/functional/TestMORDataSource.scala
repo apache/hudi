@@ -69,7 +69,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     "hoodie.upsert.shuffle.parallelism" -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
@@ -142,11 +142,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
     writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
-    readOpts = readOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
+    readOpts = readOpts - HoodieTableConfig.ORDERING_FIELDS.key
     if (!hasPreCombineField) {
-      writeOpts = writeOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
+      writeOpts = writeOpts - HoodieTableConfig.ORDERING_FIELDS.key
     } else {
-      writeOpts = writeOpts ++ Map(DataSourceWriteOptions.PRECOMBINE_FIELD.key ->
+      writeOpts = writeOpts ++ Map(HoodieTableConfig.ORDERING_FIELDS.key ->
         (if (isNullOrEmpty(precombineField)) "" else precombineField))
     }
     if (!isNullOrEmpty(recordMergeMode)) {
@@ -772,7 +772,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(PAYLOAD_CLASS_NAME.key, classOf[DefaultHoodieRecordPayload].getCanonicalName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option(RECORDKEY_FIELD.key, "id")
-      .option(PRECOMBINE_FIELD.key, "version")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
       .mode(SaveMode.Append)
       .save(basePath)
@@ -1143,7 +1143,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key()-> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
@@ -1185,7 +1185,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
@@ -1329,7 +1329,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val options = Map[String, String](
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
       DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> precombineField,
+      HoodieTableConfig.ORDERING_FIELDS.key -> precombineField,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
@@ -1427,7 +1427,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val options = Map[String, String](
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
       DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> precombineField,
+      HoodieTableConfig.ORDERING_FIELDS.key -> precombineField,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
@@ -1742,7 +1742,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "timestamp,rider",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "timestamp,rider",
       DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
     )
@@ -1935,7 +1935,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     Map(
       // Don't override table name - let fixture table configuration take precedence
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",         // Fixture uses 'id' as record key
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",        // Fixture uses 'ts' as precombine field
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",        // Fixture uses 'ts' as precombine field
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition", // Fixture uses 'partition' as partition field
       "hoodie.upsert.shuffle.parallelism" -> "2",
       "hoodie.insert.shuffle.parallelism" -> "2"

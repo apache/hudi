@@ -64,7 +64,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     }
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "_event_lsn").
-      option(PRECOMBINE_FIELD.key(), precombineField).
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), precombineField).
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").

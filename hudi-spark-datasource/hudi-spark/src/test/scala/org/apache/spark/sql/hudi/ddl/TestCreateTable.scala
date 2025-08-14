@@ -877,7 +877,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, s"original_$tableName")
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -956,7 +956,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
           .option(URL_ENCODE_PARTITIONING.key, "true")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -1025,7 +1025,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         .option(HoodieWriteConfig.TBL_NAME.key, tableName)
         .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
         .option(RECORDKEY_FIELD.key, "id")
-        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
         .option(PARTITIONPATH_FIELD.key, "")
         .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
         .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -1454,7 +1454,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val hoodieCatalogTable = HoodieCatalogTable(spark, TableIdentifier(tableName))
         assertResult(Array("id"))(hoodieCatalogTable.primaryKeys)
         assertResult(tableType)(hoodieCatalogTable.tableTypeName)
-        assertResult(java.util.Collections.singletonList[String]("ts"))(hoodieCatalogTable.preCombineKeys)
+        assertResult(java.util.Collections.singletonList[String]("ts"))(hoodieCatalogTable.orderingFields)
       }
     }
   }

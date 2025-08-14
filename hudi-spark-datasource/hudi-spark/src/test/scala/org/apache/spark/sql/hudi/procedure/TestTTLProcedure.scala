@@ -31,7 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 
 import org.apache.spark.api.java.JavaSparkContext
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import scala.collection.JavaConverters._
 
@@ -114,7 +114,6 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
       .newBuilder
       .withPath(basePath)
       .withSchema(TRIP_EXAMPLE_SCHEMA)
-      .withPreCombineField("_row_key")
       .forTable(tableName)
-
+      .withProps(Collections.singletonMap(HoodieTableConfig.ORDERING_FIELDS.key(), "_row_key"))
 }

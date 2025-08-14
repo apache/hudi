@@ -111,7 +111,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   private static final List<HoodieFileFormat> DEFAULT_SUPPORTED_FILE_FORMATS = Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC);
   protected static List<HoodieFileFormat> supportedFileFormats;
   private static final String KEY_FIELD_NAME = "_row_key";
-  private static final String PRECOMBINE_FIELD_NAME = "timestamp";
+  private static final String ORDERING_FIELD_NAME = "timestamp";
   private static final String PARTITION_FIELD_NAME = "partition_path";
   private static final String RIDER_FIELD_NAME = "rider";
   @TempDir
@@ -208,7 +208,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     writeConfigs.put("hoodie.datasource.write.table.type", HoodieTableType.MERGE_ON_READ.name());
     // Use two precombine values - combination of timestamp and rider
     String orderingValues = "timestamp,rider";
-    writeConfigs.put("hoodie.datasource.write.precombine.fields", orderingValues);
+    writeConfigs.put(HoodieTableConfig.ORDERING_FIELDS.key(), orderingValues);
     writeConfigs.put("hoodie.payload.ordering.field", orderingValues);
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
@@ -628,8 +628,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     Map<String, String> configMapping = new HashMap<>();
     configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), KEY_FIELD_NAME);
     configMapping.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), PARTITION_FIELD_NAME);
-    configMapping.put("hoodie.datasource.write.precombine.fields", PRECOMBINE_FIELD_NAME);
-    configMapping.put("hoodie.payload.ordering.field", PRECOMBINE_FIELD_NAME);
+    configMapping.put(HoodieTableConfig.ORDERING_FIELDS.key(), ORDERING_FIELD_NAME);
+    configMapping.put("hoodie.payload.ordering.field", ORDERING_FIELD_NAME);
     configMapping.put(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "hoodie_test");
     configMapping.put("hoodie.insert.shuffle.parallelism", "4");
     configMapping.put("hoodie.upsert.shuffle.parallelism", "4");
@@ -888,7 +888,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private TypedProperties buildProperties(HoodieTableMetaClient metaClient, RecordMergeMode recordMergeMode) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.datasource.write.precombine.fields", metaClient.getTableConfig().getOrderingFieldsStr().orElse(""));
+    props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), metaClient.getTableConfig().getOrderingFieldsStr().orElse(""));
     props.setProperty("hoodie.payload.ordering.field", metaClient.getTableConfig().getOrderingFieldsStr().orElse(""));
     props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
     if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
@@ -949,14 +949,14 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   }
 
   private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord<T>> records, Schema schema, HoodieReaderContext<T> readerContext,
-                                                                              List<String> preCombineFields) {
+                                                                              List<String> orderingFields) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.datasource.write.precombine.fields", String.join(",", preCombineFields));
+    props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), String.join(",", orderingFields));
     return records.stream()
         .map(record -> new HoodieTestDataGenerator.RecordIdentifier(
             record.getRecordKey(),
             removeHiveStylePartition(record.getPartitionPath()),
-            record.getOrderingValue(schema, props, preCombineFields.toArray(new String[0])).toString(),
+            record.getOrderingValue(schema, props, orderingFields.toArray(new String[0])).toString(),
             readerContext.getRecordContext().getValue(record.getData(), schema, RIDER_FIELD_NAME).toString()))
         .collect(Collectors.toList());
   }
