@@ -120,7 +120,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     val finalDf = df.select("ts", "key", "rider", "driver", "fare", "Op").sort("key")
 
     val expectedData = if (!payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
-      if (HoodieTableConfig.EVENT_TIME_BASED_PAYLOADS.contains(payloadClazz)) {
+      if (HoodieTableConfig.EVENT_TIME_ORDERING_PAYLOADS.contains(payloadClazz)) {
         Seq(
           (11, "1", "rider-X", "driver-X", 19.10, "D"),
           (11, "2", "rider-Y", "driver-Y", 27.70, "u"),

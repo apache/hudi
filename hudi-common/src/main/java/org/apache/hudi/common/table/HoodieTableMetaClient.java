@@ -90,7 +90,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
-import static org.apache.hudi.common.table.HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForV9TableCreation;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -1491,7 +1491,7 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
         tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
       } else { // For table version >= 9
-        Map<String, String> mergeConfigs = inferCorrectMergingBehaviorV9TblCreation(
+        Map<String, String> mergeConfigs = inferMergingConfigsForV9TableCreation(
             recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields, tableVersion);
         for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
           tableConfig.setValue(config.getKey(), config.getValue());

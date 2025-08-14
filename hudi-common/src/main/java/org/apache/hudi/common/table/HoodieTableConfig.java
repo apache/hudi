@@ -146,7 +146,7 @@ public class HoodieTableConfig extends HoodieConfig {
           PartialUpdateAvroPayload.class.getName(),
           PostgresDebeziumAvroPayload.class.getName())));
 
-  public static final Set<String> EVENT_TIME_BASED_PAYLOADS = Collections.unmodifiableSet(
+  public static final Set<String> EVENT_TIME_ORDERING_PAYLOADS = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           DefaultHoodieRecordPayload.class.getName(),
           EventTimeAvroPayload.class.getName(),
@@ -855,11 +855,11 @@ public class HoodieTableConfig extends HoodieConfig {
    * which is based on the logic of table version < 9, and then tuned for version 9 logic.
    * This approach fits the same behavior of upgrade from 8 to 9.
    */
-  public static Map<String, String> inferCorrectMergingBehaviorV9TblCreation(RecordMergeMode recordMergeMode,
-                                                                             String payloadClassName,
-                                                                             String recordMergeStrategyId,
-                                                                             String orderingFieldName,
-                                                                             HoodieTableVersion tableVersion) {
+  public static Map<String, String> inferMergingConfigsForV9TableCreation(RecordMergeMode recordMergeMode,
+                                                                          String payloadClassName,
+                                                                          String recordMergeStrategyId,
+                                                                          String orderingFieldName,
+                                                                          HoodieTableVersion tableVersion) {
     Map<String, String> reconciledConfigs = new HashMap<>();
     if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
       throw new HoodieIOException("Unsupported flow for table versions less than 9");
@@ -891,7 +891,7 @@ public class HoodieTableConfig extends HoodieConfig {
       } else { // CASE 3: Payload classes are under deprecation.
         // Standard merging configs.
         // NOTE: We use LEGACY_PAYLOAD_CLASS_NAME instead of PAYLOAD_CLASS_NAME here.
-        if (EVENT_TIME_BASED_PAYLOADS.contains(payloadClassName)) {
+        if (EVENT_TIME_ORDERING_PAYLOADS.contains(payloadClassName)) {
           reconciledConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
           reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
           reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), EVENT_TIME_BASED_MERGE_STRATEGY_UUID);

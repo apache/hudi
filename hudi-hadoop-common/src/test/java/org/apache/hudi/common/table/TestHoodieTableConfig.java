@@ -592,9 +592,9 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
                                           String expectedPartialUpdateMode, String expectedDebeziumMarker,
                                           String expectedDeleteKey, String expectedDeleteMarker) {
     if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
-      assertExceptionWithInferCorrectMergingBehaviorV9TblCreation(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+      assertExceptionWithInferMergingConfigsForV9TableCreation(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
     } else {
-      Map<String, String> configs = HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+      Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
           recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
 
       assertEquals(expectedConfigSize, configs.size(), "Config size mismatch for: " + testName);
@@ -662,15 +662,15 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testInferMergingConfigsForVersion9WithInconsistentConfigs() {
     // Test case: Inconsistent merge mode and strategy should throw exception
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+      HoodieTableConfig.inferMergingConfigsForV9TableCreation(
           EVENT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
     });
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+      HoodieTableConfig.inferMergingConfigsForV9TableCreation(
           COMMIT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
     });
     assertThrows(IllegalArgumentException.class, () -> {
-      HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+      HoodieTableConfig.inferMergingConfigsForV9TableCreation(
           CUSTOM, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
     });
   }
@@ -678,18 +678,18 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testInferMergingConfigsForVersion9EdgeCases() {
     // Test case: Empty string payload class should be treated as null
-    Map<String, String> configs = HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+    Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
         EVENT_TIME_ORDERING, "", EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
     assertEquals(2, configs.size());
     assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
     assertEquals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID, configs.get(RECORD_MERGE_STRATEGY_ID.key()));
 
     // Test case: Non-version 9 table with all parameters should throw
-    assertExceptionWithInferCorrectMergingBehaviorV9TblCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
+    assertExceptionWithInferMergingConfigsForV9TableCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
         EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.EIGHT);
 
     // Test case: Version 9 table with null ordering field for event time ordering should still work
-    configs = HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+    configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
         EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
     assertEquals(2, configs.size());
     assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
@@ -701,10 +701,10 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // Test that only version 9 returns configs, others throw exception
     for (HoodieTableVersion version : HoodieTableVersion.values()) {
       if (version.lesserThan(HoodieTableVersion.NINE)) {
-        assertExceptionWithInferCorrectMergingBehaviorV9TblCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
+        assertExceptionWithInferMergingConfigsForV9TableCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
             EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", version);
       } else {
-        Map<String, String> configs = HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(
+        Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
             EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
             EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", version);
         assertEquals(3, configs.size(), "Table version 9 and above should return 3 configs");
@@ -712,13 +712,13 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     }
   }
 
-  private void assertExceptionWithInferCorrectMergingBehaviorV9TblCreation(RecordMergeMode recordMergeMode,
-                                                                           String payloadClassName,
-                                                                           String recordMergeStrategyId,
-                                                                           String orderingFieldName,
-                                                                           HoodieTableVersion tableVersion) {
+  private void assertExceptionWithInferMergingConfigsForV9TableCreation(RecordMergeMode recordMergeMode,
+                                                                        String payloadClassName,
+                                                                        String recordMergeStrategyId,
+                                                                        String orderingFieldName,
+                                                                        HoodieTableVersion tableVersion) {
     HoodieIOException ioException = assertThrows(HoodieIOException.class, () -> {
-      HoodieTableConfig.inferCorrectMergingBehaviorV9TblCreation(recordMergeMode, payloadClassName,
+      HoodieTableConfig.inferMergingConfigsForV9TableCreation(recordMergeMode, payloadClassName,
           recordMergeStrategyId, orderingFieldName, tableVersion);
     });
     assertEquals("Unsupported flow for table versions less than 9", ioException.getMessage().toString());
