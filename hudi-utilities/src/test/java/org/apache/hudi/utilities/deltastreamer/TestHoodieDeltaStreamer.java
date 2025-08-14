@@ -1886,7 +1886,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(metaClient.getTableConfig().getPayloadClass(), PartialUpdateAvroPayload.class.getName());
   }
 
-  // @Test TO be fixed with HUDI-9714
+  @Disabled("To be fixed with HUDI-9714")
+  @Test
   public void testPayloadClassUpdateWithCOWTable() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_cow";
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
