@@ -25,14 +25,15 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 
 import org.apache.avro.Schema;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDefaultValue;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
 
 /**
@@ -41,7 +42,7 @@ import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
  * {@link BufferedRecordMergerFactory.CommitTimePartialRecordMerger} and
  * {@link BufferedRecordMergerFactory.EventTimePartialRecordMerger}.
  */
-public class PartialUpdateStrategy<T> {
+public class PartialUpdateStrategy<T> implements Serializable {
   private final RecordContext<T> recordContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
@@ -178,6 +179,6 @@ public class PartialUpdateStrategy<T> {
   }
 
   static Map<String, String> parseMergeProperties(TypedProperties props) {
-    return extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    return extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
   }
 }

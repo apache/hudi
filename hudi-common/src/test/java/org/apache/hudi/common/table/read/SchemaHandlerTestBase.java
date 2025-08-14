@@ -257,6 +257,7 @@ public abstract class SchemaHandlerTestBase {
   private static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
+    when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     if (hasPrecombine) {
       when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.of("timestamp"));
       when(hoodieTableConfig.getPreCombineFields()).thenReturn(Collections.singletonList("timestamp"));
@@ -266,8 +267,6 @@ public abstract class SchemaHandlerTestBase {
     }
     if (mergeMode == CUSTOM) {
       when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn("asdf");
-      // NOTE: in this test custom doesn't have any meta cols because it is more interesting of a test case
-      when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
     }
   }
 

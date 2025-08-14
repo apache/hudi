@@ -136,7 +136,6 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       val tableVersion = HoodieTableVersion.current().versionCode()
       val expectedOutput =s"""
           |[hoodie.archivelog.folder,archived,archive]
-          |[hoodie.compaction.payload.class,org.apache.hudi.common.model.DefaultHoodieRecordPayload,null]
           |[hoodie.database.name,default,null]
           |[hoodie.datasource.write.drop.partition.columns,false,false]
           |[hoodie.datasource.write.hive_style_partitioning,true,null]

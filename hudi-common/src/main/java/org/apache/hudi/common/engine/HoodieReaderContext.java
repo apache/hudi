@@ -55,6 +55,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -270,12 +271,12 @@ public abstract class HoodieReaderContext<T> {
     HoodieTableVersion tableVersion = tableConfig.getTableVersion();
     // If the provided payload class differs from the table's payload class, we need to infer the correct merging behavior.
     if (isIngestion && providedPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(null, providedPayloadClass.get(), null,
+      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferMergingConfigsForWrites(null, providedPayloadClass.get(), null,
           tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
       recordMergeMode = triple.getLeft();
       mergeStrategyId = triple.getRight();
-    } else if (!tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
+    } else if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      Triple<RecordMergeMode, String, String> triple = inferMergingConfigsForPreV9Table(
           recordMergeMode, tableConfig.getPayloadClass(),
           mergeStrategyId, tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
       recordMergeMode = triple.getLeft();
