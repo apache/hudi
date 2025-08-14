@@ -23,6 +23,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -191,8 +192,10 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     // Note: starting from version 9, payload class is not necessary set, but
     //       merge mode must exist. Therefore, we use merge mode to infer
     //       the payload class for certain corner cases, like for MIT command.
-    if (props.containsKey(RECORD_MERGE_MODE.key())
-        && props.getProperty(RECORD_MERGE_MODE.key()).equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
+
+    if (ConfigUtils.containsConfigProperty(props, RECORD_MERGE_MODE)
+        && ConfigUtils.getStringWithAltKeys(props, RECORD_MERGE_MODE, "")
+        .equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
       return OverwriteWithLatestAvroPayload.class.getName();
     }
     return DEFAULT_PAYLOAD_CLASS_NAME;
@@ -202,10 +205,10 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   // some temporary payload class setting is respect.
   static Option<String> getPayloadClassNameIfPresent(Properties props) {
     String payloadClassName = null;
-    if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
-      payloadClassName = props.getProperty(PAYLOAD_CLASS_NAME.key());
+    if (ConfigUtils.containsConfigProperty(props, PAYLOAD_CLASS_NAME)) {
+      payloadClassName = ConfigUtils.getStringWithAltKeys(props, PAYLOAD_CLASS_NAME);
     } else if (props.containsKey(LEGACY_PAYLOAD_CLASS_NAME.key())) {
-      payloadClassName = props.getProperty(LEGACY_PAYLOAD_CLASS_NAME.key());
+      payloadClassName = ConfigUtils.getStringWithAltKeys(props, LEGACY_PAYLOAD_CLASS_NAME);
     } else if (props.containsKey("hoodie.datasource.write.payload.class")) {
       payloadClassName = props.getProperty("hoodie.datasource.write.payload.class");
     }

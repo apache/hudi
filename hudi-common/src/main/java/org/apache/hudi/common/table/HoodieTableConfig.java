@@ -266,9 +266,9 @@ public class HoodieTableConfig extends HoodieConfig {
           + " produce a new base file.");
 
   public static final ConfigProperty<String> LEGACY_PAYLOAD_CLASS_NAME = ConfigProperty
-      .key("hoodie.legacy.payload.class")
+      .key("hoodie.table.legacy.payload.class")
       .noDefaultValue()
-      .deprecatedAfter("1.1.0")
+      .sinceVersion("1.1.0")
       .withDocumentation("Payload class to indicate the payload class that is used to create the table and is not used anymore.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
