@@ -154,6 +154,7 @@ public class SpillableMapUtils {
 
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
         HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
+
     return (HoodieRecord<R>) hoodieRecord;
   }
 
