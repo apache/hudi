@@ -856,10 +856,10 @@ public class HoodieTableConfig extends HoodieConfig {
    * This approach fits the same behavior of upgrade from 8 to 9.
    */
   static Map<String, String> inferMergingConfigsForV9TableCreation(RecordMergeMode recordMergeMode,
-                                                                          String payloadClassName,
-                                                                          String recordMergeStrategyId,
-                                                                          String orderingFieldName,
-                                                                          HoodieTableVersion tableVersion) {
+                                                                   String payloadClassName,
+                                                                   String recordMergeStrategyId,
+                                                                   String orderingFieldName,
+                                                                   HoodieTableVersion tableVersion) {
     Map<String, String> reconciledConfigs = new HashMap<>();
     if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
       throw new HoodieIOException("Unsupported flow for table versions less than 9");
@@ -957,10 +957,10 @@ public class HoodieTableConfig extends HoodieConfig {
    * This function infers basic merging properties used by table version <= 8.
    */
   static Triple<RecordMergeMode, String, String> inferMergingConfigsForPreV9Table(RecordMergeMode recordMergeMode,
-                                                                                          String payloadClassName,
-                                                                                          String recordMergeStrategyId,
-                                                                                          String orderingFieldNamesAsString,
-                                                                                          HoodieTableVersion tableVersion) {
+                                                                                  String payloadClassName,
+                                                                                  String recordMergeStrategyId,
+                                                                                  String orderingFieldNamesAsString,
+                                                                                  HoodieTableVersion tableVersion) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;
