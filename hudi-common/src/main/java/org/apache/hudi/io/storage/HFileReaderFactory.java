@@ -27,12 +27,15 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
 import org.apache.hudi.io.hfile.HFileReader;
+import org.apache.hudi.io.hfile.HFileReaderConfig;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * Factory class to provide the implementation for
@@ -55,7 +58,32 @@ public class HFileReaderFactory {
   public HFileReader createHFileReader() throws IOException {
     final long fileSize = determineFileSize();
     final SeekableDataInputStream inputStream = createInputStream(fileSize);
+    
+    if (shouldEnableBlockCaching()) {
+      HFileReaderConfig config = createHFileReaderConfig();
+      String filePath = getFilePath();
+      return new CachingHFileReaderImpl(inputStream, fileSize, filePath, config);
+    }
+    
     return new HFileReaderImpl(inputStream, fileSize);
+  }
+
+  private boolean shouldEnableBlockCaching() {
+    return metadataConfig.getHFileBlockCacheEnabled();
+  }
+
+  private HFileReaderConfig createHFileReaderConfig() {
+    int blockCacheSize = metadataConfig.getHFileBlockCacheSize();
+    int cacheTtlMinutes = metadataConfig.getHFileBlockCacheTTLMinutes();
+    return new HFileReaderConfig(blockCacheSize, cacheTtlMinutes);
+  }
+
+  private String getFilePath() {
+    if (fileSource.isLeft()) {
+      return fileSource.asLeft().toString();
+    }
+    // For byte array content, use a hash-based identifier
+    return "bytes:" + Arrays.hashCode(fileSource.asRight());
   }
 
   private long determineFileSize() throws IOException {
