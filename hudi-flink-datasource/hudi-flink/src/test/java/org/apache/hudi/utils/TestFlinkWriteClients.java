@@ -40,7 +40,6 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -134,7 +133,6 @@ public class TestFlinkWriteClients {
     assertThat(mergerClasses, is(CommitTimeFlinkRecordMerger.class.getName()));
   }
 
-  @Disabled("[HUDI-9644] Disabling to get green CI. will continue to investigate right fix for this.")
   @ParameterizedTest
   @ValueSource(ints = {1, 2, 3})
     // Disabling to get green CI. will continue to investigate right fix for this.
@@ -150,8 +148,8 @@ public class TestFlinkWriteClients {
     HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
 
-    assertThat(tableConfig.getRecordMergeMode(), is(configOrdinal == 3 ? RecordMergeMode.CUSTOM : RecordMergeMode.EVENT_TIME_ORDERING));
-    assertThat(tableConfig.getRecordMergeStrategyId(), is(configOrdinal == 3 ? HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID : HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
+    assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
+    assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
     assertThat(tableConfig.getPayloadClass(), is(PartialUpdateAvroPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
