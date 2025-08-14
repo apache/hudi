@@ -40,6 +40,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -133,8 +134,10 @@ public class TestFlinkWriteClients {
     assertThat(mergerClasses, is(CommitTimeFlinkRecordMerger.class.getName()));
   }
 
-  //@ParameterizedTest
-  //@ValueSource(ints = {3}) // Disabling to get green CI. will continue to investigate right fix for this.
+  @Disabled("[HUDI-9644] Disabling to get green CI. will continue to investigate right fix for this.")
+  @ParameterizedTest
+  @ValueSource(ints = {1, 2, 3})
+    // Disabling to get green CI. will continue to investigate right fix for this.
   void testRecordMergeConfigForPartialUpdate(int configOrdinal) throws Exception {
     if (configOrdinal == 1) {
       conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
