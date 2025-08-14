@@ -29,6 +29,7 @@ import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode
 import org.apache.hudi.functional.TestBootstrap
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.io.HoodieWriteMergeHandle
 import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -40,7 +41,7 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{Disabled, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 import org.mockito.ArgumentMatchers.any
@@ -1000,7 +1001,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key -> "false",
       "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1"
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key -> "org.apache.hudi.io.HoodieWriteMergeHandle"
     )
 
     val df = spark.range(0, 10).toDF("keyid")
