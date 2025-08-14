@@ -91,28 +91,32 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
       });
     } catch (Exception e) {
       LOG.error("Failed to create TLS-enabled DataHub emitter", e);
-      throw new RuntimeException("Failed to create TLS-enabled DataHub emitter", e);
+      throw new DataHubEmitterConfigurationException("Failed to create TLS-enabled DataHub emitter", e);
     }
   }
 
-  private SSLContext createSSLContext(String caCertPath) throws Exception {
+  private SSLContext createSSLContext(String caCertPath) throws DataHubEmitterConfigurationException {
     ValidationUtils.checkArgument(Files.exists(Paths.get(caCertPath)),
         "CA certificate file not found: " + caCertPath);
     
-    SSLContextBuilder sslContextBuilder = SSLContexts.custom();
+    try {
+      SSLContextBuilder sslContextBuilder = SSLContexts.custom();
 
-    KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
-    trustStore.load(null, null);
+      KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+      trustStore.load(null, null);
 
-    CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
-    try (FileInputStream certInputStream = new FileInputStream(caCertPath)) {
-      Certificate caCert = certificateFactory.generateCertificate(certInputStream);
-      trustStore.setCertificateEntry("ca-cert", caCert);
-      LOG.info("Successfully loaded CA certificate from: {}", caCertPath);
+      CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
+      try (FileInputStream certInputStream = new FileInputStream(caCertPath)) {
+        Certificate caCert = certificateFactory.generateCertificate(certInputStream);
+        trustStore.setCertificateEntry("ca-cert", caCert);
+        LOG.info("Successfully loaded CA certificate from: {}", caCertPath);
+      }
+
+      sslContextBuilder.loadTrustMaterial(trustStore, null);
+      
+      return sslContextBuilder.build();
+    } catch (Exception e) {
+      throw new DataHubEmitterConfigurationException("Failed to create SSL context with CA certificate: " + caCertPath, e);
     }
-
-    sslContextBuilder.loadTrustMaterial(trustStore, null);
-    
-    return sslContextBuilder.build();
   }
 }
