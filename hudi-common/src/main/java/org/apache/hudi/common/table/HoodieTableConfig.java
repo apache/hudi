@@ -927,11 +927,11 @@ public class HoodieTableConfig extends HoodieConfig {
    * To be invoked for table creation flows or writer flows.
    * @return the merging configs to use.
    */
-  public static Triple<RecordMergeMode, String, String> inferMergingConfigsForTblCreation(RecordMergeMode recordMergeMode,
-                                                                                          String payloadClassName,
-                                                                                          String recordMergeStrategyId,
-                                                                                          String orderingFieldNamesAsString,
-                                                                                          HoodieTableVersion tableVersion) {
+  public static Triple<RecordMergeMode, String, String> inferMergingConfigsForWrites(RecordMergeMode recordMergeMode,
+                                                                                     String payloadClassName,
+                                                                                     String recordMergeStrategyId,
+                                                                                     String orderingFieldNamesAsString,
+                                                                                     HoodieTableVersion tableVersion) {
     return inferMergingConfigsPreTableV9(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
   }
 
