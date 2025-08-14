@@ -621,6 +621,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withFileStitchingBinaryCopySchemaEvolutionEnabled(Boolean enabled) {
+      clusteringConfig.setValue(FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withDataOptimizeStrategy(String strategy) {
       clusteringConfig.setValue(LAYOUT_OPTIMIZE_STRATEGY, strategy);
       return this;
