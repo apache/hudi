@@ -235,7 +235,6 @@ object HoodieWriterUtils {
       key
     } else {
       if (tableConfig.getInt(HoodieTableConfig.VERSION) == HoodieTableVersion.NINE.versionCode()
-        && key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key)
         && !StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(
         HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING).trim)) {
         HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key

@@ -79,6 +79,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferRecordMergeModeFromPayloadClass;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -343,7 +344,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals(expectedProps, config.getTableMergeProperties());
   }
 
-  private static Stream<Arguments> argumentsForInferringRecordMergeMode() {
+  private static Stream<Arguments> argumentsForInferringRecordMergeModeForPreV9() {
     String defaultPayload = DefaultHoodieRecordPayload.class.getName();
     String overwritePayload = OverwriteWithLatestAvroPayload.class.getName();
     String customPayload = "custom_payload";
@@ -487,11 +488,11 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("argumentsForInferringRecordMergeMode")
-  void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass,
-                                 String inputMergeStrategy, String orderingFieldName,
-                                 String shouldThrowString, RecordMergeMode outputMergeMode,
-                                 String outputPayloadClass, String outputMergeStrategy) throws IOException {
+  @MethodSource("argumentsForInferringRecordMergeModeForPreV9")
+  void testInferMergeModeForPreV9Table(RecordMergeMode inputMergeMode, String inputPayloadClass,
+                                       String inputMergeStrategy, String orderingFieldName,
+                                       String shouldThrowString, RecordMergeMode outputMergeMode,
+                                       String outputPayloadClass, String outputMergeStrategy) throws IOException {
     Arrays.stream(new HoodieTableVersion[] {HoodieTableVersion.EIGHT, HoodieTableVersion.SIX})
         .forEach(tableVersion -> {
           boolean shouldThrow = "eight-only".equals(shouldThrowString)
@@ -508,12 +509,12 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
           }
           if (shouldThrow) {
             assertThrows(IllegalArgumentException.class,
-                () -> HoodieTableConfig.inferMergingConfigs(
+                () -> inferMergingConfigsForPreV9Table(
                     inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
                     tableVersion));
           } else {
             Triple<RecordMergeMode, String, String> inferredConfigs =
-                HoodieTableConfig.inferMergingConfigs(
+                inferMergingConfigsForPreV9Table(
                     inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
                     tableVersion);
             assertEquals(expectedMergeMode, inferredConfigs.getLeft());
