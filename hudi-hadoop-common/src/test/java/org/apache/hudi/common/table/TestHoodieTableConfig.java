@@ -508,12 +508,12 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
           }
           if (shouldThrow) {
             assertThrows(IllegalArgumentException.class,
-                () -> HoodieTableConfig.inferCorrectMergingBehavior(
+                () -> HoodieTableConfig.inferMergingConfigs(
                     inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
                     tableVersion));
           } else {
             Triple<RecordMergeMode, String, String> inferredConfigs =
-                HoodieTableConfig.inferCorrectMergingBehavior(
+                HoodieTableConfig.inferMergingConfigs(
                     inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
                     tableVersion);
             assertEquals(expectedMergeMode, inferredConfigs.getLeft());

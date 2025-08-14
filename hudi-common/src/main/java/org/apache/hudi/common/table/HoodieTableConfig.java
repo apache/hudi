@@ -868,8 +868,8 @@ public class HoodieTableConfig extends HoodieConfig {
     // Step 1: Infer merging configs based on input information.
     // This step is important since it provides the same configs before we do table upgrade.
     // Then additional logic for table version 9 could be verified.
-    Triple<RecordMergeMode, String, String> inferredConfigs = inferCorrectMergingBehavior(
-        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion, true);
+    Triple<RecordMergeMode, String, String> inferredConfigs = inferMergingConfigsPreTableV9(
+        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
     recordMergeMode = inferredConfigs.getLeft();
     recordMergeStrategyId = inferredConfigs.getRight();
 
@@ -924,16 +924,15 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
-   * Infers the merging behavior based on what the user sets (or doesn't set).
-   * Validates that the user has not set an illegal combination of configs.
-   * This function infers basic merging properties used by table version <= 8.
+   * To be invoked for table creation flows or writer flows.
+   * @return the merging configs to use.
    */
-  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
-                                                                                    String payloadClassName,
-                                                                                    String recordMergeStrategyId,
-                                                                                    String orderingFieldNamesAsString,
-                                                                                    HoodieTableVersion tableVersion) {
-    return inferCorrectMergingBehavior(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion, false);
+  public static Triple<RecordMergeMode, String, String> inferMergingConfigsForTblCreation(RecordMergeMode recordMergeMode,
+                                                                                          String payloadClassName,
+                                                                                          String recordMergeStrategyId,
+                                                                                          String orderingFieldNamesAsString,
+                                                                                          HoodieTableVersion tableVersion) {
+    return inferMergingConfigsPreTableV9(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
   }
 
   /**
@@ -941,15 +940,27 @@ public class HoodieTableConfig extends HoodieConfig {
    * Validates that the user has not set an illegal combination of configs.
    * This function infers basic merging properties used by table version <= 8.
    */
-  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
-                                                                                    String payloadClassName,
-                                                                                    String recordMergeStrategyId,
-                                                                                    String orderingFieldNamesAsString,
-                                                                                    HoodieTableVersion tableVersion,
-                                                                                    boolean inferForVersion9) {
-    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE) && !inferForVersion9) {
+  public static Triple<RecordMergeMode, String, String> inferMergingConfigs(RecordMergeMode recordMergeMode,
+                                                                            String payloadClassName,
+                                                                            String recordMergeStrategyId,
+                                                                            String orderingFieldNamesAsString,
+                                                                            HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
       return Triple.of(recordMergeMode, payloadClassName, recordMergeStrategyId);
     }
+    return inferMergingConfigsPreTableV9(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
+  }
+
+  /**
+   * Infers the merging behavior based on what the user sets (or doesn't set).
+   * Validates that the user has not set an illegal combination of configs.
+   * This function infers basic merging properties used by table version <= 8.
+   */
+  private static Triple<RecordMergeMode, String, String> inferMergingConfigsPreTableV9(RecordMergeMode recordMergeMode,
+                                                                                      String payloadClassName,
+                                                                                      String recordMergeStrategyId,
+                                                                                      String orderingFieldNamesAsString,
+                                                                                      HoodieTableVersion tableVersion) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;
