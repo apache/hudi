@@ -134,7 +134,7 @@ public class HoodieTableConfig extends HoodieConfig {
   // This prefix is used to set merging related properties.
   // A reader might need to read some writer properties to function as expected,
   // and Hudi stores properties with this prefix so the reader parses these properties to fetch any custom property.
-  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.merge.custom.property.";
+  public static final String MERGE_CUSTOM_PROPERTY_PREFIX = "hoodie.record.merge.custom.property.";
   public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           AWSDmsAvroPayload.class.getName(),
