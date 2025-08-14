@@ -528,7 +528,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     // Check if schema evolution is enabled before proceeding with column masking
     if (schemaEvolutionEnabled == null || !schemaEvolutionEnabled) {
       throw new HoodieException("Column masking operation is not supported when schema evolution is disabled. "
-          + "Set 'hoodie.file.stitching.binary.copy.schema.evolution.enable' to true to enable schema evolution support.");
+          + "Set 'hoodie.clustering.plan.strategy.file.stitching.binary.copy.schema.evolution.enable' to true to enable schema evolution support.");
     }
 
     long totalChunkValues = chunk.getValueCount();
