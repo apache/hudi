@@ -344,7 +344,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals(expectedProps, config.getTableMergeProperties());
   }
 
-  private static Stream<Arguments> argumentsForInferringRecordMergeModeForPreV9() {
+  private static Stream<Arguments> testInferMergingConfigsForPreV9Table() {
     String defaultPayload = DefaultHoodieRecordPayload.class.getName();
     String overwritePayload = OverwriteWithLatestAvroPayload.class.getName();
     String customPayload = "custom_payload";
@@ -488,11 +488,11 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("argumentsForInferringRecordMergeModeForPreV9")
-  void testInferMergeModeForPreV9Table(RecordMergeMode inputMergeMode, String inputPayloadClass,
-                                       String inputMergeStrategy, String orderingFieldName,
-                                       String shouldThrowString, RecordMergeMode outputMergeMode,
-                                       String outputPayloadClass, String outputMergeStrategy) throws IOException {
+  @MethodSource
+  void testInferMergingConfigsForPreV9Table(RecordMergeMode inputMergeMode, String inputPayloadClass,
+                                            String inputMergeStrategy, String orderingFieldName,
+                                            String shouldThrowString, RecordMergeMode outputMergeMode,
+                                            String outputPayloadClass, String outputMergeStrategy) throws IOException {
     Arrays.stream(new HoodieTableVersion[] {HoodieTableVersion.EIGHT, HoodieTableVersion.SIX})
         .forEach(tableVersion -> {
           boolean shouldThrow = "eight-only".equals(shouldThrowString)
@@ -524,7 +524,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         });
   }
 
-  private static Stream<Arguments> argumentsForInferMergingConfigsForVersion9() {
+  private static Stream<Arguments> testInferMergingConfigsForV9TableCreation() {
     return Stream.of(
         // Test case: Non-version 9 table should return empty configs
         arguments(
@@ -585,13 +585,13 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("argumentsForInferMergingConfigsForVersion9")
-  void testInferMergingConfigsForVersion9(String testName, RecordMergeMode recordMergeMode, String payloadClassName,
-                                          String recordMergeStrategyId, String orderingFieldName, HoodieTableVersion tableVersion,
-                                          int expectedConfigSize, String expectedMergeMode, String expectedPayloadClass,
-                                          String expectedMergeStrategyId, String expectedLegacyPayloadClass,
-                                          String expectedPartialUpdateMode, String expectedDebeziumMarker,
-                                          String expectedDeleteKey, String expectedDeleteMarker) {
+  @MethodSource
+  void testInferMergingConfigsForV9TableCreation(String testName, RecordMergeMode recordMergeMode, String payloadClassName,
+                                                 String recordMergeStrategyId, String orderingFieldName, HoodieTableVersion tableVersion,
+                                                 int expectedConfigSize, String expectedMergeMode, String expectedPayloadClass,
+                                                 String expectedMergeStrategyId, String expectedLegacyPayloadClass,
+                                                 String expectedPartialUpdateMode, String expectedDebeziumMarker,
+                                                 String expectedDeleteKey, String expectedDeleteMarker) {
     if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
       assertExceptionWithInferMergingConfigsForV9TableCreation(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
     } else {
