@@ -186,7 +186,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   }
 
   protected lazy val preCombineFields: List[String] = {
-    val tablePrecombineFields = tableConfig.getPreCombineFields
+    val tablePrecombineFields = tableConfig.getOrderingFields
     if (tablePrecombineFields.isEmpty) {
       DataSourceOptionsHelper.getPreCombineFields(optParams)
         .orElse(java.util.Collections.emptyList[String])

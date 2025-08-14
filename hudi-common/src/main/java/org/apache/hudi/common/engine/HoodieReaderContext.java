@@ -274,13 +274,13 @@ public abstract class HoodieReaderContext<T> {
     // If the provided payload class differs from the table's payload class, we need to infer the correct merging behavior.
     if (isIngestion && providedPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
       Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(null, providedPayloadClass.get(), null,
-          tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
+          tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
       recordMergeMode = triple.getLeft();
       mergeStrategyId = triple.getRight();
     } else if (!tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferCorrectMergingBehavior(
           recordMergeMode, tableConfig.getPayloadClass(),
-          mergeStrategyId, tableConfig.getPreCombineFieldsStr().orElse(null), tableVersion);
+          mergeStrategyId, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
       recordMergeMode = triple.getLeft();
       mergeStrategyId = triple.getRight();
     }

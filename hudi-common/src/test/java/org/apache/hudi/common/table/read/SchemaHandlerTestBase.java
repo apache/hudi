@@ -251,11 +251,11 @@ public abstract class SchemaHandlerTestBase {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     if (hasPrecombine) {
-      when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.of("timestamp"));
-      when(hoodieTableConfig.getPreCombineFields()).thenReturn(Collections.singletonList("timestamp"));
+      when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.of("timestamp"));
+      when(hoodieTableConfig.getOrderingFields()).thenReturn(Collections.singletonList("timestamp"));
     } else {
-      when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
-      when(hoodieTableConfig.getPreCombineFields()).thenReturn(Collections.emptyList());
+      when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
+      when(hoodieTableConfig.getOrderingFields()).thenReturn(Collections.emptyList());
     }
     if (mergeMode == CUSTOM) {
       when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn("asdf");

@@ -64,7 +64,7 @@ class TestStreamSourceReadByStateTransitionTime extends StreamTest  {
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setTableName(s"test_stream_${tableType.name()}")
-          .setPreCombineFields("timestamp")
+          .setOrderingFields("timestamp")
           .setPartitionFields("partition_path")
           .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 

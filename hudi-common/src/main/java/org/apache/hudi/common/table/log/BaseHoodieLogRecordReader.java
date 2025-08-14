@@ -151,7 +151,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
-    this.preCombineFields = tableConfig.getPreCombineFieldsStr().orElse(null);
+    this.preCombineFields = tableConfig.getOrderingFieldsStr().orElse(null);
     // Log scanner merge log with precombine
     TypedProperties props = new TypedProperties();
     if (this.preCombineFields != null) {

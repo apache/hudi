@@ -126,6 +126,6 @@ public class HoodieRecordUtils {
                                                    HoodieTableMetaClient metaClient) {
     return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
         ? Collections.emptyList()
-        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElseGet(() -> metaClient.getTableConfig().getPreCombineFields());
+        : Option.ofNullable(ConfigUtils.getOrderingFields(props)).map(Arrays::asList).orElseGet(() -> metaClient.getTableConfig().getOrderingFields());
   }
 }

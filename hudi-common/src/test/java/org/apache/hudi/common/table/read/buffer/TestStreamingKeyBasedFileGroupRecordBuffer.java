@@ -70,7 +70,7 @@ class TestStreamingKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecord
   void readWithEventTimeOrdering() throws IOException {
     HoodieReadStats readStats = new HoodieReadStats();
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "ts");
+    properties.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "ts");
     properties.setProperty(DELETE_KEY, "counter");
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);

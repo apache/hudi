@@ -172,7 +172,7 @@ public interface HoodieRecordMerger extends Serializable {
       }
     }
 
-    List<String> preCombineFields = cfg.getPreCombineFields();
+    List<String> preCombineFields = cfg.getOrderingFields();
     requiredFields.addAll(preCombineFields);
     return requiredFields.toArray(new String[0]);
   }

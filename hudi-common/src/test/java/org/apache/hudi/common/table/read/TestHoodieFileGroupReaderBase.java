@@ -713,7 +713,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return expectedHoodieRecords.stream().map(rec -> {
       RawTripTestPayload oldPayload = (RawTripTestPayload) rec.getData();
       try {
-        List<String> orderingFields = metaClient.getTableConfig().getPreCombineFields();
+        List<String> orderingFields = metaClient.getTableConfig().getOrderingFields();
         HoodieAvroRecord avroRecord = ((HoodieAvroRecord) rec);
         Comparable orderingValue = OrderingValues.create(orderingFields, field -> (Comparable) avroRecord.getColumnValueAsJava(avroSchema, field, new TypedProperties()));
         RawTripTestPayload newPayload = new RawTripTestPayload(Option.ofNullable(oldPayload.getJsonData()), oldPayload.getRowKey(), oldPayload.getPartitionPath(), null, false, orderingValue);
@@ -739,20 +739,20 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     boolean sortOutput = !containsBaseFile;
     List<HoodieTestDataGenerator.RecordIdentifier> actualRecordList = convertEngineRecords(
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false, sortOutput),
-        avroSchema, readerContext, metaClient.getTableConfig().getPreCombineFields());
+        avroSchema, readerContext, metaClient.getTableConfig().getOrderingFields());
     // validate size is equivalent to ensure no duplicates are returned
     assertEquals(expectedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
     // validate records can be read from file group as HoodieRecords
     actualRecordList = convertHoodieRecords(
         readHoodieRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode),
-        avroSchema, readerContext, metaClient.getTableConfig().getPreCombineFields());
+        avroSchema, readerContext, metaClient.getTableConfig().getOrderingFields());
     assertEquals(expectedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedRecords), new HashSet<>(actualRecordList));
     // validate unmerged records
     actualRecordList = convertEngineRecords(
         readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, true, false),
-        avroSchema, readerContext, metaClient.getTableConfig().getPreCombineFields());
+        avroSchema, readerContext, metaClient.getTableConfig().getOrderingFields());
     assertEquals(expectedUnmergedRecords.size(), actualRecordList.size());
     assertEquals(new HashSet<>(expectedUnmergedRecords), new HashSet<>(actualRecordList));
   }
@@ -888,8 +888,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private TypedProperties buildProperties(HoodieTableMetaClient metaClient, RecordMergeMode recordMergeMode) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.datasource.write.precombine.fields", metaClient.getTableConfig().getPreCombineFieldsStr().orElse(""));
-    props.setProperty("hoodie.payload.ordering.field", metaClient.getTableConfig().getPreCombineFieldsStr().orElse(""));
+    props.setProperty("hoodie.datasource.write.precombine.fields", metaClient.getTableConfig().getOrderingFieldsStr().orElse(""));
+    props.setProperty("hoodie.payload.ordering.field", metaClient.getTableConfig().getOrderingFieldsStr().orElse(""));
     props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
     if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
       props.setProperty(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);

@@ -63,7 +63,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
-    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
