@@ -147,8 +147,8 @@ public class TestFlinkWriteClients {
     HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
 
-    assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.CUSTOM));
-    assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID));
+    assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
+    assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
     assertThat(tableConfig.getPayloadClass(), is(PartialUpdateAvroPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);

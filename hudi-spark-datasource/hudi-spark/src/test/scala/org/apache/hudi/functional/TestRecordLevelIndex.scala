@@ -267,7 +267,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     deleteDf.cache()
     deleteDf.write.format("hudi")
       .options(hudiOpts)
-      .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
+      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
     val prevDf = mergedDfList.last

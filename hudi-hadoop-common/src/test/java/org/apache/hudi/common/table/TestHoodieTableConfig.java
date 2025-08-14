@@ -21,8 +21,14 @@ package org.apache.hudi.common.table;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -61,12 +67,19 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.getRecordMergeStrategyId;
+import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferRecordMergeModeFromPayloadClass;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -298,7 +311,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(40, configProperties.size());
+    assertEquals(41, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
@@ -318,8 +331,8 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
     // no merge props
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES_PREFIX + "key1", "value1");
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES_PREFIX + "key2", "value2");
+    props.setProperty(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + "key1", "value1");
+    props.setProperty(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + "key2", "value2");
     // add some random property which does not match the prefix.
     props.setProperty("key3", "value3");
 
@@ -331,7 +344,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals(expectedProps, config.getTableMergeProperties());
   }
 
-  private static Stream<Arguments> argumentsForInferringRecordMergeMode() {
+  private static Stream<Arguments> testInferMergingConfigsForPreV9Table() {
     String defaultPayload = DefaultHoodieRecordPayload.class.getName();
     String overwritePayload = OverwriteWithLatestAvroPayload.class.getName();
     String customPayload = "custom_payload";
@@ -475,11 +488,11 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource("argumentsForInferringRecordMergeMode")
-  void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass,
-                                 String inputMergeStrategy, String orderingFieldName,
-                                 String shouldThrowString, RecordMergeMode outputMergeMode,
-                                 String outputPayloadClass, String outputMergeStrategy) throws IOException {
+  @MethodSource
+  void testInferMergingConfigsForPreV9Table(RecordMergeMode inputMergeMode, String inputPayloadClass,
+                                            String inputMergeStrategy, String orderingFieldName,
+                                            String shouldThrowString, RecordMergeMode outputMergeMode,
+                                            String outputPayloadClass, String outputMergeStrategy) throws IOException {
     Arrays.stream(new HoodieTableVersion[] {HoodieTableVersion.EIGHT, HoodieTableVersion.SIX})
         .forEach(tableVersion -> {
           boolean shouldThrow = "eight-only".equals(shouldThrowString)
@@ -496,12 +509,12 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
           }
           if (shouldThrow) {
             assertThrows(IllegalArgumentException.class,
-                () -> HoodieTableConfig.inferCorrectMergingBehavior(
+                () -> inferMergingConfigsForPreV9Table(
                     inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
                     tableVersion));
           } else {
             Triple<RecordMergeMode, String, String> inferredConfigs =
-                HoodieTableConfig.inferCorrectMergingBehavior(
+                inferMergingConfigsForPreV9Table(
                     inputMergeMode, inputPayloadClass, inputMergeStrategy, orderingFieldName,
                     tableVersion);
             assertEquals(expectedMergeMode, inferredConfigs.getLeft());
@@ -509,5 +522,206 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
             assertEquals(expectedMergeStrategy, inferredConfigs.getRight());
           }
         });
+  }
+
+  private static Stream<Arguments> testInferMergingConfigsForV9TableCreation() {
+    return Stream.of(
+        // Test case: Non-version 9 table should return empty configs
+        arguments(
+            "Non-version 9 table", EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.EIGHT,
+            0, null, null, null, null, null, null, null, null, null),
+
+        // Test case: Version 9 table with null payload class and event time ordering
+        arguments("Version 9 with event time ordering", EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE,
+            2, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, null, null, null, null),
+
+        // Test case: Version 9 table with null payload class and commit time ordering
+        arguments("Version 9 with commit time ordering", COMMIT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE,
+            2, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, null, null, null, null, null),
+
+        // Test case: Version 9 table with null payload class and custom merge mode
+        arguments("Version 9 with custom merge mode", CUSTOM, null, CUSTOM_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE,
+            2, CUSTOM.name(), null, CUSTOM_MERGE_STRATEGY_UUID, null, null, null, null, null),
+
+        // Test case: Version 9 table with custom payload class (not under deprecation)
+        arguments("Version 9 with custom payload", null, "com.example.CustomPayload", null, null, HoodieTableVersion.NINE,
+            3, CUSTOM.name(), "com.example.CustomPayload", PAYLOAD_BASED_MERGE_STRATEGY_UUID, null, null, null, null, null),
+
+        // Test case: Version 9 table with event time based payload (DefaultHoodieRecordPayload)
+        arguments("Version 9 with DefaultHoodieRecordPayload", null, DefaultHoodieRecordPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
+            3, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, DefaultHoodieRecordPayload.class.getName(), null, null, null, null),
+
+        // Test case: Version 9 table with commit time based payload (OverwriteWithLatestAvroPayload)
+        arguments("Version 9 with OverwriteWithLatestAvroPayload", null, OverwriteWithLatestAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
+            3, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, OverwriteWithLatestAvroPayload.class.getName(), null, null, null, null),
+
+        // Test case: Version 9 table with PartialUpdateAvroPayload (should set partial update mode)
+        arguments("Version 9 with PartialUpdateAvroPayload", null, PartialUpdateAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
+            4, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PartialUpdateAvroPayload.class.getName(), PartialUpdateMode.IGNORE_DEFAULTS.name(),
+            null, null, null),
+
+        // Test case: Version 9 table with OverwriteNonDefaultsWithLatestAvroPayload (should set partial update mode)
+        arguments("Version 9 with OverwriteNonDefaultsWithLatestAvroPayload", null, OverwriteNonDefaultsWithLatestAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
+            4, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            PartialUpdateMode.IGNORE_DEFAULTS.name(), null, null, null),
+
+        // Test case: Version 9 table with PostgresDebeziumAvroPayload (should set partial update mode and custom properties)
+        arguments("Version 9 with PostgresDebeziumAvroPayload", null, PostgresDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
+            5, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PostgresDebeziumAvroPayload.class.getName(),
+            PartialUpdateMode.IGNORE_MARKERS.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, null, null),
+
+        // Test case: Version 9 table with AWSDmsAvroPayload (should set custom delete properties)
+        arguments("Version 9 with AWSDmsAvroPayload", null, AWSDmsAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
+            5, COMMIT_TIME_ORDERING.name(), null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, AWSDmsAvroPayload.class.getName(), null, null, "Op", "D"),
+
+        // Test case: Version 9 table with EventTimeAvroPayload (event time based payload)
+        arguments("Version 9 with EventTimeAvroPayload", null, EventTimeAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
+            3, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, EventTimeAvroPayload.class.getName(), null, null, null, null),
+
+        // Test case: Version 9 table with MySqlDebeziumAvroPayload (event time based payload)
+        arguments("Version 9 with MySqlDebeziumAvroPayload", null, MySqlDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
+            3, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, MySqlDebeziumAvroPayload.class.getName(), null, null, null, null)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void testInferMergingConfigsForV9TableCreation(String testName, RecordMergeMode recordMergeMode, String payloadClassName,
+                                                 String recordMergeStrategyId, String orderingFieldName, HoodieTableVersion tableVersion,
+                                                 int expectedConfigSize, String expectedMergeMode, String expectedPayloadClass,
+                                                 String expectedMergeStrategyId, String expectedLegacyPayloadClass,
+                                                 String expectedPartialUpdateMode, String expectedDebeziumMarker,
+                                                 String expectedDeleteKey, String expectedDeleteMarker) {
+    if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      assertExceptionWithInferMergingConfigsForV9TableCreation(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+    } else {
+      Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+          recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+
+      assertEquals(expectedConfigSize, configs.size(), "Config size mismatch for: " + testName);
+      if (expectedMergeMode != null) {
+        assertEquals(expectedMergeMode, configs.get(RECORD_MERGE_MODE.key()),
+            "Merge mode mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(RECORD_MERGE_MODE.key()), "Record merge mode not expected to be set");
+      }
+      if (expectedPayloadClass != null) {
+        assertEquals(expectedPayloadClass, configs.get(PAYLOAD_CLASS_NAME.key()),
+            "Payload class mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(PAYLOAD_CLASS_NAME.key()), "Payload class not expected to be set");
+      }
+      if (expectedMergeStrategyId != null) {
+        assertEquals(expectedMergeStrategyId, configs.get(RECORD_MERGE_STRATEGY_ID.key()),
+            "Merge strategy ID mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(RECORD_MERGE_STRATEGY_ID.key()), "Record merge strategy id not expected to be set");
+      }
+
+      if (expectedLegacyPayloadClass != null) {
+        assertEquals(expectedLegacyPayloadClass, configs.get(LEGACY_PAYLOAD_CLASS_NAME.key()),
+            "Legacy payload class mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(LEGACY_PAYLOAD_CLASS_NAME.key()), "Legacy payload class not expected to be set");
+      }
+
+      if (expectedPartialUpdateMode != null) {
+        assertEquals(expectedPartialUpdateMode, configs.get(HoodieTableConfig.PARTIAL_UPDATE_MODE.key()),
+            "Partial update mode mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(HoodieTableConfig.PARTIAL_UPDATE_MODE.key()), HoodieTableConfig.PARTIAL_UPDATE_MODE.key() + " not expected to be set");
+      }
+
+      if (expectedDebeziumMarker != null) {
+        assertEquals(expectedDebeziumMarker, configs.get(
+                HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
+            "Debezium marker mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
+            "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER + " not expected to be set");
+      }
+
+      if (expectedDeleteKey != null) {
+        assertEquals(expectedDeleteKey, configs.get(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY),
+            "Delete key mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY),
+            "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "  not expected to be set");
+      }
+
+      if (expectedDeleteMarker != null) {
+        assertEquals(expectedDeleteMarker, configs.get(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER),
+            "Delete marker mismatch for: " + testName);
+      } else {
+        assertFalse(configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER),
+            "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "  not expected to be set");
+      }
+    }
+  }
+
+  @Test
+  void testInferMergingConfigsForVersion9WithInconsistentConfigs() {
+    // Test case: Inconsistent merge mode and strategy should throw exception
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+          EVENT_TIME_ORDERING, null, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
+    });
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+          COMMIT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
+    });
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+          CUSTOM, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
+    });
+  }
+
+  @Test
+  void testInferMergingConfigsForVersion9EdgeCases() {
+    // Test case: Empty string payload class should be treated as null
+    Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        EVENT_TIME_ORDERING, "", EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.NINE);
+    assertEquals(2, configs.size());
+    assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
+    assertEquals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID, configs.get(RECORD_MERGE_STRATEGY_ID.key()));
+
+    // Test case: Non-version 9 table with all parameters should throw
+    assertExceptionWithInferMergingConfigsForV9TableCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
+        EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", HoodieTableVersion.EIGHT);
+
+    // Test case: Version 9 table with null ordering field for event time ordering should still work
+    configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        EVENT_TIME_ORDERING, null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, null, HoodieTableVersion.NINE);
+    assertEquals(2, configs.size());
+    assertEquals(EVENT_TIME_ORDERING.name(), configs.get(RECORD_MERGE_MODE.key()));
+    assertEquals(EVENT_TIME_BASED_MERGE_STRATEGY_UUID, configs.get(RECORD_MERGE_STRATEGY_ID.key()));
+  }
+
+  @Test
+  void testInferMergingConfigsForVersion9WithAllTableVersions() {
+    // Test that only version 9 returns configs, others throw exception
+    for (HoodieTableVersion version : HoodieTableVersion.values()) {
+      if (version.lesserThan(HoodieTableVersion.NINE)) {
+        assertExceptionWithInferMergingConfigsForV9TableCreation(EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
+            EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", version);
+      } else {
+        Map<String, String> configs = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+            EVENT_TIME_ORDERING, DefaultHoodieRecordPayload.class.getName(),
+            EVENT_TIME_BASED_MERGE_STRATEGY_UUID, "ts", version);
+        assertEquals(3, configs.size(), "Table version 9 and above should return 3 configs");
+      }
+    }
+  }
+
+  private void assertExceptionWithInferMergingConfigsForV9TableCreation(RecordMergeMode recordMergeMode,
+                                                                        String payloadClassName,
+                                                                        String recordMergeStrategyId,
+                                                                        String orderingFieldName,
+                                                                        HoodieTableVersion tableVersion) {
+    HoodieIOException ioException = assertThrows(HoodieIOException.class, () -> {
+      HoodieTableConfig.inferMergingConfigsForV9TableCreation(recordMergeMode, payloadClassName,
+          recordMergeStrategyId, orderingFieldName, tableVersion);
+    });
+    assertEquals("Unsupported flow for table versions less than 9", ioException.getMessage().toString());
   }
 }
