@@ -76,13 +76,16 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
         
         // Configure TLS if CA certificate is provided
         if (caCertPath != null && !caCertPath.isEmpty()) {
-          LOG.info("Configuring TLS with CA certificate from: {}", caCertPath);
           try {
+            LOG.info("Configuring TLS with CA certificate from: {}", caCertPath);
             SSLContext sslContext = createSSLContext(caCertPath);
             
             builder.customizeHttpAsyncClient(httpClientBuilder -> httpClientBuilder.setSSLContext(sslContext));
+            LOG.info("Successfully configured TLS for DataHub connection");
           } catch (Exception e) {
-            throw new RuntimeException("Failed to configure SSL context", e);
+            LOG.warn("Failed to configure TLS with CA certificate, falling back to default HTTP client configuration. "
+                + "CA certificate path: {}. Error: {}", caCertPath, e.getMessage());
+            LOG.debug("TLS configuration error details", e);
           }
         }
       });
@@ -97,23 +100,19 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
         "CA certificate file not found: " + caCertPath);
     
     SSLContextBuilder sslContextBuilder = SSLContexts.custom();
-    
-    // Create a KeyStore containing the CA certificate
+
     KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
     trustStore.load(null, null);
-    
-    // Load the CA certificate
+
     CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
     try (FileInputStream certInputStream = new FileInputStream(caCertPath)) {
       Certificate caCert = certificateFactory.generateCertificate(certInputStream);
       trustStore.setCertificateEntry("ca-cert", caCert);
       LOG.info("Successfully loaded CA certificate from: {}", caCertPath);
     }
-    
-    // Configure the SSL context with the custom trust store
+
     sslContextBuilder.loadTrustMaterial(trustStore, null);
     
     return sslContextBuilder.build();
   }
-
 }

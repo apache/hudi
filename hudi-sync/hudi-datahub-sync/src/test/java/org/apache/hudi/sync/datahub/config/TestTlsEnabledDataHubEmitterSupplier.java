@@ -81,7 +81,7 @@ class TestTlsEnabledDataHubEmitterSupplier {
   }
 
   @Test
-  void testEmitterCreationFailsWithInvalidCACertPath() {
+  void testEmitterCreationFallsBackWithInvalidCACertPath() {
     Properties props = new Properties();
     props.setProperty(DATAHUB_EMITTER_SERVER, "https://datahub.example.com:8080");
     props.setProperty(DATAHUB_TLS_CA_CERT_PATH, "/non/existent/path/cert.pem");
@@ -89,11 +89,11 @@ class TestTlsEnabledDataHubEmitterSupplier {
     TypedProperties typedProps = new TypedProperties(props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
     
-    assertThrows(RuntimeException.class, supplier::get, 
-        "Should throw exception when CA certificate file doesn't exist");
+    // Should not throw exception, but fall back gracefully to default HTTP client
+    RestEmitter emitter = supplier.get();
+    assertNotNull(emitter, "Emitter should be created even with invalid CA certificate path");
   }
 
-  // Helper method to create a test certificate file
   private Path createDummyCertificateFile() throws Exception {
     Path certPath = tempDir.resolve("ca-cert.pem");
     
