@@ -170,7 +170,7 @@ public class HoodieTableMetaClient implements Serializable {
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
+  private Option<HoodieIndexMetadata> indexMetadataOpt;
   private HoodieTableFormat tableFormat;
 
   /**
@@ -190,7 +190,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.basePath = new StoragePath(basePath);
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath, recordMergeMode, payloadClassName, recordMergerStrategy);
-    this.indexMetadataOpt = getIndexMetadata();
+    this.indexMetadataOpt = readIndexDefinitionFromStorage(this.storage, this.basePath, this.tableConfig);
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -321,20 +321,17 @@ public class HoodieTableMetaClient implements Serializable {
    * Returns Option of {@link HoodieIndexMetadata} from index definition file if present, else returns empty Option.
    */
   public Option<HoodieIndexMetadata> getIndexMetadata() {
-    if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
-      return indexMetadataOpt;
-    }
-    Option<HoodieIndexMetadata> indexDefOption = Option.empty();
-    if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
-      indexDefOption = loadIndexDefFromStorage(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
-    }
-    return indexDefOption;
+    return indexMetadataOpt;
   }
 
-  private static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
-      StoragePath basePath, String relativeIndexDefinitionPath, HoodieStorage storage) {
-    StoragePath indexDefinitionPath =
-        new StoragePath(basePath, relativeIndexDefinitionPath);
+  private static Option<HoodieIndexMetadata> readIndexDefinitionFromStorage(
+      HoodieStorage storage, StoragePath basePath, HoodieTableConfig tableConfig) {
+    Option<String> indexDefinitionPathOpt = tableConfig.getRelativeIndexDefinitionPath();
+    if (indexDefinitionPathOpt.isEmpty() || StringUtils.isNullOrEmpty(indexDefinitionPathOpt.get())) {
+      return Option.empty();
+    }
+
+    StoragePath indexDefinitionPath = new StoragePath(basePath, indexDefinitionPathOpt.get());
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
@@ -343,7 +340,7 @@ public class HoodieTableMetaClient implements Serializable {
         return Option.of(new HoodieIndexMetadata());
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not load index definition at path: " + relativeIndexDefinitionPath, e);
+      throw new HoodieIOException("Could not load index definition at path: " + indexDefinitionPath, e);
     }
   }
 
