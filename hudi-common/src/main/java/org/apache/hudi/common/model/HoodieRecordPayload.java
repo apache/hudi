@@ -23,7 +23,6 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
@@ -35,7 +34,10 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 
 /**
  * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which depend on record specific logic.
@@ -182,16 +184,32 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   static String getPayloadClassName(Properties props) {
-    return getPayloadClassNameIfPresent(props).orElse(HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME);
+    Option<String> payloadOpt = getPayloadClassNameIfPresent(props);
+    if (payloadOpt.isPresent()) {
+      return payloadOpt.get();
+    }
+    // Note: starting from version 9, payload class is not necessary set, but
+    //       merge mode must exist. Therefore, we use merge mode to infer
+    //       the payload class for certain corner cases, like for MIT command.
+    if (props.containsKey(RECORD_MERGE_MODE.key())
+        && props.getProperty(RECORD_MERGE_MODE.key()).equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
+      return OverwriteWithLatestAvroPayload.class.getName();
+    }
+    return DEFAULT_PAYLOAD_CLASS_NAME;
   }
 
+  // NOTE: PAYLOAD_CLASS_NAME is before LEGACY_PAYLOAD_CLASS_NAME to make sure
+  // some temporary payload class setting is respect.
   static Option<String> getPayloadClassNameIfPresent(Properties props) {
     String payloadClassName = null;
     if (props.containsKey(PAYLOAD_CLASS_NAME.key())) {
       payloadClassName = props.getProperty(PAYLOAD_CLASS_NAME.key());
+    } else if (props.containsKey(LEGACY_PAYLOAD_CLASS_NAME.key())) {
+      payloadClassName = props.getProperty(LEGACY_PAYLOAD_CLASS_NAME.key());
     } else if (props.containsKey("hoodie.datasource.write.payload.class")) {
       payloadClassName = props.getProperty("hoodie.datasource.write.payload.class");
     }
+
     // There could be tables written with payload class from com.uber.hoodie.
     // Need to transparently change to org.apache.hudi.
     return Option.ofNullable(payloadClassName).map(className -> className.replace("com.uber.hoodie", "org.apache.hudi"));

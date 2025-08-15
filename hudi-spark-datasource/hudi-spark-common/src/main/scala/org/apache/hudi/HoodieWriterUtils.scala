@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
@@ -217,6 +218,34 @@ object HoodieWriterUtils {
   }
 
   /**
+   * This function adds specific rules to choose config key in table config for a given writer key.
+   *
+   * RULE 1: When
+   *   1. table version is 9,
+   *   2. writer key is a payload class key, and
+   *   3. table config has legacy payload class configured,
+   * then
+   *   return legacy payload class key.
+   *
+   * Basic rule:
+   *   return writer key.
+   */
+  def getKeyInTableConfig(key: String, tableConfig: HoodieConfig): String = {
+    if (tableConfig == null) {
+      key
+    } else {
+      if (tableConfig.getInt(HoodieTableConfig.VERSION) == HoodieTableVersion.NINE.versionCode()
+        && key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key)
+        && !StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(
+        HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING).trim)) {
+        HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key
+      } else {
+        key
+      }
+    }
+  }
+
+  /**
    * Detects conflicts between new parameters and existing table configurations
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
@@ -227,9 +256,10 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
+          val keyInTableConfig = getKeyInTableConfig(key, tableConfig)
+          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
-            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")
           }
         }
       }

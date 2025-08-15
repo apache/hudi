@@ -257,6 +257,7 @@ public abstract class SchemaHandlerTestBase {
   private static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
+    when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     if (hasPrecombine) {
       when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.of("timestamp"));
       when(hoodieTableConfig.getPreCombineFields()).thenReturn(Collections.singletonList("timestamp"));

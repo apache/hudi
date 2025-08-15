@@ -20,13 +20,25 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.storage.HoodieStorage;
@@ -35,13 +47,11 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.Mock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -50,68 +60,185 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
+import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_CUSTOM_PROPERTY_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.PartialUpdateMode.IGNORE_MARKERS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class TestEightToNineUpgradeHandler {
-
+  private final EightToNineUpgradeHandler handler = new EightToNineUpgradeHandler();
+  private final HoodieStorage storage = mock(HoodieStorage.class);
+  private final HoodieEngineContext context = mock(HoodieEngineContext.class);
+  private final HoodieTable table = mock(HoodieTable.class);
+  private final HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+  private final HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+  private final SupportsUpgradeDowngrade upgradeDowngradeHelper =
+      mock(SupportsUpgradeDowngrade.class);
+  private final HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+  private static final Map<ConfigProperty, String> DEFAULT_CONFIG_UPDATED = Collections.emptyMap();
+  private static final Set<ConfigProperty> DEFAULT_CONFIG_REMOVED = Collections.emptySet();
+  private static final UpgradeDowngrade.TableConfigChangeSet DEFAULT_UPGRADE_RESULT =
+      new UpgradeDowngrade.TableConfigChangeSet(DEFAULT_CONFIG_UPDATED, DEFAULT_CONFIG_REMOVED);
+  private static final String INSTANT_TIME = "20231201120000";
+  private StoragePath indexDefPath;
   @TempDir
   private Path tempDir;
 
-  @Mock
-  private HoodieWriteConfig config;
-  @Mock
-  private HoodieEngineContext context;
-  @Mock
-  private SupportsUpgradeDowngrade upgradeDowngradeHelper;
-  @Mock
-  private HoodieTable table;
-  @Mock
-  private HoodieTableMetaClient metaClient;
-  @Mock
-  private HoodieTableConfig tableConfig;
-  @Mock
-  private HoodieStorage storage;
-
-  private EightToNineUpgradeHandler upgradeHandler;
-  private static final String INSTANT_TIME = "20231201120000";
-  private StoragePath indexDefPath;
-
   @BeforeEach
-  void setUp() throws IOException {
-    upgradeHandler = new EightToNineUpgradeHandler();
-    
+  public void setUp() throws IOException {
+    when(upgradeDowngradeHelper.getTable(any(), any())).thenReturn(table);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(config.autoUpgrade()).thenReturn(true);
+
     // Setup common mocks
     when(upgradeDowngradeHelper.getTable(config, context)).thenReturn(table);
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(metaClient.getStorage()).thenReturn(storage);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
-    
+
     // Use a temp file for index definition path
     indexDefPath = new StoragePath(tempDir.resolve("index.json").toString());
     when(metaClient.getIndexDefinitionPath()).thenReturn(indexDefPath.toString());
-    
+
     // Mock storage methods for file creation
     when(storage.exists(any(StoragePath.class))).thenReturn(false);
     when(storage.createNewFile(any(StoragePath.class))).thenReturn(true);
-    
+
     // Mock create method to capture written content
     ByteArrayOutputStream capturedContent = new ByteArrayOutputStream();
     when(storage.create(any(StoragePath.class), anyBoolean())).thenReturn(capturedContent);
-    
+
     // Mock autoUpgrade to return true
     when(config.autoUpgrade()).thenReturn(true);
+  }
+
+  static Stream<Arguments> payloadClassTestCases() {
+    return Stream.of(
+        Arguments.of(
+            DefaultHoodieRecordPayload.class.getName(),
+            "",
+            null,
+            PartialUpdateMode.NONE.name(),
+            "DefaultHoodieRecordPayload"
+        ),
+        Arguments.of(
+            OverwriteWithLatestAvroPayload.class.getName(),
+            "",
+            null,
+            PartialUpdateMode.NONE.name(),
+            "OverwriteWithLatestAvroPayload"
+        ),
+        Arguments.of(
+            AWSDmsAvroPayload.class.getName(),
+            MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_KEY + "=Op,"
+                + MERGE_CUSTOM_PROPERTY_PREFIX + DELETE_MARKER + "=D", // mergeProperties
+            COMMIT_TIME_ORDERING.name(),
+            PartialUpdateMode.NONE.name(),
+            "AWSDmsAvroPayload"
+        ),
+        Arguments.of(
+            PostgresDebeziumAvroPayload.class.getName(),
+            MERGE_CUSTOM_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER
+                + "=" + DEBEZIUM_UNAVAILABLE_VALUE,
+            EVENT_TIME_ORDERING.name(),
+            IGNORE_MARKERS.name(),
+            "PostgresDebeziumAvroPayload"
+        ),
+        Arguments.of(
+            PartialUpdateAvroPayload.class.getName(),
+            "",
+            EVENT_TIME_ORDERING.name(),
+            PartialUpdateMode.IGNORE_DEFAULTS.name(),
+            "PartialUpdateAvroPayload"
+        ),
+        Arguments.of(
+            MySqlDebeziumAvroPayload.class.getName(),
+            "",
+            EVENT_TIME_ORDERING.name(),
+            PartialUpdateMode.NONE.name(),
+            "MySqlDebeziumAvroPayload"
+        ),
+        Arguments.of(
+            OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            "",
+            COMMIT_TIME_ORDERING.name(),
+            PartialUpdateMode.IGNORE_DEFAULTS.name(),
+            "OverwriteNonDefaultsWithLatestAvroPayload"
+        )
+    );
+  }
+
+  @ParameterizedTest(name = "testUpgradeWith{4}")
+  @MethodSource("payloadClassTestCases")
+  void testUpgradeWithPayloadClass(String payloadClassName, String expectedMergeProperties,
+                                   String expectedRecordMergeMode, String expectedPartialUpdateMode,
+                                   String testName) {
+    try (org.mockito.MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+              any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getPayloadClass()).thenReturn(payloadClassName);
+      when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+      when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID);
+      when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+      UpgradeDowngrade.TableConfigChangeSet propertiesToHandle =
+          handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.propertiesToUpdate();
+      Set<ConfigProperty> propertiesToRemove = propertiesToHandle.propertiesToDelete();
+      // Assert merge properties
+      if (!StringUtils.isNullOrEmpty(expectedMergeProperties)) {
+        String[] configs = expectedMergeProperties.split(",");
+        for (String config : configs) {
+          String[] kv = config.split("=");
+          boolean found = false;
+          for (Map.Entry<ConfigProperty, String> e : propertiesToAdd.entrySet()) {
+            if (e.getKey().key().equals(kv[0])) {
+              assertEquals(kv[1], e.getValue());
+              found = true;
+            }
+          }
+          assertTrue(found);
+        }
+      }
+      // Assert record merge mode
+      if (expectedRecordMergeMode == null) {
+        assertFalse(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+      } else {
+        assertTrue(propertiesToAdd.containsKey(RECORD_MERGE_MODE));
+        assertEquals(expectedRecordMergeMode, propertiesToAdd.get(RECORD_MERGE_MODE));
+      }
+      // Assert partial update mode
+      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
+      assertEquals(expectedPartialUpdateMode, propertiesToAdd.get(PARTIAL_UPDATE_MODE));
+      // Assert payload class change
+      assertPayloadClassChange(propertiesToAdd, propertiesToRemove, payloadClassName);
+    }
   }
 
   @Test
@@ -126,16 +253,44 @@ class TestEightToNineUpgradeHandler {
           anyBoolean(),
           any(HoodieTableVersion.class)
       )).thenAnswer(invocation -> null); // Do nothing
-      
       // Setup: No index metadata present
       when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
-      
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
-
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
     }
+  }
+
+  @Test
+  void testUpgradeWhenAutoUpgradeIsFalse() {
+    when(config.autoUpgrade()).thenReturn(false);
+    // Payload class can be any, e.g., AWSDmsAvroPayload
+    when(config.getProps()).thenReturn(new TypedProperties());
+    when(tableConfig.getPayloadClass()).thenReturn(AWSDmsAvroPayload.class.getName());
+    UpgradeDowngrade.TableConfigChangeSet  propertiesToHandle =
+        handler.upgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+    Map<ConfigProperty, String> propertiesToAdd = propertiesToHandle.propertiesToUpdate();
+    Set<ConfigProperty> propertiesToRemove = propertiesToHandle.propertiesToDelete();
+    assertTrue(
+        propertiesToAdd.isEmpty(),
+        "Expected no properties to be added when autoUpgrade is false");
+    assertTrue(
+        propertiesToRemove.isEmpty(),
+        "Expected no properties to be removed when autoUpgrade is false");
+  }
+
+  private void assertPayloadClassChange(Map<ConfigProperty, String> propertiesToAdd,
+                                        Set<ConfigProperty> propertiesToRemove,
+                                        String payloadClass) {
+    assertEquals(1, propertiesToRemove.size());
+    assertTrue(propertiesToRemove.contains(PAYLOAD_CLASS_NAME));
+    assertTrue(propertiesToAdd.containsKey(LEGACY_PAYLOAD_CLASS_NAME));
+    assertEquals(
+        payloadClass,
+        propertiesToAdd.get(LEGACY_PAYLOAD_CLASS_NAME));
   }
 
   @Test
@@ -172,10 +327,12 @@ class TestEightToNineUpgradeHandler {
       when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
 
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
       
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present
@@ -254,13 +411,12 @@ class TestEightToNineUpgradeHandler {
       // Note: Since we can't import HoodieIndexVersion due to dependency issues, 
       // we'll skip this test for now and focus on testing the storage functionality
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
-
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
-
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
-      // Verify the written json is the same as before
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
     }
   }
 
@@ -280,12 +436,12 @@ class TestEightToNineUpgradeHandler {
       // Setup: Empty index metadata (no index definitions)
       HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata();
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
-
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
-
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
     }
   }
 
@@ -321,10 +477,12 @@ class TestEightToNineUpgradeHandler {
       when(storage.create(eq(indexDefPath), eq(true))).thenReturn(capturedContent);
 
       // Execute
-      Map<ConfigProperty, String> result = upgradeHandler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
+      UpgradeDowngrade.TableConfigChangeSet result =
+          handler.upgrade(config, context, INSTANT_TIME, upgradeDowngradeHelper);
 
       // Verify
-      assertEquals(Collections.emptyMap(), result);
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToUpdate(), result.propertiesToUpdate());
+      assertEquals(DEFAULT_UPGRADE_RESULT.propertiesToDelete(), result.propertiesToDelete());
       
       // Verify storage methods were called correctly
       // Note: createFileInPath directly calls create() when contentWriter is present
@@ -554,4 +712,4 @@ class TestEightToNineUpgradeHandler {
     assertEquals(Collections.singletonList("price"), secIdxDef.getSourceFields());
     assertEquals(Collections.emptyMap(), secIdxDef.getIndexOptions());
   }
-} 
+}
