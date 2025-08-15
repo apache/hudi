@@ -270,7 +270,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           }
           // Writes the record
           try {
-            // if the record is not being updated and is not a new insert for the file group, we must preserve the existing record metadata.
+            // For Compaction operations, the preserveMetadata flag is always true as we want to preserve the existing record metadata.
+            // For other updates, we only want to preserve the metadata if the record is not being modified by this update. If the record already exists in the base file and is not updated,
+            // the operation will be null. Records that are being updated or records being added to the file group for the first time will have an operation set and must generate new metadata.
             boolean shouldPreserveRecordMetadata = preserveMetadata || record.getOperation() == null;
             Schema recordSchema = shouldPreserveRecordMetadata ? writeSchemaWithMetaFields : writeSchema;
             writeToFile(record.getKey(), record, recordSchema, config.getPayloadConfig().getProps(), shouldPreserveRecordMetadata);
