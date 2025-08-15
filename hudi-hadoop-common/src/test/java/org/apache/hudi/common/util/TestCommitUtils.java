@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 
@@ -173,7 +174,7 @@ public class TestCommitUtils {
     if (isCompleted) {
       timeline.saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-          Option.of(commitMetadata));
+          Option.of(commitMetadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
   }
 
@@ -187,7 +188,7 @@ public class TestCommitUtils {
     timeline.transitionRequestedToInflight(instant, Option.of(commitMetadata));
     timeline.saveAsComplete(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant.getAction(), instant.requestedTime()),
-        Option.of(commitMetadata));
+        Option.of(commitMetadata), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
   }
 
   private void addRequestedCompaction(HoodieActiveTimeline timeline, String ts) {

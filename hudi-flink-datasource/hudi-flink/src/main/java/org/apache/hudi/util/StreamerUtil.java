@@ -492,7 +492,6 @@ public class StreamerUtil {
     return HoodieTableMetaClient.builder()
         .setBasePath(conf.get(FlinkOptions.PATH))
         .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
-        .setTimeGeneratorConfig(getTimeGeneratorConfig(conf))
         .build();
   }
 

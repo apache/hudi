@@ -527,29 +527,6 @@ public class TimelineUtils {
   }
 
   /**
-   * Returns next instant time in the correct format.
-   * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
-   *
-   * @param shouldLock    whether the lock should be enabled to get the instant time.
-   * @param timeGenerator TimeGenerator used to generate the instant time.
-   */
-  public static String generateInstantTime(boolean shouldLock, TimeGenerator timeGenerator) {
-    return generateInstantTime(shouldLock, timeGenerator, 0L);
-  }
-
-  /**
-   * Returns next instant time in the correct format.
-   * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
-   *
-   * @param shouldLock    whether the lock should be enabled to get the instant time.
-   * @param timeGenerator TimeGenerator used to generate the instant time.
-   * @param milliseconds  Milliseconds to add to current time while generating the new instant time
-   */
-  public static String generateInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
-    return HoodieInstantTimeGenerator.createNewInstantTime(shouldLock, timeGenerator, milliseconds);
-  }
-
-  /**
    * Delete Instant file from storage
    *
    * @param storage  Hoodie Storage.
