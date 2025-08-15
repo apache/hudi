@@ -162,7 +162,7 @@ public interface UpdateProcessor<T> {
     private final BaseFileUpdateCallback<T> callback;
     private final UpdateProcessor<T> delegate;
 
-    public CallbackProcessor(BaseFileUpdateCallback callback, UpdateProcessor<T> delegate) {
+    public CallbackProcessor(BaseFileUpdateCallback<T> callback, UpdateProcessor<T> delegate) {
       this.callback = callback;
       this.delegate = delegate;
     }
@@ -173,9 +173,9 @@ public interface UpdateProcessor<T> {
 
       if (isDelete) {
         callback.onDelete(recordKey, previousRecord, mergedRecord.getHoodieOperation());
-      } else if (HoodieOperation.isUpdateAfter(result.getHoodieOperation())) {
+      } else if (result != null && HoodieOperation.isUpdateAfter(result.getHoodieOperation())) {
         callback.onUpdate(recordKey, previousRecord, mergedRecord);
-      } else if (HoodieOperation.isInsert(result.getHoodieOperation())) {
+      } else if (result != null && HoodieOperation.isInsert(result.getHoodieOperation())) {
         callback.onInsert(recordKey, mergedRecord);
       }
       return result;
