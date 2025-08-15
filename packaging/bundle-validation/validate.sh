@@ -389,7 +389,7 @@ then
   fi
   echo "::warning::validate.sh done validating cli bundle"
 else
-  echo "::warning::validate.sh skip validating cli bundle for Spark >= 3.5 build"
+  echo "::warning::validate.sh skip validating cli bundle for Spark < 3.5 build"
 fi
 
 if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* ]]
@@ -401,7 +401,7 @@ then
   fi
   echo "::warning::validate.sh done validating utilities bundle"
 else
-  echo "::warning::validate.sh skip validating utilities bundle for Spark >= 3.5 build"
+  echo "::warning::validate.sh skip validating utilities bundle for Spark < 3.5 build"
 fi
 
 echo "::warning::validate.sh validating utilities slim bundle"
