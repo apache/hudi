@@ -19,10 +19,12 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -48,18 +50,24 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -97,6 +105,8 @@ class TestNineToEightDowngradeHandler {
         Arguments.of(
             AWSDmsAvroPayload.class.getName(),
             4, // propertiesToRemove size
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + ","
+                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER,
             3, // propertiesToAdd size
             true, // hasRecordMergeMode
             true, // hasRecordMergeStrategyId
@@ -106,6 +116,7 @@ class TestNineToEightDowngradeHandler {
         Arguments.of(
             OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
             2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
             3,
             true,
             true,
@@ -115,6 +126,7 @@ class TestNineToEightDowngradeHandler {
         Arguments.of(
             PartialUpdateAvroPayload.class.getName(),
             2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
             3,
             true,
             true,
@@ -124,6 +136,7 @@ class TestNineToEightDowngradeHandler {
         Arguments.of(
             MySqlDebeziumAvroPayload.class.getName(),
             2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
             3,
             true,
             true,
@@ -133,6 +146,7 @@ class TestNineToEightDowngradeHandler {
         Arguments.of(
             PostgresDebeziumAvroPayload.class.getName(),
             3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER,
             3,
             true,
             true,
@@ -142,6 +156,7 @@ class TestNineToEightDowngradeHandler {
         Arguments.of(
             OverwriteWithLatestAvroPayload.class.getName(),
             2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
             1,
             false,
             false,
@@ -151,17 +166,28 @@ class TestNineToEightDowngradeHandler {
         Arguments.of(
             DefaultHoodieRecordPayload.class.getName(),
             2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
             1,
             false,
             false,
             "DefaultHoodieRecordPayload"
+        ),
+        // EventTimeAvroPayload - only requires PAYLOAD_CLASS_NAME
+        Arguments.of(
+            EventTimeAvroPayload.class.getName(),
+            2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            1,
+            false,
+            false,
+            "EventTimeAvroPayload"
         )
     );
   }
 
   @ParameterizedTest(name = "testDowngradeFor{5}")
   @MethodSource("payloadClassTestCases")
-  void testDowngradeForPayloadClass(String payloadClassName, int expectedPropertiesToRemoveSize,
+  void testDowngradeForPayloadClass(String payloadClassName, int expectedPropertiesToRemoveSize, String expectedPropsToRemove,
                                     int expectedPropertiesToAddSize, boolean hasRecordMergeMode,
                                     boolean hasRecordMergeStrategyId, String testName) {
     try (MockedStatic<UpgradeDowngradeUtils> utilities =
@@ -175,6 +201,12 @@ class TestNineToEightDowngradeHandler {
           handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
       // Assert properties to remove
       assertEquals(expectedPropertiesToRemoveSize, propertiesToChange.propertiesToDelete().size());
+      if (expectedPropertiesToAddSize > 0) {
+        List<String> propsToRemove = Arrays.asList(expectedPropsToRemove.split(","));
+        Collections.sort(propsToRemove);
+        List<String> actualPropsRemoved = propertiesToChange.propertiesToDelete().stream().map(ConfigProperty::key).sorted().collect(Collectors.toList());
+        assertEquals(propsToRemove, actualPropsRemoved);
+      }
       assertTrue(propertiesToChange.propertiesToDelete().contains(PARTIAL_UPDATE_MODE));
       assertTrue(propertiesToChange.propertiesToDelete().contains(LEGACY_PAYLOAD_CLASS_NAME));
       // Assert properties to add

@@ -97,7 +97,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
-    // 3. Add an update.
+    // 3. Add an update. This is expected to trigger the upgrade
     val secondUpdateData = Seq(
       (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1"),
       (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1"),
@@ -108,7 +108,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9").
       mode(SaveMode.Append).
       save(basePath)
-    // Validate table version.
+    // Validate table version as 9.
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
     assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
@@ -228,6 +228,68 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 object TestPayloadDeprecationFlow {
   def providePayloadClassTestCases(): java.util.List[Arguments] = {
     java.util.Arrays.asList(
+      Arguments.of(
+        "COPY_ON_WRITE",
+        classOf[DefaultHoodieRecordPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)),
+      Arguments.of(
+        "COPY_ON_WRITE",
+        classOf[OverwriteWithLatestAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
+        )
+      ),
+      Arguments.of(
+        "COPY_ON_WRITE",
+        classOf[PartialUpdateAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"),
+      Arguments.of(
+        "COPY_ON_WRITE",
+        classOf[PostgresDebeziumAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PostgresDebeziumAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
+        HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_MARKERS",
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER
+          -> "__debezium_unavailable_value"),
+      Arguments.of(
+        "COPY_ON_WRITE",
+        classOf[AWSDmsAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[AWSDmsAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_KEY -> "Op",
+        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_MARKER -> "D"),
+      Arguments.of(
+        "COPY_ON_WRITE",
+        classOf[EventTimeAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[EventTimeAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
+        )
+      ),
+      Arguments.of(
+        "COPY_ON_WRITE",
+        classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"
+        )
+      ),
       Arguments.of(
         "MERGE_ON_READ",
         classOf[DefaultHoodieRecordPayload].getName,

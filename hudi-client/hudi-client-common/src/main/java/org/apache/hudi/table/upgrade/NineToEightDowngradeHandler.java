@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -93,7 +94,8 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
       propertiesToRemove.add(LEGACY_PAYLOAD_CLASS_NAME);
       propertiesToAdd.put(PAYLOAD_CLASS_NAME, legacyPayloadClass);
       if (!legacyPayloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())
-          && !legacyPayloadClass.equals(DefaultHoodieRecordPayload.class.getName())) {
+          && !legacyPayloadClass.equals(DefaultHoodieRecordPayload.class.getName())
+          && !legacyPayloadClass.equals(EventTimeAvroPayload.class.getName())) {
         propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, PAYLOAD_BASED_MERGE_STRATEGY_UUID);
         propertiesToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
       }

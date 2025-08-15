@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, RECORD_MERGE_IMPL_CLASSES, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.common.config.{HoodieStorageConfig, RecordMergeMode}
-import org.apache.hudi.common.model.{AWSDmsAvroPayload, HoodieRecordMerger, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, PartialUpdateAvroPayload}
+import org.apache.hudi.common.model.{AWSDmsAvroPayload, EventTimeAvroPayload, HoodieRecordMerger, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, PartialUpdateMode}
@@ -60,7 +60,6 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
       schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS)
     metaClient = getLatestMetaClient(true)
     // Assert table version is 8.
-    checkResultForVersion8(payloadClass)
     checkResultForVersion8(payloadClass)
     // Add an extra commit.
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
@@ -115,10 +114,12 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     assertEquals(payloadClass, metaClient.getTableConfig.getPayloadClass)
     // The partial update mode should be NONE.
     assertEquals(PartialUpdateMode.NONE, metaClient.getTableConfig.getPartialUpdateMode)
-    // The merge mode should be CUSTOM.
-    assertEquals(
-      HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID,
-      metaClient.getTableConfig.getRecordMergeStrategyId)
+    if (payloadClass.equals("org.apache.hudi.common.model.EventTimeAvroPayload")) {
+      assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
+    } else {
+      // The merge mode should be CUSTOM.
+      assertEquals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
+    }
   }
 
   def checkResultForVersion9(partitionFields: String, payloadClass: String): Unit = {
@@ -165,10 +166,17 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
 object TestEightToNineUpgrade {
   def payloadConfigs(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName),
+      Arguments.of("COPY_ON_WRITE", classOf[EventTimeAvroPayload].getName),
+      Arguments.of("COPY_ON_WRITE", classOf[PartialUpdateAvroPayload].getName),
+      Arguments.of("COPY_ON_WRITE", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName),
+      Arguments.of("COPY_ON_WRITE", classOf[PostgresDebeziumAvroPayload].getName),
+      Arguments.of("COPY_ON_WRITE", classOf[AWSDmsAvroPayload].getName),
+      Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName),
+      Arguments.of("COPY_ON_WRITE", classOf[PartialUpdateAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[PostgresDebeziumAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName)
+      // MySqlDebeziumPayload to be added.
     )
   }
 }

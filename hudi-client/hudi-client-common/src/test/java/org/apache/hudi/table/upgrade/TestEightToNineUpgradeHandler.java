@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -144,6 +145,13 @@ class TestEightToNineUpgradeHandler {
             null,
             PartialUpdateMode.NONE.name(),
             "DefaultHoodieRecordPayload"
+        ),
+        Arguments.of(
+            EventTimeAvroPayload.class.getName(),
+            "",
+            EVENT_TIME_ORDERING.name(),
+            PartialUpdateMode.NONE.name(),
+            "EventTimeAvroPayload"
         ),
         Arguments.of(
             OverwriteWithLatestAvroPayload.class.getName(),
