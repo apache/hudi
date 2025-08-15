@@ -84,8 +84,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           true,
           recordMerger,
           orderingFieldNames,
-          payloadClass,
           readerSchema,
+          payloadClasses,
           props,
           partialUpdateMode);
     }
@@ -125,10 +125,8 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
     BufferedRecord<T> existingRecord = records.get(recordIdentifier);
     totalLogRecords++;
     Option<DeleteRecord> recordOpt = bufferedRecordMerger.deltaMerge(deleteRecord, existingRecord);
-    recordOpt.ifPresent(deleteRec -> {
-      Comparable orderingValue = getOrderingValue(readerContext, deleteRec);
-      records.put(recordIdentifier, BufferedRecords.fromDeleteRecord(deleteRec, orderingValue));
-    });
+    recordOpt.ifPresent(deleteRec ->
+        records.put(recordIdentifier, BufferedRecords.fromDeleteRecord(deleteRec, readerContext.getRecordContext())));
   }
 
   @Override

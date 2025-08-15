@@ -513,7 +513,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
     keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,
       metaClient.getTableConfig.getPartialUpdateMode, readerProperties, metaClient.getTableConfig.getPreCombineFields,
-      UpdateProcessor.create(stats, readerContext, true, Option.empty())))
+      UpdateProcessor.create(stats, readerContext, true, Option.empty(), props)))
 
     HoodieMergedLogRecordReader.newBuilder[InternalRow]
       .withStorage(metaClient.getStorage)

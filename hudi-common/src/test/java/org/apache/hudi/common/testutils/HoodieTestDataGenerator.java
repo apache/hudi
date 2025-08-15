@@ -1108,7 +1108,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @param n          Number of unique records
    * @return stream of hoodie records for delete
    */
-  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
+  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, boolean updatePartition) {
     final Set<KeyPartition> used = new HashSet<>();
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
@@ -1128,8 +1128,14 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       existingKeys.remove(numExistingKeys - 1);
       numExistingKeys--;
       used.add(kp);
+      HoodieKey key = kp.key;
+      if (updatePartition) {
+        String updatedPartitionPath = Arrays.stream(partitionPaths).filter(p -> !p.equals(kp.partitionPath))
+            .findAny().orElseThrow(() -> new HoodieIOException("No other partition path found to update"));
+        key = new HoodieKey(key.getRecordKey(), updatedPartitionPath);
+      }
       try {
-        result.add(new HoodieAvroRecord(kp.key, generateRandomDeleteValue(kp.key, instantTime)));
+        result.add(new HoodieAvroRecord(key, generateRandomDeleteValue(key, instantTime)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -1146,7 +1152,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return List of hoodie records for delete
    */
   public List<HoodieRecord> generateUniqueDeleteRecords(String instantTime, Integer n) {
-    return generateUniqueDeleteRecordStream(instantTime, n).collect(Collectors.toList());
+    return generateUniqueDeleteRecordStream(instantTime, n, false).collect(Collectors.toList());
+  }
+
+  public List<HoodieRecord> generateUniqueDeleteRecordsWithUpdatedPartition(String instantTime, Integer n) {
+    return generateUniqueDeleteRecordStream(instantTime, n, true).collect(Collectors.toList());
   }
 
   public boolean deleteExistingKeyIfPresent(HoodieKey key) {
@@ -1184,6 +1194,14 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return numKeysBySchema.getOrDefault(schemaStr, 0);
   }
 
+  public List<String> getExistingKeys() {
+    return getExistingKeys(TRIP_EXAMPLE_SCHEMA);
+  }
+
+  public List<String> getExistingKeys(String schemaStr) {
+    return existingKeysBySchema.get(schemaStr).values().stream().map(kp -> kp.key.getRecordKey()).collect(Collectors.toList());
+  }
+
   /**
    * Object containing the key and partition path for testing.
    */
@@ -1200,10 +1218,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
   private static long genRandomTimeMillis(Random r) {
     // Fri Feb 13 15:31:30 PST 2009
-    long anchorTs = 1234567890L;
+    long anchorTs = 1234567890000L;
     // NOTE: To provide for certainty and not generate overly random dates, we will limit
     //       dispersion to be w/in +/- 3 days from the anchor date
-    return anchorTs + r.nextLong() % 259200000L;
+    return anchorTs + r.nextInt(259200000);
   }
 
   public static UUID genPseudoRandomUUID(Random r) {

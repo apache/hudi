@@ -201,7 +201,8 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
     PartialUpdateMode partialUpdateMode = PartialUpdateMode.NONE;
     TypedProperties props = new TypedProperties();
-    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
+    when(mockReaderContext.getPayloadClasses(any())).thenReturn(Option.empty());
+    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), props);
     return new SortedKeyBasedFileGroupRecordBuffer<>(
         mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, Collections.emptyList(), updateProcessor);
   }

@@ -194,11 +194,11 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
 
   @Override
   public ReaderContextFactory<IndexedRecord> getReaderContextFactory(HoodieTableMetaClient metaClient) {
-    return getDefaultContextFactory(metaClient);
+    return getEngineReaderContextFactory(metaClient);
   }
 
   @Override
-  public ReaderContextFactory<IndexedRecord> getDefaultContextFactory(HoodieTableMetaClient metaClient) {
+  public ReaderContextFactory<IndexedRecord> getEngineReaderContextFactory(HoodieTableMetaClient metaClient) {
     return new AvroReaderContextFactory(metaClient);
   }
 
