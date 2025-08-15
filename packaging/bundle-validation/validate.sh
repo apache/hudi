@@ -100,20 +100,28 @@ test_spark_hadoop_mr_bundles () {
         echo "::error::validate.sh Spark SQL validation failed."
         exit 1
     fi
-#    echo "::warning::validate.sh Query and validate the results using HiveQL"
-#    use_default_java_runtime
-#    if [[ $HIVE_HOME =~ 'hive-2' ]]; then return; fi # skipping hive2 for HiveQL query due to setup issue
-#    # save HiveQL query results
-#    hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
-#    mkdir -p $hiveqlresultsdir
-#    $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
-#      -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
-#      -e 'select * from trips' >> $hiveqlresultsdir/results.csv
-#    numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
-#    if [ "$numRecordsHiveQL" -ne 10 ]; then
-#        echo "::error::validate.sh HiveQL validation failed."
-#        exit 1
-#    fi
+    echo "::warning::validate.sh Query and validate the results using HiveQL"
+    use_default_java_runtime
+    if [[ $HIVE_HOME =~ 'hive-2' ]]; then return; fi # skipping hive2 for HiveQL query due to setup issue
+    # save HiveQL query results
+    hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
+    mkdir -p $hiveqlresultsdir
+    $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
+      -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
+      -e 'select * from trips' >> $hiveqlresultsdir/results.csv
+    numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
+    if [ "$numRecordsHiveQL" -ne 10 ]; then
+        echo "::error::validate.sh HiveQL validation failed."
+        if [ "$SPARK_VERSION" = "4.0.0" ]; then
+            echo "::error::validate.sh Debug info for Spark4 validation failure:"
+            $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
+                      -u jdbc:hive2://localhost:10000/default --showHeader=true --outputformat=csv2 \
+                      -e 'select * from trips' --verbose=true --showNestedErrs=true
+            # not exit here for Spark 4, may be we can fix it as a follow-up
+        else
+            exit 1
+        fi
+    fi
     echo "::warning::validate.sh spark & hadoop-mr bundles validation was successful."
     kill $DERBY_PID $HIVE_PID
 }
