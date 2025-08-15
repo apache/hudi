@@ -21,6 +21,7 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -46,20 +47,21 @@ public class HoodieBloomIndexCheckFunction<I>
     implements Function<Iterator<I>, Iterator<List<HoodieKeyLookupResult>>>, Serializable {
 
   private final HoodieTable hoodieTable;
-
   private final HoodieWriteConfig config;
-
   private final SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor;
   private final SerializableFunction<I, String> recordKeyExtractor;
+  private final Option<String> lastInstant;
 
   public HoodieBloomIndexCheckFunction(HoodieTable hoodieTable,
                                        HoodieWriteConfig config,
                                        SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor,
-                                       SerializableFunction<I, String> recordKeyExtractor) {
+                                       SerializableFunction<I, String> recordKeyExtractor,
+                                       Option<String> lastInstant) {
     this.hoodieTable = hoodieTable;
     this.config = config;
     this.fileGroupIdExtractor = fileGroupIdExtractor;
     this.recordKeyExtractor = recordKeyExtractor;
+    this.lastInstant = lastInstant;
   }
 
   @Override
@@ -94,7 +96,7 @@ public class HoodieBloomIndexCheckFunction<I>
 
           // lazily init state
           if (keyLookupHandle == null) {
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair, lastInstant);
           }
 
           // if continue on current file
@@ -103,7 +105,7 @@ public class HoodieBloomIndexCheckFunction<I>
           } else {
             // do the actual checking of file & break out
             ret.add(keyLookupHandle.getLookupResult());
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair, lastInstant);
             keyLookupHandle.addKey(recordKey);
             break;
           }
