@@ -26,10 +26,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.testutils.CheckedFunction;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -105,7 +106,7 @@ public class Assertions {
    *
    * @param records List of Hoodie records
    */
-  public static void assertNoDupesWithinPartition(List<HoodieRecord<RawTripTestPayload>> records) {
+  public static void assertNoDupesWithinPartition(List<HoodieRecord<IndexedRecord>> records) {
     Map<String, Set<String>> partitionToKeys = new HashMap<>();
     for (HoodieRecord r : records) {
       String key = r.getRecordKey();

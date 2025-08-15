@@ -341,7 +341,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table, inputAndExpectedDataSet.getRecordsToMerge().iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        Option.empty());
+        Option.empty(), readerContext);
 
     fileGroupReaderBasedMergeHandle.doMerge();
     List<WriteStatus> writeStatuses = fileGroupReaderBasedMergeHandle.close();

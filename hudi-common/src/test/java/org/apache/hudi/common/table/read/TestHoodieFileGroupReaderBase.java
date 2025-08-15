@@ -33,7 +33,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -47,7 +47,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -711,16 +710,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private static List<HoodieRecord> getExpectedHoodieRecordsWithOrderingValue(List<HoodieRecord> expectedHoodieRecords, HoodieTableMetaClient metaClient, Schema avroSchema) {
     return expectedHoodieRecords.stream().map(rec -> {
-      RawTripTestPayload oldPayload = (RawTripTestPayload) rec.getData();
-      try {
-        List<String> orderingFields = metaClient.getTableConfig().getOrderingFields();
-        HoodieAvroRecord avroRecord = ((HoodieAvroRecord) rec);
-        Comparable orderingValue = OrderingValues.create(orderingFields, field -> (Comparable) avroRecord.getColumnValueAsJava(avroSchema, field, new TypedProperties()));
-        RawTripTestPayload newPayload = new RawTripTestPayload(Option.ofNullable(oldPayload.getJsonData()), oldPayload.getRowKey(), oldPayload.getPartitionPath(), null, false, orderingValue);
-        return new HoodieAvroRecord<>(rec.getKey(), newPayload);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+      List<String> orderingFields = metaClient.getTableConfig().getOrderingFields();
+      HoodieAvroIndexedRecord avroRecord = ((HoodieAvroIndexedRecord) rec);
+      Comparable orderingValue = OrderingValues.create(orderingFields, field -> (Comparable) avroRecord.getColumnValueAsJava(avroSchema, field, new TypedProperties()));
+      return new HoodieAvroIndexedRecord(rec.getKey(), avroRecord.getData(), orderingValue);
     }).collect(Collectors.toList());
   }
 
@@ -931,7 +924,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   private List<HoodieTestDataGenerator.RecordIdentifier> convertHoodieRecords(List<HoodieRecord> records, Schema schema) {
     return records.stream().map(record -> {
-      RawTripTestPayload payload = (RawTripTestPayload) record.getData();
+      GenericRecord payload = (GenericRecord) record.getData();
       return HoodieTestDataGenerator.RecordIdentifier.fromTripTestPayload(payload);
     }).collect(Collectors.toList());
   }

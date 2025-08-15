@@ -828,7 +828,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         val dataGen = new HoodieTestDataGenerator
         val schema = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA
-        val records1 = RawTripTestPayload.recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 1000, schema)).asScala.toList
+        val records1 = HoodieTestDataGenerator.recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 1000, schema)).asScala.toList
         val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
         // drop tip_history.element.amount, city_to_state, distance_in_meters, drivers
         val orgStringDf = inputDF1.drop("city_to_state", "distance_in_meters", "drivers")
@@ -858,7 +858,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             .load(tablePath)
         oldView.show(5, false)
 
-        val records2 = RawTripTestPayload.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
+        val records2 = HoodieTestDataGenerator.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
         val inputD2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
         val updatedStringDf = inputD2.drop("fare").drop("height")
         val checkRowKey = inputD2.select("_row_key").collectAsList().asScala.map(_.getString(0)).head

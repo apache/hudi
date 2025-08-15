@@ -20,11 +20,9 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
@@ -152,8 +150,8 @@ public class SpillableMapUtils {
       record = recordWithoutMetaFields;
     }
 
-    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-        HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
+    HoodieRecord hoodieRecord = HoodieRecordUtils.createHoodieRecord(record, preCombineVal, new HoodieKey(recKey, partitionPath), payloadClazz, operation, Option.empty());
+
     return (HoodieRecord<R>) hoodieRecord;
   }
 
@@ -175,16 +173,5 @@ public class SpillableMapUtils {
           Object orderingValue = HoodieAvroUtils.getNestedFieldVal(rec, field, true, false);
           return orderingValue == null ? OrderingValues.getDefault() : (Comparable) orderingValue;
         });
-  }
-
-  /**
-   * Utility method to convert bytes to HoodieRecord using schema and payload class.
-   */
-  public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
-    return (R) new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath), HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal));
-  }
-
-  public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz, HoodieOperation hoodieOperation) {
-    return (R) new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath), HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal), hoodieOperation, true);
   }
 }

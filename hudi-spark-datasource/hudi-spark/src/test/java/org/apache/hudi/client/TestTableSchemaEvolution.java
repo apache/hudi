@@ -20,7 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -384,14 +383,9 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     Schema newSchema = new Schema.Parser().parse(schemaStr);
     return records.stream().map(r -> {
       HoodieKey key = r.getKey();
-      GenericRecord payload;
-      try {
-        payload = (GenericRecord) ((HoodieAvroRecord) r).getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
-        GenericRecord newPayload = HoodieAvroUtils.rewriteRecord(payload, newSchema);
-        return new HoodieAvroRecord(key, new RawTripTestPayload(newPayload.toString(), key.getRecordKey(), key.getPartitionPath(), schemaStr));
-      } catch (IOException e) {
-        throw new RuntimeException("Conversion to new schema failed");
-      }
+      GenericRecord payload = (GenericRecord) ((HoodieAvroIndexedRecord) r).getData();
+      GenericRecord newPayload = HoodieAvroUtils.rewriteRecord(payload, newSchema);
+      return new HoodieAvroIndexedRecord(key, newPayload);
     }).collect(Collectors.toList());
   }
 

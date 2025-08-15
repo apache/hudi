@@ -20,12 +20,10 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -117,9 +115,9 @@ public class HoodieStreamerUtils {
                       ? OrderingValues.create(cfg.sourceOrderingFields.split(","),
                          field -> (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, field, false, useConsistentLogicalTimestamp))
                       : null;
-                  HoodieRecordPayload payload = shouldUseOrderingField ? HoodieRecordUtils.loadPayload(payloadClassName, gr, orderingValue)
-                      : DataSourceUtils.createPayload(payloadClassName, gr);
-                  return Either.left(new HoodieAvroRecord<>(hoodieKey, payload));
+                  HoodieRecord record = shouldUseOrderingField ? HoodieRecordUtils.createHoodieRecord(gr, orderingValue, hoodieKey, payloadClassName)
+                      : HoodieRecordUtils.createHoodieRecord(gr, hoodieKey, payloadClassName);
+                  return Either.left(record);
                 } catch (Exception e) {
                   return generateErrorRecordOrThrowException(genRec, e, shouldErrorTable);
                 }
