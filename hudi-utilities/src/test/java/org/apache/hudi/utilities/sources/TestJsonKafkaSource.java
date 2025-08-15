@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
@@ -46,6 +45,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -171,12 +171,12 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(Option.empty(),
         kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     // Send  1000 non-null messages to Kafka
-    List<RawTripTestPayload> insertRecords = DATA_GENERATOR.generateInserts("000", 1000)
+    List<IndexedRecord> insertRecords = DATA_GENERATOR.generateInserts("000", 1000)
         .stream()
-        .map(hr -> (RawTripTestPayload) hr.getData()).collect(Collectors.toList());
+        .map(hr -> (IndexedRecord) hr.getData()).collect(Collectors.toList());
     sendMessagesToKafkaWithJsonSchemaSerializer(topic, 2, insertRecords);
     // send 200 null messages to Kafka
-    List<RawTripTestPayload> nullInsertedRecords = Arrays.asList(new RawTripTestPayload[200]);
+    List<IndexedRecord> nullInsertedRecords = Arrays.asList(new IndexedRecord[200]);
     sendMessagesToKafkaWithJsonSchemaSerializer(topic, 2, nullInsertedRecords);
     InputBatch<JavaRDD<GenericRecord>> fetch1 =
         kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
@@ -511,9 +511,9 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   private void sendMessagesToKafkaWithJsonSchemaSerializer(String topic, int numPartitions,
-                                                           List<RawTripTestPayload> insertRecords) {
+                                                           List<IndexedRecord> insertRecords) {
     Properties config = getProducerPropertiesForJsonKafkaSchemaSerializer();
-    try (Producer<String, RawTripTestPayload> producer = new KafkaProducer<>(config)) {
+    try (Producer<String, IndexedRecord> producer = new KafkaProducer<>(config)) {
       for (int i = 0; i < insertRecords.size(); i++) {
         // use consistent keys to get even spread over partitions for test expectations
         producer.send(new ProducerRecord<>(topic, Integer.toString(i % numPartitions),

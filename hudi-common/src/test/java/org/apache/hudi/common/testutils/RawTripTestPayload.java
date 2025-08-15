@@ -33,10 +33,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.specific.SpecificDatumWriter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -54,6 +50,7 @@ import java.util.zip.InflaterInputStream;
 import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.extractPartitionFromTimeField;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -75,22 +72,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   private boolean isDeleted;
   private Comparable orderingVal;
 
-  public RawTripTestPayload(Option<String> jsonData, String rowKey, String partitionPath, String schemaStr,
-      Boolean isDeleted, Comparable orderingVal) throws IOException {
-    if (jsonData.isPresent()) {
-      this.jsonDataCompressed = compressData(jsonData.get());
-      this.dataSize = jsonData.get().length();
-    }
-    this.rowKey = rowKey;
-    this.partitionPath = partitionPath;
-    this.isDeleted = isDeleted;
-    this.orderingVal = orderingVal;
-  }
-
-  public RawTripTestPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
-    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false, 0);
-  }
-
   public RawTripTestPayload(String jsonData) throws IOException {
     this.jsonDataCompressed = compressData(jsonData);
     this.dataSize = jsonData.length();
@@ -99,68 +80,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
     this.isDeleted = false;
     this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0).toString());
-  }
-
-  public RawTripTestPayload(GenericRecord record, Comparable orderingVal) {
-    this.orderingVal = orderingVal;
-    try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      Encoder jsonEncoder = EncoderFactory.get().jsonEncoder(record.getSchema(), out);
-      DatumWriter w = new SpecificDatumWriter<>(record.getSchema());
-      w.write(record, jsonEncoder);
-      jsonEncoder.flush();
-      out.flush();
-      String jsonData = out.toString("UTF-8");
-      Map<String, Object> jsonRecordMap = OBJECT_MAPPER.readValue(jsonData, Map.class);
-      for (Schema.Field f : record.getSchema().getFields()) {
-        Object fieldValue = jsonRecordMap.get(f.name());
-        if (fieldValue instanceof Map) {
-          Object unionValue = ((Map<?, ?>) fieldValue).values().iterator().next();
-          jsonRecordMap.put(f.name(), unionValue);
-        }
-      }
-      jsonData = OBJECT_MAPPER.writeValueAsString(jsonRecordMap);
-      this.jsonDataCompressed = compressData(jsonData);
-      this.dataSize = jsonData.length();
-      this.rowKey = jsonRecordMap.get("_row_key").toString();
-      this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
-      this.isDeleted = false;
-    } catch (IOException e) {
-      throw new IllegalStateException("Fail to instantiate.", e);
-    }
-  }
-
-  /**
-   * @deprecated PLEASE READ THIS CAREFULLY
-   * <p>
-   * Converting properly typed schemas into JSON leads to inevitable information loss, since JSON
-   * encodes only representation of the record (with no schema accompanying it), therefore occasionally
-   * losing nuances of the original data-types provided by the schema (for ex, with 1.23 literal it's
-   * impossible to tell whether original type was Double or Decimal).
-   * <p>
-   * Multiplied by the fact that Spark 2 JSON schema inference has substantial gaps in it (see below),
-   * it's **NOT RECOMMENDED** to use this method. Instead please consider using {@link AvroConversionUtils#createDataframe()}
-   * method accepting list of {@link HoodieRecord} (as produced by the {@link HoodieTestDataGenerator}
-   * to create Spark's {@code Dataframe}s directly.
-   * <p>
-   * REFs
-   * https://medium.com/swlh/notes-about-json-schema-handling-in-spark-sql-be1e7f13839d
-   */
-  @Deprecated
-  public static List<String> recordsToStrings(List<HoodieRecord> records) {
-    return records.stream().map(RawTripTestPayload::recordToString).filter(Option::isPresent).map(Option::get)
-        .collect(Collectors.toList());
-  }
-
-  public static Option<String> recordToString(HoodieRecord record) {
-    try {
-      String str = ((RawTripTestPayload) record.getData()).getJsonData();
-      str = "{" + str.substring(str.indexOf("\"timestamp\":"));
-      // Remove the last } bracket
-      str = str.substring(0, str.length() - 1);
-      return Option.of(str + ", \"partition\": \"" + record.getPartitionPath() + "\"}");
-    } catch (IOException e) {
-      return Option.empty();
-    }
   }
 
   public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
@@ -264,19 +183,8 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
-  public RawTripTestPayload clone() {
-    try {
-      return new RawTripTestPayload(unCompressData(jsonDataCompressed), rowKey, partitionPath, null);
-    } catch (IOException e) {
-      return null;
-    }
-  }
-
   public HoodieRecord toHoodieRecord() {
     return new HoodieAvroRecord(new HoodieKey(getRowKey(), getPartitionPath()), this);
   }
 
-  public static String extractPartitionFromTimeField(String timeField) {
-    return timeField.split("T")[0].replace("-", "/");
-  }
 }

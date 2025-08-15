@@ -21,17 +21,14 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordUtils;
-import org.apache.hudi.common.util.OrderingValues;
-import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
@@ -55,20 +52,15 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   private final String payloadClass;
-  // This boolean indicates whether the caller requires payloads in the HoodieRecord conversion.
-  // This is temporarily required as we migrate away from payloads.
-  private final boolean requiresPayloadRecords;
 
-  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, boolean requiresPayloadRecords) {
+  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass) {
     super(tableConfig, new AvroJavaTypeConverter());
     this.payloadClass = payloadClass;
-    this.requiresPayloadRecords = requiresPayloadRecords;
   }
 
   public AvroRecordContext() {
     super(new AvroJavaTypeConverter());
     this.payloadClass = null;
-    this.requiresPayloadRecords = false;
   }
 
   public static Object getFieldValueFromIndexedRecord(
@@ -111,26 +103,15 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
 
     if (bufferedRecord.isDelete()) {
-      if (payloadClass != null) {
-        return SpillableMapUtils.generateEmptyPayload(
-            bufferedRecord.getRecordKey(),
-            partitionPath,
-            bufferedRecord.getOrderingValue(),
-            payloadClass,
-            bufferedRecord.getHoodieOperation());
-      } else {
-        return new HoodieEmptyRecord<>(
-            hoodieKey,
-            bufferedRecord.getHoodieOperation(),
-            OrderingValues.getDefault(),
-            HoodieRecord.HoodieRecordType.AVRO);
-      }
+      return new HoodieEmptyRecord<>(
+          hoodieKey,
+          bufferedRecord.getHoodieOperation(),
+          bufferedRecord.getOrderingValue(),
+          HoodieRecord.HoodieRecordType.AVRO);
     }
-    if (requiresPayloadRecords) {
-      HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, (GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue());
-      return new HoodieAvroRecord<>(hoodieKey, payload, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
-    }
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getHoodieOperation());
+
+    return HoodieRecordUtils.createHoodieRecord((GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(),
+        hoodieKey, payloadClass, bufferedRecord.getHoodieOperation(), Option.empty());
   }
 
   @Override
