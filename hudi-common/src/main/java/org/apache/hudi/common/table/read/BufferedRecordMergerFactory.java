@@ -413,11 +413,13 @@ public class BufferedRecordMergerFactory {
    */
   private static class ExpressionPayloadRecordMerger<T> extends CustomPayloadRecordMerger<T> {
     private final String basePayloadClass;
+    private final HoodieRecordMerger deltaMerger;
 
     public ExpressionPayloadRecordMerger(RecordContext<T> recordContext, Option<HoodieRecordMerger> recordMerger, List<String> orderingFieldNames, String basePayloadClass, String incomingPayloadClass,
                                          Schema readerSchema, TypedProperties props) {
       super(recordContext, recordMerger, orderingFieldNames, incomingPayloadClass, readerSchema, props);
       this.basePayloadClass = basePayloadClass;
+      this.deltaMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger.get());
     }
 
     @Override
@@ -425,6 +427,16 @@ public class BufferedRecordMergerFactory {
       HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(recordContext, olderRecord, basePayloadClass);
       HoodieRecord newHoodieRecord = constructHoodieAvroRecord(recordContext, newerRecord, payloadClass);
       return Pair.of(oldHoodieRecord, newHoodieRecord);
+    }
+
+    @Override
+    protected Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
+      if (isFinalMerge) {
+        return super.getMergedRecord(olderRecord, newerRecord, isFinalMerge);
+      } else {
+        Pair<HoodieRecord, HoodieRecord> records = getDeltaMergeRecords(olderRecord, newerRecord);
+        return deltaMerger.merge(records.getLeft(), getSchemaForAvroPayloadMerge(olderRecord), records.getRight(), getSchemaForAvroPayloadMerge(newerRecord), props);
+      }
     }
   }
 
@@ -481,7 +493,7 @@ public class BufferedRecordMergerFactory {
       Schema mergeResultSchema = mergedRecordAndSchema.get().getRight();
       // Special handling for SENTINEL record in Expression Payload
       if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
-        return BufferedRecords.SENTINEL;
+        return olderRecord;
       }
       if (!mergedRecord.isDelete(mergeResultSchema, props)) {
         IndexedRecord indexedRecord;
@@ -506,7 +518,7 @@ public class BufferedRecordMergerFactory {
       return getDeltaMergeRecords(olderRecord, newerRecord);
     }
 
-    private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
+    protected Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
       Pair<HoodieRecord, HoodieRecord> records = isFinalMerge ? getFinalMergeRecords(olderRecord, newerRecord) : getDeltaMergeRecords(olderRecord, newerRecord);
       return recordMerger.merge(records.getLeft(), getSchemaForAvroPayloadMerge(olderRecord), records.getRight(), getSchemaForAvroPayloadMerge(newerRecord), props);
     }
@@ -522,7 +534,7 @@ public class BufferedRecordMergerFactory {
           HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue()), null);
     }
 
-    private Schema getSchemaForAvroPayloadMerge(BufferedRecord<T> bufferedRecord) {
+    protected Schema getSchemaForAvroPayloadMerge(BufferedRecord<T> bufferedRecord) {
       if (bufferedRecord.getSchemaId() == null) {
         return readerSchema;
       }

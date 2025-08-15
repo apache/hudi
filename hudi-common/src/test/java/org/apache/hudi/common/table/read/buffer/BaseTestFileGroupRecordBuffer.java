@@ -121,7 +121,7 @@ public class BaseTestFileGroupRecordBuffer {
     readerContext.setRecordMerger(Option.ofNullable(recordMerger));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
-    UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
+    UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty(), props);
 
     if (fileGroupRecordBufferItrOpt.isEmpty()) {
       return new KeyBasedFileGroupRecordBuffer<>(

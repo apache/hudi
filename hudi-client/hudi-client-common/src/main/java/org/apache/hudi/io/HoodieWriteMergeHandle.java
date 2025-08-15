@@ -446,7 +446,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     try {
       if (isClosed()) {
         // Handle has already been closed
-        return Collections.emptyList();
+        return Collections.singletonList(writeStatus);
       }
 
       markClosed();

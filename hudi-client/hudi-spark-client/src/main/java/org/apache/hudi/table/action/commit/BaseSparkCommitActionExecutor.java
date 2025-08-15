@@ -27,6 +27,7 @@ import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -48,6 +49,7 @@ import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.io.CreateHandleFactory;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.io.IOUtils;
@@ -91,6 +93,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseSparkCommitActionExecutor.class);
   protected final Option<BaseKeyGenerator> keyGeneratorOpt;
+  private final ReaderContextFactory<T> readerContextFactory;
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
@@ -108,6 +111,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
                                        Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
     keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
+    readerContextFactory = WriteOperationType.isChangingRecords(operationType) ? table.getReaderContextFactoryForWrite() : null;
   }
 
   protected HoodieData<HoodieRecord<T>> clusteringHandleUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
@@ -371,7 +375,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
-      LOG.info("Empty partition with fileId => " + fileId);
+      LOG.info("Empty partition with fileId => {}", fileId);
       return Collections.emptyIterator();
     }
 
@@ -388,7 +392,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     HoodieMergeHandle mergeHandle = HoodieMergeHandleFactory.create(operationType, config, instantTime, table, recordItr, partitionPath, fileId,
-        taskContextSupplier, keyGeneratorOpt);
+          taskContextSupplier, keyGeneratorOpt);
     if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
       Option<String[]> partitionFields = table.getMetaClient().getTableConfig().getPartitionFields();
       Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
@@ -396,6 +400,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           mergeHandle.getWriterSchema(), (Configuration) table.getStorageConf().unwrap());
       mergeHandle.setPartitionFields(partitionFields);
       mergeHandle.setPartitionValues(partitionValues);
+    }
+    if (readerContextFactory != null && mergeHandle instanceof FileGroupReaderBasedMergeHandle) {
+      ((FileGroupReaderBasedMergeHandle) mergeHandle).setReaderContext(readerContextFactory.getContext());
     }
     return mergeHandle;
   }
