@@ -192,9 +192,8 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     // Note: starting from version 9, payload class is not necessary set, but
     //       merge mode must exist. Therefore, we use merge mode to infer
     //       the payload class for certain corner cases, like for MIT command.
-
     if (ConfigUtils.containsConfigProperty(props, RECORD_MERGE_MODE)
-        && ConfigUtils.getStringWithAltKeys(props, RECORD_MERGE_MODE, "")
+        && ConfigUtils.getStringWithAltKeys(props, RECORD_MERGE_MODE, StringUtils.EMPTY_STRING)
         .equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
       return OverwriteWithLatestAvroPayload.class.getName();
     }
@@ -202,7 +201,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   // NOTE: PAYLOAD_CLASS_NAME is before LEGACY_PAYLOAD_CLASS_NAME to make sure
-  // some temporary payload class setting is respect.
+  // some temporary payload class setting is respected.
   static Option<String> getPayloadClassNameIfPresent(Properties props) {
     String payloadClassName = null;
     if (ConfigUtils.containsConfigProperty(props, PAYLOAD_CLASS_NAME)) {
