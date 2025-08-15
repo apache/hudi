@@ -130,7 +130,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
-  public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
+  public static final String PARTIAL_UPDATE_UNAVAILABLE_VALUE = "hoodie.write.partial.update.unavailable.value";
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
   // This prefix is used to set merging related properties.
   // A reader might need to read some writer properties to function as expected,
@@ -363,12 +363,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
 
-  public static final ConfigProperty<PartialUpdateMode> PARTIAL_UPDATE_MODE = ConfigProperty
+  public static final ConfigProperty<String> PARTIAL_UPDATE_MODE = ConfigProperty
       .key("hoodie.table.partial.update.mode")
-      .defaultValue(PartialUpdateMode.NONE)
+      .noDefaultValue()
       .sinceVersion("1.1.0")
-      .withDocumentation("This property when set, will define how two versions of the record will be "
-          + "merged together where the later contains only partial set of values and not entire record.");
+      .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -871,13 +870,13 @@ public class HoodieTableConfig extends HoodieConfig {
             || payloadClassName.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
           reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
         } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
-          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_MARKERS.name());
+          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.FILL_UNAVAILABLE.name());
         }
         // Additional custom merge properties.
         // Cretain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
         // merge to function as expected. Handing such special cases here.
         if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
-          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER, DEBEZIUM_UNAVAILABLE_VALUE);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE, DEBEZIUM_UNAVAILABLE_VALUE);
         } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
           reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
           reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
@@ -1196,12 +1195,16 @@ public class HoodieTableConfig extends HoodieConfig {
             CONFIG_VALUES_DELIMITER));
   }
 
-  public PartialUpdateMode getPartialUpdateMode() {
+  public Option<PartialUpdateMode> getPartialUpdateMode() {
     if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
-      return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
+      if (contains(PARTIAL_UPDATE_MODE)) {
+        return Option.of(PartialUpdateMode.valueOf(getString(PARTIAL_UPDATE_MODE)));
+      } else {
+        return Option.empty();
+      }
     } else {
       // For table version <= 8, partial update is not supported.
-      return PartialUpdateMode.NONE;
+      return Option.empty();
     }
   }
 

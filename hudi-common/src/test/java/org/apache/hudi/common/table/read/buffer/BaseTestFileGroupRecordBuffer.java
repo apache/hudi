@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -125,7 +124,7 @@ public class BaseTestFileGroupRecordBuffer {
 
     if (fileGroupRecordBufferItrOpt.isEmpty()) {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, orderingFieldNames, updateProcessor);
+          readerContext, mockMetaClient, recordMergeMode, Option.empty(), props, orderingFieldNames, updateProcessor);
     } else {
       FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
       InputSplit inputSplit = mock(InputSplit.class);

@@ -70,7 +70,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final Schema readerSchema;
   protected final List<String> orderingFieldNames;
   protected final RecordMergeMode recordMergeMode;
-  protected final PartialUpdateMode partialUpdateMode;
+  protected final Option<PartialUpdateMode> partialUpdateModeOpt;
   protected final Option<HoodieRecordMerger> recordMerger;
   // The pair of payload classes represents the payload class for the table and the payload class for the incoming records.
   // The two classes are only expected to be different when there is a merge-into operation that leverages the ExpressionPayload.
@@ -93,7 +93,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
                                   RecordMergeMode recordMergeMode,
-                                  PartialUpdateMode partialUpdateMode,
+                                  Option<PartialUpdateMode> partialUpdateModeOpt,
                                   TypedProperties props,
                                   List<String> orderingFieldNames,
                                   UpdateProcessor<T> updateProcessor) {
@@ -101,7 +101,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     this.updateProcessor = updateProcessor;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
-    this.partialUpdateMode = partialUpdateMode;
+    this.partialUpdateModeOpt = partialUpdateModeOpt;
     this.recordMerger = readerContext.getRecordMerger();
     this.payloadClasses = readerContext.getPayloadClasses(props);
     this.orderingFieldNames = orderingFieldNames;
@@ -117,7 +117,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, readerSchema, payloadClasses, props, partialUpdateMode);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, readerSchema, payloadClasses, props, partialUpdateModeOpt);
     this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
     this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema, readerContext.getRecordContext(), orderingFieldNames);
   }

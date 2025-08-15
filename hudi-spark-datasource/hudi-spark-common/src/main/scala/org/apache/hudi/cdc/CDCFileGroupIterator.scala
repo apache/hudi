@@ -89,12 +89,12 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   } else {
     Option.empty.asInstanceOf[Option[String]]
   }
-  private lazy val partialUpdateMode: PartialUpdateMode = metaClient.getTableConfig.getPartialUpdateMode
+  private lazy val partialUpdateModeOpt: Option[PartialUpdateMode] = metaClient.getTableConfig.getPartialUpdateMode
   private var isPartialMergeEnabled = false
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
     readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger), orderingFieldNames,
-    payloadClass, avroSchema, props, partialUpdateMode)
+    payloadClass, avroSchema, props, partialUpdateModeOpt)
 
   private lazy val storage = metaClient.getStorage
 

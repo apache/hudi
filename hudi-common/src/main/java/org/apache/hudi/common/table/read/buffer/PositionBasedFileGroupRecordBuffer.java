@@ -73,12 +73,12 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                             HoodieTableMetaClient hoodieTableMetaClient,
                                             RecordMergeMode recordMergeMode,
-                                            PartialUpdateMode partialUpdateMode,
+                                            Option<PartialUpdateMode> partialUpdateModeOpt,
                                             String baseFileInstantTime,
                                             TypedProperties props,
                                             List<String> orderingFieldNames,
                                             UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -124,7 +124,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           readerSchema,
           payloadClasses,
           props,
-          partialUpdateMode);
+          partialUpdateModeOpt);
     }
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
