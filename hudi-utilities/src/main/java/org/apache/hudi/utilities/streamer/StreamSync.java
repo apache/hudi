@@ -57,6 +57,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -71,6 +72,7 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetaSyncException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -366,10 +368,13 @@ public class StreamSync implements Serializable, Closeable {
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
             .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
-            .setPayloadClassName(cfg.payloadClassName)
-            .setRecordMergerStrategy(null)
             .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
             .build();
+        if (cfg.payloadClassName != null
+            && !cfg.payloadClassName.equals(metaClient.getTableConfig().getPayloadClass())) {
+          throw new HoodieValidationException("payload class can not be changed once the table is created,"
+              + "table and configured payload classes: [" + StringUtils.nullToEmpty(metaClient.getTableConfig().getPayloadClass()) + ", " + cfg.payloadClassName + "]");
+        }
         if (refreshTimeline) {
           switch (metaClient.getTableType()) {
             case COPY_ON_WRITE:

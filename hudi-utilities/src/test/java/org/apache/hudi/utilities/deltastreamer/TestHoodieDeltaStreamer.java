@@ -43,6 +43,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -73,6 +74,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -475,6 +477,21 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getHiveStylePartitioningEnable()));
     assertEquals(configFlag, Boolean.parseBoolean(metaClient.getTableConfig().getUrlEncodePartitioning()));
+  }
+
+  @Test
+  public void testModifyingPayloadClassForExistingTable() throws Exception {
+    String tablePath = basePath + "/modify_payload_class";
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
+    // Update DeltaStreamer configs for with parameterized test input
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamer.getIngestionService().ingestOnce();
+    // update payload class for existing table
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    assertThrows(HoodieValidationException.class, () -> new HoodieDeltaStreamer(cfg, jsc),
+        "payload class can not be changed once the table is create");
   }
 
   @ParameterizedTest

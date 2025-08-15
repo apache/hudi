@@ -466,58 +466,14 @@ public class HoodieTableConfig extends HoodieConfig {
     return new HoodieTableConfig(storage, metaPath);
   }
 
-  private HoodieTableConfig(HoodieStorage storage, StoragePath metaPath) {
-    this(storage, metaPath, null, null, null, false);
-  }
-
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
-                           String recordMergeStrategyId) {
-    this(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId, true);
-  }
-
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
-                           String recordMergeStrategyId, boolean autoUpdate) {
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
       this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
-      if (autoUpdate) {
-        autoUpdateHoodieProperties(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId);
-      }
     } catch (IOException e) {
       throw new HoodieIOException("Could not load properties from " + propertyPath, e);
-    }
-  }
-
-  private void autoUpdateHoodieProperties(HoodieStorage storage, StoragePath metaPath,
-                                          RecordMergeMode recordMergeMode, String payloadClassName,
-                                          String recordMergeStrategyId) {
-    StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
-    try {
-      boolean needStore = false;
-      if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
-          && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
-        setValue(PAYLOAD_CLASS_NAME, payloadClassName);
-        needStore = true;
-      }
-      if (contains(RECORD_MERGE_MODE) && recordMergeMode != null
-          && !recordMergeMode.equals(RecordMergeMode.getValue(getString(RECORD_MERGE_MODE)))) {
-        setValue(RECORD_MERGE_MODE, recordMergeMode.name());
-        needStore = true;
-      }
-      if (contains(RECORD_MERGE_STRATEGY_ID) && recordMergeStrategyId != null
-          && !getString(RECORD_MERGE_STRATEGY_ID).equals(recordMergeStrategyId)) {
-        setValue(RECORD_MERGE_STRATEGY_ID, recordMergeStrategyId);
-        needStore = true;
-      }
-      if (needStore) {
-        try (OutputStream outputStream = storage.create(propertyPath)) {
-          storeProperties(props, outputStream, propertyPath);
-        }
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not store properties in " + propertyPath, e);
     }
   }
 
