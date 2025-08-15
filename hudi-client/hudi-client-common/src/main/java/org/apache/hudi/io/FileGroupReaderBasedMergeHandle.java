@@ -259,7 +259,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
           HoodieRecord<T> record = recordIterator.next();
-          Option<Map<String, String>> recordMetadata = getRecordMetadata(record, writeSchema, props);
+          Option<Map<String, String>> recordMetadata = operation.isEmpty() ? getRecordMetadata(record, writeSchema, props) : Option.empty();
           record.setCurrentLocation(newRecordLocation);
           record.setNewLocation(newRecordLocation);
           if (!partitionPath.equals(record.getPartitionPath())) {
