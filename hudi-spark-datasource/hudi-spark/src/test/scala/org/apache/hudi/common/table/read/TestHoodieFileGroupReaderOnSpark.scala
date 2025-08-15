@@ -191,7 +191,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val row = InternalRow("item", 1000L, "blue")
     testGetOrderingValue(sparkReaderContext, row, avroSchema, orderingFieldName, 1000L)
     testGetOrderingValue(
-      sparkReaderContext, row, avroSchema, "col3", UTF8String.fromString("blue"))
+      sparkReaderContext, row, avroSchema, "col3", sparkAdapter.getHoodieUTF8StringFactory.wrapUTF8String(UTF8String.fromString("blue")))
     testGetOrderingValue(
       sparkReaderContext, row, avroSchema, "non_existent_col", OrderingValues.getDefault)
   }

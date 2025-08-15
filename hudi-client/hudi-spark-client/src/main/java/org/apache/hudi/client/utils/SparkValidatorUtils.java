@@ -75,7 +75,7 @@ public class SparkValidatorUtils {
         writeMetadata.setWriteStats(writeMetadata.getWriteStatuses().map(WriteStatus::getStat).collectAsList());
       }
       Set<String> partitionsModified = writeMetadata.getWriteStats().get().stream().map(HoodieWriteStat::getPartitionPath).collect(Collectors.toSet());
-      SQLContext sqlContext = new SQLContext(HoodieSparkEngineContext.getSparkContext(context));
+      SQLContext sqlContext = SQLContext.getOrCreate(HoodieSparkEngineContext.getSparkContext(context).sc());
       // Refresh timeline to ensure validator sees the any other operations done on timeline (async operations such as other clustering/compaction/rollback)
       table.getMetaClient().reloadActiveTimeline();
       Dataset<Row> afterState = getRecordsFromPendingCommits(sqlContext, partitionsModified, writeMetadata, table, instantTime);

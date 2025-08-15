@@ -224,7 +224,7 @@ object TestHoodieSparkUtils {
     // modify [[StructField] with name `cn`
     val newSchema = setNullableRec(schema, columnName.split('.'), 0)
     // apply new schema
-    df.sqlContext.createDataFrame(df.rdd, newSchema)
+    df.sparkSession.sqlContext.createDataFrame(df.rdd, newSchema)
   }
 
   /**
