@@ -32,7 +32,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 
 import java.util.Collections;
@@ -77,27 +76,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         }
         return recordMerger;
     }
-  }
-
-  @Override
-  public InternalRow seal(InternalRow internalRow) {
-    return internalRow.copy();
-  }
-
-  @Override
-  public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
-    if (internalRow instanceof UnsafeRow) {
-      return internalRow;
-    }
-    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
-    return unsafeProjection.apply(internalRow);
-  }
-
-  @Override
-  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
-    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
-        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
-    return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 
   /**

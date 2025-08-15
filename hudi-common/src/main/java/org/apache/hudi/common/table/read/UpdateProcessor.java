@@ -89,7 +89,7 @@ public interface UpdateProcessor<T> {
           mergedRecord.setHoodieOperation(HoodieOperation.INSERT);
           readStats.incrementNumInserts();
         }
-        return mergedRecord.seal(readerContext);
+        return mergedRecord.seal(readerContext.getRecordContext());
       }
     }
   }

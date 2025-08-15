@@ -29,7 +29,9 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
@@ -48,7 +50,11 @@ public abstract class HoodieAvroFileReader implements HoodieFileReader<IndexedRe
     return getIndexedRecordIterator(readerSchema, readerSchema);
   }
 
-  public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    return getIndexedRecordIterator(readerSchema, requestedSchema, Collections.emptyMap());
+  }
+
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema, Map<String, String> renamedColumns) throws IOException;
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,
                                                                                   Schema readerSchema)

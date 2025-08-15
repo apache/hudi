@@ -1558,8 +1558,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     }
   }
 
-  @Test
-  def testMergerStrategySet(): Unit = {
+  @ParameterizedTest
+  @CsvSource(Array("8", "9"))
+  def testMergerStrategySet(tableVersion: String): Unit = {
     val (writeOpts, _) = getWriterReaderOpts()
     val input = recordsToStrings(dataGen.generateInserts("000", 1)).asScala
     val inputDf= spark.read.json(spark.sparkContext.parallelize(input.toSeq, 1))
@@ -1570,6 +1571,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), mergerStrategyName)
       .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
+      .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key, tableVersion)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)

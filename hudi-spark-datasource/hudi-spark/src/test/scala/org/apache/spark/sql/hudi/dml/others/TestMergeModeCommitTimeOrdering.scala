@@ -71,7 +71,6 @@ class TestMergeModeCommitTimeOrdering extends HoodieSparkSqlTestBase {
       Map(
         HoodieTableConfig.VERSION.key -> tableVersion,
         HoodieTableConfig.RECORD_MERGE_MODE.key -> COMMIT_TIME_ORDERING.name(),
-        HoodieTableConfig.PAYLOAD_CLASS_NAME.key -> classOf[OverwriteWithLatestAvroPayload].getName,
         HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key -> COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
     }
     val nonExistentConfigs = if (tableVersion.toInt == 6) {

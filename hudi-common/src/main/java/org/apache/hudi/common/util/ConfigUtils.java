@@ -254,11 +254,11 @@ public class ConfigUtils {
    * Whether the properties contain a config. If any of the key or alternative keys of the
    * {@link ConfigProperty} exists in the properties, this method returns {@code true}.
    *
-   * @param props          Configs in {@link TypedProperties}
+   * @param props          Configs in {@link Properties}
    * @param configProperty Config to look up.
    * @return {@code true} if exists; {@code false} otherwise.
    */
-  public static boolean containsConfigProperty(TypedProperties props,
+  public static boolean containsConfigProperty(Properties props,
                                                ConfigProperty<?> configProperty) {
     if (!props.containsKey(configProperty.key())) {
       for (String alternative : configProperty.getAlternatives()) {

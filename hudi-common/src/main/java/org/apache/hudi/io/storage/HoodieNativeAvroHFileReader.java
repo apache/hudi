@@ -96,9 +96,10 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema,
-                                                                  Schema requestedSchema)
+                                                                  Schema requestedSchema,
+                                                                  Map<String, String> renamedColumns)
       throws IOException {
-    if (!Objects.equals(readerSchema, requestedSchema)) {
+    if (!Objects.equals(readerSchema, requestedSchema) || !renamedColumns.isEmpty()) {
       throw new UnsupportedOperationException(
           "Schema projections are not supported in HFile reader");
     }

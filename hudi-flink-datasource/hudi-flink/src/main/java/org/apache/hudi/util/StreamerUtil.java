@@ -403,7 +403,7 @@ public class StreamerUtil {
    * @return The correct merging behaviour: <merge_mode, payload_class, merge_strategy_id>
    */
   public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
-    return HoodieTableConfig.inferCorrectMergingBehavior(
+    return HoodieTableConfig.inferMergingConfigsForWrites(
         getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineField(conf), HoodieTableVersion.EIGHT);
   }
 

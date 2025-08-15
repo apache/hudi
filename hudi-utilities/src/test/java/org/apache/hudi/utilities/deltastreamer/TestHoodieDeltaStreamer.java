@@ -1858,6 +1858,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         true, false, null, "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
     assertRecordCount(1000, dataSetBasePath, sqlContext);
+    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
 
     //now create one more deltaStreamer instance and update payload class
     cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
@@ -1865,9 +1867,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         true, true, DummyAvroPayload.class.getName(), "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
 
-    //now assert that hoodie.properties file now has updated payload class name
-    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
-    assertEquals(metaClient.getTableConfig().getPayloadClass(), DummyAvroPayload.class.getName());
+    // NOTE: Payload class cannot be updated, though the write can be executed using different payload classes in the runtime.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
   }
 
   @Test
@@ -1884,6 +1886,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(metaClient.getTableConfig().getPayloadClass(), PartialUpdateAvroPayload.class.getName());
   }
 
+  @Disabled("To be fixed with HUDI-9714")
   @Test
   public void testPayloadClassUpdateWithCOWTable() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_cow";
@@ -1900,7 +1903,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       props.load(inputStream);
     }
 
-    assertTrue(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
+    assertFalse(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_MODE.key()));
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()));
 

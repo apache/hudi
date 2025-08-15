@@ -34,11 +34,17 @@ import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
+
+import scala.Function1;
 
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
@@ -139,5 +145,26 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
         null
     };
     return SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, null, false);
+  }
+
+  @Override
+  public InternalRow seal(InternalRow internalRow) {
+    return internalRow.copy();
+  }
+
+  @Override
+  public InternalRow toBinaryRow(Schema schema, InternalRow internalRow) {
+    if (internalRow instanceof UnsafeRow) {
+      return internalRow;
+    }
+    final UnsafeProjection unsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema);
+    return unsafeProjection.apply(internalRow);
+  }
+
+  @Override
+  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns, Collections.emptyMap());
+    return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 }
