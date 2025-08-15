@@ -139,16 +139,15 @@ public abstract class HoodieEngineContext {
   /**
    * Returns reader context factory for write operations in the table.
    *
-   * @param metaClient            Table meta client
-   * @param recordType            Record type
-   * @param properties            Typed properties
-   * @param outputsCustomPayloads Whether the reader context factory should output custom payloads. Final merging of records before writes does not require custom payloads.
+   * @param metaClient Table meta client
+   * @param recordType Record type
+   * @param properties Typed properties
    */
   public ReaderContextFactory<?> getReaderContextFactoryForWrite(HoodieTableMetaClient metaClient, HoodieRecord.HoodieRecordType recordType,
-                                                                 TypedProperties properties, boolean outputsCustomPayloads) {
+                                                                 TypedProperties properties) {
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
       String payloadClass = ConfigUtils.getPayloadClass(properties);
-      return new AvroReaderContextFactory(metaClient, payloadClass, outputsCustomPayloads);
+      return new AvroReaderContextFactory(metaClient, payloadClass);
     }
     return getEngineReaderContextFactory(metaClient);
   }

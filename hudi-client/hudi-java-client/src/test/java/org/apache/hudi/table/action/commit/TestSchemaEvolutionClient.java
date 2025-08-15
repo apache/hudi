@@ -20,16 +20,15 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +37,7 @@ import java.io.IOException;
 import java.util.Collections;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -50,7 +50,7 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
   @BeforeEach
   public void setUpClient() throws IOException {
-    HoodieJavaWriteClient<RawTripTestPayload> writeClient = getWriteClient();
+    HoodieJavaWriteClient<IndexedRecord> writeClient = getWriteClient();
     this.writeClient = writeClient;
     prepareTable(writeClient);
   }
@@ -68,7 +68,7 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
     assertEquals(Types.LongType.get(), getFieldByName("number").type());
   }
 
-  private HoodieJavaWriteClient<RawTripTestPayload> getWriteClient() {
+  private HoodieJavaWriteClient<IndexedRecord> getWriteClient() {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
@@ -78,12 +78,9 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
     return new HoodieJavaWriteClient<>(context, config);
   }
 
-  private void prepareTable(HoodieJavaWriteClient<RawTripTestPayload> writeClient) throws IOException {
+  private void prepareTable(HoodieJavaWriteClient<IndexedRecord> writeClient) {
     String commitTime = writeClient.startCommit();
-    String jsonRow = "{\"_row_key\": \"1\", \"time\": \"2000-01-01T00:00:00.000Z\", \"number\": 1}";
-    RawTripTestPayload payload = new RawTripTestPayload(jsonRow);
-    HoodieAvroRecord<RawTripTestPayload> record = new HoodieAvroRecord<>(
-        new HoodieKey(payload.getRowKey(), payload.getPartitionPath()), payload);
+    HoodieAvroIndexedRecord record = createSimpleRecord("1", "2000-01-01T00:00:00.000Z", 1);
     writeClient.commit(commitTime, writeClient.insert(Collections.singletonList(record), commitTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
   }
 

@@ -21,12 +21,26 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.OperationModeAwareness;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.RewriteAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -40,13 +54,27 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A utility class for HoodieRecord.
  */
 public class HoodieRecordUtils {
   private static final Map<String, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
+  private static final Map<String, Constructor<?>> CONSTRUCTOR_CACHE_WITH_ORDERING_VALUE = new ConcurrentHashMap<>();
+  private static final Set<String> DEPRECATED_PAYLOADS = Stream.of(
+      AWSDmsAvroPayload.class.getName(),
+      DefaultHoodieRecordPayload.class.getName(),
+      EventTimeAvroPayload.class.getName(),
+      HoodieAvroPayload.class.getName(),
+      OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+      OverwriteWithLatestAvroPayload.class.getName(),
+      RewriteAvroPayload.class.getName(),
+      PostgresDebeziumAvroPayload.class.getName(),
+      MySqlDebeziumAvroPayload.class.getName()).collect(Collectors.toSet());
 
   /**
    * Instantiate a given class with a record merge.
@@ -87,12 +115,16 @@ public class HoodieRecordUtils {
         .findFirst());
   }
 
+  public static boolean isPayloadClassDeprecated(String recordPayloadClass) {
+    return DEPRECATED_PAYLOADS.contains(recordPayloadClass);
+  }
+
   /**
    * Instantiate a given class with an avro record payload.
    */
   public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, GenericRecord record, Comparable orderingValue) {
     try {
-      return (T) CONSTRUCTOR_CACHE.computeIfAbsent(recordPayloadClass, key -> {
+      return (T) CONSTRUCTOR_CACHE_WITH_ORDERING_VALUE.computeIfAbsent(recordPayloadClass, key -> {
         try {
           return ReflectionUtils.getClass(recordPayloadClass).getConstructor(GenericRecord.class, Comparable.class);
         } catch (NoSuchMethodException ex) {
@@ -102,6 +134,58 @@ public class HoodieRecordUtils {
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
       throw new HoodieException("Unable to instantiate payload class ", e);
     }
+  }
+
+  /**
+   * Instantiate a given class with an avro record payload.
+   */
+  public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, GenericRecord record) {
+    try {
+      return (T) CONSTRUCTOR_CACHE.computeIfAbsent(recordPayloadClass, key -> {
+        try {
+          return ReflectionUtils.getClass(recordPayloadClass).getConstructor(Option.class);
+        } catch (NoSuchMethodException ex) {
+          throw new HoodieException("Unable to find constructor for payload class: " + recordPayloadClass, ex);
+        }
+      }).newInstance(Option.ofNullable(record));
+    } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+      throw new HoodieException("Unable to instantiate payload class ", e);
+    }
+  }
+
+  public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey, String payloadClass) {
+    return createHoodieRecord(data, orderingVal, hKey, payloadClass, null, Option.empty());
+  }
+
+  public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey,
+                                                String payloadClass, HoodieOperation hoodieOperation, Option<HoodieRecordLocation> recordLocation) {
+    HoodieRecord record;
+    if (isPayloadClassDeprecated(payloadClass)) {
+      record = new HoodieAvroIndexedRecord(hKey, data, orderingVal, hoodieOperation);
+    } else {
+      HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data, orderingVal);
+      record = new HoodieAvroRecord<>(hKey, payload, hoodieOperation);
+    }
+    recordLocation.ifPresent(location -> record.setCurrentLocation(recordLocation.get()));
+    return record;
+  }
+
+  public static HoodieRecord createHoodieRecord(GenericRecord data, HoodieKey hKey,
+                                                String payloadClass) {
+    return createHoodieRecord(data, hKey, payloadClass, Option.empty());
+  }
+
+  public static HoodieRecord createHoodieRecord(GenericRecord data, HoodieKey hKey,
+                                                String payloadClass, Option<HoodieRecordLocation> recordLocation) {
+    HoodieRecord record;
+    if (isPayloadClassDeprecated(payloadClass)) {
+      record = new HoodieAvroIndexedRecord(hKey, data);
+    } else {
+      HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data);
+      record = new HoodieAvroRecord<>(hKey, payload);
+    }
+    recordLocation.ifPresent(location -> record.setCurrentLocation(recordLocation.get()));
+    return record;
   }
 
   public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {

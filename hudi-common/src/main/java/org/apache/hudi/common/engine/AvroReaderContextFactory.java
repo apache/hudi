@@ -29,20 +29,18 @@ import org.apache.avro.generic.IndexedRecord;
 public class AvroReaderContextFactory implements ReaderContextFactory<IndexedRecord> {
   private final HoodieTableMetaClient metaClient;
   private final String payloadClassName;
-  private final boolean requiresPayloadRecords;
 
   public AvroReaderContextFactory(HoodieTableMetaClient metaClient) {
-    this(metaClient, metaClient.getTableConfig().getPayloadClass(), false);
+    this(metaClient, metaClient.getTableConfig().getPayloadClass());
   }
 
-  public AvroReaderContextFactory(HoodieTableMetaClient metaClient, String payloadClassName, boolean requiresPayloadRecords) {
+  public AvroReaderContextFactory(HoodieTableMetaClient metaClient, String payloadClassName) {
     this.metaClient = metaClient;
     this.payloadClassName = payloadClassName;
-    this.requiresPayloadRecords = requiresPayloadRecords;
   }
 
   @Override
   public HoodieReaderContext<IndexedRecord> getContext() {
-    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), payloadClassName, requiresPayloadRecords);
+    return new HoodieAvroReaderContext(metaClient.getStorageConf(), metaClient.getTableConfig(), payloadClassName);
   }
 }

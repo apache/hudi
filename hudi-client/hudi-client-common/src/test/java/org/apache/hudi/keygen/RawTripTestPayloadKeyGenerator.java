@@ -21,6 +21,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 
 import org.apache.avro.generic.GenericRecord;
@@ -37,6 +38,6 @@ public class RawTripTestPayloadKeyGenerator extends SimpleAvroKeyGenerator {
   public String getPartitionPath(GenericRecord record) {
     String partitionPath = HoodieAvroUtils
         .getNestedFieldValAsString(record, getPartitionPathFields().get(0), true, isConsistentLogicalTimestampEnabled());
-    return RawTripTestPayload.extractPartitionFromTimeField(partitionPath);
+    return HoodieTestUtils.extractPartitionFromTimeField(partitionPath);
   }
 }

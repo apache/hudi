@@ -235,7 +235,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
 
     nextRecordPosition = readerContext.getRecordContext().extractRecordPosition(baseRecord, readerSchema,
         ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
-    BufferedRecord<T> logRecordInfo = records.remove(nextRecordPosition++);
+    BufferedRecord<T> logRecordInfo = records.get(nextRecordPosition++);
     return super.hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 
