@@ -216,8 +216,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       Seq(HoodieTableConfig.PRECOMBINE_FIELDS.key)
     }).asJava
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
-    val commit1CompletionTime = if (
-      tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+    val commit1CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
       DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     } else {
       DataSourceTestUtils.latestCommitRequestTime(storage, basePath)

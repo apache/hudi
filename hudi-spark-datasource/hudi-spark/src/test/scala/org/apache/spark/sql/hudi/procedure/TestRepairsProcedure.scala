@@ -134,8 +134,11 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
       // overwrite hoodie props
       val tableVersion = HoodieTableVersion.current().versionCode()
+      // NOTE: After COW write path is updated, and upgrade/downgrade paht is enabled for COW table,
+      //       this test should fail automatically. Then we can remove the payload class config here.
       val expectedOutput =s"""
           |[hoodie.archivelog.folder,archived,archive]
+          |[hoodie.compaction.payload.class,org.apache.hudi.common.model.DefaultHoodieRecordPayload,null]
           |[hoodie.database.name,default,null]
           |[hoodie.datasource.write.drop.partition.columns,false,false]
           |[hoodie.datasource.write.hive_style_partitioning,true,null]
