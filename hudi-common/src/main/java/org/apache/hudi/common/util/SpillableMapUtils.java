@@ -20,7 +20,6 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -153,13 +152,9 @@ public class SpillableMapUtils {
       record = recordWithoutMetaFields;
     }
 
-    if (StringUtils.isNullOrEmpty(payloadClazz)) {
-      return (HoodieRecord<R>) new HoodieAvroIndexedRecord(new HoodieKey(recKey, partitionPath), record);
-    } else {
-      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
-          HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
-      return (HoodieRecord<R>) hoodieRecord;
-    }
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
+        HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
+    return (HoodieRecord<R>) hoodieRecord;
   }
 
   /**
@@ -186,9 +181,6 @@ public class SpillableMapUtils {
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
-    if (StringUtils.isNullOrEmpty(payloadClazz)) {
-      return (R) new HoodieAvroIndexedRecord(new HoodieKey(recKey, partitionPath), null, HoodieOperation.DELETE, Option.empty());
-    }
     return (R) new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath), HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal));
   }
 

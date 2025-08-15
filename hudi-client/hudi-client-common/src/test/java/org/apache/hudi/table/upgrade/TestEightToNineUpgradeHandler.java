@@ -97,7 +97,7 @@ class TestEightToNineUpgradeHandler {
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper =
       mock(SupportsUpgradeDowngrade.class);
   private final HoodieWriteConfig config = mock(HoodieWriteConfig.class);
-  private static final Map<ConfigProperty, String> DEFAULT_CONFIG_UPDATED = Collections.emptyMap();
+  private static final Map<ConfigProperty, String> DEFAULT_CONFIG_UPDATED = Collections.singletonMap(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name());
   private static final Set<ConfigProperty> DEFAULT_CONFIG_REMOVED = Collections.emptySet();
   private static final UpgradeDowngrade.TableConfigChangeSet DEFAULT_UPGRADE_RESULT =
       new UpgradeDowngrade.TableConfigChangeSet(DEFAULT_CONFIG_UPDATED, DEFAULT_CONFIG_REMOVED);

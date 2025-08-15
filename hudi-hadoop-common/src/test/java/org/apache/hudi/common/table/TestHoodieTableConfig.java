@@ -183,7 +183,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     propsToDelete.add(HoodieTableConfig.PARTITION_FIELDS.key());
     // delete a non existant property as well
     propsToDelete.add(HoodieTableConfig.RECORDKEY_FIELDS.key());
-    HoodieTableConfig.updateDeleteProps(storage, metaPath, updatedProps, propsToDelete);
+    HoodieTableConfig.updateAndDeleteProps(storage, metaPath, updatedProps, propsToDelete);
     config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
@@ -192,7 +192,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     // just delete 1 property w/o updating anything.
     updatedProps = new Properties();
-    HoodieTableConfig.updateDeleteProps(storage, metaPath, updatedProps, Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELDS.key()));
+    HoodieTableConfig.updateAndDeleteProps(storage, metaPath, updatedProps, Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELDS.key()));
     config = new HoodieTableConfig(storage, metaPath, null, null, null);
     assertEquals(7, config.getProps().size());
     assertEquals("test-table2", config.getTableName());

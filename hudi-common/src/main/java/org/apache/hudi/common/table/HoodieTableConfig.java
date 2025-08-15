@@ -629,8 +629,8 @@ public class HoodieTableConfig extends HoodieConfig {
     modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, Collections.EMPTY_SET);
   }
 
-  public static void updateDeleteProps(HoodieStorage storage, StoragePath metadataFolder,
-                            Properties updatedProps, Set<String> propstoDelete) {
+  public static void updateAndDeleteProps(HoodieStorage storage, StoragePath metadataFolder,
+                                          Properties updatedProps, Set<String> propstoDelete) {
     modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, propstoDelete);
   }
 

@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
@@ -75,18 +74,18 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSE
  *     set hoodie.record.merge.strategy.id based on RFC-97
  *   for table with event_time/commit_time merge mode,
  *     set hoodie.table.partial.update.mode to default value
- *     set hoodie.table.merge.properties to default value
+ *   for certain payloads, we might need to set additional merge properties in table config to expose it to readers.
+ *     set properties with hoodie.record.merge.property. as prefix as needed.
  *   for table with custom merger or payload,
- *     set hoodie.table.partial.update.mode to default value
- *     set hoodie.table.merge.properties to default value
+ *     set hoodie.table.partial.update.mode to default value.
  */
 public class EightToNineUpgradeHandler implements UpgradeHandler {
-  private static final Set<String> PAYLOADS_UPGRADE_TO_EVENT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
+  private static final Set<String> PAYLOADS_MAPPED_TO_EVENT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
       EventTimeAvroPayload.class.getName(),
       MySqlDebeziumAvroPayload.class.getName(),
       PartialUpdateAvroPayload.class.getName(),
       PostgresDebeziumAvroPayload.class.getName()));
-  private static final Set<String> PAYLOADS_UPGRADE_TO_COMMIT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
+  private static final Set<String> PAYLOADS_MAPPED_TO_COMMIT_TIME_MERGE_MODE = new HashSet<>(Arrays.asList(
       AWSDmsAvroPayload.class.getName(),
       OverwriteNonDefaultsWithLatestAvroPayload.class.getName()));
   public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
@@ -117,17 +116,14 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           metaClient.getTableConfig().getTableVersion());
     }
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
-    // TODO: make it work for COW after write path is ready.
-    if (tableConfig.getTableType() == HoodieTableType.MERGE_ON_READ) {
-      // Handle merge mode config.
-      reconcileMergeModeConfig(tablePropsToAdd, tableConfig);
-      // Handle partial update mode config.
-      reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
-      // Handle merge properties config.
-      reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig);
-      // Handle payload class configs.
-      reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
-    }
+    // Handle merge mode config.
+    reconcileMergeModeConfig(tablePropsToAdd, tableConfig);
+    // Handle partial update mode config.
+    reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
+    // Handle merge properties config.
+    reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig);
+    // Handle payload class configs.
+    reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 
@@ -138,10 +134,10 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
       return;
     }
-    if (PAYLOADS_UPGRADE_TO_COMMIT_TIME_MERGE_MODE.contains(payloadClass)) {
+    if (PAYLOADS_MAPPED_TO_COMMIT_TIME_MERGE_MODE.contains(payloadClass)) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
       tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
-    } else if (PAYLOADS_UPGRADE_TO_EVENT_TIME_MERGE_MODE.contains(payloadClass)) {
+    } else if (PAYLOADS_MAPPED_TO_EVENT_TIME_MERGE_MODE.contains(payloadClass)) {
       tablePropsToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
       tablePropsToAdd.put(RECORD_MERGE_STRATEGY_ID, EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
     }
@@ -165,7 +161,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   private void reconcilePartialUpdateModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                                 HoodieTableConfig tableConfig) {
     // Set partial update mode for all tables.
-    tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name());
+    tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name()); // to be fixed once we land PR #13721
 
     String payloadClass = tableConfig.getPayloadClass();
     String mergeStrategy = tableConfig.getRecordMergeStrategyId();
@@ -176,9 +172,9 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         || payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
       tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_DEFAULTS.name());
     } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
-      tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_MARKERS.name());
+      tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_MARKERS.name()); // to be fixed once we land PR #13721.
     } else {
-      tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name());
+      tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name()); // to be fixed once we land PR #13721.
     }
   }
 
@@ -198,7 +194,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           AWSDmsAvroPayload.DELETE_OPERATION_VALUE);
     } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
       tablePropsToAdd.put(
-          ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue(),
+          ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue(), // // to be fixed once we land PR #13721.
           DEBEZIUM_UNAVAILABLE_VALUE);
     }
   }

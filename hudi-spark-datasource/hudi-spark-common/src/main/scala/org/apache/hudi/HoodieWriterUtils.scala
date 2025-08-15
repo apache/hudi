@@ -255,8 +255,6 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          // TODO: To disable payload class overwrite during writes,
-          //       `HoodieTableConfig.PAYLOAD_CLASS_NAME` should be changed to `PAYLOAD_CLASS_NAME`.
           val keyInTableConfig = if (key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key))  {
             getPayloadClassConfigKeyFromTableConfig(key, tableConfig)
           } else {

@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -62,6 +61,7 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSE
  *     set hoodie.compaction.payload.class=payload
  *     set hoodie.record.merge.mode=CUSTOM
  *     set hoodie.record.merge.strategy.id accordingly
+ *   remove any properties with prefix hoodie.record.merge.property.
  */
 public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
@@ -77,36 +77,34 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
-    // TODO: handle COW table after write path is done.
-    if (metaClient.getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ) {
-      updateMergeRelatedConfigs(propertiesToAdd, propertiesToRemove, metaClient);
-    }
+    reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, metaClient);
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
   }
 
-  private void updateMergeRelatedConfigs(Map<ConfigProperty, String> propertiesToAdd,
-                                         Set<ConfigProperty> propertiesToRemove,
-                                         HoodieTableMetaClient metaClient) {
+  private void reconcileMergeConfigs(Map<ConfigProperty, String> propertiesToAdd,
+                                     Set<ConfigProperty> propertiesToRemove,
+                                     HoodieTableMetaClient metaClient) {
     // Update table properties.
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
     // For specified payload classes, add strategy id and custom merge mode.
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    String payloadClass = tableConfig.getLegacyPayloadClass();
-    if (!StringUtils.isNullOrEmpty(payloadClass) && (PAYLOAD_CLASSES_TO_HANDLE.contains(payloadClass))) {
+    String legacyPayloadClass = tableConfig.getLegacyPayloadClass();
+    if (!StringUtils.isNullOrEmpty(legacyPayloadClass) && (PAYLOAD_CLASSES_TO_HANDLE.contains(legacyPayloadClass))) {
       propertiesToRemove.add(LEGACY_PAYLOAD_CLASS_NAME);
-      propertiesToAdd.put(PAYLOAD_CLASS_NAME, payloadClass);
-      if (!payloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())
-          && !payloadClass.equals(DefaultHoodieRecordPayload.class.getName())) {
+      propertiesToAdd.put(PAYLOAD_CLASS_NAME, legacyPayloadClass);
+      if (!legacyPayloadClass.equals(OverwriteWithLatestAvroPayload.class.getName())
+          && !legacyPayloadClass.equals(DefaultHoodieRecordPayload.class.getName())) {
         propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, PAYLOAD_BASED_MERGE_STRATEGY_UUID);
         propertiesToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
       }
-      if (payloadClass.equals(AWSDmsAvroPayload.class.getName())) {
+      // don't we need to fix merge strategy Id for OverwriteWithLatestAvroPayload and DefaultHoodieRecordPayload ?
+      if (legacyPayloadClass.equals(AWSDmsAvroPayload.class.getName())) {
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER).noDefaultValue());
       }
-      if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
+      if (legacyPayloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue());
       }

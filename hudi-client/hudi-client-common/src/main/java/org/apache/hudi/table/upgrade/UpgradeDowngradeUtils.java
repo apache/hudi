@@ -242,13 +242,6 @@ public class UpgradeDowngradeUtils {
     }
   }
 
-  static void checkAndHandleMetadataTable(HoodieEngineContext context,
-                                          HoodieTable table,
-                                          HoodieWriteConfig config,
-                                          HoodieTableMetaClient metaClient) {
-    checkAndHandleMetadataTable(context, table, config, metaClient, false);
-  }
-
   // If the metadata table is enabled for the data table, and
   // existing metadata table is behind the data table, then delete it.
   static void checkAndHandleMetadataTable(HoodieEngineContext context,
