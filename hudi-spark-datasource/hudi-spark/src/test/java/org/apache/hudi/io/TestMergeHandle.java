@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.SecondaryIndexStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -43,6 +44,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
@@ -70,6 +73,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -78,6 +82,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.AssertionsKt.assertNull;
 
 /**
  * Unit tests {@link HoodieMergeHandle}.
@@ -163,10 +168,24 @@ public class TestMergeHandle extends BaseTestHandle {
   @ParameterizedTest // TODO add CUSTOM_MERGER once deletes are handled properly
   @ValueSource(strings = {"EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING", "CUSTOM"})
   public void testFGReaderBasedMergeHandleInsertUpsertDelete(String mergeMode) throws IOException {
+    testFGReaderBasedMergeHandleInsertUpsertDeleteInternal(mergeMode, new Properties(), false);
+  }
+
+  @Test
+  public void testFGReaderBasedMergeHandleEventTimeMetadata() throws IOException {
+    Properties properties = new Properties();
+    properties.put("hoodie.write.track.event.time.watermark","true");
+    properties.put("hoodie.payload.event.time.field","current_ts");
+    testFGReaderBasedMergeHandleInsertUpsertDeleteInternal("EVENT_TIME_ORDERING", properties, true);
+  }
+
+  private void testFGReaderBasedMergeHandleInsertUpsertDeleteInternal(String mergeMode, Properties writerProps, boolean validateEventTimeMetadata) throws IOException {
     metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
 
-    HoodieWriteConfig config = getHoodieWriteConfigBuilder().build();
+    HoodieWriteConfig config = getHoodieWriteConfigBuilder().withProperties(writerProps).build();
     TypedProperties properties = new TypedProperties();
+    writerProps.keySet().forEach((key -> properties.put(key, writerProps.get(key))));
+
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
     properties.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), ORDERING_FIELD);
@@ -252,6 +271,16 @@ public class TestMergeHandle extends BaseTestHandle {
     validateWriteStatus(writeStatus, commit1, 10 - inputAndExpectedDataSet.getExpectedDeletes() + 2,
         inputAndExpectedDataSet.getExpectedUpdates(), 2, inputAndExpectedDataSet.getExpectedDeletes());
 
+    // validate event time metadata if enabled
+    if (validateEventTimeMetadata) {
+      List<HoodieRecord> records = new ArrayList<>();
+      records.addAll(validUpdatesRecordsMap.values());
+      records.addAll(untouchedRecordsFromBatch1.values());
+      validateEventTimeMetadata(writeStatus, writerProps.get("hoodie.payload.event.time.field").toString(), AVRO_SCHEMA, config, properties, records);
+    } else {
+      validateEventTimeMetadataNotSet(writeStatus);
+    }
+
     // validate RLI stats
     List<HoodieRecordDelegate> recordDelegates = writeStatus.getIndexStats().getWrittenRecordDelegates();
     recordDelegates.forEach(recordDelegate -> {
@@ -284,6 +313,45 @@ public class TestMergeHandle extends BaseTestHandle {
             secondaryIndexStat.getSecondaryKeyValue().toString());
       }
     }
+  }
+
+  private void validateEventTimeMetadataNotSet(WriteStatus writeStatus) {
+    assertNull(writeStatus.getStat().getMinEventTime());
+    assertNull(writeStatus.getStat().getMaxEventTime());
+  }
+
+  private void validateEventTimeMetadata(WriteStatus writeStatus, String eventTimeFieldName, Schema schema, HoodieWriteConfig config,
+                                         TypedProperties props, List<HoodieRecord> records) {
+    long actualMinEventTime = writeStatus.getStat().getMinEventTime();
+    long actualMaxEventTime = writeStatus.getStat().getMaxEventTime();
+    boolean keepConsistentLogicalTimestamp = ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
+
+    AtomicLong expectedMinValue = new AtomicLong(Long.MAX_VALUE);
+    AtomicLong expectedMaxValue = new AtomicLong(Long.MIN_VALUE);
+
+    records.forEach(record -> {
+      Object eventTimeValue = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
+      if (eventTimeValue != null) {
+        // Append event_time.
+        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema, eventTimeFieldName);
+        // Field should definitely exist.
+        eventTimeValue = record.convertColumnValueForLogicalType(
+            field.get().schema(), eventTimeValue, keepConsistentLogicalTimestamp);
+        int length = eventTimeValue.toString().length();
+        Long millisEventTime = null;
+        if (length == 10) {
+          millisEventTime = Long.parseLong(eventTimeValue.toString()) * 1000;
+        } else if (length == 13) {
+          // eventTimeVal in millis unit
+          millisEventTime = Long.parseLong(eventTimeValue.toString());
+        }
+        long eventTime = DateTimeUtils.parseDateTime(Long.toString(millisEventTime)).toEpochMilli();
+        expectedMinValue.set(Math.min(expectedMinValue.get(), eventTime));
+        expectedMaxValue.set(Math.max(expectedMaxValue.get(), eventTime));
+      }
+    });
+    assertEquals(expectedMinValue.get(), actualMinEventTime, "Min event time does not match");
+    assertEquals(expectedMaxValue.get(), actualMaxEventTime, "Max event time does not match");
   }
 
   private List<HoodieRecord> initialWrite(HoodieWriteConfig config, HoodieTestDataGenerator dataGenerator, String payloadClass, String partitionPath) {
