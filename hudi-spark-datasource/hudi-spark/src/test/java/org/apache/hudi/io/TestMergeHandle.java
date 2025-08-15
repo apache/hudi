@@ -38,7 +38,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -60,6 +59,7 @@ import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -165,8 +165,8 @@ public class TestMergeHandle extends BaseTestHandle {
     validateSecondaryIndexStatsContent(writeStatus, numUpdates, numDeletes);
   }
 
-  @ParameterizedTest // TODO add CUSTOM_MERGER once deletes are handled properly
-  @ValueSource(strings = {"EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING", "CUSTOM"})
+  @ParameterizedTest
+  @ValueSource(strings = {"EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING", "CUSTOM", "CUSTOM_MERGER"})
   public void testFGReaderBasedMergeHandleInsertUpsertDelete(String mergeMode) throws IOException {
     testFGReaderBasedMergeHandleInsertUpsertDeleteInternal(mergeMode, new Properties(), false);
   }
@@ -174,8 +174,8 @@ public class TestMergeHandle extends BaseTestHandle {
   @Test
   public void testFGReaderBasedMergeHandleEventTimeMetadata() throws IOException {
     Properties properties = new Properties();
-    properties.put("hoodie.write.track.event.time.watermark","true");
-    properties.put("hoodie.payload.event.time.field","current_ts");
+    properties.put("hoodie.write.track.event.time.watermark", "true");
+    properties.put("hoodie.payload.event.time.field", "current_ts");
     testFGReaderBasedMergeHandleInsertUpsertDeleteInternal("EVENT_TIME_ORDERING", properties, true);
   }
 
@@ -198,8 +198,8 @@ public class TestMergeHandle extends BaseTestHandle {
     String payloadClass = null;
     if (mergeMode.equals(RecordMergeMode.CUSTOM.name()) || mergeMode.equals("CUSTOM_MERGER")) {
       // set payload class as part of table properties.
-      properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
-      payloadClass = OverwriteNonDefaultsWithLatestAvroPayload.class.getName();
+      properties.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), CustomPayload.class.getName());
+      payloadClass = CustomPayload.class.getName();
     } else if (mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name())) {
       payloadClass = DefaultHoodieRecordPayload.class.getName();
     } else if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
@@ -273,9 +273,7 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // validate event time metadata if enabled
     if (validateEventTimeMetadata) {
-      List<HoodieRecord> records = new ArrayList<>();
-      records.addAll(validUpdatesRecordsMap.values());
-      records.addAll(untouchedRecordsFromBatch1.values());
+      List<HoodieRecord> records = new ArrayList<>(inputAndExpectedDataSet.getExpectedRecordsMap().values());
       validateEventTimeMetadata(writeStatus, writerProps.get("hoodie.payload.event.time.field").toString(), AVRO_SCHEMA, config, properties, records);
     } else {
       validateEventTimeMetadataNotSet(writeStatus);
@@ -329,6 +327,7 @@ public class TestMergeHandle extends BaseTestHandle {
     AtomicLong expectedMinValue = new AtomicLong(Long.MAX_VALUE);
     AtomicLong expectedMaxValue = new AtomicLong(Long.MIN_VALUE);
 
+    // Append event_time.
     records.forEach(record -> {
       Object eventTimeValue = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
       if (eventTimeValue != null) {
@@ -387,15 +386,12 @@ public class TestMergeHandle extends BaseTestHandle {
     recordsToDelete.add(deleteRecordLowerOrderingValue);
     recordsToDelete.add(deleteRecordHigherOrderingValue);
 
-    if (!mergeMode.equals("CUSTOM_MERGER")) {
-      // Custom merger chooses record with lower ordering value
-      validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
-      validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
-      expectedDeletes += 2;
-    }
-    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name()) || mergeMode.equals("CUSTOM_MERGER")) {
-      // for deletes w/ custom payload based merge, we do honor ordering value.
-      // Custom merger chooses record with lower ordering value
+    // Known Gap HUDI-9715: Currently the ordering provided by the custom mergers does not apply deletes.
+    validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
+    validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
+    expectedDeletes += 2;
+
+    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
       validDeletes.put(deleteRecordLowerOrderingValue.getRecordKey(), deleteRecordLowerOrderingValue);
       expectedDeletes += 1;
     }
@@ -408,7 +404,7 @@ public class TestMergeHandle extends BaseTestHandle {
     recordsToUpdate.add(genericRecord1);
     recordsToUpdate.add(genericRecord2);
     List<HoodieRecord> hoodieRecordsToUpdate = getHoodieRecords(payloadClass, recordsToUpdate, partitionPath);
-    if (!mergeMode.equals("CUSTOM_MERGER")) {
+    if (!mergeMode.equals("CUSTOM_MERGER") && !mergeMode.equals("CUSTOM")) {
       // Custom merger chooses record with lower ordering value
       validUpdates.add(hoodieRecordsToUpdate.get(0));
       expectedUpdates += 1;
@@ -611,6 +607,40 @@ public class TestMergeHandle extends BaseTestHandle {
     @Override
     public String getMergingStrategy() {
       return STRATEGY_ID;
+    }
+  }
+
+  public static class CustomPayload implements HoodieRecordPayload<CustomPayload> {
+    private final GenericRecord record;
+
+    public CustomPayload(GenericRecord record, Comparable orderingValue) {
+      this.record = record;
+    }
+
+    @Override
+    public CustomPayload preCombine(CustomPayload other) {
+      return this; // No-op for this test
+    }
+
+    @Override
+    public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+      Long olderTimestamp = (Long) ((GenericRecord) currentValue).get("timestamp");
+      Long newerTimestamp = (Long) record.get("timestamp");
+      if (olderTimestamp.equals(newerTimestamp)) {
+        // If the timestamps are the same, we do not update
+        return Option.of(currentValue);
+      } else if (olderTimestamp < newerTimestamp) {
+        // Custom merger chooses record with lower ordering value
+        return Option.of(currentValue);
+      } else {
+        // Custom merger chooses record with lower ordering value
+        return Option.of(record);
+      }
+    }
+
+    @Override
+    public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
+      return Option.of(record);
     }
   }
 }

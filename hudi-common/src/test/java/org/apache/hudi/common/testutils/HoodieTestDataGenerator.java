@@ -1218,10 +1218,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
   private static long genRandomTimeMillis(Random r) {
     // Fri Feb 13 15:31:30 PST 2009
-    long anchorTs = 1234567890L;
+    long anchorTs = 1234567890000L;
     // NOTE: To provide for certainty and not generate overly random dates, we will limit
     //       dispersion to be w/in +/- 3 days from the anchor date
-    return anchorTs + r.nextLong() % 259200000L;
+    return anchorTs + r.nextInt(259200000);
   }
 
   public static UUID genPseudoRandomUUID(Random r) {

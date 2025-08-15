@@ -86,7 +86,7 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(FileGroupReaderBasedMergeHandle.class);
 
-  private final Option<CompactionOperation> operation;
+  private final Option<CompactionOperation> compactionOperation;
   private final String maxInstantTime;
   private HoodieReaderContext<T> readerContext;
   private HoodieReadStats readStats;
@@ -112,7 +112,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
                                          Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                          TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    this.operation = Option.empty();
+    this.compactionOperation = Option.empty();
     this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
@@ -129,23 +129,23 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @param instantTime instant time of interest.
    * @param hoodieTable instance of {@link HoodieTable} to use.
-   * @param operation compaction operation containing info about base and log files.
+   * @param compactionOperation compaction operation containing info about base and log files.
    * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
    * @param maxInstantTime max instant time to use.
    * @param enginRecordType engine record type.
    */
   @SuppressWarnings("unused")
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                         CompactionOperation operation, TaskContextSupplier taskContextSupplier,
+                                         CompactionOperation compactionOperation, TaskContextSupplier taskContextSupplier,
                                          HoodieReaderContext<T> readerContext, String maxInstantTime,
                                          HoodieRecord.HoodieRecordType enginRecordType) {
-    super(config, instantTime, operation.getPartitionPath(), operation.getFileId(), hoodieTable, taskContextSupplier);
+    super(config, instantTime, compactionOperation.getPartitionPath(), compactionOperation.getFileId(), hoodieTable, taskContextSupplier);
     this.maxInstantTime = maxInstantTime;
     this.keyToNewRecords = Collections.emptyMap();
     this.readerContext = readerContext;
-    this.operation = Option.of(operation);
+    this.compactionOperation = Option.of(compactionOperation);
     initRecordTypeAndCdcLogger(enginRecordType);
-    init(operation, this.partitionPath);
+    init(compactionOperation, this.partitionPath);
     this.props = TypedProperties.copy(config.getProps());
     this.incomingRecordsItr = null;
   }
@@ -241,7 +241,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   @Override
   public void doMerge() {
     // For non-compaction operations, the merger needs to be initialized with the writer properties to handle cases like Merge-Into commands
-    if (operation.isEmpty()) {
+    if (compactionOperation.isEmpty()) {
       this.readerContext.initRecordMergerForIngestion(config.getProps());
     }
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
@@ -250,7 +250,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
             config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS)));
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
-    Option<Stream<HoodieLogFile>> logFilesStreamOpt = operation.map(op -> op.getDeltaFileNames().stream().map(logFileName ->
+    Option<Stream<HoodieLogFile>> logFilesStreamOpt = compactionOperation.map(op -> op.getDeltaFileNames().stream().map(logFileName ->
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
             config.getBasePath(), op.getPartitionPath()), logFileName))));
     // Initializes file group reader
@@ -259,7 +259,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
           HoodieRecord<T> record = recordIterator.next();
-          Option<Map<String, String>> recordMetadata = operation.isEmpty() ? getRecordMetadata(record, writeSchema, props) : Option.empty();
+          Option<Map<String, String>> recordMetadata = compactionOperation.isEmpty() ? getRecordMetadata(record, writeSchema, props) : Option.empty();
           record.setCurrentLocation(newRecordLocation);
           record.setNewLocation(newRecordLocation);
           if (!partitionPath.equals(record.getPartitionPath())) {
@@ -333,8 +333,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       writeStatus.getStat().setTotalLogBlocks(readStats.getTotalLogBlocks());
       writeStatus.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
       writeStatus.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
-      if (operation.isPresent()) {
-        writeStatus.getStat().setTotalLogSizeCompacted(operation.get().getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+      if (compactionOperation.isPresent()) {
+        writeStatus.getStat().setTotalLogSizeCompacted(compactionOperation.get().getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
       }
 
       if (writeStatus.getStat().getRuntimeStats() != null) {
@@ -353,7 +353,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       callbacks.add(new CDCCallback<>(cdcLogger.get(), readerContext));
     }
     // Indexes are not updated during compaction
-    if (operation.isEmpty()) {
+    if (compactionOperation.isEmpty()) {
       // record index callback
       if (this.writeStatus.isTrackingSuccessfulWrites()) {
         writeStatus.manuallyTrackSuccess();
