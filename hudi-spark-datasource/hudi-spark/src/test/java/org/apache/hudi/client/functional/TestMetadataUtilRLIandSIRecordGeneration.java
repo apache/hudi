@@ -45,7 +45,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -63,6 +62,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
@@ -498,11 +498,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
   }
 
   private static String getSecondaryIndexKey(HoodieRecord record) {
-    try {
-      return constructSecondaryIndexKey(((RawTripTestPayload) record.getData()).getJsonDataAsMap().get("rider").toString(), record.getRecordKey());
-    } catch (IOException e) {
-      throw new HoodieException("Failed to construct secondary index key for record key: " + record.getRecordKey(), e);
-    }
+    return constructSecondaryIndexKey(((GenericRecord) record.getData()).get("rider").toString(), record.getRecordKey());
   }
 
   private void assertRLIandSIRecordGenerationAPIs(List<HoodieRecord> inserts3, List<HoodieRecord> updates3, List<HoodieRecord> deletes3,
