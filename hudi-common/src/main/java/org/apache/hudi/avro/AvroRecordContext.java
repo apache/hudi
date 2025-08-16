@@ -21,7 +21,6 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -40,6 +39,8 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.UnaryOperator;
+
+import static org.apache.hudi.common.util.HoodieRecordUtils.generateEmptyAvroRecord;
 
 /**
  * Record context for reading and transforming avro indexed records.
@@ -103,11 +104,11 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
 
     if (bufferedRecord.isDelete()) {
-      return new HoodieEmptyRecord<>(
+      return generateEmptyAvroRecord(
           hoodieKey,
-          bufferedRecord.getHoodieOperation(),
           bufferedRecord.getOrderingValue(),
-          HoodieRecord.HoodieRecordType.AVRO);
+          payloadClass,
+          bufferedRecord.getHoodieOperation());
     }
 
     return HoodieRecordUtils.createHoodieRecord((GenericRecord) bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(),
