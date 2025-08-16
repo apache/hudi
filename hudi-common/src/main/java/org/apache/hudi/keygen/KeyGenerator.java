@@ -70,14 +70,8 @@ public abstract class KeyGenerator implements KeyGeneratorInterface {
    * @param recordValueFunction takes the record key field name and the index of the field in the record key fields and outputs a value
    * @return the record key
    */
+  // TODO(yihua): check all callers
   public static String constructRecordKey(String[] recordKeyFields, BiFunction<String, Integer, String> recordValueFunction) {
-    if (recordKeyFields.length == 1) {
-      String recordKeyValue = recordValueFunction.apply(recordKeyFields[0], 0);
-      if (recordKeyValue == null) {
-        throw new HoodieKeyException("recordKey cannot be null");
-      }
-      return recordKeyValue;
-    }
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
     for (int i = 0; i < recordKeyFields.length; i++) {

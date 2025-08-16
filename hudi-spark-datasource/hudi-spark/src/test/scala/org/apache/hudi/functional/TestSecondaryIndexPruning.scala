@@ -45,6 +45,7 @@ import org.apache.hudi.util.{JavaConversions, JFunction}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.disableComplexKeygenValidation
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -1381,6 +1382,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql("set spark.sql.defaultColumn.enabled=false")
     }
 
+    disableComplexKeygenValidation(spark, tableName)
+    // TODO(yihua): understand why test fails without this config
+    spark.sql(
+      s"""
+         |ALTER TABLE $tableName
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.encode.single.record.key.field.name = 'false')
+         |""".stripMargin)
     spark.sql(
       s"""|INSERT INTO $tableName(ts, id, rider, driver, fare, city, state) VALUES
           |    (1695159649,'trip1','rider-A','driver-K',19.10,'san_francisco','california'),

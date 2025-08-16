@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.{Option => HOption}
@@ -791,6 +791,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         "hoodie.datasource.write.table.type" -> "COPY_ON_WRITE",
         "hoodie.datasource.write.recordkey.field" -> "a",
         "hoodie.datasource.write.partitionpath.field" -> "a,b,c",
+        "hoodie.write.complex.keygen.validation.enable" -> "false",
         "hoodie.clean.automatic" -> "true",
         "hoodie.metadata.enable" -> "true",
         "hoodie.clustering.inline" -> "true",
