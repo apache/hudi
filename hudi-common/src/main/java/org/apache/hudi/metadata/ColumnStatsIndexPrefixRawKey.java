@@ -25,40 +25,60 @@ import org.apache.hudi.common.util.hash.PartitionIndexID;
 import java.util.Objects;
 
 /**
- * Represents a raw key for column stats index consisting of column name and optional partition name.
+ * Represents a raw key prefix for column stats index consisting of column name and optional partition name.
+ * <p>
+ * This key is used for prefix lookups in the COLUMN_STATS partition to find all stats
+ * for a specific column across files, or for a column within a specific partition.
+ * This enables efficient retrieval of column statistics for query planning.
+ * <p>
+ * Raw key format:
+ * - Column-only lookup: base64(column_name)
+ * - Column + partition lookup: base64(column_name) + base64(partition_identifier)
+ * <p>
+ * Examples:
+ * - To find all stats for column "price" across all partitions and files:
+ *   key = base64("price")
+ *   Example encoded: "cHJpY2U="
+ * <p>
+ * - To find all stats for column "user_id" in partition "2023/01/15":
+ *   key = base64("user_id") + base64("2023/01/15")
+ *   Example encoded: "dXNlcl9pZA==" + "MjAyMy8wMS8xNQ=="
+ * <p>
+ * This prefix key enables range scans to retrieve all column stats matching the prefix,
+ * which is useful for query optimization and partition pruning.
  */
-public class ColumnStatsIndexPrefixRawKey implements RawKey {
+public class ColumnStatsIndexPrefixRawKey implements MetadataRawKey {
   private static final long serialVersionUID = 1L;
-  
+
   private final String columnName;
   private final Option<String> partitionName;
-  
+
   public ColumnStatsIndexPrefixRawKey(String columnName) {
     this(columnName, Option.empty());
   }
-  
+
   public ColumnStatsIndexPrefixRawKey(String columnName, String partitionName) {
     this(columnName, Option.of(partitionName));
   }
-  
+
   public ColumnStatsIndexPrefixRawKey(String columnName, Option<String> partitionName) {
     this.columnName = Objects.requireNonNull(columnName, "Column name cannot be null");
     this.partitionName = Objects.requireNonNull(partitionName, "Partition name option cannot be null");
   }
-  
-  public String getColumnName() {
+
+  public String columnName() {
     return columnName;
   }
-  
-  public Option<String> getPartitionName() {
+
+  public Option<String> partitionName() {
     return partitionName;
   }
-  
+
   @Override
   public String encode() {
     ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
     String encodedValue;
-    
+
     if (partitionName.isPresent()) {
       PartitionIndexID partitionIndexId = new PartitionIndexID(
           HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionName.get()));
@@ -67,10 +87,10 @@ public class ColumnStatsIndexPrefixRawKey implements RawKey {
     } else {
       encodedValue = columnIndexID.asBase64EncodedString();
     }
-    
+
     return encodedValue;
   }
-  
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -82,12 +102,12 @@ public class ColumnStatsIndexPrefixRawKey implements RawKey {
     ColumnStatsIndexPrefixRawKey that = (ColumnStatsIndexPrefixRawKey) o;
     return Objects.equals(columnName, that.columnName) && Objects.equals(partitionName, that.partitionName);
   }
-  
+
   @Override
   public int hashCode() {
     return Objects.hash(columnName, partitionName);
   }
-  
+
   @Override
   public String toString() {
     return "ColumnStatsIndexKey{columnName='" + columnName + "', partitionName=" + partitionName + "}";
