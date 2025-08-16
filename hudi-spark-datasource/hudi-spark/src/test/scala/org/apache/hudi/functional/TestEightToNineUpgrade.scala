@@ -32,12 +32,11 @@ import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkAnswer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
-
-import scala.collection.immutable.Seq
 
 class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
 
@@ -186,7 +185,7 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
 
     tableName = "testUpgradeDowngradeMySqlDebeziumPayload"
     spark.sql(s"create table testUpgradeDowngradeMySqlDebeziumPayload using hudi location '$basePath'")
-    checkAnswer(s"select ts, key, rider, driver, ${DebeziumConstants.FLATTENED_FILE_COL_NAME}, ${DebeziumConstants.FLATTENED_POS_COL_NAME},"
+    checkAnswer(spark, s"select ts, key, rider, driver, ${DebeziumConstants.FLATTENED_FILE_COL_NAME}, ${DebeziumConstants.FLATTENED_POS_COL_NAME},"
       + s" ${DebeziumConstants.ADDED_SEQ_COL_NAME} from default.$tableName")(
       Seq(8, "1", "rider-X", "driver-X", 1, 3, "1.3"),
       Seq(8, "2", "rider-Y", "driver-Y", 4, 2, "4.2"),
