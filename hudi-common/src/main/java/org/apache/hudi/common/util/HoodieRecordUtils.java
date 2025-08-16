@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -189,6 +190,18 @@ public class HoodieRecordUtils {
     }
     recordLocation.ifPresent(location -> record.setCurrentLocation(recordLocation.get()));
     return record;
+  }
+
+  public static <R> R generateEmptyPayload(String recKey, String partitionPath, Comparable orderingVal, String payloadClazz) {
+    HoodieKey key = new HoodieKey(recKey, partitionPath);
+    return (R) new HoodieAvroRecord<>(key, HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal));
+  }
+
+  public static HoodieRecord generateEmptyAvroRecord(HoodieKey key, Comparable orderingVal, String payloadClazz, HoodieOperation hoodieOperation) {
+    if (isPayloadClassDeprecated(payloadClazz)) {
+      return new HoodieEmptyRecord<>(key, hoodieOperation, orderingVal, HoodieRecordType.AVRO);
+    }
+    return new HoodieAvroRecord<>(key, HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal), hoodieOperation, true);
   }
 
   public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {

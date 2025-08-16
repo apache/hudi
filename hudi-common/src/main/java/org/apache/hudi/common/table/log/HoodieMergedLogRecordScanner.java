@@ -290,8 +290,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       }
     }
     // Put the DELETE record
-    HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
-    records.put(key, record);
+    if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
+      records.put(key, HoodieRecordUtils.generateEmptyPayload(key,
+          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
+    } else {
+      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
+      records.put(key, record);
+    }
   }
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {
