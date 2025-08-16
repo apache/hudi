@@ -34,7 +34,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -63,7 +63,6 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
@@ -97,6 +96,7 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -557,14 +557,14 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     return configBuilder.build();
   }
 
-  protected List<HoodieRecord<RawTripTestPayload>> dedupForCopyOnWriteStorage(HoodieWriteConfig writeConfig, HoodieData<HoodieRecord> records,
-                                                                              boolean isGlobal, int additionalParallelism, int expectedNumPartitions) {
+  protected List<HoodieRecord<IndexedRecord>> dedupForCopyOnWriteStorage(HoodieWriteConfig writeConfig, HoodieData<HoodieRecord> records,
+                                                                         boolean isGlobal, int additionalParallelism, int expectedNumPartitions) {
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(isGlobal);
     int dedupParallelism = records.getNumPartitions() + additionalParallelism;
     BaseHoodieWriteClient writeClient = getHoodieWriteClient(writeConfig);
     HoodieReaderContext readerContext = writeClient.getEngineContext()
-        .getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, writeConfig.getProps(), true).getContext();
+        .getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, writeConfig.getProps()).getContext();
     List<String> orderingFieldNames = getOrderingFieldNames(
         readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
     BufferedRecordMerger<HoodieRecord> recordMerger = BufferedRecordMergerFactory.create(
@@ -577,8 +577,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         new Schema.Parser().parse(writeClient.getConfig().getSchema()),
         writeClient.getConfig().getProps(),
         metaClient.getTableConfig().getPartialUpdateMode());
-    HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd =
-        (HoodieData<HoodieRecord<RawTripTestPayload>>) HoodieWriteHelper.newInstance()
+    HoodieData<HoodieRecord<IndexedRecord>> dedupedRecsRdd =
+        (HoodieData<HoodieRecord<IndexedRecord>>) HoodieWriteHelper.newInstance()
             .deduplicateRecords(
                 records,
                 index,
@@ -589,7 +589,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
                 readerContext,
                 orderingFieldNames.toArray(new String[0]));
     assertEquals(expectedNumPartitions, dedupedRecsRdd.getNumPartitions());
-    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupedRecsRdd.collectAsList();
+    List<HoodieRecord<IndexedRecord>> dedupedRecs = dedupedRecsRdd.collectAsList();
     assertEquals(isGlobal ? 1 : 2, dedupedRecs.size());
     assertNoDupesWithinPartition(dedupedRecs);
     return dedupedRecs;
@@ -839,14 +839,14 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   protected List<HoodieRecord> generate3AvroRecords(String commitTime) throws IOException {
     String recordKey = UUID.randomUUID().toString();
     HoodieKey keyOne = new HoodieKey(recordKey, "2018-01-01");
-    HoodieRecord<RawTripTestPayload> recordOne =
-            new HoodieAvroRecord(keyOne, dataGen.generateRandomValue(keyOne, commitTime), HoodieOperation.INSERT);
+    HoodieRecord recordOne =
+            new HoodieAvroIndexedRecord(keyOne, dataGen.generateRandomValue(keyOne, commitTime), HoodieOperation.INSERT);
     HoodieKey keyTwo = new HoodieKey(recordKey, "2018-02-01");
     HoodieRecord recordTwo =
-            new HoodieAvroRecord(keyTwo, dataGen.generateRandomValue(keyTwo, commitTime), HoodieOperation.INSERT);
+            new HoodieAvroIndexedRecord(keyTwo, dataGen.generateRandomValue(keyTwo, commitTime), HoodieOperation.INSERT);
     // Same key and partition as keyTwo
     HoodieRecord recordThree =
-            new HoodieAvroRecord(keyTwo, dataGen.generateRandomValue(keyTwo, commitTime), HoodieOperation.UPDATE_AFTER);
+            new HoodieAvroIndexedRecord(keyTwo, dataGen.generateRandomValue(keyTwo, commitTime), HoodieOperation.UPDATE_AFTER);
     return Arrays.asList(recordOne, recordTwo, recordThree);
   }
 
@@ -1085,7 +1085,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieData<HoodieRecord> records = HoodieListData.eager(recordList);
     HoodieWriteConfig writeConfig = getWriteConfigWithPopulateMetaFieldsAndAllowOperationMetaField(populateMetaFields, allowOperationMetadataField);
     // Global dedup should be done based on recordKey only
-    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupForCopyOnWriteStorage(writeConfig, records, true, allowOperationMetadataField ? 100 : 2, records.getNumPartitions());
+    List<HoodieRecord<IndexedRecord>> dedupedRecs = dedupForCopyOnWriteStorage(writeConfig, records, true, allowOperationMetadataField ? 100 : 2, records.getNumPartitions());
     if (allowOperationMetadataField) {
       assertEquals(dedupedRecs.get(0).getOperation(), recordList.get(2).getOperation());
     } else {

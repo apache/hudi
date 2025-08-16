@@ -46,6 +46,7 @@ import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.HoodieSparkKryoRegistrar;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -118,7 +119,7 @@ public class HoodieClientTestUtils {
     } else {
       sparkConf.set("spark.ui.enabled", "false");
     }
-
+    HoodieSparkKryoRegistrar.register(sparkConf);
     return SparkRDDReadClient.addHoodieSupport(sparkConf);
   }
   

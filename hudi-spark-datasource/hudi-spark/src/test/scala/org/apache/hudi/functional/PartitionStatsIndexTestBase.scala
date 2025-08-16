@@ -25,7 +25,7 @@ import org.apache.hudi.TestHoodieSparkUtils.dropMetaFields
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.functional.PartitionStatsIndexTestBase.checkIfOverlapped
 
 import org.apache.spark.sql.{Column, DataFrame, SaveMode}

@@ -28,7 +28,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -36,7 +36,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -76,10 +75,10 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.common.table.HoodieTableConfig.NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
+import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_HISTORY_PATH;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_LAYOUT_VERSION;
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
@@ -348,14 +347,9 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
       List<HoodieRecord> records2 = new ArrayList<>();
       records1.forEach(entry -> {
         HoodieKey hoodieKey = new HoodieKey(entry.getRecordKey(), PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH);
-        RawTripTestPayload testPayload = (RawTripTestPayload) entry.getData();
-        try {
-          GenericRecord genericRecord = (GenericRecord) testPayload.getRecordToInsert(HoodieTestDataGenerator.AVRO_SCHEMA);
-          genericRecord.put("partition_path", null);
-          records2.add(new HoodieAvroRecord(hoodieKey, new RawTripTestPayload(genericRecord.toString(), hoodieKey.getRecordKey(), hoodieKey.getPartitionPath(), TRIP_EXAMPLE_SCHEMA)));
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
+        GenericRecord genericRecord = (GenericRecord) entry.getData();
+        genericRecord.put("partition_path", null);
+        records2.add(new HoodieAvroIndexedRecord(hoodieKey, genericRecord));
       });
 
       WriteClientTestUtils.startCommitWithTime(client, newCommitTime);
