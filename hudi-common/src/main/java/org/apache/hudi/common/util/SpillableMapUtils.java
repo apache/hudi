@@ -20,9 +20,11 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.collection.BitCaskDiskMap.FileEntry;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
@@ -150,7 +152,8 @@ public class SpillableMapUtils {
       record = recordWithoutMetaFields;
     }
 
-    HoodieRecord hoodieRecord = HoodieRecordUtils.createHoodieRecord(record, preCombineVal, new HoodieKey(recKey, partitionPath), payloadClazz, operation, Option.empty());
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieAvroRecord<>(new HoodieKey(recKey, partitionPath),
+        HoodieRecordUtils.loadPayload(payloadClazz, record, preCombineVal), operation);
 
     return (HoodieRecord<R>) hoodieRecord;
   }
