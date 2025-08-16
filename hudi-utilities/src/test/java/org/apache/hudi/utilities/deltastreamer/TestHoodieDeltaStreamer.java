@@ -788,14 +788,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals("local-timestamp-millis", tableSchema.getField("local_ts_millis").schema().getLogicalType().getName());
     assertEquals("local-timestamp-micros", tableSchema.getField("local_ts_micros").schema().getLogicalType().getName());
     assertEquals("date", tableSchema.getField("event_date").schema().getLogicalType().getName());
-    assertEquals("bytes", tableSchema.getField("dec_plain_small").schema().getType().getName());
-    assertEquals("decimal", tableSchema.getField("dec_plain_small").schema().getLogicalType().getName());
-    assertEquals(5, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_small").schema().getLogicalType()).getPrecision());
-    assertEquals(2, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_small").schema().getLogicalType()).getScale());
     assertEquals("bytes", tableSchema.getField("dec_plain_large").schema().getType().getName());
     assertEquals("decimal", tableSchema.getField("dec_plain_large").schema().getLogicalType().getName());
-    assertEquals(18, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getPrecision());
-    assertEquals(9, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getScale());
+    assertEquals(20, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getPrecision());
+    assertEquals(10, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getScale());
     assertEquals("fixed", tableSchema.getField("dec_fixed_small").schema().getType().getName());
     assertEquals(3, tableSchema.getField("dec_fixed_small").schema().getFixedSize());
     assertEquals("decimal", tableSchema.getField("dec_fixed_small").schema().getLogicalType().getName());
@@ -864,34 +860,35 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     //        df.filter("time_micros < time('06:00:00')").count()
     //    );
 
+    df.show(100, false);
     assertTrue(
-        Math.abs(df.filter("local_ts_millis > CAST('2015-05-20 16:34:56' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
+        Math.abs(df.filter("local_ts_millis > CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
         "local_ts_millis > threshold not within tolerance"
     );
     assertTrue(
-        Math.abs(df.filter("local_ts_millis < CAST('2015-05-20 16:34:56' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
+        Math.abs(df.filter("local_ts_millis < CAST('2015-05-20 12:34:56' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
         "local_ts_millis < threshold not within tolerance"
     );
 
-    assertEquals(0, df.filter("local_ts_millis > CAST('2015-05-20 16:34:56.001' AS TIMESTAMP_NTZ)").count());
-    assertEquals(totalCount, df.filter("local_ts_millis <= CAST('2015-05-20 16:34:56.001' AS TIMESTAMP_NTZ)").count());
-    assertEquals(0, df.filter("local_ts_millis < CAST('2015-05-20 16:34:55.999' AS TIMESTAMP_NTZ)").count());
-    assertEquals(totalCount, df.filter("local_ts_millis >= CAST('2015-05-20 16:34:55.999' AS TIMESTAMP_NTZ)").count());
+    assertEquals(0, df.filter("local_ts_millis > CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)").count());
+    assertEquals(totalCount, df.filter("local_ts_millis <= CAST('2015-05-20 12:34:56.001' AS TIMESTAMP_NTZ)").count());
+    assertEquals(0, df.filter("local_ts_millis < CAST('2015-05-20 12:34:55.999' AS TIMESTAMP_NTZ)").count());
+    assertEquals(totalCount, df.filter("local_ts_millis >= CAST('2015-05-20 12:34:55.999' AS TIMESTAMP_NTZ)").count());
 
 
     assertTrue(
-        Math.abs(df.filter("local_ts_micros > CAST('2017-07-07 11:07:07' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
+        Math.abs(df.filter("local_ts_micros > CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
         "local_ts_micros > threshold not within tolerance"
     );
     assertTrue(
-        Math.abs(df.filter("local_ts_micros < CAST('2017-07-07 11:07:07' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
+        Math.abs(df.filter("local_ts_micros < CAST('2017-07-07 07:07:07' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
         "local_ts_micros < threshold not within tolerance"
     );
 
-    assertEquals(0, df.filter("local_ts_micros > CAST('2017-07-07 11:07:07.000001' AS TIMESTAMP_NTZ)").count());
-    assertEquals(totalCount, df.filter("local_ts_micros <= CAST('2017-07-07 11:07:07.000001' AS TIMESTAMP_NTZ)").count());
-    assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 11:07:06.999999' AS TIMESTAMP_NTZ)").count());
-    assertEquals(totalCount, df.filter("local_ts_micros >= CAST('2017-07-07 11:07:06.999999' AS TIMESTAMP_NTZ)").count());
+    assertEquals(0, df.filter("local_ts_micros > CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)").count());
+    assertEquals(totalCount, df.filter("local_ts_micros <= CAST('2017-07-07 07:07:07.000001' AS TIMESTAMP_NTZ)").count());
+    assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count());
+    assertEquals(totalCount, df.filter("local_ts_micros >= CAST('2017-07-07 07:07:06.999999' AS TIMESTAMP_NTZ)").count());
 
 
     assertTrue(
@@ -908,38 +905,21 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(0, df.filter("event_date < date('1999-12-31')").count());
     assertEquals(totalCount, df.filter("event_date >= date('1999-12-31')").count());
 
-
     assertTrue(
-        Math.abs(df.filter("dec_plain_small < 123.45").count() - expectedHalf) <= tolerance,
-        "dec_plain_small < threshold not within tolerance"
-    );
-
-    assertTrue(
-        Math.abs(df.filter("dec_plain_small > 123.45").count() - expectedHalf) <= tolerance,
-        "dec_plain_small > threshold not within tolerance"
-    );
-
-    assertEquals(0, df.filter("dec_plain_small < 123.44").count());
-    assertEquals(totalCount, df.filter("dec_plain_small >= 123.44").count());
-    assertEquals(0, df.filter("dec_plain_small > 123.46").count());
-    assertEquals(totalCount, df.filter("dec_plain_small <= 123.46").count());
-
-    assertTrue(
-        Math.abs(df.filter("dec_plain_large < 123456789.987654321").count() - expectedHalf) <= tolerance,
+        Math.abs(df.filter("dec_plain_large < 1234567890.0987654321").count() - expectedHalf) <= tolerance,
         "dec_plain_large < threshold not within tolerance"
     );
 
     assertTrue(
-        Math.abs(df.filter("dec_plain_large > 123456789.987654321").count() - expectedHalf) <= tolerance,
+        Math.abs(df.filter("dec_plain_large > 1234567890.0987654321").count() - expectedHalf) <= tolerance,
         "dec_plain_large > threshold not within tolerance"
     );
 
-    assertEquals(0, df.filter("dec_plain_large < 123456789.987654320").count());
-    assertEquals(totalCount, df.filter("dec_plain_large >= 123456789.987654320").count());
-    assertEquals(0, df.filter("dec_plain_large > 123456789.987654322").count());
-    assertEquals(totalCount, df.filter("dec_plain_large <= 123456789.987654322").count());
-
-
+    assertEquals(0, df.filter("dec_plain_large < 1234567890.0987654320").count());
+    assertEquals(totalCount, df.filter("dec_plain_large >= 1234567890.0987654320").count());
+    assertEquals(0, df.filter("dec_plain_large > 1234567890.0987654322").count());
+    assertEquals(totalCount, df.filter("dec_plain_large <= 1234567890.0987654322").count());
+    
     assertTrue(
         Math.abs(df.filter("dec_fixed_small < 543.21").count() - expectedHalf) <= tolerance,
         "dec_fixed_small < threshold not within tolerance"

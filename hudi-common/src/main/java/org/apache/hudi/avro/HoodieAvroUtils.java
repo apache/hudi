@@ -1287,7 +1287,8 @@ public class HoodieAvroUtils {
       case BYTES:
         if (oldSchema.getType() == Schema.Type.FIXED) {
           return ByteBuffer.wrap(((GenericFixed) oldValue).bytes());
-        } if (oldSchema.getType() == Schema.Type.STRING) {
+        }
+        if (oldSchema.getType() == Schema.Type.STRING) {
           return ByteBuffer.wrap(getUTF8Bytes(oldValue.toString()));
         }
         break;

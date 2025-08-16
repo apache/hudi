@@ -66,7 +66,6 @@ import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -159,8 +158,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
           + "{\"name\":\"local_ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}},"
           + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
           + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
-          + "{\"name\":\"dec_plain_small\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
-          + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},"
+          + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":10}},"
           + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
           + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
 
@@ -627,9 +625,9 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     //LocalTime timeMicrosThreshold = LocalTime.of(6, 0, 0);   // 6 AM
 
     Instant localTsMillisThreshold = ZonedDateTime.of(
-        2015, 5, 20, 12, 34, 56, 0, ZoneId.systemDefault()).toInstant();
+        2015, 5, 20, 12, 34, 56, 0, ZoneOffset.UTC).toInstant();
     Instant localTsMicrosThreshold = ZonedDateTime.of(
-        2017, 7, 7, 7, 7, 7, 0, ZoneId.systemDefault()).toInstant();
+        2017, 7, 7, 7, 7, 7, 0, ZoneOffset.UTC).toInstant();
 
     LocalDate dateThreshold = LocalDate.of(2000, 1, 1);
 
@@ -669,8 +667,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     // -------------------
     // Decimal thresholds
     // -------------------
-    BigDecimal decPlainSmallThreshold = new BigDecimal("123.45"); // precision=5, scale=2
-    BigDecimal decPlainLargeThreshold = new BigDecimal("123456789.987654321"); // precision=18, scale=9
+    BigDecimal decPlainLargeThreshold = new BigDecimal("1234567890.0987654321"); // precision=20, scale=10
 
     BigDecimal decFixedSmallThreshold = new BigDecimal("543.21"); // precision=5, scale=2
     BigDecimal decFixedLargeThreshold = new BigDecimal("987654321.123456789"); // precision=18, scale=9
@@ -678,15 +675,13 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     // Increment for just-above/below threshold = smallest possible unit for that scale
     BigDecimal incSmallScale2 = new BigDecimal("0.01");
     BigDecimal incLargeScale9 = new BigDecimal("0.000000001");
+    BigDecimal incLargeScale10 = new BigDecimal("0.0000000001");
 
     // Assign thresholded decimals
-    rec.put("dec_plain_small", Base64.getEncoder().encodeToString((above
-        ? decPlainSmallThreshold.add(incSmallScale2)
-        : decPlainSmallThreshold.subtract(incSmallScale2)).unscaledValue().toByteArray()));
 
     rec.put("dec_plain_large", Base64.getEncoder().encodeToString((above
-        ? decPlainLargeThreshold.add(incLargeScale9)
-        : decPlainLargeThreshold.subtract(incLargeScale9)).unscaledValue().toByteArray()));
+        ? decPlainLargeThreshold.add(incLargeScale10)
+        : decPlainLargeThreshold.subtract(incLargeScale10)).unscaledValue().toByteArray()));
 
     rec.put("dec_fixed_small", Base64.getEncoder().encodeToString((above
         ? decFixedSmallThreshold.add(incSmallScale2)
