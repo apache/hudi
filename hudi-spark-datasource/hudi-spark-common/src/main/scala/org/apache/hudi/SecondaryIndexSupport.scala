@@ -22,9 +22,9 @@ package org.apache.hudi
 import org.apache.hudi.RecordLevelIndexSupport.{filterQueryWithRecordKey, getPrunedStoragePaths}
 import org.apache.hudi.SecondaryIndexSupport.filterQueriesWithSecondaryKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.data.HoodieListData
+import org.apache.hudi.common.data.{HoodieListData, HoodiePairData}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieRecordGlobalLocation}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
@@ -81,8 +81,8 @@ class SecondaryIndexSupport(spark: SparkSession,
   private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
     val secondaryIndexData = metadataTable.readSecondaryIndexLocationsWithKeys(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName)
-    try {
-      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(secondaryIndexData)
+    HoodieDataUtils.withHoodieDataCleanUp(secondaryIndexData, (data: HoodiePairData[String, HoodieRecordGlobalLocation]) => {
+      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(data)
       val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
       val candidateFiles: mutable.Set[String] = mutable.Set.empty
       recordKeyLocationsMap.values().forEach(location => fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath))
@@ -95,10 +95,7 @@ class SecondaryIndexSupport(spark: SparkSession,
         }
       }
       candidateFiles.toSet
-    } finally {
-      // Clean up the RDD to avoid memory leaks
-      secondaryIndexData.unpersistWithDependencies()
-    }
+    })
   }
 
   /**

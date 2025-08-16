@@ -202,14 +202,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
         readIndexRecordsWithKeys(HoodieListData.eager(bloomFilterKeys), metadataPartitionName);
-    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords;
-    try {
-      hoodieRecords = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
+    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords = HoodieDataUtils.withHoodieDataCleanUp(recordsData, data -> {
+      Map<String, HoodieRecord<HoodieMetadataPayload>> result = HoodieDataUtils.dedupeAndCollectAsMap(data);
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
       metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR, bloomFilterKeys.size()));
-    } finally {
-      recordsData.unpersistWithDependencies();
-    }
+      return result;
+    });
 
     Map<Pair<String, String>, BloomFilter> partitionFileToBloomFilterMap = new HashMap<>(hoodieRecords.size());
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
@@ -330,12 +328,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
         readIndexRecordsWithKeys(HoodieListData.eager(filesKeys),
             MetadataPartitionType.FILES.getPartitionPath());
-    Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs;
-    try {
-      partitionIdRecordPairs = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
-    } finally {
-      recordsData.unpersistWithDependencies();
-    }
+    Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs = HoodieDataUtils.withHoodieDataCleanUp(recordsData, data -> 
+        HoodieDataUtils.dedupeAndCollectAsMap(data));
     metrics.ifPresent(
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
@@ -396,13 +390,11 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
         readIndexRecordsWithKeys(
             HoodieListData.eager(rawKeys), MetadataPartitionType.COLUMN_STATS.getPartitionPath());
-    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords;
-    try {
-      hoodieRecords = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
+    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords = HoodieDataUtils.withHoodieDataCleanUp(recordsData, data -> {
+      Map<String, HoodieRecord<HoodieMetadataPayload>> result = HoodieDataUtils.dedupeAndCollectAsMap(data);
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
-    } finally {
-      recordsData.unpersistWithDependencies();
-    }
+      return result;
+    });
     Map<Pair<String, String>, List<HoodieMetadataColumnStats>> fileToColumnStatMap = new HashMap<>();
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
       final Option<HoodieMetadataColumnStats> columnStatMetadata =
