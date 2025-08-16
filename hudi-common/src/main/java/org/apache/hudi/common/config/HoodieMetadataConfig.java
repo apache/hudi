@@ -527,6 +527,33 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Max size in MB below which metadata file (HFile) will be downloaded "
           + "and cached entirely for the HFileReader.");
 
+  public static final ConfigProperty<Boolean> METADATA_HFILE_BLOCK_CACHE_ENABLED = ConfigProperty
+      .key(METADATA_PREFIX + ".hfile.block.cache.enabled")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Enable HFile block-level caching for metadata files. This caches frequently "
+          + "accessed HFile blocks in memory to reduce I/O operations during metadata queries. "
+          + "Improves performance for workloads with repeated metadata access patterns.");
+
+  public static final ConfigProperty<Integer> METADATA_HFILE_BLOCK_CACHE_SIZE = ConfigProperty
+      .key(METADATA_PREFIX + ".hfile.block.cache.size")
+      .defaultValue(100)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum number of HFile blocks to cache in memory per metadata file reader. "
+          + "Higher values improve cache hit rates but consume more memory. "
+          + "Only effective when hfile.block.cache.enabled is true.");
+
+  public static final ConfigProperty<Integer> METADATA_HFILE_BLOCK_CACHE_TTL_MINUTES = ConfigProperty
+      .key(METADATA_PREFIX + ".hfile.block.cache.ttl.minutes")
+      .defaultValue(60)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Time-to-live (TTL) in minutes for cached HFile blocks. Blocks are evicted "
+          + "from the cache after this duration to prevent memory leaks. "
+          + "Only effective when hfile.block.cache.enabled is true.");
+
   public static final ConfigProperty<Boolean> BLOOM_FILTER_ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".bloom.filter.enable")
       .defaultValue(false)
@@ -854,6 +881,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(METADATA_FILE_CACHE_MAX_SIZE_MB);
   }
 
+  public boolean getHFileBlockCacheEnabled() {
+    return getBoolean(METADATA_HFILE_BLOCK_CACHE_ENABLED);
+  }
+
+  public int getHFileBlockCacheSize() {
+    return getInt(METADATA_HFILE_BLOCK_CACHE_SIZE);
+  }
+
+  public int getHFileBlockCacheTTLMinutes() {
+    return getInt(METADATA_HFILE_BLOCK_CACHE_TTL_MINUTES);
+  }
+
   public int getRecordPreparationParallelism() {
     return getIntOrDefault(RECORD_PREPARATION_PARALLELISM);
   }
@@ -1167,6 +1206,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withRepartitionDefaultPartitions(int defaultPartitions) {
       metadataConfig.setValue(REPARTITION_DEFAULT_PARTITIONS, String.valueOf(defaultPartitions));
+      return this;
+    }
+
+    public Builder withMetadataHFileBlockCacheEnabled(boolean enable) {
+      metadataConfig.setValue(METADATA_HFILE_BLOCK_CACHE_ENABLED, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataHFileBlockCacheSize(int cacheSize) {
+      metadataConfig.setValue(METADATA_HFILE_BLOCK_CACHE_SIZE, String.valueOf(cacheSize));
+      return this;
+    }
+
+    public Builder withMetadataHFileBlockCacheTTLMinutes(int ttlMinutes) {
+      metadataConfig.setValue(METADATA_HFILE_BLOCK_CACHE_TTL_MINUTES, String.valueOf(ttlMinutes));
       return this;
     }
 
