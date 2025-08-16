@@ -170,7 +170,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertEquals(9, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals(Collections.singletonList("new_field"), config.getPreCombineFields());
@@ -184,7 +184,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // delete a non existant property as well
     propsToDelete.add(HoodieTableConfig.RECORDKEY_FIELDS.key());
     HoodieTableConfig.updateAndDeleteProps(storage, metaPath, updatedProps, propsToDelete);
-    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    config = new HoodieTableConfig(storage, metaPath);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals(Collections.singletonList("new_field2"), config.getPreCombineFields());
@@ -193,7 +193,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // just delete 1 property w/o updating anything.
     updatedProps = new Properties();
     HoodieTableConfig.updateAndDeleteProps(storage, metaPath, updatedProps, Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELDS.key()));
-    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    config = new HoodieTableConfig(storage, metaPath);
     assertEquals(7, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertTrue(config.getPreCombineFields().isEmpty());

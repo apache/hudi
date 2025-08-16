@@ -69,12 +69,12 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
-import static org.apache.hudi.common.table.PartialUpdateMode.IGNORE_MARKERS;
+import static org.apache.hudi.common.table.PartialUpdateMode.FILL_UNAVAILABLE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -98,7 +98,7 @@ class TestEightToNineUpgradeHandler {
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper =
       mock(SupportsUpgradeDowngrade.class);
   private final HoodieWriteConfig config = mock(HoodieWriteConfig.class);
-  private static final Map<ConfigProperty, String> DEFAULT_CONFIG_UPDATED = Collections.singletonMap(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name());
+  private static final Map<ConfigProperty, String> DEFAULT_CONFIG_UPDATED = Collections.emptyMap();
   private static final Set<ConfigProperty> DEFAULT_CONFIG_REMOVED = Collections.emptySet();
   private static final UpgradeDowngrade.TableConfigChangeSet DEFAULT_UPGRADE_RESULT =
       new UpgradeDowngrade.TableConfigChangeSet(DEFAULT_CONFIG_UPDATED, DEFAULT_CONFIG_REMOVED);
@@ -143,21 +143,21 @@ class TestEightToNineUpgradeHandler {
             DefaultHoodieRecordPayload.class.getName(),
             "",
             null,
-            PartialUpdateMode.NONE.name(),
+            null,
             "DefaultHoodieRecordPayload"
         ),
         Arguments.of(
             EventTimeAvroPayload.class.getName(),
             "",
             EVENT_TIME_ORDERING.name(),
-            PartialUpdateMode.NONE.name(),
+            null,
             "EventTimeAvroPayload"
         ),
         Arguments.of(
             OverwriteWithLatestAvroPayload.class.getName(),
             "",
             null,
-            PartialUpdateMode.NONE.name(),
+            null,
             "OverwriteWithLatestAvroPayload"
         ),
         Arguments.of(
@@ -165,15 +165,15 @@ class TestEightToNineUpgradeHandler {
             RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + "=Op,"
                 + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER + "=D", // mergeProperties
             COMMIT_TIME_ORDERING.name(),
-            PartialUpdateMode.NONE.name(),
+            null,
             "AWSDmsAvroPayload"
         ),
         Arguments.of(
             PostgresDebeziumAvroPayload.class.getName(),
-            RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER
+            RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE
                 + "=" + DEBEZIUM_UNAVAILABLE_VALUE,
             EVENT_TIME_ORDERING.name(),
-            IGNORE_MARKERS.name(),
+            FILL_UNAVAILABLE.name(),
             "PostgresDebeziumAvroPayload"
         ),
         Arguments.of(
@@ -187,7 +187,7 @@ class TestEightToNineUpgradeHandler {
             MySqlDebeziumAvroPayload.class.getName(),
             "",
             EVENT_TIME_ORDERING.name(),
-            PartialUpdateMode.NONE.name(),
+            null,
             "MySqlDebeziumAvroPayload"
         ),
         Arguments.of(
@@ -241,8 +241,12 @@ class TestEightToNineUpgradeHandler {
         assertEquals(expectedRecordMergeMode, propertiesToAdd.get(RECORD_MERGE_MODE));
       }
       // Assert partial update mode
-      assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
-      assertEquals(expectedPartialUpdateMode, propertiesToAdd.get(PARTIAL_UPDATE_MODE));
+      if (expectedPartialUpdateMode != null) {
+        assertTrue(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
+        assertEquals(expectedPartialUpdateMode, propertiesToAdd.get(PARTIAL_UPDATE_MODE));
+      } else {
+        assertFalse(propertiesToAdd.containsKey(PARTIAL_UPDATE_MODE));
+      }
       // Assert payload class change
       assertPayloadClassChange(propertiesToAdd, propertiesToRemove, payloadClassName);
     }

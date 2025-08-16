@@ -23,10 +23,6 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 
 public enum PartialUpdateMode {
   @EnumFieldDescription(
-      "No partial update logic should be employed.")
-  NONE,
-
-  @EnumFieldDescription(
       "For columns having default values set in current record, pick the value from previous version of the record."
       + "Only top level data type default is checked, which means this mode does not check leaf level data type default"
       + "value for nested data types.")
