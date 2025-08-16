@@ -170,7 +170,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertEquals(9, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals(Collections.singletonList("new_field"), config.getPreCombineFields());
@@ -184,7 +184,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // delete a non existant property as well
     propsToDelete.add(HoodieTableConfig.RECORDKEY_FIELDS.key());
     HoodieTableConfig.updateAndDeleteProps(storage, metaPath, updatedProps, propsToDelete);
-    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    config = new HoodieTableConfig(storage, metaPath);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals(Collections.singletonList("new_field2"), config.getPreCombineFields());
@@ -193,7 +193,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     // just delete 1 property w/o updating anything.
     updatedProps = new Properties();
     HoodieTableConfig.updateAndDeleteProps(storage, metaPath, updatedProps, Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELDS.key()));
-    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    config = new HoodieTableConfig(storage, metaPath);
     assertEquals(7, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertTrue(config.getPreCombineFields().isEmpty());
@@ -608,7 +608,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
         // Test case: Version 9 table with PostgresDebeziumAvroPayload (should set partial update mode and custom properties)
         arguments("Version 9 with PostgresDebeziumAvroPayload", null, PostgresDebeziumAvroPayload.class.getName(), null, "ts", HoodieTableVersion.NINE,
             5, EVENT_TIME_ORDERING.name(), null, EVENT_TIME_BASED_MERGE_STRATEGY_UUID, PostgresDebeziumAvroPayload.class.getName(),
-            PartialUpdateMode.IGNORE_MARKERS.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, null, null),
+            PartialUpdateMode.FILL_UNAVAILABLE.name(), HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE, null, null),
 
         // Test case: Version 9 table with AWSDmsAvroPayload (should set custom delete properties)
         arguments("Version 9 with AWSDmsAvroPayload", null, AWSDmsAvroPayload.class.getName(), null, null, HoodieTableVersion.NINE,
@@ -674,11 +674,11 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
       if (expectedDebeziumMarker != null) {
         assertEquals(expectedDebeziumMarker, configs.get(
-                HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
+                HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE),
             "Debezium marker mismatch for: " + testName);
       } else {
-        assertFalse(configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER),
-            "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER + " not expected to be set");
+        assertFalse(configs.containsKey(HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE),
+            "Custom merge property " + HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE + " not expected to be set");
       }
 
       if (expectedDeleteKey != null) {

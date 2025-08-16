@@ -29,18 +29,18 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TestPartialUpdateStrategy {
+class TestPartialUpdateHandler {
   @Test
   void testEmptyProperties() {
     TypedProperties props = new TypedProperties();
-    Map<String, String> result = PartialUpdateStrategy.parseMergeProperties(props);
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
     assertTrue(result.isEmpty());
   }
 
   @Test
   void testDirectMatch() {
     Schema stringSchema = Schema.create(Schema.Type.STRING);
-    assertTrue(PartialUpdateStrategy.hasTargetType(stringSchema, Schema.Type.STRING));
+    assertTrue(PartialUpdateHandler.hasTargetType(stringSchema, Schema.Type.STRING));
   }
 
   @Test
@@ -50,7 +50,7 @@ class TestPartialUpdateStrategy {
         Schema.create(Schema.Type.BOOLEAN),
         Schema.create(Schema.Type.STRING)
     );
-    assertTrue(PartialUpdateStrategy.hasTargetType(unionSchema, Schema.Type.STRING));
+    assertTrue(PartialUpdateHandler.hasTargetType(unionSchema, Schema.Type.STRING));
   }
 
   @Test
@@ -60,12 +60,12 @@ class TestPartialUpdateStrategy {
         Schema.create(Schema.Type.BOOLEAN),
         Schema.create(Schema.Type.INT)
     );
-    assertFalse(PartialUpdateStrategy.hasTargetType(unionSchema, Schema.Type.STRING));
+    assertFalse(PartialUpdateHandler.hasTargetType(unionSchema, Schema.Type.STRING));
   }
 
   @Test
   void testNonUnionNonTargetType() {
     Schema intSchema = Schema.create(Schema.Type.INT);
-    assertFalse(PartialUpdateStrategy.hasTargetType(intSchema, Schema.Type.STRING));
+    assertFalse(PartialUpdateHandler.hasTargetType(intSchema, Schema.Type.STRING));
   }
 }
