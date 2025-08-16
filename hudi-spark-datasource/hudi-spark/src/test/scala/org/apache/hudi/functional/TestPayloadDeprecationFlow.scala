@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{AWSDmsAvroPayload, DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieRecordMerger, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
-import org.apache.hudi.common.model.debezium.{MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
+import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -48,14 +48,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
                                expectedConfigs: Map[String, String]): Unit = {
     val opts: Map[String, String] = Map(
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz)
-    val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq")
+    val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME)
     // 1. Add an insert.
     val data = Seq(
-      (10, 1L, "rider-A", "driver-A", 19.10, "i", "10.1"),
-      (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1"),
-      (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1"),
-      (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1"),
-      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1"))
+      (10, 1L, "rider-A", "driver-A", 19.10, "i", "10.1", 10, 1),
+      (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1),
+      (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1),
+      (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     val precombineField = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
@@ -83,8 +83,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertTrue(metaClient.getActiveTimeline.firstInstant().isPresent)
     // 2. Add an update.
     val firstUpdateData = Seq(
-      (11, 1L, "rider-X", "driver-X", 19.10, "D", "11.1"),
-      (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1"))
+      (11, 1L, "rider-X", "driver-X", 19.10, "D", "11.1", 11, 1),
+      (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1))
     val firstUpdate = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
     firstUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
@@ -93,15 +93,15 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       mode(SaveMode.Append).
       save(basePath)
     // Validate table version.
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+    metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(8, metaClient.getTableConfig.getTableVersion.versionCode())
     val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
 
     // 3. Add an update. This is expected to trigger the upgrade
     val secondUpdateData = Seq(
-      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1"),
-      (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1"),
-      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1"))
+      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
+      (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 9, 1),
+      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
     val secondUpdate = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
     secondUpdate.write.format("hudi").
       option(OPERATION.key(), "upsert").
@@ -118,7 +118,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
 
     // 4. Add a trivial update to trigger payload class mismatch.
     val thirdUpdateData = Seq(
-      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1"))
+      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1))
     val thirdUpdate = spark.createDataFrame(thirdUpdateData).toDF(columns: _*)
     if (!payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       assertThrows[HoodieException] {
@@ -145,7 +145,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     }
     // Validate snapshot query.
     val df = spark.read.format("hudi").load(basePath)
-    val finalDf = df.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq").sort("_event_lsn")
+    val finalDf = df.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME)
+      .sort("_event_lsn")
     val expectedData = getExpectedResultForSnapshotQuery(payloadClazz)
     val expectedDf = spark.createDataFrame(spark.sparkContext.parallelize(expectedData)).toDF(columns: _*).sort("_event_lsn")
     expectedDf.show(false)
@@ -154,7 +155,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     // Validate time travel query.
     val timeTravelDf = spark.read.format("hudi")
       .option("as.of.instant", firstUpdateInstantTime).load(basePath)
-      .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq").sort("_event_lsn")
+      .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME)
+      .sort("_event_lsn")
     timeTravelDf.show(false)
     val expectedTimeTravelData = getExpectedResultForTimeTravelQuery(payloadClazz)
     val expectedTimeTravelDf = spark.createDataFrame(
@@ -174,7 +176,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       .build()
   }
 
-  def getExpectedResultForSnapshotQuery(payloadClazz: String): Seq[(Int, Long, String, String, Double, String, String)] = {
+  def getExpectedResultForSnapshotQuery(payloadClazz: String): Seq[(Int, Long, String, String, Double, String, String, Int, Int)] = {
     if (!payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
       if (payloadClazz.equals(classOf[PartialUpdateAvroPayload].getName)
         || payloadClazz.equals(classOf[EventTimeAvroPayload].getName)
@@ -182,43 +184,43 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         || payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)
         || payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
         Seq(
-          (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1"),
-          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1"),
-          (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1"),
-          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1"),
-          (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1"))
+          (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1", 11, 1),
+          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
+          (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
+          (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
       } else {
         Seq(
-          (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1"),
-          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1"),
-          (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1"),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1"),
-          (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1"))
+          (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1", 11, 1),
+          (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
+          (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 9, 1),
+          (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
       }
     } else {
       Seq(
-        (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1"),
-        (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1"),
-        (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1"),
-        (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1"))
+        (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
+        (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
+        (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 9, 1),
+        (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
     }
   }
 
   def getExpectedResultForTimeTravelQuery(payloadClazz: String):
-  Seq[(Int, Long, String, String, Double, String, String)] = {
+  Seq[(Int, Long, String, String, Double, String, String, Int, Int)] = {
     if (!payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
       Seq(
-        (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1"),
-        (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1"),
-        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1"),
-        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1"),
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1"))
+        (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1", 11, 1),
+        (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
+        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1),
+        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1))
     } else {
       Seq(
-        (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1"),
-        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1"),
-        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1"),
-        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1"))
+        (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
+        (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1),
+        (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
+        (10, 5, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1))
     }
   }
 }
@@ -260,6 +262,14 @@ object TestPayloadDeprecationFlow {
         HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_MARKERS",
         HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE
           -> "__debezium_unavailable_value"),
+      Arguments.of(
+        "COPY_ON_WRITE",
+        classOf[MySqlDebeziumAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PRECOMBINE_FIELDS.key() -> (DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME))),
       Arguments.of(
         "COPY_ON_WRITE",
         classOf[AWSDmsAvroPayload].getName,
@@ -322,6 +332,14 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_MARKERS",
           HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE
             -> "__debezium_unavailable_value"),
+      Arguments.of(
+        "MERGE_ON_READ",
+        classOf[MySqlDebeziumAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PRECOMBINE_FIELDS.key() -> (DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME))),
       Arguments.of(
         "MERGE_ON_READ",
         classOf[AWSDmsAvroPayload].getName,
