@@ -125,7 +125,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testCreate() throws IOException {
     assertTrue(
         storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertEquals(7, config.getProps().size());
   }
 
@@ -138,7 +138,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertEquals(8, config.getProps().size());
     assertEquals("test-table2", config.getTableName());
     assertEquals(Collections.singletonList("new_field"), config.getPreCombineFields());
@@ -153,7 +153,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertEquals(6, config.getProps().size());
     assertNull(config.getProps().getProperty("hoodie.invalid.config"));
     assertFalse(config.getProps().contains(HoodieTableConfig.TIMELINE_HISTORY_PATH.key()));
@@ -163,13 +163,13 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testReadsWhenPropsFileDoesNotExist() throws IOException {
     storage.deleteFile(cfgPath);
     assertThrows(HoodieIOException.class, () -> {
-      new HoodieTableConfig(storage, metaPath, null, null, null);
+      new HoodieTableConfig(storage, metaPath);
     });
   }
 
   @Test
   void testReadsWithUpdateFailures() throws IOException {
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     storage.deleteFile(cfgPath);
     try (OutputStream out = storage.create(backupCfgPath)) {
       config.getProps().store(out, "");
@@ -177,14 +177,14 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     assertFalse(storage.exists(cfgPath));
     assertTrue(storage.exists(backupCfgPath));
-    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    config = new HoodieTableConfig(storage, metaPath);
     assertEquals(7, config.getProps().size());
   }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testUpdateRecovery(boolean shouldPropsFileExist) throws IOException {
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     if (!shouldPropsFileExist) {
       storage.deleteFile(cfgPath);
     }
@@ -195,7 +195,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     recoverIfNeeded(storage, cfgPath, backupCfgPath);
     assertTrue(storage.exists(cfgPath));
     assertFalse(storage.exists(backupCfgPath));
-    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    config = new HoodieTableConfig(storage, metaPath);
     assertEquals(7, config.getProps().size());
   }
 
@@ -203,11 +203,11 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   void testReadRetry() throws IOException {
     // When both the hoodie.properties and hoodie.properties.backup do not exist then the read fails
     storage.rename(cfgPath, new StoragePath(cfgPath.toString() + ".bak"));
-    assertThrows(HoodieIOException.class, () -> new HoodieTableConfig(storage, metaPath, null, null, null));
+    assertThrows(HoodieIOException.class, () -> new HoodieTableConfig(storage, metaPath));
 
     // Should return the backup config if hoodie.properties is not present
     storage.rename(new StoragePath(cfgPath.toString() + ".bak"), backupCfgPath);
-    new HoodieTableConfig(storage, metaPath, null, null, null);
+    new HoodieTableConfig(storage, metaPath);
 
     // Should return backup config if hoodie.properties is corrupted
     Properties props = new Properties();
@@ -215,14 +215,13 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     try (OutputStream out = storage.create(cfgPath)) {
       props.store(out, "Wrong checksum in file so is invalid");
     }
-    new HoodieTableConfig(storage, metaPath, null, null, null);
+    new HoodieTableConfig(storage, metaPath);
 
     // Should throw exception if both hoodie.properties and backup are corrupted
     try (OutputStream out = storage.create(backupCfgPath)) {
       props.store(out, "Wrong checksum in file so is invalid");
     }
-    assertThrows(IllegalArgumentException.class, () -> new HoodieTableConfig(storage,
-        metaPath, null, null, null));
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableConfig(storage, metaPath));
   }
 
   @Test
@@ -240,7 +239,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     Future readerFuture = executor.submit(() -> {
       for (int i = 0; i < 100; i++) {
         // Try to load the table properties, won't throw any exception
-        new HoodieTableConfig(storage, metaPath, null, null, null);
+        new HoodieTableConfig(storage, metaPath);
       }
     });
 
@@ -259,7 +258,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
 
     // Test makes sure that the partition fields returned by table config do not have partition type
     // to ensure backward compatibility for the API
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertArrayEquals(new String[] {"p1", "p2"}, config.getPartitionFields().get());
     assertEquals("p1,p2", config.getPartitionFieldProp());
   }
@@ -271,7 +270,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFields);
     HoodieTableConfig.update(storage, metaPath, updatedProps);
 
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(config).get());
     assertEquals("p1,p2", HoodieTableConfig.getPartitionFieldProp(config).get());
     assertArrayEquals(Arrays.stream(partitionFields.split(BaseKeyGenerator.FIELD_SEPARATOR)).toArray(), HoodieTableConfig.getPartitionFieldsForKeyGenerator(config).get().toArray());
@@ -321,7 +320,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testTableMergeProperties() throws IOException {
     // for out of the box, there are no merge properties
-    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
     assertTrue(config.getTableMergeProperties().isEmpty());
 
     // delete and re-create w/ merge properties
@@ -337,7 +336,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     props.setProperty("key3", "value3");
 
     initializeNewTableConfig(props);
-    config = new HoodieTableConfig(storage, metaPath, null, null, null);
+    config = new HoodieTableConfig(storage, metaPath);
     Map<String, String> expectedProps = new HashMap<>();
     expectedProps.put("key1","value1");
     expectedProps.put("key2","value2");

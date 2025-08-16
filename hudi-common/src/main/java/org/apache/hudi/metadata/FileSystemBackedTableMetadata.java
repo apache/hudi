@@ -82,7 +82,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath, null, null, null);
+    HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath);
     this.hiveStylePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled =
