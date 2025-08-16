@@ -548,10 +548,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
       // 4. Upsert and save back to a temp file
       String checksum;
-      try (OutputStream out = storage.create(cfgPath, true)) {
+      try (OutputStream out = storage.create(tempCfgPath, true)) {
         propsToUpdate.accept(props, modifyProps);
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
-        checksum = storeProperties(props, out, cfgPath);
+        checksum = storeProperties(props, out, tempCfgPath);
       }
 
       // 5. Rename to the original config file
@@ -568,7 +568,6 @@ public class HoodieTableConfig extends HoodieConfig {
           throw new HoodieIOException("Checksum property missing or does not match.");
         }
       }
-
 
       // 7. delete the backup properties file
       deleteFile(storage, backupCfgPath);
