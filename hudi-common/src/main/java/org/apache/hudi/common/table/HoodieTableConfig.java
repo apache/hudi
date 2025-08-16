@@ -131,7 +131,6 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String HOODIE_TEMP_FILE_SUFFIX = ".temp";
-  public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
   public static final String PARTIAL_UPDATE_UNAVAILABLE_VALUE = "hoodie.write.partial.update.unavailable.value";
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
   // This prefix is used to set merging related properties.
