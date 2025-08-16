@@ -1867,7 +1867,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         true, true, DummyAvroPayload.class.getName(), "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
 
-    // NOTE: Payload class cannot be updated, though the write can be executed using different payload classes in the runtime.
+    // NOTE: Payload class cannot be updated.
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
   }

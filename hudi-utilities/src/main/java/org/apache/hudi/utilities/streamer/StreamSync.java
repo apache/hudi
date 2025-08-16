@@ -366,8 +366,6 @@ public class StreamSync implements Serializable, Closeable {
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
             .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
-            .setPayloadClassName(cfg.payloadClassName)
-            .setRecordMergerStrategy(null)
             .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
             .build();
         if (refreshTimeline) {
