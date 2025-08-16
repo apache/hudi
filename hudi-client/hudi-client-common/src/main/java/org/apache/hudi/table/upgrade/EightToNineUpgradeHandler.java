@@ -52,7 +52,7 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_M
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
@@ -160,9 +160,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
 
   private void reconcilePartialUpdateModeConfig(Map<ConfigProperty, String> tablePropsToAdd,
                                                 HoodieTableConfig tableConfig) {
-    // Set partial update mode for all tables.
-    tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name()); // to be fixed once we land PR #13721
-
     String payloadClass = tableConfig.getPayloadClass();
     String mergeStrategy = tableConfig.getRecordMergeStrategyId();
     if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
@@ -172,9 +169,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         || payloadClass.equals(PartialUpdateAvroPayload.class.getName())) {
       tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_DEFAULTS.name());
     } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
-      tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.IGNORE_MARKERS.name()); // to be fixed once we land PR #13721.
-    } else {
-      tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.NONE.name()); // to be fixed once we land PR #13721.
+      tablePropsToAdd.put(PARTIAL_UPDATE_MODE, PartialUpdateMode.FILL_UNAVAILABLE.name());
     }
   }
 
@@ -194,7 +189,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           AWSDmsAvroPayload.DELETE_OPERATION_VALUE);
     } else if (payloadClass.equals(PostgresDebeziumAvroPayload.class.getName())) {
       tablePropsToAdd.put(
-          ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER).noDefaultValue(), // // to be fixed once we land PR #13721.
+          ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue(), // // to be fixed once we land PR #13721.
           DEBEZIUM_UNAVAILABLE_VALUE);
     }
   }

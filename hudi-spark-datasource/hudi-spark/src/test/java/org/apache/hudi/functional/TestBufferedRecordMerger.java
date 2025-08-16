@@ -75,7 +75,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromInternalRow;
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -124,9 +124,9 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @MethodSource("mergeModeAndStageProvider")
   void testRegularMerging(RecordMergeMode mergeMode, PartialUpdateMode updateMode, MergeStage stage) throws IOException {
-    if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+    if (updateMode == PartialUpdateMode.FILL_UNAVAILABLE) {
       props.put(
-          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER,
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE,
           IGNORE_MARKERS_VALUE);
     }
 
@@ -140,7 +140,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   }
 
   private void runDeltaMerge(RecordMergeMode mergeMode, PartialUpdateMode updateMode) throws IOException {
-    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, updateMode);
+    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, Option.of(updateMode));
     // Create records with all columns.
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
     InternalRow newRecord = createFullRecord("new_id", "New Name", 0, IGNORE_MARKERS_VALUE, 0L);
@@ -153,16 +153,16 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     Option<BufferedRecord<InternalRow>> deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     if (mergeMode == COMMIT_TIME_ORDERING) {
       assertTrue(deltaResult.isPresent());
-      if (updateMode == PartialUpdateMode.NONE) {
+      if (updateMode == null) {
         assertEquals(newRecord, deltaResult.get().getRecord());
       } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
         assertEquals(25, deltaResult.get().getRecord().getInt(2));
         assertEquals(1000L, deltaResult.get().getRecord().getLong(4));
-      } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+      } else if (updateMode == PartialUpdateMode.FILL_UNAVAILABLE) {
         assertEquals("Old City", deltaResult.get().getRecord().getString(3));
       }
     } else {
-      if (updateMode == PartialUpdateMode.NONE) {
+      if (updateMode == null) {
         assertTrue(deltaResult.isEmpty());
       } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
         assertTrue(deltaResult.isPresent());
@@ -175,12 +175,12 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, null);
     deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     assertTrue(deltaResult.isPresent());
-    if (updateMode == PartialUpdateMode.NONE) {
+    if (updateMode == null) {
       assertEquals(newRecord, deltaResult.get().getRecord());
     } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
       assertEquals(25, deltaResult.get().getRecord().getInt(2));
       assertEquals(1000L, deltaResult.get().getRecord().getLong(4));
-    } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+    } else if (updateMode == PartialUpdateMode.FILL_UNAVAILABLE) {
       assertEquals("Old City", deltaResult.get().getRecord().getString(3));
     }
 
@@ -189,18 +189,18 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     newBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, null);
     deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
     assertTrue(deltaResult.isPresent());
-    if (updateMode == PartialUpdateMode.NONE) {
+    if (updateMode == null) {
       assertEquals(newRecord, deltaResult.get().getRecord());
     } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
       assertEquals(25, deltaResult.get().getRecord().getInt(2));
       assertEquals(1000L, deltaResult.get().getRecord().getLong(4));
-    } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+    } else if (updateMode == PartialUpdateMode.FILL_UNAVAILABLE) {
       assertEquals("Old City", deltaResult.get().getRecord().getString(3));
     }
   }
 
   private void runDeltaDeleteMerge(RecordMergeMode mergeMode, PartialUpdateMode updateMode) throws IOException {
-    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, updateMode);
+    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, Option.ofNullable(updateMode));
     // Create records with all columns.
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
     InternalRow newRecord = createFullRecord("new_id", "New Name", 0, IGNORE_MARKERS_VALUE, 0L);
@@ -231,7 +231,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   }
 
   private void runFinalMerge(RecordMergeMode mergeMode, PartialUpdateMode updateMode) throws IOException {
-    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, updateMode);
+    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, Option.ofNullable(updateMode));
     InternalRow oldRecord = createFullRecord(
         "older_id", "Older Name", 20, "Older City", 500L);
     InternalRow newRecord = createFullRecord(
@@ -245,12 +245,12 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     BufferedRecord<InternalRow> finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      if (updateMode == PartialUpdateMode.NONE) {
+      if (updateMode == null) {
         assertEquals(newRecord, finalResult.getRecord());
       } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
         assertEquals(20, finalResult.getRecord().getInt(2));
         assertEquals(500L, finalResult.getRecord().getLong(4));
-      } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+      } else if (updateMode == PartialUpdateMode.FILL_UNAVAILABLE) {
         assertEquals("Older City", finalResult.getRecord().getString(3));
       }
     } else {
@@ -262,12 +262,12 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE + 1, newRecord, 1, null);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
-    if (updateMode == PartialUpdateMode.NONE) {
+    if (updateMode == null) {
       assertEquals(newRecord, finalResult.getRecord());
     } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
       assertEquals(20, finalResult.getRecord().getInt(2));
       assertEquals(500, finalResult.getRecord().getLong(4));
-    } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+    } else if (updateMode == PartialUpdateMode.FILL_UNAVAILABLE) {
       assertEquals("Older City", finalResult.getRecord().getString(3));
     }
 
@@ -276,12 +276,12 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     newerBufferedRecord = new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE, newRecord, 1, null);
     finalResult = merger.finalMerge(olderBufferedRecord, newerBufferedRecord);
     assertFalse(finalResult.isDelete());
-    if (updateMode == PartialUpdateMode.NONE) {
+    if (updateMode == null) {
       assertEquals(newRecord, finalResult.getRecord());
     } else if (updateMode == PartialUpdateMode.IGNORE_DEFAULTS) {
       assertEquals(20, finalResult.getRecord().getInt(2));
       assertEquals(500, finalResult.getRecord().getLong(4));
-    } else if (updateMode == PartialUpdateMode.IGNORE_MARKERS) {
+    } else if (updateMode == PartialUpdateMode.FILL_UNAVAILABLE) {
       assertEquals("Older City", finalResult.getRecord().getString(3));
     }
   }
@@ -381,7 +381,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
   void testRegularMergingWithIgnoreDefaultsNested(RecordMergeMode mergeMode) throws IOException {
     BufferedRecordMerger<InternalRow> ignoreDefaultsMerger =
-        createMerger(readerContext, mergeMode, PartialUpdateMode.IGNORE_DEFAULTS);
+        createMerger(readerContext, mergeMode, Option.of(PartialUpdateMode.IGNORE_DEFAULTS));
 
     // Old record has all columns, new record has some columns with default/null values
     InternalRow oldRecordWithDefaults = createFullRecordWithCompany(
@@ -412,7 +412,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
   void testDeltaMergeWithNullExistingRecord(RecordMergeMode mergeMode) throws IOException {
     BufferedRecordMerger<InternalRow> merger = createMerger(
-        readerContext, mergeMode, PartialUpdateMode.NONE);
+        readerContext, mergeMode, Option.empty());
 
     // New record is not delete.
     InternalRow newRecord = createFullRecord(
@@ -449,7 +449,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   @ParameterizedTest
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
   void testDeltaMergeWithDeleteRecord(RecordMergeMode mergeMode) {
-    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, PartialUpdateMode.NONE);
+    BufferedRecordMerger<InternalRow> merger = createMerger(readerContext, mergeMode, Option.empty());
 
     // Delete record has null ordering value.
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
@@ -553,7 +553,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
   @EnumSource(value = RecordMergeMode.class, names = {"COMMIT_TIME_ORDERING", "EVENT_TIME_ORDERING"})
   void testFinalMergeWithDeleteRecords(RecordMergeMode mergeMode) throws IOException {
     BufferedRecordMerger<InternalRow> merger = createMerger(
-        readerContext, mergeMode, PartialUpdateMode.NONE);
+        readerContext, mergeMode, Option.empty());
 
     InternalRow oldRecord = createFullRecord("old_id", "Old Name", 25, "Old City", 1000L);
     InternalRow newRecord = createFullRecord("new_id", "New Name", 29, "New City", 2000L);
@@ -608,7 +608,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         )
         .filter(args -> {
           PartialUpdateMode updateMode = (PartialUpdateMode) args.get()[1];
-          return updateMode != PartialUpdateMode.FILL_DEFAULTS && updateMode != PartialUpdateMode.KEEP_VALUES;
+          return updateMode != PartialUpdateMode.IGNORE_DEFAULTS;
         });
   }
 
@@ -661,7 +661,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
   private BufferedRecordMerger<InternalRow> createMerger(HoodieReaderContext<InternalRow> readerContext,
                                                          RecordMergeMode mergeMode,
-                                                         PartialUpdateMode partialUpdateMode) {
+                                                         Option<PartialUpdateMode> partialUpdateModeOpt) {
     return BufferedRecordMergerFactory.create(
         readerContext,
         mergeMode,
@@ -673,7 +673,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         Option.empty(), // payloadClass
         READER_SCHEMA, // readerSchema
         props, // props
-        partialUpdateMode
+        partialUpdateModeOpt
     );
   }
 
@@ -690,7 +690,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         Option.empty(), // payloadClass
         READER_SCHEMA, // readerSchema
         props, // props
-        PartialUpdateMode.KEEP_VALUES // partialUpdateMode
+        Option.of(PartialUpdateMode.IGNORE_DEFAULTS) // partialUpdateMode
     );
   }
 
