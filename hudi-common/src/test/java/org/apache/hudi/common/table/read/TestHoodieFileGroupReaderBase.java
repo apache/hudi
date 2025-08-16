@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaTestUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
@@ -42,12 +43,16 @@ import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.testutils.SchemaEvolutionTestUtilsBase;
+import org.apache.hudi.common.testutils.SchemaOnReadEvolutionTestUtils;
+import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -56,6 +61,9 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -70,6 +78,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -138,16 +147,15 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     commitToTable(recordList, operation, firstCommit, writeConfigs, TRIP_EXAMPLE_SCHEMA);
   }
 
+  public abstract void commitSchemaToTable(InternalSchema schema, Map<String, String> writeConfigs, String historySchemaStr);
+
   public abstract void assertRecordsEqual(Schema schema, T expected, T actual);
 
   public abstract void assertRecordMatchesSchema(Schema schema, T record);
 
-  public abstract HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs();
+  public abstract SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaOnWriteConfigs();
 
-  private static Stream<Arguments> supportedBaseFileFormatArgs() {
-    return supportedFileFormats.stream()
-        .map(Arguments::of);
-  }
+  public abstract SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs();
 
   private static Stream<Arguments> testArguments() {
     boolean supportsORC = supportedFileFormats.contains(HoodieFileFormat.ORC);
@@ -275,280 +283,244 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
-  private static List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
-    return hoodieRecords.stream().map(r -> {
-      try {
-        return r.toIndexedRecord(schema, CollectionUtils.emptyProps());
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+  @ParameterizedTest
+  @EnumSource(value = SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.class)
+  public void testSchemaOnRead(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) throws Exception {
+    try (SchemaOnReadTestExecutor executor = new SchemaOnReadTestExecutor(testType,
+        getSchemaOnReadConfigs(),
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue())) {
+      executor.execute();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"avro", "parquet"})
+  public void testSchemaOnReadLogBlocks(String logDataBlockFormat) throws Exception {
+    try (SchemaOnReadTestExecutor executor = new SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.BASE_FILE_HAS_DIFFERENT_SCHEMA_THAN_LOG_FILES,
+        getSchemaOnReadConfigs(),
+        HoodieFileFormat.PARQUET,
+        Option.of(logDataBlockFormat))) {
+      executor.execute();
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.class)
+  public void testSchemaOnWrite(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType) throws Exception {
+    try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(testType,
+        getSchemaOnWriteConfigs(),
+        HoodieTableConfig.BASE_FILE_FORMAT.defaultValue())) {
+      executor.execute();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"avro", "parquet"})
+  public void testSchemaOnWriteLogBlocks(String logDataBlockFormat) throws Exception {
+    try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.BASE_FILE_HAS_DIFFERENT_SCHEMA_THAN_LOG_FILES,
+        getSchemaOnWriteConfigs(),
+        HoodieFileFormat.PARQUET,
+        Option.of(logDataBlockFormat))) {
+      executor.execute();
+    }
+  }
+
+  @Test
+  public void testSchemaOnWriteOrc() throws Exception {
+    if (supportedFileFormats.contains(HoodieFileFormat.ORC)) {
+      try (SchemaOnWriteTestExecutor executor = new SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType.BASE_FILES_WITH_DIFFERENT_SCHEMA,
+          getSchemaOnWriteConfigs(),
+          HoodieFileFormat.ORC)) {
+        executor.execute();
       }
-    }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), r.getData())).collect(Collectors.toList());
-  }
-
-  /**
-   * Write a base file with schema A, then write another base file with schema B.
-   */
-  @ParameterizedTest
-  @MethodSource("supportedBaseFileFormatArgs")
-  public void testSchemaEvolutionWhenBaseFilesWithDifferentSchema(HoodieFileFormat fileFormat) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(
-        getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
-    HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
-    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
-    if (fileFormat == HoodieFileFormat.ORC) {
-      // ORC can support reading float as string, but it converts float to double to string causing differences in precision
-      schemaEvolutionConfigs.floatToDoubleSupport = false;
-      schemaEvolutionConfigs.floatToStringSupport = false;
-    }
-
-    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      dataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
-
-      // Write a base file with schema A
-      List<HoodieRecord> firstRecords = dataGen.generateInsertsForPartition("001", 5, "any_partition");
-      List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, dataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, dataGen.getExtendedSchema().toString());
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords);
-
-      // Evolve schema
-      dataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
-
-      // Write another base file with schema B
-      List<HoodieRecord> secondRecords = dataGen.generateInsertsForPartition("002", 5, "new_partition");
-      List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, dataGen.getExtendedSchema());
-      commitToTable(secondRecords, INSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
-      List<Pair<String, IndexedRecord>> mergedRecords = CollectionUtils.combine(firstIndexedRecords, secondIndexedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
     }
   }
 
-  private static Stream<Arguments> testArgsForDifferentBaseAndLogFormats() {
-    boolean supportsORC = supportedFileFormats.contains(HoodieFileFormat.ORC);
-    List<Arguments> args = new ArrayList<>();
-    
-    if (supportsORC) {
-      args.add(arguments(HoodieFileFormat.ORC, "avro"));
-    }
-    
-    args.add(arguments(HoodieFileFormat.PARQUET, "avro"));
-    args.add(arguments(HoodieFileFormat.PARQUET, "parquet"));
-    
-    return args.stream();
-  }
-  
-  /**
-   * Write a base file with schema A, then write a log file with schema A, then write another base file with schema B.
-   */
-  @ParameterizedTest
-  @MethodSource("testArgsForDifferentBaseAndLogFormats")
-  public void testSchemaEvolutionWhenBaseFileHasDifferentSchemaThanLogFiles(HoodieFileFormat fileFormat, String logFileFormat) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(
-        getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
-    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
-    writeConfigs.put(HoodieTableConfig.LOG_FILE_FORMAT.key(), logFileFormat);
-    HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
-    if (fileFormat == HoodieFileFormat.ORC) {
-      // ORC can support reading float as string, but it converts float to double to string causing differences in precision
-      schemaEvolutionConfigs.floatToDoubleSupport = false;
-      schemaEvolutionConfigs.floatToStringSupport = false;
-    }
+  // Base class for executing schema evolution tests
+  public abstract class AbstractSchemaEvolutionTestExecutor<C extends SchemaEvolutionTestUtilsBase.SchemaEvolutionConfigBase> implements SchemaEvolutionTestUtilsBase.SchemaEvolutionTestExecutor {
 
-    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      dataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
+    protected final int maxIterations;
+    private final SchemaEvolutionTestUtilsBase.SchemaEvolutionScenario scenario;
+    protected C evolutionConfigs;
+    protected final Map<String, String> writeConfigs;
+    private final HoodieTestDataGenerator dataGen;
+    protected List<Pair<String, IndexedRecord>> allRecords = new ArrayList<>();
+    protected Schema extendedSchema;
+    private boolean first = true;
 
-      // Write a base file with schema A
-      List<HoodieRecord> firstRecords = dataGen.generateInsertsForPartition("001", 10, "any_partition");
-      List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, dataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, dataGen.getExtendedSchema().toString());
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords);
-
-      // Write a log file with schema A
-      List<HoodieRecord> secondRecords = dataGen.generateUniqueUpdates("002", 5);
-      List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, dataGen.getExtendedSchema());
-      commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
-      List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
-
-      // Evolve schema
-      dataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
-
-      // Write another base file with schema B
-      List<HoodieRecord> thirdRecords = dataGen.generateInsertsForPartition("003", 5, "new_partition");
-      List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, dataGen.getExtendedSchema());
-      commitToTable(thirdRecords, INSERT.value(), false, writeConfigs, dataGen.getExtendedSchema().toString());
-      mergedRecords = CollectionUtils.combine(mergedRecords, thirdIndexedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          // use -1 to prevent validation of numlogfiles because one fg has a log file but the other doesn't
-          true, -1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
-    }
-  }
-
-  /**
-   * Write a base file with schema A, then write a log file with schema A, then write another log file with schema B.
-   */
-  @ParameterizedTest
-  @MethodSource("supportedBaseFileFormatArgs")
-  public void testSchemaEvolutionWhenLogFilesWithDifferentSchema(HoodieFileFormat fileFormat) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(
-        getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
-    writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), fileFormat.name());
-    HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
-    if (fileFormat == HoodieFileFormat.ORC) {
-      // ORC can support reading float as string, but it converts float to double to string causing differences in precision
-      schemaEvolutionConfigs.floatToDoubleSupport = false;
-      schemaEvolutionConfigs.floatToStringSupport = false;
+    public AbstractSchemaEvolutionTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                               C evolutionConfigs,
+                                               HoodieFileFormat baseFileFormat,
+                                               Option<String> logFileFormat) {
+      this.maxIterations = testType.getScenario().getMaxIterations();
+      this.scenario = testType.getScenario();
+      this.dataGen = new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF);
+      this.evolutionConfigs = evolutionConfigs;
+      if (baseFileFormat.equals(HoodieFileFormat.ORC)) {
+        this.evolutionConfigs.floatToDoubleSupport = false;
+        this.evolutionConfigs.floatToStringSupport = false;
+      }
+      this.writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.COMMIT_TIME_ORDERING, true));
+      writeConfigs.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.name());
+      if (logFileFormat.isPresent()) {
+        writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logFileFormat.get());
+      }
+      initializeSchema();
+      dataGen.addExtendedSchema(extendedSchema);
     }
 
-    try (HoodieTestDataGenerator baseFileDataGen =
-             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      baseFileDataGen.extendSchemaBeforeEvolution(schemaEvolutionConfigs);
+    // create schema for iteration 0
+    protected abstract void initializeSchema();
 
-      // Write base file with schema A
-      List<HoodieRecord> firstRecords = baseFileDataGen.generateInserts("001", 100);
-      List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
+    // evolve the schema
+    protected abstract void doEvolveSchema(int iteration);
+
+    // does `allRecords` schema matches the current table schema
+    protected abstract boolean areExpectedRecordsInFinalSchema();
+
+    private List<Pair<String, IndexedRecord>> hoodieRecordsToIndexedRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
+      return hoodieRecords.stream().map(r -> {
+        try {
+          return r.toIndexedRecord(schema, CollectionUtils.emptyProps());
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }).filter(Option::isPresent).map(Option::get).map(r -> Pair.of(r.getRecordKey(), r.getData())).collect(Collectors.toList());
+    }
+
+    @Override
+    public void writeData(SchemaEvolutionTestUtilsBase.WriteDataConfig dataConfig) throws Exception {
+      if (dataConfig.isBaseFile) {
+        List<HoodieRecord> records = dataConfig.partition == null
+            ? dataGen.generateInserts(dataConfig.commitId, dataConfig.recordCount)
+            : dataGen.generateInsertsForPartition(dataConfig.commitId, dataConfig.recordCount, dataConfig.partition);
+        List<Pair<String, IndexedRecord>> indexedRecords = hoodieRecordsToIndexedRecords(records, extendedSchema);
+        allRecords.addAll(indexedRecords);
+        commitToTable(records, INSERT.value(), first, writeConfigs, extendedSchema.toString());
+      } else {
+        List<HoodieRecord> records = dataGen.generateUniqueUpdates(dataConfig.commitId, dataConfig.recordCount);
+        List<Pair<String, IndexedRecord>> indexedRecords = hoodieRecordsToIndexedRecords(records, extendedSchema);
+        allRecords = mergeIndexedRecordLists(indexedRecords, allRecords);
+        commitToTable(records, UPSERT.value(), first, writeConfigs, extendedSchema.toString());
+      }
+      first = false;
+    }
+
+    @Override
+    public void validate(int expectedLogFiles) throws Exception {
       validateOutputFromFileGroupReaderWithNativeRecords(
           getStorageConf(), getBasePath(),
-          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords);
+          true, expectedLogFiles, RecordMergeMode.EVENT_TIME_ORDERING,
+          allRecords, areExpectedRecordsInFinalSchema());
+    }
 
-      // Write log file with schema A
-      List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 50);
-      List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
-      List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+    @Override
+    public void close() throws Exception {
+      dataGen.close();
+      allRecords.clear();
+    }
 
-      // Evolve schema
-      baseFileDataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
+    // Abstract method for schema evolution - implementation varies by subclass
+    @Override
+    public void evolveSchema(int iteration) throws Exception {
+      doEvolveSchema(iteration);
+      dataGen.addExtendedSchema(extendedSchema);
+    }
 
-      // Write log file with schema B
-      List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates("003", 50);
-      List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(thirdRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
-      mergedRecords = mergeIndexedRecordLists(thirdIndexedRecords, mergedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 2, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+    public void execute() throws Exception {
+      SchemaEvolutionTestUtilsBase.executeTest(this, scenario);
     }
   }
 
-  /**
-   * Write a base file with schema A, then write a log file with schema A, then write another log file with schema B. Then write a different base file with schema C.
-   */
-  @Test
-  public void testSchemaEvolutionWhenLogFilesWithDifferentSchemaAndTableSchemaDiffers() throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(
-        getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
+  // single use class for testing schema on read
+  private class SchemaOnReadTestExecutor extends AbstractSchemaEvolutionTestExecutor<SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs> {
+    private InternalSchema extendedInternalSchema;
+    private String historySchema = "";
 
-    try (HoodieTestDataGenerator baseFileDataGen =
-             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
+    public SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs,
+                                    HoodieFileFormat baseFileFormat,
+                                    Option<String> logFileFormat) {
+      super(testType, configs, baseFileFormat, logFileFormat);
+      writeConfigs.put(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), "true");
+      // TODO fix schema evolution on col stats
+      writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+      writeConfigs.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "false");
+    }
 
-      // Write base file with schema A
-      List<HoodieRecord> firstRecords = baseFileDataGen.generateInserts("001", 100);
-      List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords);
+    public SchemaOnReadTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs,
+                                    HoodieFileFormat baseFileFormat) {
+      this(testType, configs, baseFileFormat, Option.empty());
+    }
 
-      // Write log file with schema A
-      List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 50);
-      List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
-      List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+    @Override
+    protected void initializeSchema() {
+      updateSchemas(0);
+    }
 
-      // Evolve schema
-      HoodieTestDataGenerator.SchemaEvolutionConfigs schemaEvolutionConfigs = getSchemaEvolutionConfigs();
-      boolean addNewFieldSupport = schemaEvolutionConfigs.addNewFieldSupport;
-      schemaEvolutionConfigs.addNewFieldSupport = false;
-      baseFileDataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
+    @Override
+    public void doEvolveSchema(int iteration) {
+      updateSchemas(iteration);
+      commitSchemaToTable(extendedInternalSchema, writeConfigs, historySchema);
+      Map<String, String> renameCols = SchemaOnReadEvolutionTestUtils.generateColumnNameChanges(evolutionConfigs, iteration, maxIterations);
+      allRecords = allRecords.stream()
+          .map(r -> Pair.of(r.getLeft(),
+              (IndexedRecord) HoodieAvroUtils.rewriteRecordWithNewSchema(r.getRight(), extendedSchema, renameCols, true)))
+          .collect(Collectors.toList());
+    }
 
-      // Write log file with schema B
-      List<HoodieRecord> thirdRecords = baseFileDataGen.generateUniqueUpdates("003", 50);
-      List<Pair<String, IndexedRecord>> thirdIndexedRecords = hoodieRecordsToIndexedRecords(thirdRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(thirdRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
-      mergedRecords = mergeIndexedRecordLists(thirdIndexedRecords, mergedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 2, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+    @Override
+    protected boolean areExpectedRecordsInFinalSchema() {
+      // in doEvolveSchema we update `allRecords` to match the table schema since we need to deal with name changes
+      return true;
+    }
 
-      // Evolve schema again
-      schemaEvolutionConfigs = getSchemaEvolutionConfigs();
-      schemaEvolutionConfigs.addNewFieldSupport = addNewFieldSupport;
-      baseFileDataGen.extendSchemaAfterEvolution(schemaEvolutionConfigs);
-
-      // Write another base file with schema C
-      List<HoodieRecord> fourthRecords = baseFileDataGen.generateInsertsForPartition("004", 5, "new_partition");
-      List<Pair<String, IndexedRecord>> fourthIndexedRecords = hoodieRecordsToIndexedRecords(fourthRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(fourthRecords, INSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
-      mergedRecords = CollectionUtils.combine(mergedRecords, fourthIndexedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          // use -1 to prevent validation of numlogfiles because one fg has log files but the other doesn't
-          true, -1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+    private void updateSchemas(int iteration) {
+      // inherit from the previous schema
+      if (extendedInternalSchema != null) {
+        historySchema = SerDeHelper.inheritSchemas(extendedInternalSchema, historySchema);
+      }
+      extendedInternalSchema = SchemaOnReadEvolutionTestUtils.generateExtendedSchema(evolutionConfigs, iteration, maxIterations);
+      extendedSchema = HoodieAvroUtils.removeMetadataFields(
+          AvroInternalSchemaConverter.convert(extendedInternalSchema, evolutionConfigs.schema.getName()));
     }
   }
 
-  /**
-   * Write a base file with schema A, then write a log file with schema B
-   */
-  @Test
-  public void testSchemaEvolutionWhenBaseFilesWithDifferentSchemaFromLogFiles() throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(
-        getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING, true));
+  // single use class for testing schema on write
+  private class SchemaOnWriteTestExecutor extends AbstractSchemaEvolutionTestExecutor<SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs> {
 
-    try (HoodieTestDataGenerator baseFileDataGen =
-             new HoodieTestDataGenerator(TRIP_EXAMPLE_SCHEMA, 0xDEEF)) {
-      baseFileDataGen.extendSchemaBeforeEvolution(getSchemaEvolutionConfigs());
+    private boolean hasEvolvedSchema = false;
 
-      // Write base file with schema A
-      List<HoodieRecord> firstRecords = baseFileDataGen.generateInserts("001", 100);
-      List<Pair<String, IndexedRecord>> firstIndexedRecords = hoodieRecordsToIndexedRecords(firstRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(firstRecords, INSERT.value(), true, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 0, RecordMergeMode.EVENT_TIME_ORDERING,
-          firstIndexedRecords);
+    public SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                     SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs,
+                                     HoodieFileFormat baseFileFormat) {
+      this(testType, configs, baseFileFormat, Option.empty());
+    }
 
-      //Evolve schema
-      baseFileDataGen.extendSchemaAfterEvolution(getSchemaEvolutionConfigs());
+    public SchemaOnWriteTestExecutor(SchemaEvolutionTestUtilsBase.SchemaEvolutionScenarioType testType,
+                                     SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs configs,
+                                     HoodieFileFormat baseFileFormat,
+                                     Option<String> logFileFormat) {
+      super(testType, configs, baseFileFormat, logFileFormat);
+    }
 
-      // Write log file with schema B
-      List<HoodieRecord> secondRecords = baseFileDataGen.generateUniqueUpdates("002", 50);
-      List<Pair<String, IndexedRecord>> secondIndexedRecords = hoodieRecordsToIndexedRecords(secondRecords, baseFileDataGen.getExtendedSchema());
-      commitToTable(secondRecords, UPSERT.value(), false, writeConfigs, baseFileDataGen.getExtendedSchema().toString());
-      List<Pair<String, IndexedRecord>> mergedRecords = mergeIndexedRecordLists(secondIndexedRecords, firstIndexedRecords);
-      validateOutputFromFileGroupReaderWithNativeRecords(
-          getStorageConf(), getBasePath(),
-          true, 1, RecordMergeMode.EVENT_TIME_ORDERING,
-          mergedRecords);
+    @Override
+    protected void initializeSchema() {
+      doEvolveSchema(0);
+    }
+
+    @Override
+    public void doEvolveSchema(int iteration)  {
+      if (iteration > 0) {
+        hasEvolvedSchema = true;
+      }
+      extendedSchema = SchemaOnWriteEvolutionTestUtils.generateExtendedSchema(evolutionConfigs, iteration, maxIterations);
+    }
+
+    @Override
+    protected boolean areExpectedRecordsInFinalSchema() {
+      return !hasEvolvedSchema;
     }
   }
 
@@ -645,23 +617,33 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return configMapping;
   }
 
+  // validate records involved in schema evolution
   private void validateOutputFromFileGroupReaderWithNativeRecords(StorageConfiguration<?> storageConf,
-                                                                    String tablePath,
-                                                                    boolean containsBaseFile,
-                                                                    int expectedLogFileNum,
-                                                                    RecordMergeMode recordMergeMode,
-                                                                    List<Pair<String, IndexedRecord>> expectedRecords) throws Exception {
+                                                                  String tablePath,
+                                                                  boolean containsBaseFile,
+                                                                  int expectedLogFileNum,
+                                                                  RecordMergeMode recordMergeMode,
+                                                                  List<Pair<String, IndexedRecord>> expectedRecords,
+                                                                  boolean expectedHasCorrectSchema) throws Exception {
     Set<String> metaCols = new HashSet<>(HoodieRecord.HOODIE_META_COLUMNS);
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
     TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
     Schema avroSchema = resolver.getTableAvroSchema();
     Schema avroSchemaWithoutMeta = resolver.getTableAvroSchema(false);
+    Option<InternalSchema> internalSchemaOption = resolver.getTableInternalSchemaFromCommitMetadata();
+    if (internalSchemaOption.isPresent()) {
+      getStorageConf().set("hoodie.tablePath", getBasePath());
+      InstantFileNameGenerator instantFileNameGenerator = metaClient.getTimelineLayout().getInstantFileNameGenerator();
+      String validCommits = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants()
+          .getInstants().stream().map(instantFileNameGenerator::getFileName).collect(Collectors.joining(","));
+      getStorageConf().set("hoodie.valid.commits.list", validCommits);
+    }
     // use reader context for conversion to engine specific objects
     HoodieReaderContext<T> readerContext = getHoodieReaderContext(tablePath, avroSchema, getStorageConf(), metaClient);
     List<FileSlice> fileSlices = getFileSlicesToRead(storageConf, tablePath, metaClient, containsBaseFile, expectedLogFileNum);
     boolean sortOutput = !containsBaseFile;
     List<T> actualRecordList =
-        readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, recordMergeMode, false, sortOutput);
+        readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, internalSchemaOption, recordMergeMode, false, sortOutput);
     assertEquals(expectedRecords.size(), actualRecordList.size());
     actualRecordList.forEach(r -> assertRecordMatchesSchema(avroSchema, r));
     Set<GenericRecord> actualRecordSet = actualRecordList.stream().map(r ->  readerContext.getRecordContext().convertToAvroRecord(r, avroSchema))
@@ -669,8 +651,13 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .collect(Collectors.toSet());
     Set<GenericRecord> expectedRecordSet = expectedRecords.stream()
         .map(r -> (GenericRecord) r.getRight())
-        .map(r -> HoodieAvroUtils.rewriteRecordWithNewSchema(r, avroSchemaWithoutMeta))
-        .collect(Collectors.toSet());
+        .map(r -> {
+          if (!expectedHasCorrectSchema) {
+            return HoodieAvroUtils.rewriteRecordWithNewSchema(r, avroSchemaWithoutMeta);
+          } else {
+            return r;
+          }
+        }).collect(Collectors.toSet());
     compareRecordSets(expectedRecordSet, actualRecordSet);
   }
 
@@ -687,7 +674,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     for (String key : actualMap.keySet()) {
       GenericRecord expectedRecord = expectedMap.get(key);
       GenericRecord actualRecord = actualMap.get(key);
-      assertEquals(expectedRecord, actualRecord);
+      AvroSchemaTestUtils.validateRecordsHaveSameData(expectedRecord, actualRecord);
     }
   }
 
@@ -803,6 +790,18 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                            RecordMergeMode recordMergeMode,
                                            boolean isSkipMerge,
                                            boolean sortOutput) {
+    return readRecordsFromFileGroup(storageConf, tablePath, metaClient, fileSlices, avroSchema, Option.empty(), recordMergeMode, isSkipMerge, sortOutput);
+  }
+
+  private List<T> readRecordsFromFileGroup(StorageConfiguration<?> storageConf,
+                                           String tablePath,
+                                           HoodieTableMetaClient metaClient,
+                                           List<FileSlice> fileSlices,
+                                           Schema avroSchema,
+                                           Option<InternalSchema> internalSchemaOpt,
+                                           RecordMergeMode recordMergeMode,
+                                           boolean isSkipMerge,
+                                           boolean sortOutput) {
 
     List<T> actualRecordList = new ArrayList<>();
     TypedProperties props = buildProperties(metaClient, recordMergeMode);
@@ -811,9 +810,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     fileSlices.forEach(fileSlice -> {
       if (shouldValidatePartialRead(fileSlice, avroSchema)) {
-        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 1, props, sortOutput));
+        assertThrows(IllegalArgumentException.class, () -> getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 1, props, sortOutput, internalSchemaOpt));
       }
-      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props, sortOutput)) {
+      try (HoodieFileGroupReader<T> fileGroupReader = getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, 0, props, sortOutput, internalSchemaOpt)) {
         readWithFileGroupReader(fileGroupReader, actualRecordList, avroSchema, getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient), sortOutput);
       } catch (Exception ex) {
         throw new RuntimeException(ex);
@@ -828,6 +827,16 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                             Schema avroSchema,
                                                             FileSlice fileSlice,
                                                             int start, TypedProperties props, boolean sortOutput) {
+    return getHoodieFileGroupReader(storageConf, tablePath, metaClient, avroSchema, fileSlice, start, props, sortOutput, Option.empty());
+  }
+
+  private HoodieFileGroupReader<T> getHoodieFileGroupReader(StorageConfiguration<?> storageConf,
+                                                            String tablePath,
+                                                            HoodieTableMetaClient metaClient,
+                                                            Schema avroSchema,
+                                                            FileSlice fileSlice,
+                                                            int start, TypedProperties props, boolean sortOutput,
+                                                            Option<InternalSchema> internalSchemaOpt) {
     return HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf, metaClient))
         .withHoodieTableMetaClient(metaClient)
@@ -835,6 +844,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .withFileSlice(fileSlice)
         .withDataSchema(avroSchema)
         .withRequestedSchema(avroSchema)
+        .withInternalSchema(internalSchemaOpt)
         .withProps(props)
         .withStart(start)
         .withLength(fileSlice.getTotalFileSize())

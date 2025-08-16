@@ -23,7 +23,8 @@ import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.SchemaOnReadEvolutionTestUtils;
+import org.apache.hudi.common.testutils.SchemaOnWriteEvolutionTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -59,9 +60,48 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
   }
 
   @Override
-  public HoodieTestDataGenerator.SchemaEvolutionConfigs getSchemaEvolutionConfigs() {
-    HoodieTestDataGenerator.SchemaEvolutionConfigs configs = new HoodieTestDataGenerator.SchemaEvolutionConfigs();
+  public SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs getSchemaOnWriteConfigs() {
+    return new SchemaOnWriteEvolutionTestUtils.SchemaOnWriteConfigs();
+  }
+
+  @Override
+  public SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs getSchemaOnReadConfigs() {
+    SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs configs = new SchemaOnReadEvolutionTestUtils.SchemaOnReadConfigs();
     configs.addNewFieldSupport = false;
+    configs.addNewFieldNotAtEndSupport = false;
+    configs.renameColumnSupport = false;
+    configs.renameColumnAsPreviouslyRemovedSupport = false;
+
+    configs.intToLongSupport = false;
+    configs.intToFloatSupport = false;
+    configs.intToDoubleSupport = false;
+    configs.intToStringSupport = false;
+    configs.intToDecimalFixedSupport = false;
+    configs.intToDecimalBytesSupport = false;
+
+    configs.longToFloatSupport = false;
+    configs.longToDoubleSupport = false;
+    configs.longToStringSupport = false;
+    configs.longToDecimalFixedSupport = false;
+    configs.longToDecimalBytesSupport = false;
+
+    configs.floatToDoubleSupport = false;
+    configs.floatToStringSupport = false;
+    configs.floatToDecimalFixedSupport = false;
+    configs.floatToDecimalBytesSupport = false;
+
+    configs.doubleToStringSupport = false;
+    configs.doubleToDecimalFixedSupport = false;
+    configs.doubleToDecimalBytesSupport = false;
+
+    configs.stringToDecimalFixedSupport = false;
+    configs.stringToDecimalBytesSupport = false;
+    configs.stringToDateSupport = false;
+
+    configs.decimalFixedToStringSupport = false;
+    configs.decimalBytesToStringSupport = false;
+
+    configs.dateToStringSupport = false;
     return configs;
   }
 }
