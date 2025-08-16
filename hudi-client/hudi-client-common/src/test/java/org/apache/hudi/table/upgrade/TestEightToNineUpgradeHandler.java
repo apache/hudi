@@ -67,6 +67,8 @@ import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.DEBEZIUM_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
@@ -196,6 +198,13 @@ class TestEightToNineUpgradeHandler {
             COMMIT_TIME_ORDERING.name(),
             PartialUpdateMode.IGNORE_DEFAULTS.name(),
             "OverwriteNonDefaultsWithLatestAvroPayload"
+        ),
+        Arguments.of(
+            MySqlDebeziumAvroPayload.class.getName(),
+            "",
+            EVENT_TIME_ORDERING.name(),
+            null,
+            "MySqlDebeziumAvroPayload"
         )
     );
   }
@@ -284,6 +293,10 @@ class TestEightToNineUpgradeHandler {
     assertEquals(
         payloadClass,
         propertiesToAdd.get(LEGACY_PAYLOAD_CLASS_NAME));
+    if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+      assertTrue(propertiesToAdd.containsKey(HoodieTableConfig.PRECOMBINE_FIELDS));
+      assertEquals(propertiesToAdd.get(HoodieTableConfig.PRECOMBINE_FIELDS).toString(), FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
+    }
   }
 
   @Test
