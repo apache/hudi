@@ -19,75 +19,234 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
+import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+
 class TestNineToEightDowngradeHandler {
-
-  @Mock
-  private HoodieWriteConfig config;
-  @Mock
-  private HoodieTableConfig tblConfig;
-  @Mock
-  private HoodieTableMetaClient metaClient;
-  @Mock
-  private HoodieEngineContext context;
-  @Mock
-  private SupportsUpgradeDowngrade upgradeDowngradeHelper;
-  @Mock
-  private HoodieTable table;
-
-  private NineToEightDowngradeHandler downgradeHandler;
+  private final NineToEightDowngradeHandler handler = new NineToEightDowngradeHandler();
+  private final HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+  private final HoodieEngineContext context = mock(HoodieEngineContext.class);
+  private final HoodieTable table = mock(HoodieTable.class);
+  private HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+  private HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+  private SupportsUpgradeDowngrade upgradeDowngradeHelper = mock(SupportsUpgradeDowngrade.class);
 
   @BeforeEach
-  void setUp() {
-    downgradeHandler = new NineToEightDowngradeHandler();
-    when(upgradeDowngradeHelper.getTable(config, context)).thenReturn(table);
+  public void setUp() {
+    when(upgradeDowngradeHelper.getTable(any(), any())).thenReturn(table);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+  }
+
+  static Stream<Arguments> payloadClassTestCases() {
+    return Stream.of(
+        // AWSDmsAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            AWSDmsAvroPayload.class.getName(),
+            4, // propertiesToRemove size
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY + ","
+                + RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER,
+            3, // propertiesToAdd size
+            true, // hasRecordMergeMode
+            true, // hasRecordMergeStrategyId
+            "AWSDmsAvroPayload"
+        ),
+        // OverwriteNonDefaultsWithLatestAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            true,
+            true,
+            "OverwriteNonDefaultsWithLatestAvroPayload"
+        ),
+        // PartialUpdateAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            PartialUpdateAvroPayload.class.getName(),
+            2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            true,
+            true,
+            "PartialUpdateAvroPayload"
+        ),
+        // MySqlDebeziumAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            MySqlDebeziumAvroPayload.class.getName(),
+            2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            true,
+            true,
+            "MySqlDebeziumAvroPayload"
+        ),
+        // PostgresDebeziumAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
+        Arguments.of(
+            PostgresDebeziumAvroPayload.class.getName(),
+            3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key() + "," + RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER,
+            3,
+            true,
+            true,
+            "PostgresDebeziumAvroPayload"
+        ),
+        // OverwriteWithLatestAvroPayload - only requires PAYLOAD_CLASS_NAME
+        Arguments.of(
+            OverwriteWithLatestAvroPayload.class.getName(),
+            2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            1,
+            false,
+            false,
+            "OverwriteWithLatestAvroPayload"
+        ),
+        // DefaultHoodieRecordPayload - only requires PAYLOAD_CLASS_NAME
+        Arguments.of(
+            DefaultHoodieRecordPayload.class.getName(),
+            2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            1,
+            false,
+            false,
+            "DefaultHoodieRecordPayload"
+        ),
+        // EventTimeAvroPayload - only requires PAYLOAD_CLASS_NAME
+        Arguments.of(
+            EventTimeAvroPayload.class.getName(),
+            2,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            1,
+            false,
+            false,
+            "EventTimeAvroPayload"
+        )
+    );
+  }
+
+  @ParameterizedTest(name = "testDowngradeFor{5}")
+  @MethodSource("payloadClassTestCases")
+  void testDowngradeForPayloadClass(String payloadClassName, int expectedPropertiesToRemoveSize, String expectedPropsToRemove,
+                                    int expectedPropertiesToAddSize, boolean hasRecordMergeMode,
+                                    boolean hasRecordMergeStrategyId, String testName) {
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(payloadClassName);
+      when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+      UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      // Assert properties to remove
+      assertEquals(expectedPropertiesToRemoveSize, propertiesToChange.propertiesToDelete().size());
+      if (expectedPropertiesToAddSize > 0) {
+        List<String> propsToRemove = Arrays.asList(expectedPropsToRemove.split(","));
+        Collections.sort(propsToRemove);
+        List<String> actualPropsRemoved = propertiesToChange.propertiesToDelete().stream().map(ConfigProperty::key).sorted().collect(Collectors.toList());
+        assertEquals(propsToRemove, actualPropsRemoved);
+      }
+      assertTrue(propertiesToChange.propertiesToDelete().contains(PARTIAL_UPDATE_MODE));
+      assertTrue(propertiesToChange.propertiesToDelete().contains(LEGACY_PAYLOAD_CLASS_NAME));
+      // Assert properties to add
+      assertEquals(expectedPropertiesToAddSize, propertiesToChange.propertiesToUpdate().size());
+      // Assert payload class is always set
+      assertEquals(payloadClassName, propertiesToChange.propertiesToUpdate().get(PAYLOAD_CLASS_NAME));
+      // Assert record merge mode if required
+      if (hasRecordMergeMode) {
+        assertEquals(RecordMergeMode.CUSTOM.name(),
+            propertiesToChange.propertiesToUpdate().get(RECORD_MERGE_MODE));
+      }
+      // Assert record merge strategy ID if required
+      if (hasRecordMergeStrategyId) {
+        assertEquals(PAYLOAD_BASED_MERGE_STRATEGY_UUID,
+            propertiesToChange.propertiesToUpdate().get(RECORD_MERGE_STRATEGY_ID));
+      }
+    }
+  }
+
+  @Test
+  void testDowngradeForOtherPayloadClass() {
+    try (MockedStatic<UpgradeDowngradeUtils> utilities =
+             org.mockito.Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      utilities.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          any(), any(), any(), any(), anyBoolean(), any()))
+          .thenAnswer(invocation -> null);
+      when(tableConfig.getLegacyPayloadClass()).thenReturn("NonExistentPayloadClass");
+      when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+      UpgradeDowngrade.TableConfigChangeSet propertiesToChange =
+          handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(1, propertiesToChange.propertiesToDelete().size());
+      assertTrue(propertiesToChange.propertiesToDelete().contains(PARTIAL_UPDATE_MODE));
+      assertEquals(0, propertiesToChange.propertiesToUpdate().size());
+    }
   }
 
   @Test
   void testDowngradeDropsOnlyV2OrAboveIndexes() {
     // Use try-with-resources to ensure the static mock is closed
-    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = mockStatic(UpgradeDowngradeUtils.class)) {
+    try (MockedStatic<UpgradeDowngradeUtils> mockedUtils = Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
       // Mock the static method to do nothing - avoid NPE
       mockedUtils.when(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           any(HoodieTable.class), 
@@ -140,16 +299,16 @@ class TestNineToEightDowngradeHandler {
 
       when(table.getMetaClient()).thenReturn(metaClient);
       when(metaClient.getIndexMetadata()).thenReturn(Option.of(metadata));
-      when(metaClient.getTableConfig()).thenReturn(tblConfig);
+      when(metaClient.getTableConfig()).thenReturn(tableConfig);
       Set<String> mdtPartitions = new HashSet<>(indexDefs.keySet());
-      when(tblConfig.getMetadataPartitions()).thenReturn(mdtPartitions);
+      when(tableConfig.getMetadataPartitions()).thenReturn(mdtPartitions);
 
       // Mock write client
       BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
       when(upgradeDowngradeHelper.getWriteClient(config, context)).thenReturn(writeClient);
 
       // Act
-      downgradeHandler.downgrade(config, context, "20240101120000", upgradeDowngradeHelper);
+      handler.downgrade(config, context, "20240101120000", upgradeDowngradeHelper);
 
       // Assert: dropIndex should be called with only index with version v2 or higher.
       ArgumentCaptor<List<String>> argumentCaptor = ArgumentCaptor.forClass(List.class);
@@ -158,4 +317,4 @@ class TestNineToEightDowngradeHandler {
       assertEquals(new HashSet<>(Arrays.asList("secondary_index_v2")), new HashSet<>(capturedIndexes));
     }
   }
-} 
+}
