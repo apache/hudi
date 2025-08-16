@@ -42,6 +42,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -396,5 +397,109 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     public List<String> getPartitionPathFields() {
       return Arrays.asList(new String[]{partitionField});
     }
+  }
+
+  @Test
+  public void testReadSchemaHash() throws Exception {
+    // Given: Create a parquet file with a specific schema
+    List<String> rowKeys = Arrays.asList("row1", "row2", "row3");
+    String filePath = Paths.get(basePath, "test_schema_hash.parquet").toUri().toString();
+    writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys);
+    
+    StoragePath storagePath = new StoragePath(filePath);
+    
+    // When: Reading schema hash
+    Integer schemaHash = ParquetUtils.readSchemaHash(HoodieTestUtils.getStorage(filePath), storagePath);
+    
+    // Then: Should return a valid hash
+    assertTrue(schemaHash != null, "Schema hash should not be null");
+    assertTrue(schemaHash != 0, "Schema hash should not be zero (default error value)");
+    
+    // Verify consistency - reading same file should return same hash
+    Integer secondRead = ParquetUtils.readSchemaHash(HoodieTestUtils.getStorage(filePath), storagePath);
+    assertEquals(schemaHash, secondRead, "Schema hash should be consistent across reads");
+  }
+
+  @Test
+  public void testReadSchemaHash_DifferentSchemas() throws Exception {
+    // Given: Create two parquet files with different schemas
+    List<String> rowKeys = Arrays.asList("row1", "row2");
+    
+    // File 1 with original schema
+    String filePath1 = Paths.get(basePath, "test_schema1.parquet").toUri().toString();
+    writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath1, rowKeys);
+    
+    // File 2 with extended schema (add a field)
+    String filePath2 = Paths.get(basePath, "test_schema2.parquet").toUri().toString();
+    writeParquetFileWithExtendedSchema(filePath2, rowKeys);
+    
+    // When: Reading schema hashes from both files
+    Integer hash1 = ParquetUtils.readSchemaHash(HoodieTestUtils.getStorage(filePath1), new StoragePath(filePath1));
+    Integer hash2 = ParquetUtils.readSchemaHash(HoodieTestUtils.getStorage(filePath2), new StoragePath(filePath2));
+    
+    // Then: Should have different hashes for different schemas
+    assertTrue(hash1 != null && hash2 != null, "Both schema hashes should be valid");
+    assertTrue(!hash1.equals(hash2), "Different schemas should have different hash codes");
+  }
+
+  @Test
+  public void testReadSchemaHash_NonExistentFile() throws Exception {
+    // Given: Non-existent file path
+    StoragePath nonExistentPath = new StoragePath("/non/existent/file.parquet");
+    
+    // When: Reading schema hash from non-existent file
+    Integer schemaHash = ParquetUtils.readSchemaHash(HoodieTestUtils.getStorage(basePath), nonExistentPath);
+    
+    // Then: Should return 0 (error default value)
+    assertEquals(Integer.valueOf(0), schemaHash, "Non-existent file should return default error value 0");
+  }
+
+  @Test
+  public void testReadSchemaHash_MatchesDirectSchemaRead() throws Exception {
+    // Given: Create a parquet file
+    List<String> rowKeys = Arrays.asList("row1", "row2", "row3");
+    String filePath = Paths.get(basePath, "test_direct_schema.parquet").toUri().toString();
+    writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys);
+    
+    StoragePath storagePath = new StoragePath(filePath);
+    
+    // When: Reading schema hash vs direct schema read
+    Integer schemaHashFromUtils = ParquetUtils.readSchemaHash(HoodieTestUtils.getStorage(filePath), storagePath);
+    MessageType directSchema = parquetUtils.readSchema(HoodieTestUtils.getStorage(filePath), storagePath);
+    Integer directSchemaHash = directSchema.hashCode();
+    
+    // Then: Hash from utility method should match direct schema hash
+    assertEquals(directSchemaHash, schemaHashFromUtils, 
+        "Schema hash from utility should match direct schema.hashCode()");
+  }
+
+  private void writeParquetFileWithExtendedSchema(String filePath, List<String> rowKeys) throws Exception {
+    // Create an extended schema with an additional field
+    Schema extendedSchema = Schema.createRecord("record", "", "", false);
+    List<Schema.Field> fields = new ArrayList<>();
+    fields.add(new Schema.Field("_row_key", Schema.create(Schema.Type.STRING), "", (Object) null));
+    fields.add(new Schema.Field("time", Schema.create(Schema.Type.LONG), "", (Object) null));
+    fields.add(new Schema.Field("number", Schema.create(Schema.Type.LONG), "", (Object) null));
+    fields.add(new Schema.Field("extra_field", createNullableSchema(Schema.Type.STRING), "", JsonProperties.NULL_VALUE)); // Additional field
+    extendedSchema.setFields(fields);
+
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1, BloomFilterTypeCode.SIMPLE.name());
+
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
+        new AvroSchemaConverter().convert(extendedSchema), extendedSchema, Option.of(filter), new Properties());
+
+    ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
+        120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
+
+    for (String rowKey : rowKeys) {
+      GenericRecord record = new GenericData.Record(extendedSchema);
+      record.put("_row_key", rowKey);
+      record.put("time", 1234567L);
+      record.put("number", 12345L);
+      record.put("extra_field", "extra_value"); // Set the extra field
+      writer.write(record);
+      writeSupport.add(rowKey);
+    }
+    writer.close();
   }
 }

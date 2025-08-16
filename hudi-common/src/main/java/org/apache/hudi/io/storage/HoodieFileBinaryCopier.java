@@ -24,7 +24,6 @@ import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Properties;
 
 /**
  * HoodieFileBinaryCopier is a high-performance utility designed for efficient merging of data files at the binary level.
@@ -34,7 +33,7 @@ import java.util.Properties;
  */
 public interface HoodieFileBinaryCopier {
 
-  long binaryCopy(List<StoragePath> inputFilePaths, List<StoragePath> outputFilePath, MessageType writeSchema, Properties props) throws IOException;
+  long binaryCopy(List<StoragePath> inputFilePaths, List<StoragePath> outputFilePath, MessageType writeSchema, boolean schemaEvolutionEnabled) throws IOException;
 
   void close() throws IOException;
 }

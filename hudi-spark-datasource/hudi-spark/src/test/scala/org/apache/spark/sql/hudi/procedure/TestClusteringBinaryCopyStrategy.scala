@@ -47,7 +47,8 @@ class TestClusteringBinaryCopyStrategy extends HoodieSparkProcedureTestBase {
               "hoodie.sql.bulk.insert.enable" -> "true",
               "hoodie.sql.insert.mode" -> "non-strict",
               "hoodie.combine.before.insert" -> "false",
-              "hoodie.parquet.small.file.limit" -> "-1"
+              "hoodie.parquet.small.file.limit" -> "-1",
+              "hoodie.file.stitching.binary.copy.schema.evolution.enable" -> "true"
             )
           case "insert" =>
             Map(
@@ -55,7 +56,8 @@ class TestClusteringBinaryCopyStrategy extends HoodieSparkProcedureTestBase {
               "hoodie.sql.insert.mode" -> "non-strict",
               "hoodie.combine.before.insert" -> "false",
               "spark.hadoop.parquet.avro.write-old-list-structure" -> "false",
-              "hoodie.parquet.small.file.limit" -> "-1"
+              "hoodie.parquet.small.file.limit" -> "-1",
+              "hoodie.file.stitching.binary.copy.schema.evolution.enable" -> "true"
             )
         }
         withSQLConf(conf.toSeq: _*) {

@@ -120,9 +120,16 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   protected MessageType requiredSchema = null;
 
   protected Configuration conf;
+  
+  // Flag to control schema evolution behavior
+  protected Boolean schemaEvolutionEnabled = null;
 
   public HoodieParquetBinaryCopyBase(Configuration conf) {
     this.conf = conf;
+  }
+  
+  public void setSchemaEvolutionEnabled(boolean enabled) {
+    this.schemaEvolutionEnabled = enabled;
   }
 
   protected void initFileWriter(Path outPutFile, CompressionCodecName newCodecName, MessageType schema) {
@@ -190,7 +197,12 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       ColumnDescriptor descriptor = descriptorsMap.get(chunk.getPath());
 
       // resolve the conflict schema between avro parquet write support and spark native parquet write support
-      if (descriptor == null) {
+      // Only attempt legacy conversion if schema evolution is enabled
+      if (schemaEvolutionEnabled == null) {
+        throw new HoodieException("Schema Evolution enabled not set");
+      }
+
+      if (descriptor == null && schemaEvolutionEnabled) {
         String[] path = chunk.getPath().toArray();
         path = Arrays.copyOf(path, path.length);
         if (convertLegacy3LevelArray(path) || convertLegacyMap(path)) {
@@ -261,6 +273,16 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         .stream()
         .filter(c -> !converted.contains(c))
         .collect(Collectors.toList());
+    
+    // If schema evolution is disabled and there are missing columns, throw an exception
+    if (!schemaEvolutionEnabled && !missedColumns.isEmpty()) {
+      String missingColumnsStr = missedColumns.stream()
+          .map(c -> String.join(".", c.getPath()))
+          .collect(Collectors.joining(", "));
+      throw new HoodieException("Schema evolution is disabled but found missing columns in input file: " 
+          + missingColumnsStr + ". All input files must have the same schema when schema evolution is disabled.");
+    }
+    
     for (ColumnDescriptor descriptor : missedColumns) {
       addNullColumn(
           descriptor,
@@ -502,6 +524,12 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       MessageType schema,
       CompressionCodecName newCodecName,
       Binary maskValue) throws IOException {
+
+    // Check if schema evolution is enabled before proceeding with column masking
+    if (schemaEvolutionEnabled == null || !schemaEvolutionEnabled) {
+      throw new HoodieException("Column masking operation is not supported when schema evolution is disabled. "
+          + "Set 'hoodie.clustering.plan.strategy.file.stitching.binary.copy.schema.evolution.enable' to true to enable schema evolution support.");
+    }
 
     long totalChunkValues = chunk.getValueCount();
     ColumnReader cReader = crStore.getColumnReader(descriptor);
