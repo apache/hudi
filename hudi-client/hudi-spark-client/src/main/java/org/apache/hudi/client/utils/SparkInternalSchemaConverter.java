@@ -285,7 +285,9 @@ public class SparkInternalSchemaConverter {
       case BINARY:
         return BinaryType$.MODULE$;
       case DECIMAL:
-        Types.DecimalType decimal = (Types.DecimalType) type;
+      case DECIMAL_BYTES:
+      case DECIMAL_FIXED:
+        Types.DecimalBase decimal = (Types.DecimalBase) type;
         return DecimalType$.MODULE$.apply(decimal.precision(), decimal.scale());
       default:
         throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Spark", type));

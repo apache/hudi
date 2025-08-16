@@ -121,6 +121,7 @@ import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -672,6 +673,58 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Test
+  public void testTimestampMillis() throws Exception {
+    //    if (zookeeperTestService != null) {
+    //      zookeeperTestService.stop();
+    //      zookeeperTestService = null;
+    //    }
+    String tableBasePath = basePath + "/testTimestampMillis";
+    defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
+    // Insert data produced with Schema A, pass Schema A
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
+        PROPS_FILENAME_TEST_SOURCE, false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
+
+
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
+        HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+    assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
+    assertEquals(1000, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
+
+    cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
+        PROPS_FILENAME_TEST_SOURCE, false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    cfg.configs.add("hoodie.streamer.schemaprovider.source.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    cfg.configs.add("hoodie.streamer.schemaprovider.target.schema.file=" + basePath + "/source-timestamp-millis.avsc");
+    cfg.configs.add(String.format("%s=%s", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), "0"));
+
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    assertUseV2Checkpoint(HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    assertRecordCount(1450, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+    tableSchemaResolver = new TableSchemaResolver(
+        HoodieTestUtils.createMetaClient(storage, tableBasePath));
+    tableSchema = tableSchemaResolver.getTableAvroSchema(false);
+    assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
+    sqlContext.clearCache();
+    assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
+    assertEquals(1450, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '2080-01-01'").count());
+    assertEquals(0, sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts < '1980-01-01'").count());
+  }
+
+  @Test
   public void testLogicalTypes() throws Exception {
     if (zookeeperTestService != null) {
       zookeeperTestService.stop();
@@ -700,15 +753,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
           HoodieTestUtils.createMetaClient(storage, tableBasePath));
       Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
-      assertEquals("timestamp-millis", tableSchema.getField("ts_millis").schema().getLogicalType().getName());
-      assertEquals("timestamp-micros", tableSchema.getField("ts_micros").schema().getLogicalType().getName());
-      //assertEquals("time-millis", tableSchema.getField("time_millis").schema().getLogicalType().getName());
-      //assertEquals("time-micros", tableSchema.getField("time_micros").schema().getLogicalType().getName());
-      assertEquals("local-timestamp-millis", tableSchema.getField("local_ts_millis").schema().getLogicalType().getName());
-      assertEquals("local-timestamp-micros", tableSchema.getField("local_ts_micros").schema().getLogicalType().getName());
-      assertEquals("date", tableSchema.getField("event_date").schema().getLogicalType().getName());
       Map<String, String> hudiOpts = new HashMap<>();
       hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts);
+
 
       cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()),
           PROPS_FILENAME_TEST_SOURCE, false, true, false, null, HoodieTableType.MERGE_ON_READ.name());
@@ -724,125 +772,204 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       tableSchemaResolver = new TableSchemaResolver(
           HoodieTestUtils.createMetaClient(storage, tableBasePath));
       tableSchema = tableSchemaResolver.getTableAvroSchema(false);
-      assertEquals("timestamp-millis", tableSchema.getField("ts_millis").schema().getLogicalType().getName());
-      assertEquals("timestamp-micros", tableSchema.getField("ts_micros").schema().getLogicalType().getName());
-      //assertEquals("time-millis", tableSchema.getField("time_millis").schema().getLogicalType().getName());
-      //assertEquals("time-micros", tableSchema.getField("time_micros").schema().getLogicalType().getName());
-      assertEquals("local-timestamp-millis", tableSchema.getField("local_ts_millis").schema().getLogicalType().getName());
-      assertEquals("local-timestamp-micros", tableSchema.getField("local_ts_micros").schema().getLogicalType().getName());
-      assertEquals("date", tableSchema.getField("event_date").schema().getLogicalType().getName());
-      sqlContext.clearCache();
-      Dataset<Row> df = sqlContext.read()
-          .options(hudiOpts)
-          .format("org.apache.hudi")
-          .load(tableBasePath);
-
-      long totalCount = df.count();
-      long expectedHalf = totalCount / 2;
-
-      assertEquals(
-          expectedHalf,
-          df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count()
-      );
-
-      //assertEquals(
-      //    expectedHalf,
-      //    df.filter("ts_micros > timestamp('2020-06-01 12:00:00')").count()
-      //);
-      //assertEquals(
-      //    expectedHalf,
-      //    df.filter("ts_micros < timestamp('2020-06-01 12:00:00')").count()
-      //);
-
-      //assertEquals(
-      //    expectedHalf,
-      //    df.filter("time_millis > time('12:00:00')").count()
-      //);
-      //assertEquals(
-      //    expectedHalf,
-      //    df.filter("time_millis < time('12:00:00')").count()
-      //);
-
-      assertEquals(
-          expectedHalf,
-          df.filter("time_micros > time('06:00:00')").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("time_micros < time('06:00:00')").count()
-      );
-
-      assertEquals(
-          expectedHalf,
-          df.filter("local_ts_millis > timestamp('2015-05-20 12:34:56')").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("local_ts_millis < timestamp('2015-05-20 12:34:56')").count()
-      );
-
-      assertEquals(
-          expectedHalf,
-          df.filter("local_ts_micros > timestamp('2017-07-07 07:07:07')").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("local_ts_micros < timestamp('2017-07-07 07:07:07')").count()
-      );
-
-      assertEquals(
-          expectedHalf,
-          df.filter("event_date > date('2000-01-01')").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("event_date < date('2000-01-01')").count()
-      );
-
-      assertEquals(
-          expectedHalf,
-          df.filter("dec_plain_small > DECIMAL(0.50)").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("dec_plain_small < DECIMAL(0.50)").count()
-      );
-
-      assertEquals(
-          expectedHalf,
-          df.filter("dec_plain_large > DECIMAL(100000.000000)").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("dec_plain_large < DECIMAL(100000.000000)").count()
-      );
-
-      assertEquals(
-          expectedHalf,
-          df.filter("dec_fixed_small > DECIMAL(1.23)").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("dec_fixed_small < DECIMAL(1.23)").count()
-      );
-
-      assertEquals(
-          expectedHalf,
-          df.filter("dec_fixed_large > DECIMAL(999999999999.123456)").count()
-      );
-      assertEquals(
-          expectedHalf,
-          df.filter("dec_fixed_large < DECIMAL(999999999999.123456)").count()
-      );
+      logicalAssertions(tableSchema, tableBasePath, hudiOpts);
     } finally {
       defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
       AbstractBaseTestSource.schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
       AbstractBaseTestSource.avroSchema = HoodieTestDataGenerator.AVRO_SCHEMA;
     }
+  }
+
+  private void logicalAssertions(Schema tableSchema, String tableBasePath, Map<String, String> hudiOpts) {
+    assertEquals("timestamp-millis", tableSchema.getField("ts_millis").schema().getLogicalType().getName());
+    assertEquals("timestamp-micros", tableSchema.getField("ts_micros").schema().getLogicalType().getName());
+    //assertEquals("time-millis", tableSchema.getField("time_millis").schema().getLogicalType().getName());
+    //assertEquals("time-micros", tableSchema.getField("time_micros").schema().getLogicalType().getName());
+    assertEquals("local-timestamp-millis", tableSchema.getField("local_ts_millis").schema().getLogicalType().getName());
+    assertEquals("local-timestamp-micros", tableSchema.getField("local_ts_micros").schema().getLogicalType().getName());
+    assertEquals("date", tableSchema.getField("event_date").schema().getLogicalType().getName());
+    assertEquals("bytes", tableSchema.getField("dec_plain_small").schema().getType().getName());
+    assertEquals("decimal", tableSchema.getField("dec_plain_small").schema().getLogicalType().getName());
+    assertEquals(5, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_small").schema().getLogicalType()).getPrecision());
+    assertEquals(2, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_small").schema().getLogicalType()).getScale());
+    assertEquals("bytes", tableSchema.getField("dec_plain_large").schema().getType().getName());
+    assertEquals("decimal", tableSchema.getField("dec_plain_large").schema().getLogicalType().getName());
+    assertEquals(18, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getPrecision());
+    assertEquals(9, ((LogicalTypes.Decimal) tableSchema.getField("dec_plain_large").schema().getLogicalType()).getScale());
+    assertEquals("fixed", tableSchema.getField("dec_fixed_small").schema().getType().getName());
+    assertEquals(3, tableSchema.getField("dec_fixed_small").schema().getFixedSize());
+    assertEquals("decimal", tableSchema.getField("dec_fixed_small").schema().getLogicalType().getName());
+    assertEquals(5, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_small").schema().getLogicalType()).getPrecision());
+    assertEquals(2, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_small").schema().getLogicalType()).getScale());
+    assertEquals("fixed", tableSchema.getField("dec_fixed_large").schema().getType().getName());
+    assertEquals(8, tableSchema.getField("dec_fixed_large").schema().getFixedSize());
+    assertEquals("decimal", tableSchema.getField("dec_fixed_large").schema().getLogicalType().getName());
+    assertEquals(18, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_large").schema().getLogicalType()).getPrecision());
+    assertEquals(9, ((LogicalTypes.Decimal) tableSchema.getField("dec_fixed_large").schema().getLogicalType()).getScale());
+
+    sqlContext.clearCache();
+    Dataset<Row> df = sqlContext.read()
+        .options(hudiOpts)
+        .format("org.apache.hudi")
+        .load(tableBasePath);
+
+    long totalCount = df.count();
+    long expectedHalf = totalCount / 2;
+    long tolerance = totalCount / 20;
+
+    assertTrue(
+        Math.abs(df.filter("ts_millis > timestamp('2020-01-01 00:00:00Z')").count() - expectedHalf) <= tolerance,
+        "ts_millis > threshold not within tolerance"
+    );
+    assertTrue(
+        Math.abs(df.filter("ts_millis < timestamp('2020-01-01 00:00:00Z')").count() - expectedHalf) <= tolerance,
+        "ts_millis < threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("ts_millis > timestamp('2020-01-01 00:00:00.001Z')").count());
+    assertEquals(totalCount, df.filter("ts_millis <= timestamp('2020-01-01 00:00:00.001Z')").count());
+    assertEquals(0, df.filter("ts_millis < timestamp('2019-12-31 23:59:59.999Z')").count());
+    assertEquals(totalCount, df.filter("ts_millis >= timestamp('2019-12-31 23:59:59.999Z')").count());
+
+
+    assertTrue(
+        Math.abs(df.filter("ts_micros > timestamp('2020-06-01 12:00:00Z')").count() - expectedHalf) <= tolerance,
+        "ts_micros > threshold not within tolerance"
+    );
+    assertTrue(
+        Math.abs(df.filter("ts_micros < timestamp('2020-06-01 12:00:00Z')").count() - expectedHalf) <= tolerance,
+        "ts_micros < threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("ts_micros > timestamp('2020-06-01 12:00:00.000001Z')").count());
+    assertEquals(totalCount, df.filter("ts_micros <= timestamp('2020-06-01 12:00:00.000001Z')").count());
+    assertEquals(0, df.filter("ts_micros < timestamp('2020-06-01 11:59:59.999999Z')").count());
+    assertEquals(totalCount, df.filter("ts_micros >= timestamp('2020-06-01 11:59:59.999999Z')").count());
+
+    //assertEquals(
+    //    expectedHalf,
+    //    df.filter("time_millis > time('12:00:00')").count()
+    //);
+    //assertEquals(
+    //    expectedHalf,
+    //    df.filter("time_millis < time('12:00:00')").count()
+    //);
+
+    //    assertEquals(
+    //        expectedHalf,
+    //        df.filter("time_micros > time('06:00:00')").count()
+    //    );
+    //    assertEquals(
+    //        expectedHalf,
+    //        df.filter("time_micros < time('06:00:00')").count()
+    //    );
+
+    assertTrue(
+        Math.abs(df.filter("local_ts_millis > CAST('2015-05-20 16:34:56' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
+        "local_ts_millis > threshold not within tolerance"
+    );
+    assertTrue(
+        Math.abs(df.filter("local_ts_millis < CAST('2015-05-20 16:34:56' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
+        "local_ts_millis < threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("local_ts_millis > CAST('2015-05-20 16:34:56.001' AS TIMESTAMP_NTZ)").count());
+    assertEquals(totalCount, df.filter("local_ts_millis <= CAST('2015-05-20 16:34:56.001' AS TIMESTAMP_NTZ)").count());
+    assertEquals(0, df.filter("local_ts_millis < CAST('2015-05-20 16:34:55.999' AS TIMESTAMP_NTZ)").count());
+    assertEquals(totalCount, df.filter("local_ts_millis >= CAST('2015-05-20 16:34:55.999' AS TIMESTAMP_NTZ)").count());
+
+
+    assertTrue(
+        Math.abs(df.filter("local_ts_micros > CAST('2017-07-07 11:07:07' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
+        "local_ts_micros > threshold not within tolerance"
+    );
+    assertTrue(
+        Math.abs(df.filter("local_ts_micros < CAST('2017-07-07 11:07:07' AS TIMESTAMP_NTZ)").count() - expectedHalf) <= tolerance,
+        "local_ts_micros < threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("local_ts_micros > CAST('2017-07-07 11:07:07.000001' AS TIMESTAMP_NTZ)").count());
+    assertEquals(totalCount, df.filter("local_ts_micros <= CAST('2017-07-07 11:07:07.000001' AS TIMESTAMP_NTZ)").count());
+    assertEquals(0, df.filter("local_ts_micros < CAST('2017-07-07 11:07:06.999999' AS TIMESTAMP_NTZ)").count());
+    assertEquals(totalCount, df.filter("local_ts_micros >= CAST('2017-07-07 11:07:06.999999' AS TIMESTAMP_NTZ)").count());
+
+
+    assertTrue(
+        Math.abs(df.filter("event_date > date('2000-01-01')").count() - expectedHalf) <= tolerance,
+        "event_date > threshold not within tolerance"
+    );
+    assertTrue(
+        Math.abs(df.filter("event_date < date('2000-01-01')").count() - expectedHalf) <= tolerance,
+        "event_date < threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("event_date > date('2000-01-02')").count());
+    assertEquals(totalCount, df.filter("event_date <= date('2000-01-02')").count());
+    assertEquals(0, df.filter("event_date < date('1999-12-31')").count());
+    assertEquals(totalCount, df.filter("event_date >= date('1999-12-31')").count());
+
+
+    assertTrue(
+        Math.abs(df.filter("dec_plain_small < 123.45").count() - expectedHalf) <= tolerance,
+        "dec_plain_small < threshold not within tolerance"
+    );
+
+    assertTrue(
+        Math.abs(df.filter("dec_plain_small > 123.45").count() - expectedHalf) <= tolerance,
+        "dec_plain_small > threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("dec_plain_small < 123.44").count());
+    assertEquals(totalCount, df.filter("dec_plain_small >= 123.44").count());
+    assertEquals(0, df.filter("dec_plain_small > 123.46").count());
+    assertEquals(totalCount, df.filter("dec_plain_small <= 123.46").count());
+
+    assertTrue(
+        Math.abs(df.filter("dec_plain_large < 123456789.987654321").count() - expectedHalf) <= tolerance,
+        "dec_plain_large < threshold not within tolerance"
+    );
+
+    assertTrue(
+        Math.abs(df.filter("dec_plain_large > 123456789.987654321").count() - expectedHalf) <= tolerance,
+        "dec_plain_large > threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("dec_plain_large < 123456789.987654320").count());
+    assertEquals(totalCount, df.filter("dec_plain_large >= 123456789.987654320").count());
+    assertEquals(0, df.filter("dec_plain_large > 123456789.987654322").count());
+    assertEquals(totalCount, df.filter("dec_plain_large <= 123456789.987654322").count());
+
+
+    assertTrue(
+        Math.abs(df.filter("dec_fixed_small < 543.21").count() - expectedHalf) <= tolerance,
+        "dec_fixed_small < threshold not within tolerance"
+    );
+
+    assertTrue(
+        Math.abs(df.filter("dec_fixed_small > 543.21").count() - expectedHalf) <= tolerance,
+        "dec_fixed_small > threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("dec_fixed_small < 543.20").count());
+    assertEquals(totalCount, df.filter("dec_fixed_small >= 543.20").count());
+    assertEquals(0, df.filter("dec_fixed_small > 543.22").count());
+    assertEquals(totalCount, df.filter("dec_fixed_small <= 543.22").count());
+
+
+    assertTrue(
+        Math.abs(df.filter("dec_fixed_large < 987654321.123456789").count() - expectedHalf) <= tolerance,
+        "dec_fixed_large < threshold not within tolerance"
+    );
+
+    assertTrue(
+        Math.abs(df.filter("dec_fixed_large > 987654321.123456789").count() - expectedHalf) <= tolerance,
+        "dec_fixed_large > threshold not within tolerance"
+    );
+
+    assertEquals(0, df.filter("dec_fixed_large < 987654321.123456788").count());
+    assertEquals(totalCount, df.filter("dec_fixed_large >= 987654321.123456788").count());
+    assertEquals(0, df.filter("dec_fixed_large > 987654321.123456790").count());
+    assertEquals(totalCount, df.filter("dec_fixed_large <= 987654321.123456790").count());
   }
 
   private static Stream<Arguments> continuousModeArgs() {

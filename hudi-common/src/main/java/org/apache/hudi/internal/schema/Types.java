@@ -299,18 +299,12 @@ public class Types {
     }
   }
 
-  /**
-   * Decimal primitive type.
-   */
-  public static class DecimalType extends PrimitiveType {
-    public static DecimalType get(int precision, int scale) {
-      return new DecimalType(precision, scale);
-    }
+  public abstract static class DecimalBase extends PrimitiveType {
 
-    private final int scale;
-    private final int precision;
+    protected final int scale;
+    protected final int precision;
 
-    private DecimalType(int precision, int scale) {
+    protected DecimalBase(int precision, int scale) {
       this.scale = scale;
       this.precision = precision;
     }
@@ -325,7 +319,7 @@ public class Types {
         return (precision - scale) >= (dt.precision - dt.scale) && scale > dt.scale;
       }
       if (other instanceof IntType) {
-        return isWiderThan(get(10, 0));
+        return (precision - scale) >= 10 && scale > 0;
       }
       return false;
     }
@@ -340,7 +334,7 @@ public class Types {
         return (precision - scale) <= (dt.precision - dt.scale) && scale <= dt.scale;
       }
       if (other instanceof IntType) {
-        return isTighterThan(get(10, 0));
+        return (precision - scale) <= 10 && scale <= 0;
       }
       return false;
     }
@@ -354,24 +348,14 @@ public class Types {
     }
 
     @Override
-    public TypeID typeId() {
-      return TypeID.DECIMAL;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("decimal(%d, %d)", precision, scale);
-    }
-
-    @Override
     public boolean equals(Object o) {
       if (this == o) {
         return true;
-      } else if (!(o instanceof DecimalType)) {
+      } else if (!(o instanceof DecimalBase)) {
         return false;
       }
 
-      DecimalType that = (DecimalType) o;
+      DecimalBase that = (DecimalBase) o;
       if (scale != that.scale) {
         return false;
       }
@@ -380,7 +364,98 @@ public class Types {
 
     @Override
     public int hashCode() {
-      return Objects.hash(DecimalType.class, scale, precision);
+      return Objects.hash(this.getClass(), scale, precision);
+    }
+  }
+
+  /**
+   * Decimal primitive type.
+   */
+  public static class DecimalType extends DecimalBase {
+    public static DecimalType get(int precision, int scale) {
+      return new DecimalType(precision, scale);
+    }
+
+    private DecimalType(int precision, int scale) {
+      super(precision, scale);
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal(%d, %d)", precision, scale);
+    }
+  }
+
+  public static class DecimalTypeBytes extends DecimalBase {
+    public static DecimalTypeBytes get(int precision, int scale) {
+      return new DecimalTypeBytes(precision, scale);
+    }
+
+    private DecimalTypeBytes(int precision, int scale) {
+      super(precision, scale);
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL_BYTES;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal_bytes(%d, %d)", precision, scale);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (super.equals(o)) {
+        return o instanceof DecimalTypeBytes;
+      }
+      return false;
+    }
+  }
+
+  public static class DecimalTypeFixed extends DecimalBase {
+    public static DecimalTypeFixed get(int precision, int scale, int size) {
+      return new DecimalTypeFixed(precision, scale, size);
+    }
+
+    private final int size;
+
+    public int getFixedSize() {
+      return size;
+    }
+
+    private DecimalTypeFixed(int precision, int scale, int size) {
+      super(precision, scale);
+      this.size = size;
+    }
+
+    @Override
+    public TypeID typeId() {
+      return TypeID.DECIMAL_FIXED;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("decimal_fixed(%d, %d)[%d]", precision, scale, size);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(DecimalTypeFixed.class, scale, precision, size);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (super.equals(o)) {
+        return o instanceof DecimalTypeFixed && ((DecimalTypeFixed) o).size == size;
+      }
+      return false;
     }
   }
 

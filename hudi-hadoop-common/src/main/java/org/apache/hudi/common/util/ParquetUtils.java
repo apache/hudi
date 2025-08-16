@@ -43,7 +43,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.avro.HoodieAvroSchemaConverter;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -52,9 +52,7 @@ import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.io.api.Binary;
-import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
 import org.slf4j.Logger;
@@ -66,6 +64,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -82,6 +86,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_BLOCK_SIZE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE_SIZE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_PAGE_SIZE;
+import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
@@ -253,7 +258,7 @@ public class ParquetUtils extends FileFormatUtils {
   @Override
   public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
     MessageType parquetSchema = readSchema(storage, filePath);
-    return new AvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
+    return new HoodieAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
   }
 
   @Override
@@ -272,14 +277,15 @@ public class ParquetUtils extends FileFormatUtils {
                     .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
                     .map(columnChunkMetaData -> {
                       Statistics stats = columnChunkMetaData.getStatistics();
+                      HoodieColumnRangeMetadata.ValueMetadata valueMetadata = HoodieColumnRangeMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType());
                       return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                           filePath,
                           columnChunkMetaData.getPath().toDotString(),
                           convertToNativeJavaType(
-                              columnChunkMetaData.getPrimitiveType(),
+                              valueMetadata,
                               stats.genericGetMin()),
                           convertToNativeJavaType(
-                              columnChunkMetaData.getPrimitiveType(),
+                              valueMetadata,
                               stats.genericGetMax()),
                           // NOTE: In case when column contains only nulls Parquet won't be creating
                           //       stats for it instead returning stubbed (empty) object. In that case
@@ -288,7 +294,7 @@ public class ParquetUtils extends FileFormatUtils {
                           columnChunkMetaData.getValueCount(),
                           columnChunkMetaData.getTotalSize(),
                           columnChunkMetaData.getTotalUncompressedSize(),
-                          HoodieColumnRangeMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType()));
+                          valueMetadata);
                     })
         );
 
@@ -459,39 +465,47 @@ public class ParquetUtils extends FileFormatUtils {
         .reduce(HoodieColumnRangeMetadata::merge).get();
   }
 
-  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val) {
+  private static Comparable<?> convertToNativeJavaType(HoodieColumnRangeMetadata.ValueMetadata valueMetadata, Comparable<?> val) {
     if (val == null) {
       return null;
     }
 
-    if (primitiveType.getOriginalType() == OriginalType.DECIMAL) {
-      return extractDecimal(val, primitiveType.getDecimalMetadata());
-    } else if (primitiveType.getOriginalType() == OriginalType.DATE) {
-      // NOTE: This is a workaround to address race-condition in using
-      //       {@code SimpleDataFormat} concurrently (w/in {@code DateStringifier})
-      // TODO cleanup after Parquet upgrade to 1.12
-      synchronized (primitiveType.stringifier()) {
-        // Date logical type is implemented as a signed INT32
-        // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
-        return java.sql.Date.valueOf(
-            primitiveType.stringifier().stringify((Integer) val)
-        );
-      }
-    } else if (primitiveType.getOriginalType() == OriginalType.UTF8) {
-      // NOTE: UTF8 type designates a byte array that should be interpreted as a
-      // UTF-8 encoded character string
-      // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
-      return ((Binary) val).toStringUsingUTF8();
-    } else if (primitiveType.getPrimitiveTypeName() == PrimitiveType.PrimitiveTypeName.BINARY) {
-      // NOTE: `getBytes` access makes a copy of the underlying byte buffer
-      return ((Binary) val).toByteBuffer();
-    }
+    switch (valueMetadata.getValueType()) {
+      case BOOLEAN:
+      case DOUBLE:
+      case FLOAT:
+      case LONG:
+      case INT:
+        return val;
+      case TIMESTAMP_MILLIS:
+        return Instant.ofEpochMilli((Long) val);
+      case TIMESTAMP_MICROS:
+        return DateTimeUtils.microsToInstant((Long) val);
+      case TIMESTAMP_NANOS:
+        return DateTimeUtils.nanosToInstant((Long) val);
+      case LOCAL_TIMESTAMP_MILLIS:
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) val), ZoneOffset.UTC);
+      case LOCAL_TIMESTAMP_MICROS:
+        return LocalDateTime.ofInstant(microsToInstant((Long) val), ZoneOffset.UTC);
+      case LOCAL_TIMESTAMP_NANOS:
+        return LocalDateTime.ofInstant(DateTimeUtils.nanosToInstant((Long) val), ZoneOffset.UTC);
+      case DATE:
+        return java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) val));
+      case DECIMAL:
+        HoodieColumnRangeMetadata.DecimalMetadata decimalMetadata = (HoodieColumnRangeMetadata.DecimalMetadata) valueMetadata;
+        return extractDecimal(val, decimalMetadata);
+      case STRING:
+        return ((Binary) val).toStringUsingUTF8();
+      case BYTES:
+        return ((Binary) val).toByteBuffer();
+      default:
+        throw new UnsupportedOperationException("Unsupported type " + valueMetadata.getValueType());
 
-    return val;
+    }
   }
 
   @Nonnull
-  private static BigDecimal extractDecimal(Object val, DecimalMetadata decimalMetadata) {
+  private static BigDecimal extractDecimal(Object val, HoodieColumnRangeMetadata.DecimalMetadata decimalMetadata) {
     // In Parquet, Decimal could be represented as either of
     //    1. INT32 (for 1 <= precision <= 9)
     //    2. INT64 (for 1 <= precision <= 18)
@@ -499,15 +513,17 @@ public class ParquetUtils extends FileFormatUtils {
     //    4. BINARY (precision is not limited)
     // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#DECIMAL
     int scale = decimalMetadata.getScale();
+    int precision = decimalMetadata.getPrecision();
     if (val == null) {
       return null;
     } else if (val instanceof Integer) {
-      return BigDecimal.valueOf((Integer) val, scale);
+      return BigDecimal.valueOf((Integer) val, scale).round(new MathContext(precision, RoundingMode.HALF_UP));
     } else if (val instanceof Long) {
-      return BigDecimal.valueOf((Long) val, scale);
+      return BigDecimal.valueOf((Long) val, scale).round(new MathContext(precision, RoundingMode.HALF_UP));
     } else if (val instanceof Binary) {
       // NOTE: Unscaled number is stored in BE format (most significant byte is 0th)
-      return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale);
+      return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale,
+          new MathContext(precision, RoundingMode.HALF_UP));
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
     }

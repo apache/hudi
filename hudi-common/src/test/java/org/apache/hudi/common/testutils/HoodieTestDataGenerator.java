@@ -160,9 +160,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
           + "{\"name\":\"local_ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}},"
           + "{\"name\":\"event_date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
           + "{\"name\":\"dec_plain_small\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
-          + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":18,\"scale\":6}},"
-          + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":4,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
-          + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":6}},";
+          + "{\"name\":\"dec_plain_large\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},"
+          + "{\"name\":\"dec_fixed_small\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedSmall\",\"size\":3,\"logicalType\":\"decimal\",\"precision\":5,\"scale\":2}},"
+          + "{\"name\":\"dec_fixed_large\",\"type\":{\"type\":\"fixed\",\"name\":\"decFixedLarge\",\"size\":8,\"logicalType\":\"decimal\",\"precision\":18,\"scale\":9}},";
 
   public static final String EXTRA_COL_SCHEMA1 = "{\"name\": \"extra_column1\", \"type\": [\"null\", \"string\"], \"default\": null },";
   public static final String EXTRA_COL_SCHEMA2 = "{\"name\": \"extra_column2\", \"type\": [\"null\", \"string\"], \"default\": null},";
@@ -666,11 +666,35 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     rec.put("event_date", above ? eventDateBase + 1 : eventDateBase - 1);
 
 
-    rec.put("dec_plain_small", getNonzeroEncodedBigDecimal(rand, 2, 5));
-    rec.put("dec_plain_large", getNonzeroEncodedBigDecimal(rand, 6, 18));
+    // -------------------
+    // Decimal thresholds
+    // -------------------
+    BigDecimal decPlainSmallThreshold = new BigDecimal("123.45"); // precision=5, scale=2
+    BigDecimal decPlainLargeThreshold = new BigDecimal("123456789.987654321"); // precision=18, scale=9
 
-    rec.put("dec_fixed_small", getNonzeroEncodedBigDecimal(rand, 2, 5));
-    rec.put("dec_fixed_large", getNonzeroEncodedBigDecimal(rand, 6, 18));
+    BigDecimal decFixedSmallThreshold = new BigDecimal("543.21"); // precision=5, scale=2
+    BigDecimal decFixedLargeThreshold = new BigDecimal("987654321.123456789"); // precision=18, scale=9
+
+    // Increment for just-above/below threshold = smallest possible unit for that scale
+    BigDecimal incSmallScale2 = new BigDecimal("0.01");
+    BigDecimal incLargeScale9 = new BigDecimal("0.000000001");
+
+    // Assign thresholded decimals
+    rec.put("dec_plain_small", Base64.getEncoder().encodeToString((above
+        ? decPlainSmallThreshold.add(incSmallScale2)
+        : decPlainSmallThreshold.subtract(incSmallScale2)).unscaledValue().toByteArray()));
+
+    rec.put("dec_plain_large", Base64.getEncoder().encodeToString((above
+        ? decPlainLargeThreshold.add(incLargeScale9)
+        : decPlainLargeThreshold.subtract(incLargeScale9)).unscaledValue().toByteArray()));
+
+    rec.put("dec_fixed_small", Base64.getEncoder().encodeToString((above
+        ? decFixedSmallThreshold.add(incSmallScale2)
+        : decFixedSmallThreshold.subtract(incSmallScale2)).unscaledValue().toByteArray()));
+
+    rec.put("dec_fixed_large", Base64.getEncoder().encodeToString((above
+        ? decFixedLargeThreshold.add(incLargeScale9)
+        : decFixedLargeThreshold.subtract(incLargeScale9)).unscaledValue().toByteArray()));
 
     generateTripSuffixValues(rec, isDeleteRecord);
     return rec;

@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.ColumnStatsIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
+import org.apache.hudi.avro.HoodieAvroUtils.convertBytesToBigDecimal
 import org.apache.hudi.avro.model._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
@@ -473,7 +474,31 @@ object ColumnStatsIndexSupport {
       // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
       //       manually encoding corresponding values as int and long w/in the Column Stats Index and
       //       here we have to decode those back into corresponding logical representation.
-      case TimestampType => DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+      case TimestampType =>
+        if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.NONE)) {
+          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIME_MICROS)) {
+          // TODO: not sure what type it's supposed to be after looking at avro serde
+          value
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MILLIS)) {
+          DateTimeUtils.toJavaTimestamp(DateTimeUtils.millisToMicros(value.asInstanceOf[Long]))
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MICROS)) {
+          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
+
+      case TimestampNTZType =>
+        if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MILLIS)) {
+          // might need to do something for local as well
+          DateTimeUtils.microsToLocalDateTime(DateTimeUtils.millisToMicros(value.asInstanceOf[Long]))
+        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MICROS)) {
+          // todo fix local issue if needed
+          DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long])
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
+
       case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
       // Standard types
       case StringType =>
@@ -508,28 +533,7 @@ object ColumnStatsIndexSupport {
         } else {
           throw new UnsupportedOperationException(s"Cannot deserialize value for DoubleType: unexpected type ${valueMetadata.getValueType.name()}")
         }
-      case LongType =>
-        if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.NONE)
-          || valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.LONG)) {
-          value
-        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIME_MICROS)) {
-          // TODO: not sure what type it's supposed to be after looking at avro serde
-          value
-        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MILLIS)) {
-          // TODO fix potential overflow
-          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long] * 1000)
-        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MICROS)) {
-          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
-        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MILLIS)) {
-          // TODO fix potential overflow
-          // might need to do something for local as well
-          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long] * 1000)
-        } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MICROS)) {
-          // todo fix local issue if needed
-          DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
-        } else {
-          throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
-        }
+      case LongType => value
 
       case IntegerType => value
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
@@ -539,8 +543,15 @@ object ColumnStatsIndexSupport {
       case dt: DecimalType =>
         value match {
           case buffer: ByteBuffer =>
-            val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
-            decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.DECIMAL)) {
+              val decimalMetadata = valueMetadata.asInstanceOf[HoodieColumnRangeMetadata.DecimalMetadata]
+              convertBytesToBigDecimal(buffer.array(), decimalMetadata.getPrecision, decimalMetadata.getScale)
+            } else if (valueMetadata.getValueType.equals(HoodieColumnRangeMetadata.ValueType.NONE)) {
+              val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
+              decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
+            } else {
+              throw new UnsupportedOperationException(s"Cannot deserialize value for DecimalType: unexpected type ${valueMetadata.getValueType.name()}")
+            }
           case bd: BigDecimal =>
             // Scala BigDecimal: convert to java.math.BigDecimal and enforce the scale
             bd.bigDecimal.setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)

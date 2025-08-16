@@ -327,6 +327,8 @@ public class SchemaEvolutionContext {
       case FIXED:
       case BINARY:
       case DECIMAL:
+      case DECIMAL_BYTES:
+      case DECIMAL_FIXED:
         return typeInfo;
       case TIME:
       case TIME_MILLIS:

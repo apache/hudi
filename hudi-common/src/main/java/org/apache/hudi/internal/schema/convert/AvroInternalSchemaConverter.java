@@ -338,10 +338,16 @@ public class AvroInternalSchemaConverter {
     if (logical != null) {
       String name = logical.getName();
       if (logical instanceof LogicalTypes.Decimal) {
-        return Types.DecimalType.get(
-                ((LogicalTypes.Decimal) logical).getPrecision(),
-                ((LogicalTypes.Decimal) logical).getScale());
-
+        if (primitive.getType() == Schema.Type.FIXED) {
+          return Types.DecimalTypeFixed.get(((LogicalTypes.Decimal) logical).getPrecision(),
+                  ((LogicalTypes.Decimal) logical).getScale(), primitive.getFixedSize());
+        } else if (primitive.getType() == Schema.Type.BYTES) {
+          return Types.DecimalTypeBytes.get(
+              ((LogicalTypes.Decimal) logical).getPrecision(),
+              ((LogicalTypes.Decimal) logical).getScale());
+        } else {
+          throw new IllegalArgumentException("Unsupported primitive type for Decimal: " + primitive.getType().getName());
+        }
       } else if (logical instanceof LogicalTypes.Date) {
         return Types.DateType.get();
       } else if (logical instanceof LogicalTypes.TimeMillis) {
@@ -590,6 +596,23 @@ public class AvroInternalSchemaConverter {
             null, null, computeMinBytesForPrecision(decimal.precision()));
         return LogicalTypes.decimal(decimal.precision(), decimal.scale())
             .addToSchema(fixedSchema);
+      }
+
+      case DECIMAL_FIXED: {
+        Types.DecimalTypeFixed decimal = (Types.DecimalTypeFixed) primitive;
+        // NOTE: All schemas corresponding to Avro's type [[FIXED]] are generated
+        //       with the "fixed" name to stay compatible w/ [[SchemaConverters]]
+        String name = recordName + AVRO_NAME_DELIMITER + "fixed";
+        Schema fixedSchema = Schema.createFixed(name,
+            null, null, decimal.getFixedSize());
+        return LogicalTypes.decimal(decimal.precision(), decimal.scale())
+            .addToSchema(fixedSchema);
+      }
+
+      case DECIMAL_BYTES: {
+        Types.DecimalTypeBytes decimal = (Types.DecimalTypeBytes) primitive;
+        return LogicalTypes.decimal(decimal.precision(), decimal.scale())
+            .addToSchema(Schema.create(Schema.Type.BYTES));
       }
 
       default:

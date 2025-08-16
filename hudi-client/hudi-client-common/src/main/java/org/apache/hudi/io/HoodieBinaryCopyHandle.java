@@ -34,7 +34,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.avro.HoodieAvroSchemaConverter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
@@ -74,7 +74,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
     this.inputFiles = inputFilePaths;
     this.conf = hoodieTable.getStorageConf().unwrapAs(Configuration.class);
-    this.writeScheMessageType = new AvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
+    this.writeScheMessageType = new HoodieAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
     HoodieFileMetadataMerger fileMetadataMerger = new HoodieFileMetadataMerger();
     this.path = makeNewPath(partitionPath);
     writeStatus.setFileId(fileId);

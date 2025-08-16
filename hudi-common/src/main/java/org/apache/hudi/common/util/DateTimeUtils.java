@@ -92,6 +92,26 @@ public class DateTimeUtils {
     }
   }
 
+  public static final long MICROS_PER_MILLIS = 1000L;
+
+  /**
+   * Converts the timestamp to milliseconds since epoch. In Spark timestamp values have microseconds
+   * precision, so this conversion is lossy.
+   */
+  public static Long microsToMillis(Long micros) {
+    // When the timestamp is negative i.e before 1970, we need to adjust the milliseconds portion.
+    // Example - 1965-01-01 10:11:12.123456 is represented as (-157700927876544) in micro precision.
+    // In millis precision the above needs to be represented as (-157700927877).
+    return Math.floorDiv(micros, MICROS_PER_MILLIS);
+  }
+
+  /**
+   * Converts milliseconds since the epoch to microseconds.
+   */
+  public static Long millisToMicros(Long millis) {
+    return Math.multiplyExact(millis, MICROS_PER_MILLIS);
+  }
+
   /**
    * Parse input String to a {@link java.time.Instant}.
    *

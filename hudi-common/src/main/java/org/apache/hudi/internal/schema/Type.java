@@ -65,6 +65,8 @@ public interface Type extends Serializable {
     TIMESTAMP(Long.class),
     DECIMAL(BigDecimal.class),
     UUID(UUID.class),
+    DECIMAL_BYTES(BigDecimal.class),
+    DECIMAL_FIXED(BigDecimal.class),
     TIME_MILLIS(Integer.class),
     TIMESTAMP_MILLIS(Long.class),
     LOCAL_TIMESTAMP_MILLIS(Long.class),
@@ -112,6 +114,8 @@ public interface Type extends Serializable {
       case FLOAT:
         return Float.parseFloat(partitionValue);
       case DECIMAL:
+      case DECIMAL_BYTES:
+      case DECIMAL_FIXED:
         return new BigDecimal(partitionValue);
       case DOUBLE:
         return Double.parseDouble(partitionValue);

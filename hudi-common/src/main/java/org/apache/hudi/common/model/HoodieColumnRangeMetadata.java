@@ -137,13 +137,13 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   }
 
   // Helper method to validate both min and max values
-  private static void validateMinMaxTypes(Object minValue, Object maxValue, Class<?> expectedType) {
+  private static void validateMinMaxTypes(Object minValue, Object maxValue, Class<?> expectedType) throws IllegalArgumentException {
     validateValueType(minValue, expectedType, "Min value");
     validateValueType(maxValue, expectedType, "Max value");
   }
 
   // Helper method to validate value types
-  private static void validateValueType(Object value, Class<?> expectedType, String valueName) {
+  private static void validateValueType(Object value, Class<?> expectedType, String valueName) throws IllegalArgumentException {
     if (value != null && !expectedType.isInstance(value)) {
       throw new IllegalArgumentException(String.format(
           "%s should be %s, but got %s",
@@ -155,13 +155,13 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   }
 
   // Helper method to validate both min and max values with multiple allowed types
-  private static void validateMinMaxTypes(Object minValue, Object maxValue, Class<?>[] allowedTypes, String typeDescription) {
+  private static void validateMinMaxTypes(Object minValue, Object maxValue, Class<?>[] allowedTypes, String typeDescription) throws IllegalArgumentException {
     validateValueType(minValue, allowedTypes, "Min value", typeDescription);
     validateValueType(maxValue, allowedTypes, "Max value", typeDescription);
   }
 
   // Helper method to validate value types with multiple allowed types
-  private static void validateValueType(Object value, Class<?>[] allowedTypes, String valueName, String typeDescription) {
+  private static void validateValueType(Object value, Class<?>[] allowedTypes, String valueName, String typeDescription) throws IllegalArgumentException {
     if (value != null) {
       for (Class<?> allowedType : allowedTypes) {
         if (allowedType.isInstance(value)) {
@@ -261,7 +261,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                                                               long valueCount,
                                                                               long totalSize,
                                                                               long totalUncompressedSize,
-                                                                              ValueMetadata valueMetadata) {
+                                                                              ValueMetadata valueMetadata) throws IllegalArgumentException {
     return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize, valueMetadata);
   }
 
