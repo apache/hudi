@@ -130,6 +130,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
+  public static final String HOODIE_TEMP_FILE_SUFFIX = ".temp";
   public static final String PARTIAL_UPDATE_UNAVAILABLE_VALUE = "hoodie.write.partial.update.unavailable.value";
   public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
   // This prefix is used to set merging related properties.
@@ -528,6 +529,7 @@ public class HoodieTableConfig extends HoodieConfig {
                              Set<String> propsToDelete) {
     StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
+    StoragePath tempCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE + HOODIE_TEMP_FILE_SUFFIX);
     try {
       // 0. do any recovery from prior attempts.
       recoverIfNeeded(storage, cfgPath, backupCfgPath);
@@ -543,15 +545,18 @@ public class HoodieTableConfig extends HoodieConfig {
       // 3. delete the properties file, reads will go to the backup, until we are done.
       deleteFile(storage, cfgPath);
 
-      // 4. Upsert and save back.
+      // 4. Upsert and save back to a temp file
       String checksum;
-      try (OutputStream out = storage.create(cfgPath, true)) {
+      try (OutputStream out = storage.create(tempCfgPath, true)) {
         propsToUpdate.accept(props, modifyProps);
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
-        checksum = storeProperties(props, out, cfgPath);
+        checksum = storeProperties(props, out, tempCfgPath);
       }
 
-      // 4. verify and remove backup.
+      // 5. Rename to the original config file
+      storage.rename(tempCfgPath, cfgPath);
+
+      // 6. verify and remove backup.
       try (InputStream in = storage.open(cfgPath)) {
         props.clear();
         props.load(in);
@@ -563,7 +568,7 @@ public class HoodieTableConfig extends HoodieConfig {
         }
       }
 
-      // 5. delete the backup properties file
+      // 7. delete the backup properties file
       deleteFile(storage, backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
