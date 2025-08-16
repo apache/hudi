@@ -67,15 +67,15 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     Schema recordSchema = HoodieAvroUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    PartialUpdateMode partialUpdateMode = tableConfig.getPartialUpdateMode();
+    Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
     FileGroupRecordBuffer<T> recordBuffer;
     if (readerParameters.sortOutputs()) {
       recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     } else {
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     }
 
     RecordContext<T> recordContext = readerContext.getRecordContext();

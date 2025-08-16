@@ -32,7 +32,7 @@ import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDefaultValue;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_CUSTOM_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
 
@@ -42,14 +42,14 @@ import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
  * {@link BufferedRecordMergerFactory.CommitTimePartialRecordMerger} and
  * {@link BufferedRecordMergerFactory.EventTimePartialRecordMerger}.
  */
-public class PartialUpdateStrategy<T> implements Serializable {
+public class PartialUpdateHandler<T> implements Serializable {
   private final RecordContext<T> recordContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
 
-  public PartialUpdateStrategy(RecordContext<T> recordContext,
-                               PartialUpdateMode partialUpdateMode,
-                               TypedProperties props) {
+  public PartialUpdateHandler(RecordContext<T> recordContext,
+                              PartialUpdateMode partialUpdateMode,
+                              TypedProperties props) {
     this.recordContext = recordContext;
     this.partialUpdateMode = partialUpdateMode;
     this.mergeProperties = parseMergeProperties(props);
@@ -67,21 +67,17 @@ public class PartialUpdateStrategy<T> implements Serializable {
                                  boolean keepOldMetadataColumns) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
-    if (partialUpdateMode == PartialUpdateMode.NONE
-        || null == oldRecord
+    if (null == oldRecord
         || newRecord.isDelete()
         || oldRecord.isDelete()) {
       return newRecord;
     }
 
     switch (partialUpdateMode) {
-      case KEEP_VALUES:
-      case FILL_DEFAULTS:
-        return newRecord;
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(
             newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns);
-      case IGNORE_MARKERS:
+      case FILL_UNAVAILABLE:
         return reconcileMarkerValues(
             newRecord, oldRecord, newSchema, oldSchema);
       default:
@@ -136,7 +132,7 @@ public class PartialUpdateStrategy<T> implements Serializable {
     List<Schema.Field> fields = newSchema.getFields();
     Map<Integer, Object> updateValues = new HashMap<>();
     T engineRecord;
-    String partialUpdateCustomMarker = mergeProperties.get(PARTIAL_UPDATE_CUSTOM_MARKER);
+    String partialUpdateCustomMarker = mergeProperties.get(PARTIAL_UPDATE_UNAVAILABLE_VALUE);
     for (Schema.Field field : fields) {
       String fieldName = field.name();
       Object newValue = recordContext.getValue(newRecord.getRecord(), newSchema, fieldName);

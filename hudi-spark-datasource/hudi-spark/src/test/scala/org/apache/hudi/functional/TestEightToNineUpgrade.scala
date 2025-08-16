@@ -25,13 +25,13 @@ import org.apache.hudi.common.model.{AWSDmsAvroPayload, EventTimeAvroPayload, Ho
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload.{DELETE_KEY, DELETE_MARKER}
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, PartialUpdateMode}
-import org.apache.hudi.common.table.HoodieTableConfig.{DEBEZIUM_UNAVAILABLE_VALUE, PARTIAL_UPDATE_CUSTOM_MARKER, RECORD_MERGE_PROPERTY_PREFIX}
+import org.apache.hudi.common.table.HoodieTableConfig.{DEBEZIUM_UNAVAILABLE_VALUE, PARTIAL_UPDATE_UNAVAILABLE_VALUE, RECORD_MERGE_PROPERTY_PREFIX}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 
 import org.apache.spark.sql.SaveMode
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -112,8 +112,8 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
     // The payload class should be maintained.
     assertEquals(payloadClass, metaClient.getTableConfig.getPayloadClass)
-    // The partial update mode should be NONE.
-    assertEquals(PartialUpdateMode.NONE, metaClient.getTableConfig.getPartialUpdateMode)
+    // The partial update mode should not be present
+    assertTrue(metaClient.getTableConfig.getPartialUpdateMode.isEmpty)
     if (payloadClass.equals("org.apache.hudi.common.model.EventTimeAvroPayload")) {
       assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
     } else {
@@ -135,30 +135,33 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
         HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
         metaClient.getTableConfig.getRecordMergeStrategyId)
       assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, metaClient.getTableConfig.getRecordMergeMode)
-      assertEquals(PartialUpdateMode.IGNORE_DEFAULTS, metaClient.getTableConfig.getPartialUpdateMode)
+      assertEquals(PartialUpdateMode.IGNORE_DEFAULTS, metaClient.getTableConfig.getPartialUpdateMode.get())
     } else if (payloadClass.equals(classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName)) {
       assertEquals(
         HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
         metaClient.getTableConfig.getRecordMergeStrategyId)
       assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, metaClient.getTableConfig.getRecordMergeMode)
-      assertEquals(PartialUpdateMode.IGNORE_DEFAULTS, metaClient.getTableConfig.getPartialUpdateMode)
+      assertEquals(PartialUpdateMode.IGNORE_DEFAULTS, metaClient.getTableConfig.getPartialUpdateMode.get())
     } else if (payloadClass.equals(classOf[PostgresDebeziumAvroPayload].getName)) {
       assertEquals(
         HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
         metaClient.getTableConfig.getRecordMergeStrategyId)
       assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, metaClient.getTableConfig.getRecordMergeMode)
-      assertEquals(PartialUpdateMode.IGNORE_MARKERS, metaClient.getTableConfig.getPartialUpdateMode)
-      val customMarker = metaClient.getTableConfig.getString(s"${RECORD_MERGE_PROPERTY_PREFIX}${PARTIAL_UPDATE_CUSTOM_MARKER}")
+      assertEquals(PartialUpdateMode.FILL_UNAVAILABLE, metaClient.getTableConfig.getPartialUpdateMode.get())
+      val customMarker = metaClient.getTableConfig.getString(s"${RECORD_MERGE_PROPERTY_PREFIX}${PARTIAL_UPDATE_UNAVAILABLE_VALUE}")
       assertEquals(DEBEZIUM_UNAVAILABLE_VALUE, customMarker)
     } else if (payloadClass.equals(classOf[AWSDmsAvroPayload].getName)) {
       assertEquals(
         HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
         metaClient.getTableConfig.getRecordMergeStrategyId)
       assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, metaClient.getTableConfig.getRecordMergeMode)
+      assertTrue(metaClient.getTableConfig.getPartialUpdateMode.isEmpty)
       val deleteField = metaClient.getTableConfig.getString(s"${RECORD_MERGE_PROPERTY_PREFIX}${DELETE_KEY}")
       assertEquals(AWSDmsAvroPayload.OP_FIELD, deleteField)
       val deleteMarker = metaClient.getTableConfig.getString(s"${RECORD_MERGE_PROPERTY_PREFIX}${DELETE_MARKER}")
       assertEquals(AWSDmsAvroPayload.DELETE_OPERATION_VALUE, deleteMarker)
+    } else {
+      assertTrue(metaClient.getTableConfig.getPartialUpdateMode.isEmpty)
     }
   }
 }
@@ -172,7 +175,7 @@ object TestEightToNineUpgrade {
       Arguments.of("COPY_ON_WRITE", classOf[PostgresDebeziumAvroPayload].getName),
       Arguments.of("COPY_ON_WRITE", classOf[AWSDmsAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[EventTimeAvroPayload].getName),
-      Arguments.of("COPY_ON_WRITE", classOf[PartialUpdateAvroPayload].getName),
+      Arguments.of("MERGE_ON_READ", classOf[PartialUpdateAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[PostgresDebeziumAvroPayload].getName),
       Arguments.of("MERGE_ON_READ", classOf[AWSDmsAvroPayload].getName)

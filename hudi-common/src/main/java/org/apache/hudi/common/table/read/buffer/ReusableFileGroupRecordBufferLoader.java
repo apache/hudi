@@ -59,17 +59,17 @@ public class ReusableFileGroupRecordBufferLoader<T> extends LogScanningRecordBuf
                                                                                          HoodieReadStats readStats,
                                                                                          Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
-    PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
+    Option<PartialUpdateMode> partialUpdateModeOpt = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
     if (cachedResults == null) {
       // Create an initial buffer to process the log files
       KeyBasedFileGroupRecordBuffer<T> initialBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
       List<String> validInstants = scanLogFiles(readerContextWithoutFilters, storage, inputSplit, hoodieTableMetaClient, props, readerParameters, readStats, initialBuffer);
       cachedResults = Pair.of(initialBuffer, validInstants);
     }
     // Create a reusable buffer with the results from the initial scan
     ReusableKeyBasedRecordBuffer<T> reusableBuffer = new ReusableKeyBasedRecordBuffer<>(
-        readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor, cachedResults.getLeft().getLogRecords());
+        readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor, cachedResults.getLeft().getLogRecords());
     return Pair.of(reusableBuffer, cachedResults.getRight());
   }
 

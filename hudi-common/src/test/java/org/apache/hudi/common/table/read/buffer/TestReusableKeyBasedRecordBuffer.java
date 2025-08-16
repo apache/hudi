@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.UpdateProcessor;
@@ -90,7 +89,7 @@ class TestReusableKeyBasedRecordBuffer {
     when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
     ReusableKeyBasedRecordBuffer<TestRecord> buffer = new ReusableKeyBasedRecordBuffer<>(mockReaderContext, metaClient,
-        RecordMergeMode.EVENT_TIME_ORDERING, PartialUpdateMode.NONE, new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);
+        RecordMergeMode.EVENT_TIME_ORDERING, Option.empty(), new TypedProperties(), Collections.singletonList("value"), updateProcessor, preMergedLogRecords);
 
     List<TestRecord> baseFileRecords = Arrays.asList(new TestRecord("1", 10), new TestRecord("3", 30));
     buffer.setBaseFileIterator(ClosableIterator.wrap(baseFileRecords.iterator()));
