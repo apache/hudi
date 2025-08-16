@@ -123,6 +123,9 @@ public class HoodieRecordUtils {
    * Instantiate a given class with an avro record payload.
    */
   public static <T extends HoodieRecordPayload> T loadPayload(String recordPayloadClass, GenericRecord record, Comparable orderingValue) {
+    if (orderingValue == null) {
+      return loadPayload(recordPayloadClass, record);
+    }
     try {
       return (T) CONSTRUCTOR_CACHE_WITH_ORDERING_VALUE.computeIfAbsent(recordPayloadClass, key -> {
         try {

@@ -1572,8 +1572,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
   public static Option<String> recordToString(HoodieRecord record) {
     try {
-      String str = HoodieAvroUtils.safeAvroToJsonString((GenericRecord) record.getData());
-      str = "{" + str.substring(str.indexOf("\"timestamp\":"));
+      String str = ((GenericRecord) record.getData()).toString();
       // Remove the last } bracket
       str = str.substring(0, str.length() - 1);
       return Option.of(str + ", \"partition\": \"" + record.getPartitionPath() + "\"}");

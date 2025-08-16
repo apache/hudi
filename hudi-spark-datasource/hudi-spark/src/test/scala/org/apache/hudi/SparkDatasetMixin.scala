@@ -31,9 +31,6 @@ trait SparkDatasetMixin {
   def toDataset(spark: SparkSession, records: java.util.List[HoodieRecord[_]]) = {
     val avroRecords = records.asScala.map(
       _.getData
-        .asInstanceOf[HoodieRecordPayload[_]]
-        .getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA)
-        .get
         .asInstanceOf[GenericRecord]
     )
       .toSeq
