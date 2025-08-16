@@ -548,7 +548,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return rec;
   }
 
-  public RawTripTestPayload generateRandomValueWithColumnRequired(HoodieKey key,
+  public IndexedRecord generateRandomValueWithColumnRequired(HoodieKey key,
                                                              String instantTime) throws IOException {
     GenericRecord rec = new GenericData.Record(AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS);
     generateTripPrefixValues(
@@ -565,11 +565,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     generateOpColumnValue(rec);
     generateEventLSNValue(rec);
     generateTripSuffixValues(rec, false);
-    return new RawTripTestPayload(
-        rec.toString(),
-        key.getRecordKey(),
-        key.getPartitionPath(),
-        TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
+    return rec;
   }
 
   /**
