@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.{HoodieInstant, InstantComparison}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, InstantComparison}
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -34,6 +34,9 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+
+import java.time.Instant
+import java.util.Date
 
 import scala.collection.JavaConverters._
 
@@ -114,8 +117,9 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     val startArchivedCompletionTs = archivedInstants(1).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
     val endArchivedCompletionTs = archivedInstants(1).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
 
-    val startOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
-    val endOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
+    val instant = Instant.now()
+    val startOutOfRangeCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(instant))
+    val endOutOfRangeCommitTs = HoodieInstantTimeGenerator.formatDate(Date.from(instant.plusMillis(1)))
 
     assertTrue(compareTimestamps(startOutOfRangeCommitTs, InstantComparison.GREATER_THAN, completedCommits.lastInstant().get().requestedTime))
     assertTrue(compareTimestamps(endOutOfRangeCommitTs, InstantComparison.GREATER_THAN, completedCommits.lastInstant().get().requestedTime))

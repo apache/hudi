@@ -35,7 +35,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metrics.HoodieMetrics;
-import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -52,7 +51,6 @@ public class RunCompactionActionExecutor<T> extends
   private static final Logger LOG = LoggerFactory.getLogger(RunCompactionActionExecutor.class);
 
   private final HoodieCompactor compactor;
-  private final HoodieCompactionHandler compactionHandler;
   private final WriteOperationType operationType;
 
   private final HoodieMetrics metrics;
@@ -62,11 +60,9 @@ public class RunCompactionActionExecutor<T> extends
                                      HoodieTable table,
                                      String instantTime,
                                      HoodieCompactor compactor,
-                                     HoodieCompactionHandler compactionHandler,
                                      WriteOperationType operationType) {
     super(context, config, table, instantTime);
     this.compactor = compactor;
-    this.compactionHandler = compactionHandler;
     this.operationType = operationType;
     checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
         "Only COMPACT and LOG_COMPACT is supported");
@@ -103,7 +99,7 @@ public class RunCompactionActionExecutor<T> extends
       }
 
       HoodieData<WriteStatus> statuses = compactor.compact(
-          context, operationType, compactionPlan, table, configCopy, instantTime, compactionHandler);
+          context, operationType, compactionPlan, table, configCopy, instantTime);
 
       compactor.maybePersist(statuses, context, config, instantTime);
       context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata: " + config.getTableName());

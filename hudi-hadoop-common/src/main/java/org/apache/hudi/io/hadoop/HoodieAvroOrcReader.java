@@ -19,11 +19,13 @@
 
 package org.apache.hudi.io.hadoop;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
@@ -45,8 +47,10 @@ import org.apache.orc.TypeDescription;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * {@link HoodieFileReader} implementation for ORC format.
@@ -79,16 +83,27 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema, Map<String, String> renamedColumns) {
     if (!Objects.equals(readerSchema, requestedSchema)) {
       throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
     }
 
-    Configuration hadoopConf = storage.getConf().unwrapAs(Configuration.class);
+    Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(hadoopConf))) {
-      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readerSchema);
+      // Limit the ORC schema to requested fields only
+      Schema fileSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
+      Set<String> existingFields = fileSchema.getFields().stream()
+          .map(Schema.Field::name)
+          .collect(Collectors.toSet());
+      Schema prunedFileSchema = HoodieAvroUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(Schema.Field::name).filter(existingFields::contains).collect(Collectors.toList()));
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(prunedFileSchema);
       RecordReader recordReader = reader.rows(new Options(hadoopConf).schema(orcSchema));
-      return new OrcReaderIterator<>(recordReader, readerSchema, orcSchema);
+      ClosableIterator<IndexedRecord> recordIterator = new OrcReaderIterator<>(recordReader, prunedFileSchema, orcSchema);
+      if (renamedColumns.isEmpty() && readerSchema.equals(fileSchema)) {
+        return recordIterator;
+      } else {
+        return new CloseableMappingIterator<>(recordIterator, data -> HoodieAvroUtils.rewriteRecordWithNewSchema(data, requestedSchema, renamedColumns));
+      }
     } catch (IOException io) {
       throw new HoodieIOException("Unable to create an ORC reader.", io);
     }

@@ -115,9 +115,9 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue("ts")
       .withFallbackKeys("write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
-      .withDescription("Field used in preCombining before actual write. When two records have the same\n"
+      .withDescription("Comma separated list of fields used in preCombining before actual write. When two records have the same\n"
           + "key value, we will pick the one with the largest value for the precombine field,\n"
-          + "determined by Object.compareTo(..)");
+          + "determined by Object.compareTo(..). For multiple fields if first key comparison is same, second key comparison is made and so on");
 
   @AdvancedConfig
   public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions
@@ -127,6 +127,20 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys("write.payload.class", HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key())
       .withDescription("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.\n"
           + "This will render any value set for the option in-effective");
+
+  public static final ConfigOption<String> INSERT_PARTITIONER_CLASS_NAME = ConfigOptions
+      .key("write.insert.partitioner.class.name")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Insert partitioner to use aiming to re-balance records and reducing small file number "
+          + "in the scenario of multi-level partitioning. For example dt/hour/eventID"
+          + "Currently support org.apache.hudi.sink.partitioner.DefaultInsertPartitioner");
+
+  public static final ConfigOption<Integer> DEFAULT_PARALLELISM_PER_PARTITION = ConfigOptions
+      .key("write.insert.partitioner.default_parallelism_per_partition")
+      .intType()
+      .defaultValue(30)
+      .withDescription("The parallelism to use in each partition when using DefaultInsertPartitioner.");
 
   @AdvancedConfig
   public static final ConfigOption<String> RECORD_MERGER_IMPLS = ConfigOptions
@@ -420,6 +434,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue())
       .withDescription("Table version produced by this writer.");
 
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_TABLE_FORMAT = ConfigOptions
+          .key(HoodieTableConfig.TABLE_FORMAT.key())
+          .stringType()
+          .defaultValue(HoodieTableConfig.TABLE_FORMAT.defaultValue())
+          .withDescription("Table format produced by this writer.");
+
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.
    * By default false to gain extra performance.
@@ -673,7 +694,15 @@ public class FlinkOptions extends HoodieConfig {
       .longType()
       .defaultValue(300_000L)
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
-          + "waits for the instant commit success, only for internal use");
+          + "waits for the instant commit success, only for internal use.");
+
+  // this is only for internal use
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_INCREMENTAL_JOB_GRAPH_GENERATION = ConfigOptions
+      .key("write.incremental.job.graph.generation")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Flag saying whether the incremental job graph generation is enabled.");
 
   @AdvancedConfig
   public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_INPUT = ConfigOptions

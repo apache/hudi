@@ -512,6 +512,43 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
+  public void testGetLatestMergedFileSliceBeforeOrOn() {
+    Option<FileSlice> actual;
+    Option<FileSlice> expected = Option.fromJavaOptional(testFileSliceStream.findFirst());
+    String partitionPath = "/table2";
+    String maxInstantTime = "2020-01-01";
+    String fileId = UUID.randomUUID().toString();
+
+    when(primary.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId))
+        .thenReturn(expected);
+    actual = fsView.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId);
+    assertEquals(expected, actual);
+    verify(secondaryViewCreator, never()).apply(engineContext);
+
+    resetMocks();
+    when(secondaryViewCreator.apply(engineContext)).thenReturn(secondary);
+    when(primary.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId))
+        .thenThrow(new RuntimeException());
+    when(secondary.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId))
+        .thenReturn(expected);
+    actual = fsView.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId);
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId))
+        .thenReturn(expected);
+    actual = fsView.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId);
+    assertEquals(expected, actual);
+
+    resetMocks();
+    when(secondary.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId))
+        .thenThrow(new RuntimeException());
+    assertThrows(RuntimeException.class, () -> {
+      fsView.getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId);
+    });
+  }
+
+  @Test
   public void testGetLatestFileSliceInRange() {
     Stream<FileSlice> actual;
     Stream<FileSlice> expected = testFileSliceStream;

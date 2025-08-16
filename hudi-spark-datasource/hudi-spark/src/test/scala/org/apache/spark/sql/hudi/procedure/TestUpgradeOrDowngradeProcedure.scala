@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 
 class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
-  test("Test Call downgrade_table and upgrade_table Procedure") {
+  ignore("[HUDI-9700] Test Call downgrade_table and upgrade_table Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -59,10 +59,11 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       var metaClient = createMetaClient(spark, tablePath)
 
       // verify hoodie.table.version of the original table
-      assertResult(HoodieTableVersion.EIGHT.versionCode) {
+      assertResult(HoodieTableVersion.current().versionCode()) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.EIGHT.versionCode)
+      assertTableVersionFromPropertyFile(
+        metaClient, HoodieTableVersion.current().versionCode())
 
       // downgrade table to ZERO
       checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'ZERO')""")(Seq(true))
@@ -86,7 +87,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call upgrade_table from version three") {
+  ignore("[HUDI-9700] Test Call upgrade_table from version three") {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"

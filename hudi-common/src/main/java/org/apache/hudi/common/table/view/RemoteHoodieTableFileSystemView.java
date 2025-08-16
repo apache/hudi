@@ -75,6 +75,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String LATEST_PARTITION_UNCOMPACTED_SLICES_URL =  String.format("%s/%s", BASE_URL, "slices/uncompacted/partition/latest/");
   public static final String ALL_SLICES_URL = String.format("%s/%s", BASE_URL, "slices/all");
   public static final String LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/merged/beforeoron/latest/");
+  public static final String LATEST_SLICE_MERGED_BEFORE_ON_INSTANT_URL = String.format("%s/%s", BASE_URL, "slice/merged/beforeoron/latest/");
   public static final String LATEST_SLICES_RANGE_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/range/latest/");
   public static final String LATEST_SLICES_BEFORE_ON_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/beforeoron/latest/");
   public static final String ALL_LATEST_SLICES_BEFORE_ON_INSTANT_URL = String.format("%s/%s", BASE_URL, "slices/all/beforeoron/latest/");
@@ -353,6 +354,13 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public Stream<FileSlice> getLatestMergedFileSlicesBeforeOrOn(String partitionPath, String maxInstantTime) {
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxInstantTime);
     return getLatestFileSlicesStreamFromParams(LATEST_SLICES_MERGED_BEFORE_ON_INSTANT_URL, paramsMap);
+  }
+
+  @Override
+  public Option<FileSlice> getLatestMergedFileSliceBeforeOrOn(String partitionPath, String maxInstantTime, String fileId) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParams(partitionPath, new String[] {MAX_INSTANT_PARAM, FILEID_PARAM},
+        new String[] {maxInstantTime, fileId});
+    return Option.fromJavaOptional(getLatestFileSlicesStreamFromParams(LATEST_SLICE_MERGED_BEFORE_ON_INSTANT_URL, paramsMap).findFirst());
   }
 
   @Override

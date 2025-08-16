@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.INSERT;
@@ -57,6 +58,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
   protected Properties getMetaProps() {
     Properties metaProps =  super.getMetaProps();
     metaProps.setProperty(HoodieTableConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+    metaProps.setProperty(PRECOMBINE_FIELDS.key(), "timestamp");
     return metaProps;
   }
 

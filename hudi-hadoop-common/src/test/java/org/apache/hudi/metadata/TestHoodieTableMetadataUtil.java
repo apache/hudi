@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -50,6 +51,9 @@ import org.apache.avro.SchemaBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.net.URI;
@@ -62,17 +66,20 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_AVRO_TYPES_STR;
 import static org.apache.hudi.avro.TestHoodieAvroUtils.SCHEMA_WITH_NESTED_FIELD_STR;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
+import static org.apache.hudi.metadata.HoodieIndexVersion.V2;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.computeRevivedAndDeletedKeys;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getFileIDForFileGroup;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.validateDataTypeForSecondaryOrExpressionIndex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
@@ -108,7 +115,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs,
         1,
         "activeModule",
-        metaClient
+        metaClient,
+        false
     );
     assertTrue(result.isEmpty());
   }
@@ -155,7 +163,6 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
       }
     });
 
-    List<String> columnsToIndex = Arrays.asList("rider", "driver");
     HoodieData<HoodieRecord> result = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
         engineContext,
         partitionFileSlicePairs,
@@ -209,7 +216,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs,
         1,
         "activeModule",
-        metaClient
+        metaClient,
+        false
     );
     // Validate the result.
     List<HoodieRecord> records = result.collectAsList();
@@ -334,46 +342,26 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
   @Test
   public void testGetFileGroupIndexFromFileId() {
-    String result = getFileIDForFileGroup(MetadataPartitionType.FILES, 1, "test_partition");
+    String result = getFileIDForFileGroup(MetadataPartitionType.FILES, 1, "test_partition", Option.empty());
     assertEquals("files-0001-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.COLUMN_STATS, 2, "stats_partition");
+    result = getFileIDForFileGroup(MetadataPartitionType.COLUMN_STATS, 2, "stats_partition", Option.empty());
     assertEquals("col-stats-0002-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.BLOOM_FILTERS, 3, "bloom_partition");
+    result = getFileIDForFileGroup(MetadataPartitionType.BLOOM_FILTERS, 3, "bloom_partition", Option.empty());
     assertEquals("bloom-filters-0003-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.RECORD_INDEX, 4, "record_partition");
+    result = getFileIDForFileGroup(MetadataPartitionType.RECORD_INDEX, 4, "record_partition", Option.empty());
     assertEquals("record-index-0004-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.SECONDARY_INDEX, 6, "secondary_index_idx_ts");
+    result = getFileIDForFileGroup(MetadataPartitionType.RECORD_INDEX, 12, "record_partition", Option.of("test"));
+    assertEquals("record-index-test-0012-0", result);
+
+    result = getFileIDForFileGroup(MetadataPartitionType.SECONDARY_INDEX, 6, "secondary_index_idx_ts", Option.empty());
     assertEquals("secondary-index-idx-ts-0006-0", result);
 
-    result = getFileIDForFileGroup(MetadataPartitionType.EXPRESSION_INDEX, 5, "expr_index_ts");
+    result = getFileIDForFileGroup(MetadataPartitionType.EXPRESSION_INDEX, 5, "expr_index_ts", Option.empty());
     assertEquals("expr-index-ts-0005-0", result);
-  }
-
-  @Test
-  public void testValidateDataTypeForSecondaryOrExpressionIndex() {
-    // Create a dummy schema with both complex and primitive types
-    Schema schema = SchemaBuilder.record("TestRecord")
-        .fields()
-        .requiredString("stringField")
-        .optionalInt("intField")
-        .name("arrayField").type().array().items().stringType().noDefault()
-        .name("mapField").type().map().values().intType().noDefault()
-        .name("structField").type().record("NestedRecord")
-        .fields()
-        .requiredString("nestedString")
-        .endRecord()
-        .noDefault()
-        .endRecord();
-
-    // Test for primitive fields
-    assertTrue(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("stringField", "intField"), schema));
-
-    // Test for complex fields
-    assertFalse(validateDataTypeForSecondaryOrExpressionIndex(Arrays.asList("arrayField", "mapField", "structField"), schema));
   }
 
   @Test
@@ -500,11 +488,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
-        .withColumnStatsIndexForColumns("firstname,student.lastname,student")
+        .withColumnStatsIndexForColumns("firstname,student.lastnameNested,student")
         .build();
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     expected.add("firstname");
-    expected.add("student.lastname");
+    expected.add("student.lastnameNested");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), false).keySet()));
 
@@ -742,5 +730,124 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     assertNotNull(result);
     assertTrue(result.isEmpty());
     verify(metaClient, atLeastOnce()).buildIndexDefinition(any());
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("mapRecordKeyToFileGroupIndexTestCases")
+  public void testMapRecordKeyToFileGroupIndex(
+      String testName,
+      String recordKey,
+      int numFileGroups,
+      String partitionName,
+      HoodieIndexVersion version,
+      int expectedIndex) {
+    boolean needsSecondaryKeyExtraction = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
+        && version.greaterThanOrEquals(HoodieIndexVersion.V2);
+    SerializableBiFunction<String, Integer, Integer> mappingFunction =
+        HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(needsSecondaryKeyExtraction);
+    int index = mappingFunction.apply(recordKey, numFileGroups);
+    assertEquals(expectedIndex, index, "File group index should match expected value");
+  }
+
+  private static Stream<Arguments> mapRecordKeyToFileGroupIndexTestCases() {
+    return Stream.of(
+        // Test case 1: Regular record key (no secondary index)
+        Arguments.of(
+            "Regular record key",
+            "test_key",
+            10,
+            "files",
+            HoodieIndexVersion.V1,
+            8  // Calculated using the explicit hashing algorithm
+        ),
+        // Test case 2: Secondary index record key with version >= 2
+        Arguments.of(
+            "Secondary index record key with version >= 2",
+            "secondary_key$primary_key",
+            10,
+            "secondary_index_idx_ts",
+            V2,
+            8  // Uses secondary key portion for hashing
+        ),
+        // Test case 3: Secondary index record key but version < 2
+        Arguments.of(
+            "Secondary index record key but version < 2",
+            "secondary_key$primary_key",
+            10,
+            "secondary_index_idx_ts",
+            HoodieIndexVersion.V1,
+            0  // Uses full key for hashing
+        ),
+        // Test case 4: Secondary index record key but not in secondary index partition
+        Arguments.of(
+            "Secondary index record key but not in secondary index partition",
+            "secondary_key$primary_key",
+            10,
+            "files",
+            HoodieIndexVersion.V1,
+            0  // Uses full key for hashing since not in secondary index partition
+        ),
+        // Test case 7: Single file group
+        Arguments.of(
+            "Single file group",
+            "test_key$record_key",
+            1,
+            "secondary_index_idx_ts",
+            V2,
+            0  // Any key with numFileGroups=1 should return 0
+        ),
+        // Test case 8: Record key with special characters
+        Arguments.of(
+            "Record key with special characters",
+            "test@key#123",
+            10,
+            "files",
+            V1,
+            0  // Calculated using the explicit hashing algorithm
+        )
+    );
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("mapKeyNoSeparatorToFileGroupIndexTestCases")
+  public void testMapKeyNoSeparatorToFileGroupIndex(
+      String testName,
+      String recordKey,
+      int numFileGroups,
+      String partitionName,
+      HoodieIndexVersion version,
+      int expectedIndex) {
+    // If the key does not have separator, hashing function for SI write will error out.
+    boolean needsSecondaryKeyExtraction = MetadataPartitionType.SECONDARY_INDEX.matchesPartitionPath(partitionName)
+        && version.greaterThanOrEquals(HoodieIndexVersion.V2);
+    SerializableBiFunction<String, Integer, Integer> mappingFunction =
+        HoodieTableMetadataUtil.getSecondaryKeyToFileGroupMappingFunction(needsSecondaryKeyExtraction);
+    assertThrows(IllegalStateException.class, () -> mappingFunction.apply(recordKey, numFileGroups));
+
+    int index = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey, numFileGroups);
+    assertEquals(expectedIndex, index, "File group index should match expected value");
+  }
+
+  private static Stream<Arguments> mapKeyNoSeparatorToFileGroupIndexTestCases() {
+    return Stream.of(
+        // Test case 5: Secondary index record key but no separator
+        Arguments.of(
+            "Secondary index record key but no separator",
+            "primary_key_secondary_key",
+            10,
+            "secondary_index_idx_ts",
+            V2,
+            7
+        ),
+        // Test case 6: Empty record key
+        Arguments.of(
+            "Empty record key",
+            "",
+            10,
+            "secondary_index_idx_ts",
+            V2,
+            0
+        )
+    );
   }
 }

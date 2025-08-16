@@ -26,7 +26,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.types.{Decimal, DecimalType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 

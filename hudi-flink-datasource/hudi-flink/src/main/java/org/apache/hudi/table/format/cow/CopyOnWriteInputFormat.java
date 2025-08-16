@@ -270,7 +270,6 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     return inputSplits.toArray(new FileInputSplit[0]);
   }
 
-  @Override
   public boolean supportsMultiPaths() {
     return true;
   }

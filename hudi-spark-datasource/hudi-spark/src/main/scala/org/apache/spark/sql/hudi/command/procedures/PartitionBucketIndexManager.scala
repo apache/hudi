@@ -21,7 +21,7 @@ import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieSparkSqlWrite
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieMetadataConfig, SerializableSchema}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
 import org.apache.hudi.common.engine.{HoodieEngineContext, ReaderContextFactory}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOperationType}
@@ -113,7 +113,8 @@ class PartitionBucketIndexManager extends BaseProcedure
 
       config = config ++ Map(OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL,
         HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.BUCKET_RESCALE.value(),
-        ENABLE_ROW_WRITER.key() -> "true")
+        ENABLE_ROW_WRITER.key() -> "true",
+        HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key -> writeClient.getConfig.enableOptimizedLogBlocksScan.toString)
 
       // Determine which operation to perform
       if (showConfig) {
@@ -146,7 +147,7 @@ class PartitionBucketIndexManager extends BaseProcedure
     val mdtEnable = metaClient.getStorage().exists(new StoragePath(metaClient.getBasePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH))
 
     // get all partition paths
-    val allPartitions = FSUtils.getAllPartitionPaths(context, metaClient.getStorage, metaClient.getBasePath, mdtEnable)
+    val allPartitions = FSUtils.getAllPartitionPaths(context, metaClient, mdtEnable)
     val usePartitionBucketIndexBefore = PartitionBucketIndexUtils.isPartitionSimpleBucketIndex(context.getStorageConf, basePath.toString)
 
     var partition2BucketWithLatestHashingConfig: util.Map[String, Integer] = null
@@ -195,8 +196,8 @@ class PartitionBucketIndexManager extends BaseProcedure
       logInfo("Perform OVERWRITE with dry-run disabled.")
       val partitionsToRescale = rescalePartitionsMap.keys
       // get all fileSlices need to read
-      val allFilesMap = FSUtils.getFilesInPartitions(context, metaClient.getStorage(), HoodieMetadataConfig.newBuilder.enable(mdtEnable).build,
-        metaClient.getBasePath.toString, partitionsToRescale.map(relative => {
+      val allFilesMap = FSUtils.getFilesInPartitions(context, metaClient, HoodieMetadataConfig.newBuilder.enable(mdtEnable).build,
+        partitionsToRescale.map(relative => {
           new StoragePath(basePath, relative)
         }).map(storagePath => storagePath.toString).toArray)
       val files = allFilesMap.values().asScala.flatMap(x => x.asScala).toList
@@ -226,6 +227,9 @@ class PartitionBucketIndexManager extends BaseProcedure
           // instantiate other supporting cast
           val readerSchema = serializableTableSchemaWithMetaFields.get
           val internalSchemaOption: Option[InternalSchema] = Option.empty()
+          // get this value from config, which has obtained this from write client
+          val enableOptimizedLogBlockScan = config.getOrElse(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
+            HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()).toBoolean
           // instantiate FG reader
           val fileGroupReader = HoodieFileGroupReader.newBuilder()
             .withReaderContext(readerContextFactory.getContext)
@@ -237,6 +241,7 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)
+            .withEnableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
             .build()
           val iterator = fileGroupReader.getClosableIterator
           CloseableIteratorListener.addListener(iterator)

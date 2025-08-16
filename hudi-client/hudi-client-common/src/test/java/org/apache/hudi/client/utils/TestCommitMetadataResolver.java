@@ -20,6 +20,7 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.client.MarkerBasedCommitMetadataResolver;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
@@ -106,7 +107,7 @@ public class TestCommitMetadataResolver extends HoodieCommonTestHarness {
     when(writeConfig.getViewStorageConfig()).thenReturn(FileSystemViewStorageConfig.newBuilder().build());
     when(writeConfig.getMarkersType()).thenReturn(MarkerType.DIRECT);
     when(writeConfig.getBasePath()).thenReturn(basePath);
-    String instantTime = metaClient.createNewInstantTime();
+    String instantTime = WriteClientTestUtils.createNewInstantTime();
 
     // Setup dummy commit metadata
     String p0 = "2020/01/01";

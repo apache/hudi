@@ -34,7 +34,7 @@ object HoodieSpark34PartitionedFileUtils extends HoodieSparkPartitionedFileUtils
   }
 
   override def getStringPathFromPartitionedFile(partitionedFile: PartitionedFile): String = {
-    partitionedFile.filePath.toString
+    partitionedFile.filePath.toPath.toString
   }
 
   override def createPartitionedFile(partitionValues: InternalRow,

@@ -19,35 +19,29 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
-import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
-
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, IndexedRecord}
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.HoodieInternalRowUtils
-import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
-
-import scala.collection.mutable
 
 /**
  * Implementation of [[HoodieReaderContext]] to read [[InternalRow]]s with
@@ -61,21 +55,15 @@ import scala.collection.mutable
  * @param filters           spark filters that might be pushed down into the reader
  * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
-class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
+class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileReader,
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
                                               tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig) {
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, new SparkFileFormatInternalRecordContext(tableConfig)) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
-  private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
-  private val serializerMap: mutable.Map[Schema, HoodieAvroSerializer] = mutable.Map()
   private lazy val allFilters = filters ++ requiredFilters
-
-  override def supportsParquetRowIndex: Boolean = {
-    HoodieSparkUtils.gteqSpark3_5
-  }
 
   override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
@@ -85,7 +73,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                      storage: HoodieStorage): ClosableIterator[InternalRow] = {
     val hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
     if (hasRowIndexField) {
-      assert(supportsParquetRowIndex())
+      assert(getRecordContext.supportsParquetRowIndex())
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
@@ -97,7 +85,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
+      new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
@@ -112,29 +100,6 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     } else {
       (schemaForRead, requiredFilters)
     }
-  }
-
-  /**
-   * Converts an Avro record, e.g., serialized in the log files, to an [[InternalRow]].
-   *
-   * @param avroRecord The Avro record.
-   * @return An [[InternalRow]].
-   */
-  override def convertAvroRecord(avroRecord: IndexedRecord): InternalRow = {
-    val schema = avroRecord.getSchema
-    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
-    val deserializer = deserializerMap.getOrElseUpdate(schema, {
-      sparkAdapter.createAvroDeserializer(schema, structType)
-    })
-    deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
-  }
-
-  override def convertToAvroRecord(record: InternalRow, schema: Schema): GenericRecord = {
-    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
-    val serializer = serializerMap.getOrElseUpdate(schema, {
-      sparkAdapter.createAvroSerializer(structType, schema, isNullable(schema))
-    })
-    serializer.serialize(record).asInstanceOf[GenericRecord]
   }
 
   /**
@@ -159,17 +124,17 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                dataFileIterator: ClosableIterator[Any],
                                dataRequiredSchema: Schema,
                                partitionFieldAndValues: java.util.List[HPair[String, Object]]): ClosableIterator[InternalRow] = {
-    if (supportsParquetRowIndex()) {
+    if (getRecordContext.supportsParquetRowIndex()) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       val rowIndexColumn = new java.util.HashSet[String]()
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       //always remove the row index column from the skeleton because the data file will also have the same column
-      val skeletonProjection = projectRecord(skeletonRequiredSchema,
+      val skeletonProjection = recordContext.projectRecord(skeletonRequiredSchema,
         HoodieAvroUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
-      val dataProjection = if (getHasLogFiles && getShouldMergeUseRecordPosition) {
+      val dataProjection = if (getShouldMergeUseRecordPosition) {
         getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       } else {
         getBootstrapProjection(dataRequiredSchema,

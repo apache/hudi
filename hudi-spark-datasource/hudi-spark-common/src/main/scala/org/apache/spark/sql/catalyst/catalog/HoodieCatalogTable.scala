@@ -19,6 +19,7 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -127,9 +128,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val primaryKeys: Array[String] = tableConfig.getRecordKeyFields.orElse(Array.empty)
 
   /**
-   * PreCombine Field
+   * Comparables Field
    */
-  lazy val preCombineKey: Option[String] = Option(tableConfig.getPreCombineField)
+  lazy val preCombineKeys: java.util.List[String] = tableConfig.getPreCombineFields
 
   /**
    * Partition Fields
@@ -180,7 +181,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   def getPartitionPaths: Seq[String] = {
     val droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())
 
-    getAllPartitionPaths(spark, table, metaClient.getStorage)
+    getAllPartitionPaths(spark, table, metaClient)
       .filter(!droppedPartitions.contains(_))
   }
 
@@ -231,6 +232,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
         .setTableVersion(Integer.valueOf(getStringWithAltKeys(tableConfigs, HoodieWriteConfig.WRITE_TABLE_VERSION)))
+        .setTableFormat(getStringWithAltKeys(tableConfigs, HoodieTableConfig.TABLE_FORMAT))
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())

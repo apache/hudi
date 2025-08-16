@@ -52,6 +52,7 @@ import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
+import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
@@ -87,7 +88,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   }
 
   public RawTripTestPayload(String jsonData, String rowKey, String partitionPath, String schemaStr) throws IOException {
-    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false, 0L);
+    this(Option.of(jsonData), rowKey, partitionPath, schemaStr, false, 0);
   }
 
   public RawTripTestPayload(String jsonData) throws IOException {
@@ -97,7 +98,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.rowKey = jsonRecordMap.get("_row_key").toString();
     this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
     this.isDeleted = false;
-    this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0L).toString());
+    this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0).toString());
   }
 
   public RawTripTestPayload(GenericRecord record, Comparable orderingVal) {
@@ -178,7 +179,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
       avroData.put("_hoodie_is_deleted", isDeleted);
       convertedRecords.add(
           createHoodieRecordFromAvro(avroData, DefaultHoodieRecordPayload.class.getName(),
-              "timestamp", Option.of(Pair.of("_row_key", "partition_path")),
+              new String[] {"timestamp"}, Option.of(Pair.of("_row_key", "partition_path")),
               false, Option.empty(), false, Option.of(AVRO_SCHEMA)));
     }
     return convertedRecords;
@@ -190,7 +191,7 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
 
   @Override
   public RawTripTestPayload preCombine(RawTripTestPayload oldValue) {
-    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+    if (!orderingVal.equals(DEFAULT_ORDERING_VALUE) && oldValue.orderingVal.compareTo(orderingVal) > 0) {
       // pick the payload with greatest ordering value
       return oldValue;
     } else {

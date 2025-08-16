@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.HoodieTableFormat;
+import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
@@ -26,6 +28,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -35,7 +38,11 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -68,10 +75,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -90,11 +100,17 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.DELETE_OPERATION_VALUE;
+import static org.apache.hudi.common.model.AWSDmsAvroPayload.OP_FIELD;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
@@ -115,6 +131,37 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String HOODIE_TEMP_FILE_SUFFIX = ".temp";
+  public static final String PARTIAL_UPDATE_CUSTOM_MARKER = "hoodie.write.partial.update.custom.marker";
+  public static final String DEBEZIUM_UNAVAILABLE_VALUE = "__debezium_unavailable_value";
+  // This prefix is used to set merging related properties.
+  // A reader might need to read some writer properties to function as expected,
+  // and Hudi stores properties with this prefix so the reader parses these properties to fetch any custom property.
+  public static final String RECORD_MERGE_PROPERTY_PREFIX = "hoodie.record.merge.property.";
+  public static final Set<String> PAYLOADS_UNDER_DEPRECATION = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          AWSDmsAvroPayload.class.getName(),
+          DefaultHoodieRecordPayload.class.getName(),
+          EventTimeAvroPayload.class.getName(),
+          MySqlDebeziumAvroPayload.class.getName(),
+          OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+          OverwriteWithLatestAvroPayload.class.getName(),
+          PartialUpdateAvroPayload.class.getName(),
+          PostgresDebeziumAvroPayload.class.getName())));
+
+  public static final Set<String> EVENT_TIME_ORDERING_PAYLOADS = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          DefaultHoodieRecordPayload.class.getName(),
+          EventTimeAvroPayload.class.getName(),
+          MySqlDebeziumAvroPayload.class.getName(),
+          PartialUpdateAvroPayload.class.getName(),
+          PostgresDebeziumAvroPayload.class.getName())));
+
+  public static final Set<String> BUILTIN_MERGE_STRATEGIES = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
+          CUSTOM_MERGE_STRATEGY_UUID,
+          EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          PAYLOAD_BASED_MERGE_STRATEGY_UUID)));
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
@@ -147,11 +194,12 @@ public class HoodieTableConfig extends HoodieConfig {
           + "when the table is initially setup.");
 
   // TODO: is this this called precombine in 1.0. ..
-  public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
+  public static final ConfigProperty<String> PRECOMBINE_FIELDS = ConfigProperty
       .key("hoodie.table.precombine.field")
       .noDefaultValue()
-      .withDocumentation("Field used in preCombining before actual write. By default, when two records have the same key value, "
-          + "the largest value for the precombine field determined by Object.compareTo(..), is picked.");
+      .withDocumentation("Comma separated fields used in preCombining before actual write. By default, when two records have the same key value, "
+          + "the largest value for the precombine field determined by Object.compareTo(..), is picked. If there are multiple fields configured, "
+          + "comparison is made on the first field. If the first field values are same, comparison is made on the second field and so on.");
 
   public static final ConfigProperty<String> PARTITION_FIELDS = ConfigProperty
       .key("hoodie.table.partition.fields")
@@ -199,7 +247,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
-  
+
+  public static final ConfigProperty<String> TABLE_FORMAT = ConfigProperty
+      .key("hoodie.table.format")
+      .defaultValue(NativeTableFormat.TABLE_FORMAT)
+      .withDocumentation("Table format name used when writing to the table.");
+
   public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
       .defaultValue((RecordMergeMode) null,
@@ -213,6 +266,12 @@ public class HoodieTableConfig extends HoodieConfig {
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
+
+  public static final ConfigProperty<String> LEGACY_PAYLOAD_CLASS_NAME = ConfigProperty
+      .key("hoodie.table.legacy.payload.class")
+      .noDefaultValue()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Payload class to indicate the payload class that is used to create the table and is not used anymore.");
 
   // This is the default payload class used by Hudi 0.x releases (table version 6 and below)
   public static final String DEFAULT_PAYLOAD_CLASS_NAME = DefaultHoodieRecordPayload.class.getName();
@@ -304,6 +363,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("When set to true, the table can support reading and writing multiple base file formats.");
+
+  public static final ConfigProperty<PartialUpdateMode> PARTIAL_UPDATE_MODE = ConfigProperty
+      .key("hoodie.table.partial.update.mode")
+      .defaultValue(PartialUpdateMode.NONE)
+      .sinceVersion("1.1.0")
+      .withDocumentation("This property when set, will define how two versions of the record will be "
+          + "merged together where the later contains only partial set of values and not entire record.");
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -402,58 +468,14 @@ public class HoodieTableConfig extends HoodieConfig {
     return new HoodieTableConfig(storage, metaPath);
   }
 
-  private HoodieTableConfig(HoodieStorage storage, StoragePath metaPath) {
-    this(storage, metaPath, null, null, null, false);
-  }
-
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
-                           String recordMergeStrategyId) {
-    this(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId, true);
-  }
-
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName,
-                           String recordMergeStrategyId, boolean autoUpdate) {
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
       this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
-      if (autoUpdate) {
-        autoUpdateHoodieProperties(storage, metaPath, recordMergeMode, payloadClassName, recordMergeStrategyId);
-      }
     } catch (IOException e) {
       throw new HoodieIOException("Could not load properties from " + propertyPath, e);
-    }
-  }
-
-  private void autoUpdateHoodieProperties(HoodieStorage storage, StoragePath metaPath,
-                                          RecordMergeMode recordMergeMode, String payloadClassName,
-                                          String recordMergeStrategyId) {
-    StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
-    try {
-      boolean needStore = false;
-      if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
-          && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
-        setValue(PAYLOAD_CLASS_NAME, payloadClassName);
-        needStore = true;
-      }
-      if (contains(RECORD_MERGE_MODE) && recordMergeMode != null
-          && !recordMergeMode.equals(RecordMergeMode.getValue(getString(RECORD_MERGE_MODE)))) {
-        setValue(RECORD_MERGE_MODE, recordMergeMode.name());
-        needStore = true;
-      }
-      if (contains(RECORD_MERGE_STRATEGY_ID) && recordMergeStrategyId != null
-          && !getString(RECORD_MERGE_STRATEGY_ID).equals(recordMergeStrategyId)) {
-        setValue(RECORD_MERGE_STRATEGY_ID, recordMergeStrategyId);
-        needStore = true;
-      }
-      if (needStore) {
-        try (OutputStream outputStream = storage.create(propertyPath)) {
-          storeProperties(props, outputStream);
-        }
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not store properties in " + propertyPath, e);
     }
   }
 
@@ -468,10 +490,11 @@ public class HoodieTableConfig extends HoodieConfig {
    *
    * @param props        - properties to be written
    * @param outputStream - output stream to which properties will be written
+   * @param propertyPath - Path of the file where properties would be stored
    * @return return the table checksum
    * @throws IOException
    */
-  private static String storeProperties(Properties props, OutputStream outputStream) throws IOException {
+  private static String storeProperties(Properties props, OutputStream outputStream, StoragePath propertyPath) throws IOException {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
@@ -482,6 +505,7 @@ public class HoodieTableConfig extends HoodieConfig {
       checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
       props.setProperty(TABLE_CHECKSUM.key(), checksum);
     }
+    LOG.info("Created properties file at " + propertyPath);
     return checksum;
   }
 
@@ -502,7 +526,8 @@ public class HoodieTableConfig extends HoodieConfig {
     recoverIfNeeded(storage, cfgPath, backupCfgPath);
   }
 
-  private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> modifyFn) {
+  private static void modify(HoodieStorage storage, StoragePath metadataFolder, Properties modifyProps, BiConsumer<Properties, Properties> propsToUpdate,
+                             Set<String> propsToDelete) {
     StoragePath cfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     StoragePath backupCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE_BACKUP);
     StoragePath tempCfgPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE + HOODIE_TEMP_FILE_SUFFIX);
@@ -515,17 +540,18 @@ public class HoodieTableConfig extends HoodieConfig {
 
       // 2. backup the existing properties.
       try (OutputStream out = storage.create(backupCfgPath, false)) {
-        storeProperties(props, out);
+        storeProperties(props, out, backupCfgPath);
       }
 
       // 3. delete the properties file, reads will go to the backup, until we are done.
-      storage.deleteFile(cfgPath);
+      deleteFile(storage, cfgPath);
 
       // 4. Upsert and save back to a temp file
       String checksum;
-      try (OutputStream out = storage.create(tempCfgPath, true)) {
-        modifyFn.accept(props, modifyProps);
-        checksum = storeProperties(props, out);
+      try (OutputStream out = storage.create(cfgPath, true)) {
+        propsToUpdate.accept(props, modifyProps);
+        propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
+        checksum = storeProperties(props, out, cfgPath);
       }
 
       // 5. Rename to the original config file
@@ -538,16 +564,22 @@ public class HoodieTableConfig extends HoodieConfig {
         if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
           // subsequent writes will recover and update, reads will go to the backup until then
-          storage.deleteFile(cfgPath);
+          deleteFile(storage, cfgPath);
           throw new HoodieIOException("Checksum property missing or does not match.");
         }
       }
 
+
       // 7. delete the backup properties file
-      storage.deleteFile(backupCfgPath);
+      deleteFile(storage, backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
     }
+  }
+
+  private static void deleteFile(HoodieStorage storage, StoragePath cfgPath) throws IOException {
+    storage.deleteFile(cfgPath);
+    LOG.info("Deleted properties file at " + cfgPath);
   }
 
   /**
@@ -556,13 +588,18 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public static void update(HoodieStorage storage, StoragePath metadataFolder,
                             Properties updatedProps) {
-    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties);
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, Collections.EMPTY_SET);
+  }
+
+  public static void updateAndDeleteProps(HoodieStorage storage, StoragePath metadataFolder,
+                                          Properties updatedProps, Set<String> propstoDelete) {
+    modify(storage, metadataFolder, updatedProps, ConfigUtils::upsertProperties, propstoDelete);
   }
 
   public static void delete(HoodieStorage storage, StoragePath metadataFolder, Set<String> deletedProps) {
     Properties props = new Properties();
     deletedProps.forEach(p -> props.setProperty(p, ""));
-    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties);
+    modify(storage, metadataFolder, props, ConfigUtils::deleteProperties, Collections.EMPTY_SET);
   }
 
   /**
@@ -603,7 +640,7 @@ public class HoodieTableConfig extends HoodieConfig {
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
       dropInvalidConfigs(hoodieConfig);
-      storeProperties(hoodieConfig.getProps(), outputStream);
+      storeProperties(hoodieConfig.getProps(), outputStream, propertyPath);
     }
   }
 
@@ -725,6 +762,20 @@ public class HoodieTableConfig extends HoodieConfig {
         : Option.empty();
   }
 
+  public HoodieTableFormat getTableFormat(TimelineLayoutVersion layoutVersion) {
+    String tableFormat = getStringOrDefault(TABLE_FORMAT);
+    if (!tableFormat.equals(NativeTableFormat.TABLE_FORMAT)) {
+      ServiceLoader<HoodieTableFormat> loader = ServiceLoader.load(HoodieTableFormat.class);
+      for (HoodieTableFormat tableFormatImpl : loader) {
+        if (getString(TABLE_FORMAT).equals(tableFormatImpl.getName())) {
+          tableFormatImpl.init(props);
+          return tableFormatImpl;
+        }
+      }
+    }
+    return new NativeTableFormat(layoutVersion);
+  }
+
   /**
    * @return the hoodie.table.version from hoodie.properties file.
    */
@@ -761,19 +812,109 @@ public class HoodieTableConfig extends HoodieConfig {
     return HoodieRecordPayload.getPayloadClassName(this);
   }
 
+  public String getLegacyPayloadClass() {
+    return getStringOrDefault(LEGACY_PAYLOAD_CLASS_NAME, EMPTY_STRING);
+  }
+
   public String getRecordMergeStrategyId() {
     return getString(RECORD_MERGE_STRATEGY_ID);
   }
 
   /**
-   * Infers the merging behavior based on what the user sets (or doesn't set).
-   * Validates that the user has not set an illegal combination of configs
+   * Handle table config creation logic when creating a table for Table Version 9,
+   * which is based on the logic of table version < 9, and then tuned for version 9 logic.
+   * This approach fits the same behavior of upgrade from 8 to 9.
    */
-  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode,
-                                                                                    String payloadClassName,
-                                                                                    String recordMergeStrategyId,
-                                                                                    String orderingFieldName,
-                                                                                    HoodieTableVersion tableVersion) {
+  static Map<String, String> inferMergingConfigsForV9TableCreation(RecordMergeMode recordMergeMode,
+                                                                   String payloadClassName,
+                                                                   String recordMergeStrategyId,
+                                                                   String orderingFieldName,
+                                                                   HoodieTableVersion tableVersion) {
+    Map<String, String> reconciledConfigs = new HashMap<>();
+    if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      throw new HoodieIOException("Unsupported flow for table versions less than 9");
+    }
+
+    // Step 1: Infer merging configs based on input information.
+    // This step is important since it provides the same configs before we do table upgrade.
+    // Then additional logic for table version 9 could be verified.
+    Triple<RecordMergeMode, String, String> inferredConfigs = inferMergingConfigsForPreV9Table(
+        recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldName, tableVersion);
+    recordMergeMode = inferredConfigs.getLeft();
+    recordMergeStrategyId = inferredConfigs.getRight();
+
+    // Step 2: Handle Version 9 specific logic.
+    // CASE 0: For tables with special merger properties, e.g., with non-builtin mergers.
+    // CASE 1: For tables using MERGE MODE, or CUSTOM builtin mergers.
+    //   NOTE: Payload class should NOT be set for these cases.
+    if (!BUILTIN_MERGE_STRATEGIES.contains(recordMergeStrategyId)
+        || StringUtils.isNullOrEmpty(payloadClassName)) {
+      reconciledConfigs.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+      reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), recordMergeStrategyId);
+    } else {
+      // For tables using payload classes.
+      //   CASE 2: Custom payload class. We set these properties explicitly.
+      if (!PAYLOADS_UNDER_DEPRECATION.contains(payloadClassName)) {
+        reconciledConfigs.put(RECORD_MERGE_MODE.key(), CUSTOM.toString());
+        reconciledConfigs.put(PAYLOAD_CLASS_NAME.key(), payloadClassName);
+        reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), PAYLOAD_BASED_MERGE_STRATEGY_UUID);
+      } else { // CASE 3: Payload classes are under deprecation.
+        // Standard merging configs.
+        // NOTE: We use LEGACY_PAYLOAD_CLASS_NAME instead of PAYLOAD_CLASS_NAME here.
+        if (EVENT_TIME_ORDERING_PAYLOADS.contains(payloadClassName)) {
+          reconciledConfigs.put(RECORD_MERGE_MODE.key(), EVENT_TIME_ORDERING.name());
+          reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
+          reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), EVENT_TIME_BASED_MERGE_STRATEGY_UUID);
+        } else {
+          reconciledConfigs.put(RECORD_MERGE_MODE.key(), COMMIT_TIME_ORDERING.name());
+          reconciledConfigs.put(LEGACY_PAYLOAD_CLASS_NAME.key(), payloadClassName);
+          reconciledConfigs.put(RECORD_MERGE_STRATEGY_ID.key(), COMMIT_TIME_BASED_MERGE_STRATEGY_UUID);
+        }
+        // Partial update mode config.
+        // Certain payloads are migrated to non payload way from 1.1 Hudi binary.
+        // Hence we need to set the right value for partial update mode for some of the cases.
+        if (payloadClassName.equals(PartialUpdateAvroPayload.class.getName())
+            || payloadClassName.equals(OverwriteNonDefaultsWithLatestAvroPayload.class.getName())) {
+          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_DEFAULTS.name());
+        } else if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
+          reconciledConfigs.put(PARTIAL_UPDATE_MODE.key(), PartialUpdateMode.IGNORE_MARKERS.name());
+        }
+        // Additional custom merge properties.
+        // Cretain payloads are migrated to non payload way from 1.1 Hudi binary and the reader might need certain properties for the
+        // merge to function as expected. Handing such special cases here.
+        if (payloadClassName.equals(PostgresDebeziumAvroPayload.class.getName())) {
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_CUSTOM_MARKER, DEBEZIUM_UNAVAILABLE_VALUE);
+        } else if (payloadClassName.equals(AWSDmsAvroPayload.class.getName())) {
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY, OP_FIELD);
+          reconciledConfigs.put(RECORD_MERGE_PROPERTY_PREFIX + DELETE_MARKER, DELETE_OPERATION_VALUE);
+        }
+      }
+    }
+    return reconciledConfigs;
+  }
+
+  /**
+   * To be invoked for table creation flows or writer flows.
+   * @return the merging configs to use.
+   */
+  public static Triple<RecordMergeMode, String, String> inferMergingConfigsForWrites(RecordMergeMode recordMergeMode,
+                                                                                     String payloadClassName,
+                                                                                     String recordMergeStrategyId,
+                                                                                     String orderingFieldNamesAsString,
+                                                                                     HoodieTableVersion tableVersion) {
+    return inferMergingConfigsForPreV9Table(recordMergeMode, payloadClassName, recordMergeStrategyId, orderingFieldNamesAsString, tableVersion);
+  }
+
+  /**
+   * Infers the merging behavior based on what the user sets (or doesn't set).
+   * Validates that the user has not set an illegal combination of configs.
+   * This function infers basic merging properties used by table version <= 8.
+   */
+  public static Triple<RecordMergeMode, String, String> inferMergingConfigsForPreV9Table(RecordMergeMode recordMergeMode,
+                                                                                         String payloadClassName,
+                                                                                         String recordMergeStrategyId,
+                                                                                         String orderingFieldNamesAsString,
+                                                                                         HoodieTableVersion tableVersion) {
     RecordMergeMode inferredRecordMergeMode;
     String inferredPayloadClassName;
     String inferredRecordMergeStrategyId;
@@ -784,7 +925,7 @@ public class HoodieTableConfig extends HoodieConfig {
       // use the default merge mode determined by whether the ordering field name is set.
       inferredRecordMergeMode = recordMergeMode != null
           ? recordMergeMode
-          : (isNullOrEmpty(orderingFieldName) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
+          : (isNullOrEmpty(orderingFieldNamesAsString) ? COMMIT_TIME_ORDERING : EVENT_TIME_ORDERING);
     } else {
       // Infer the merge mode from either the payload class or record merge strategy ID
       RecordMergeMode modeBasedOnPayload = inferRecordMergeModeFromPayloadClass(payloadClassName);
@@ -816,12 +957,12 @@ public class HoodieTableConfig extends HoodieConfig {
 
     // Check ordering field name based on record merge mode
     if (inferredRecordMergeMode == COMMIT_TIME_ORDERING) {
-      if (nonEmpty(orderingFieldName)) {
+      if (nonEmpty(orderingFieldNamesAsString)) {
         LOG.warn("The precombine or ordering field ({}) is specified. COMMIT_TIME_ORDERING "
-            + "merge mode does not use precombine or ordering field anymore.", orderingFieldName);
+            + "merge mode does not use precombine or ordering field anymore.", orderingFieldNamesAsString);
       }
     } else if (inferredRecordMergeMode == EVENT_TIME_ORDERING) {
-      if (isNullOrEmpty(orderingFieldName)) {
+      if (isNullOrEmpty(orderingFieldNamesAsString)) {
         LOG.warn("The precombine or ordering field is not specified. EVENT_TIME_ORDERING "
             + "merge mode requires precombine or ordering field to be set for getting the "
             + "event time. Using commit time-based ordering now.");
@@ -858,6 +999,7 @@ public class HoodieTableConfig extends HoodieConfig {
     if (isNullOrEmpty(payloadClassName)) {
       return null;
     }
+
     if (DefaultHoodieRecordPayload.class.getName().equals(payloadClassName)
         || EventTimeAvroPayload.class.getName().equals(payloadClassName)) {
       // DefaultHoodieRecordPayload and EventTimeAvroPayload match with EVENT_TIME_ORDERING.
@@ -883,8 +1025,14 @@ public class HoodieTableConfig extends HoodieConfig {
     }
   }
 
-  public String getPreCombineField() {
-    return getString(PRECOMBINE_FIELD);
+  public List<String> getPreCombineFields() {
+    return getPreCombineFieldsStr()
+        .map(preCombine -> Arrays.stream(preCombine.split(",")).filter(StringUtils::nonEmpty).collect(Collectors.toList()))
+        .orElse(Collections.emptyList());
+  }
+
+  public Option<String> getPreCombineFieldsStr() {
+    return Option.ofNullable(getString(PRECOMBINE_FIELDS));
   }
 
   public Option<String[]> getRecordKeyFields() {
@@ -1054,6 +1202,15 @@ public class HoodieTableConfig extends HoodieConfig {
             CONFIG_VALUES_DELIMITER));
   }
 
+  public PartialUpdateMode getPartialUpdateMode() {
+    if (getTableVersion().greaterThanOrEquals(HoodieTableVersion.NINE)) {
+      return PartialUpdateMode.valueOf(getStringOrDefault(PARTIAL_UPDATE_MODE));
+    } else {
+      // For table version <= 8, partial update is not supported.
+      return PartialUpdateMode.NONE;
+    }
+  }
+
   /**
    * @returns the index definition path.
    */
@@ -1147,6 +1304,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return Option.empty();
   }
 
+  public Map<String, String> getTableMergeProperties() {
+    return ConfigUtils.extractWithPrefix(this.props, RECORD_MERGE_PROPERTY_PREFIX);
+  }
+
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
@@ -1178,10 +1339,10 @@ public class HoodieTableConfig extends HoodieConfig {
   @Deprecated
   public static final String HOODIE_TABLE_VERSION_PROP_NAME = VERSION.key();
   /**
-   * @deprecated Use {@link #PRECOMBINE_FIELD} and its methods.
+   * @deprecated Use {@link #PRECOMBINE_FIELDS} and its methods.
    */
   @Deprecated
-  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = PRECOMBINE_FIELD.key();
+  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = PRECOMBINE_FIELDS.key();
   /**
    * @deprecated Use {@link #BASE_FILE_FORMAT} and its methods.
    */

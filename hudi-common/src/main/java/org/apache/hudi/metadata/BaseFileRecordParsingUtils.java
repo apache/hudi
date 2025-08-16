@@ -63,7 +63,8 @@ public class BaseFileRecordParsingUtils {
                                                                                    HoodieWriteStat writeStat,
                                                                                    Integer writesFileIdEncoding,
                                                                                    String instantTime,
-                                                                                   HoodieStorage storage) {
+                                                                                   HoodieStorage storage,
+                                                                                   boolean isPartitionedRLI) {
     String partition = writeStat.getPartitionPath();
     String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
     String fileId = FSUtils.getFileId(latestFileName);
@@ -83,7 +84,7 @@ public class BaseFileRecordParsingUtils {
 
     if (recordStatusListMap.containsKey(RecordStatus.DELETE)) {
       hoodieRecords.addAll(recordStatusListMap.get(RecordStatus.DELETE).stream()
-          .map(recordKey -> HoodieMetadataPayload.createRecordIndexDelete(recordKey)).collect(toList()));
+          .map(recordKey -> HoodieMetadataPayload.createRecordIndexDelete(recordKey, partition, isPartitionedRLI)).collect(toList()));
     }
 
     return hoodieRecords.iterator();

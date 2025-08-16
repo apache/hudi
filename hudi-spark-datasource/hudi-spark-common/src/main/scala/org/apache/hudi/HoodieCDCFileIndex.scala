@@ -22,32 +22,33 @@ package org.apache.hudi
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCExtractor
+import org.apache.hudi.common.table.log.InstantRange.RangeType
 
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
-import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 
-class HoodieCDCFileIndex (override val spark: SparkSession,
-                          override val metaClient: HoodieTableMetaClient,
-                          override val schemaSpec: Option[StructType],
-                          override val options: Map[String, String],
-                          @transient override val fileStatusCache: FileStatusCache = NoopCache,
-                          override val includeLogFiles: Boolean,
-                          override val shouldEmbedFileSlices: Boolean)
-  extends HoodieIncrementalFileIndex(
-    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices
-  ) with FileIndex {
+class HoodieCDCFileIndex(override val spark: SparkSession,
+                         override val metaClient: HoodieTableMetaClient,
+                         override val schemaSpec: Option[StructType],
+                         override val options: Map[String, String],
+                         @transient override val fileStatusCache: FileStatusCache = NoopCache,
+                         override val includeLogFiles: Boolean,
+                         val rangeType: RangeType)
+  extends HoodieFileIndex(
+    spark, metaClient, schemaSpec, options, fileStatusCache, includeLogFiles, shouldEmbedFileSlices = true
+  ) with FileIndex  {
   private val emptyPartitionPath: String = "empty_partition_path";
-  val cdcRelation: CDCRelation = CDCRelation.getCDCRelation(spark.sqlContext, metaClient, options)
+  val cdcRelation: CDCRelation = CDCRelation.getCDCRelation(spark.sqlContext, metaClient, options, rangeType)
   val cdcExtractor: HoodieCDCExtractor = cdcRelation.cdcExtractor
 
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    hasPushedDownPartitionPredicates = true
     cdcExtractor.extractCDCFileSplits().asScala.map {
       case (fileGroupId, fileSplits) =>
         val partitionPath = if (fileGroupId.getPartitionPath.isEmpty) emptyPartitionPath else fileGroupId.getPartitionPath
@@ -78,9 +79,5 @@ class HoodieCDCFileIndex (override val spark: SparkSession,
       val fileGroupId = fileGroupSplit._1
       new Path(fileGroupId.getPartitionPath, fileGroupId.getFileId).toString
     }.toArray
-  }
-
-  override def getRequiredFilters: Seq[Filter] = {
-    Seq.empty
   }
 }

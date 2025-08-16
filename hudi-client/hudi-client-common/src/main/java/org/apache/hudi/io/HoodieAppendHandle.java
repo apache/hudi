@@ -48,6 +48,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -68,6 +69,7 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -133,6 +135,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private boolean useWriterSchema = false;
 
   private final Properties recordProperties = new Properties();
+  private final String[] orderingFields;
 
   /**
    * This is used by log compaction only.
@@ -155,11 +158,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             // schema containing the updated fields only
             ? Option.of(new Schema.Parser().parse(config.getPartialUpdateSchema()))
             : Option.empty(),
-        taskContextSupplier);
+        taskContextSupplier,
+        false);
     this.recordItr = recordItr;
     this.sizeEstimator = getSizeEstimator();
     this.statuses = new ArrayList<>();
     this.recordProperties.putAll(config.getProps());
+    this.orderingFields = ConfigUtils.getOrderingFields(recordProperties);
     boolean shouldWriteRecordPositions = config.shouldWriteRecordPositions()
         // record positions supported only from table version 8
         && config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT);
@@ -194,8 +199,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       prevCommit = instantTime;
       if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
         // the cdc reader needs the base file metadata to have deterministic update sequence.
-        TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-        fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+        fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, fileId);
         if (fileSlice.isPresent()) {
           prevCommit = fileSlice.get().getBaseInstantTime();
           baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -204,8 +208,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
     } else {
       // older table versions.
-      TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
-      fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
+      fileSlice = hoodieTable.getSliceView().getLatestFileSlice(partitionPath, fileId);
       if (fileSlice.isPresent()) {
         prevCommit = fileSlice.get().getBaseInstantTime();
         baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
@@ -285,8 +288,8 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private void bufferRecord(HoodieRecord<T> hoodieRecord) {
-    Option<Map<String, String>> recordMetadata = hoodieRecord.getMetadata();
     Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
+    Option<Map<String, String>> recordMetadata = getRecordMetadata(hoodieRecord, schema, recordProperties);
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
       // Whether it is an update or insert record.
@@ -524,18 +527,22 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     try {
       if (isClosed()) {
         // Handle has already been closed
-        return Collections.emptyList();
+        return Collections.singletonList(writeStatus);
       }
 
       markClosed();
       // flush any remaining records to disk
       appendDataAndDeleteBlocks(header, true);
+      if (recordItr instanceof Closeable) {
+        ((Closeable) recordItr).close();
+      }
       recordItr = null;
 
       if (writer != null) {
         writer.close();
         writer = null;
       }
+
       // update final size, once for all log files
       // TODO we can actually deduce file size purely from AppendResult (based on offset and size
       //      of the appended block)
@@ -544,6 +551,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             new StoragePath(config.getBasePath(), status.getStat().getPath()))
             .getLength();
         status.getStat().setFileSizeInBytes(logFileSize);
+      }
+
+      // generate Secondary index stats if streaming writes is enabled.
+      if (isSecondaryIndexStatsStreamingWritesEnabled) {
+        // Adds secondary index only for the last log file write status. We do not need to add secondary index stats
+        // for every log file written as part of the append handle write. The last write status would update the
+        // secondary index considering all the log files.
+        SecondaryIndexStreamingTracker.trackSecondaryIndexStats(partitionPath, fileId, getReadFileSlice(),
+            statuses.stream().map(status -> status.getStat().getPath()).collect(Collectors.toList()),
+            statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
       }
 
       return statuses;
@@ -632,7 +649,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     hoodieRecord.seal();
     recordsDeleted++;
 
-    final Comparable<?> orderingVal = hoodieRecord.getOrderingValue(writeSchema, recordProperties);
+    final Comparable<?> orderingVal = hoodieRecord.getOrderingValue(writeSchema, recordProperties, orderingFields);
     long position = baseFileInstantTimeOfPositions.isPresent() ? hoodieRecord.getCurrentPosition() : -1L;
     recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(hoodieRecord.getKey(), orderingVal), position));
   }
@@ -706,5 +723,13 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }
+  }
+
+  /**
+   * Returns the file slice for reader view.
+   */
+  private Option<FileSlice> getReadFileSlice() {
+    TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
+    return rtView.getLatestMergedFileSliceBeforeOrOn(partitionPath, instantTime, fileId);
   }
 }

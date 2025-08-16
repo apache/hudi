@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import com.esotericsoftware.kryo.Kryo;
@@ -160,6 +161,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   protected transient Comparable<?> orderingValue;
 
+  protected Boolean isDelete;
+
   public HoodieRecord(HoodieKey key, T data) {
     this(key, data, null, Option.empty());
   }
@@ -172,6 +175,18 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.sealed = false;
     this.ignoreIndexUpdate = false;
     this.operation = operation;
+    this.metaData = metaData;
+  }
+
+  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, boolean isDelete, Option<Map<String, String>> metaData) {
+    this.key = key;
+    this.data = data;
+    this.currentLocation = null;
+    this.newLocation = null;
+    this.sealed = false;
+    this.ignoreIndexUpdate = false;
+    this.operation = operation;
+    this.isDelete = isDelete;
     this.metaData = metaData;
   }
 
@@ -218,11 +233,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    *
    * @param recordSchema Avro schema for the record
    * @param props Properties containing the necessary configurations
+   * @param orderingFields name of the ordering fields
    * @return The ordering value for the record
    */
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props) {
+  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
     if (orderingValue == null) {
-      orderingValue = doGetOrderingValue(recordSchema, props);
+      orderingValue = doGetOrderingValue(recordSchema, props, orderingFields);
     }
     return orderingValue;
   }
@@ -232,9 +248,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    *
    * @param recordSchema Avro schema for the record
    * @param props Properties containing the necessary configurations
+   * @param orderingFields name of the ordering fields
    * @return The ordering value for the record
    */
-  protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props);
+  protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields);
 
   public T getData() {
     if (data == null) {
@@ -389,6 +406,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     //       implementation
     writeRecordPayload(data, kryo, output);
     kryo.writeObjectOrNull(output, ignoreIndexUpdate, Boolean.class);
+    kryo.writeObjectOrNull(output, isDelete, Boolean.class);
+    kryo.writeClassAndObject(output, orderingValue);
   }
 
   /**
@@ -405,10 +424,24 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     //       implementation
     this.data = readRecordPayload(kryo, input);
     this.ignoreIndexUpdate = kryo.readObjectOrNull(input, Boolean.class);
+    this.isDelete = kryo.readObjectOrNull(input, Boolean.class);
+    this.orderingValue = (Comparable<?>) kryo.readClassAndObject(input);
 
     // NOTE: We're always seal object after deserialization
     this.sealed = true;
   }
+
+  /**
+   * This method converts a value for a column with certain Avro Logical data types that require special handling.
+   * <p>
+   * E.g., Logical Date Type is converted to actual Date value instead of Epoch Integer which is how it is
+   * represented/stored in parquet.
+   * <p>
+   * E.g., Decimal Data Type is converted to actual decimal value instead of bytes/fixed which is how it is
+   * represented/stored in parquet.
+   */
+  public abstract Object convertColumnValueForLogicalType(
+      Schema fieldSchema, Object fieldValue, boolean keepConsistentLogicalTimestamp);
 
   /**
    * Get column in record to support RDDCustomColumnsSortPartitioner
@@ -417,8 +450,10 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
 
   /**
-   * Get column in record to support RDDCustomColumnsSortPartitioner
-   * @return column value
+   * Get column as Java type in record to collect index stats: col_stats, secondary index, etc.
+   * The Java type is required to keep the value engine agnostic.
+   *
+   * @return the column value
    */
   public abstract Object getColumnValueAsJava(Schema recordSchema, String column, Properties props);
 
@@ -455,7 +490,22 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return rewriteRecordWithNewSchema(recordSchema, props, newSchema, Collections.emptyMap());
   }
 
-  public abstract boolean isDelete(Schema recordSchema, Properties props) throws IOException;
+  public boolean isDelete(Schema recordSchema, Properties props) {
+    if (isDelete == null) {
+      try {
+        isDelete = checkIsDelete(recordSchema, props);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to check DELETE record.", e);
+      }
+    }
+    return isDelete;
+  }
+
+  /**
+   * Check whether the record is DELETE by the data content.
+   * todo: all subclass
+   */
+  protected abstract boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException;
 
   /**
    * Is EmptyRecord. Generated by ExpressionPayload.

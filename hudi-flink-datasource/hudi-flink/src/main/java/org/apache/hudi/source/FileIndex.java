@@ -21,16 +21,15 @@ package org.apache.hudi.source;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.stats.FileStatsIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -71,11 +70,13 @@ public class FileIndex implements Serializable {
   private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
   private List<String> partitionPaths;                             // cache of partition paths
   private final FileStatsIndex fileStatsIndex;                     // for data skipping
+  private final HoodieTableMetaClient metaClient;
 
   private FileIndex(
       StoragePath path,
       Configuration conf,
       RowType rowType,
+      HoodieTableMetaClient metaClient,
       ColumnStatsProbe colStatsProbe,
       PartitionPruners.PartitionPruner partitionPruner,
       Function<String, Integer> partitionBucketIdFunc) {
@@ -85,8 +86,9 @@ public class FileIndex implements Serializable {
     this.metadataConfig = StreamerUtil.metadataConfig(conf);
     this.colStatsProbe = isDataSkippingFeasible(conf.get(FlinkOptions.READ_DATA_SKIPPING_ENABLED)) ? colStatsProbe : null;
     this.partitionPruner = partitionPruner;
-    this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, metadataConfig);
+    this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
+    this.metaClient = metaClient;
   }
 
   /**
@@ -158,8 +160,7 @@ public class FileIndex implements Serializable {
       return Collections.emptyList();
     }
     Map<String, List<StoragePathInfo>> filesInPartitions = FSUtils.getFilesInPartitions(
-        new HoodieFlinkEngineContext(hadoopConf),
-        new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString(), partitions);
+        new HoodieFlinkEngineContext(hadoopConf), metaClient, metadataConfig, partitions);
     int totalFilesNum = filesInPartitions.values().stream().mapToInt(List::size).sum();
     if (totalFilesNum < 1) {
       // returns early for empty table.
@@ -232,9 +233,7 @@ public class FileIndex implements Serializable {
     if (this.partitionPaths != null) {
       return this.partitionPaths;
     }
-    List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(
-        new HoodieFlinkEngineContext(hadoopConf),
-        new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString())
+    List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metaClient, metadataConfig)
         : Collections.emptyList();
     if (this.partitionPruner == null) {
       this.partitionPaths = allPartitionPaths;
@@ -288,6 +287,7 @@ public class FileIndex implements Serializable {
     private StoragePath path;
     private Configuration conf;
     private RowType rowType;
+    private HoodieTableMetaClient metaClient;
     private ColumnStatsProbe columnStatsProbe;
     private PartitionPruners.PartitionPruner partitionPruner;
     private Function<String, Integer> partitionBucketIdFunc;
@@ -310,6 +310,11 @@ public class FileIndex implements Serializable {
       return this;
     }
 
+    public Builder metaClient(HoodieTableMetaClient metaClient) {
+      this.metaClient = metaClient;
+      return this;
+    }
+
     public Builder columnStatsProbe(ColumnStatsProbe columnStatsProbe) {
       this.columnStatsProbe = columnStatsProbe;
       return this;
@@ -327,7 +332,7 @@ public class FileIndex implements Serializable {
 
     public FileIndex build() {
       return new FileIndex(Objects.requireNonNull(path), Objects.requireNonNull(conf), Objects.requireNonNull(rowType),
-          columnStatsProbe, partitionPruner, partitionBucketIdFunc);
+          metaClient, columnStatsProbe, partitionPruner, partitionBucketIdFunc);
     }
   }
 }

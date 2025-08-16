@@ -170,7 +170,7 @@ public class HoodieFlinkCompactor {
       this.metaClient = StreamerUtil.createMetaClient(conf);
 
       // get the table name
-      conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+      conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
 
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
@@ -276,9 +276,9 @@ public class HoodieFlinkCompactor {
       int totalOperations = Math.toIntExact(compactionPlans.stream().mapToLong(pair -> pair.getRight().getOperations().size()).sum());
 
       // get compactionParallelism.
-      int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
+      int compactionParallelism = conf.get(FlinkOptions.COMPACTION_TASKS) == -1
           ? totalOperations
-          : Math.min(conf.getInteger(FlinkOptions.COMPACTION_TASKS), totalOperations);
+          : Math.min(conf.get(FlinkOptions.COMPACTION_TASKS), totalOperations);
 
       LOG.info("Start to compaction for instant " + compactionInstantTimes);
 

@@ -27,13 +27,13 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -308,15 +308,14 @@ public class SparkMetadataWriterUtils {
     String relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(filePath));
     long fileSize = filePathSizePair.getValue();
     boolean isBaseFile = FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1)));
-    FileSlice fileSlice;
+    Stream<HoodieLogFile> logFileStream;
+    Option<HoodieBaseFile> baseFileOption;
     if (isBaseFile) {
-      HoodieBaseFile baseFile = new HoodieBaseFile(filePath);
-      fileSlice = new FileSlice(partition, baseFile.getCommitTime(), baseFile.getFileId());
-      fileSlice.setBaseFile(baseFile);
+      baseFileOption = Option.of(new HoodieBaseFile(filePath));
+      logFileStream = Stream.empty();
     } else {
-      HoodieLogFile logFile = new HoodieLogFile(filePath);
-      fileSlice = new FileSlice(partition, logFile.getDeltaCommitTime(), logFile.getFileId());
-      fileSlice.addLogFile(logFile);
+      baseFileOption = Option.empty();
+      logFileStream = Stream.of(new HoodieLogFile(filePath));
     }
     HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>newBuilder()
         .withReaderContext(readerContext)
@@ -326,14 +325,17 @@ public class SparkMetadataWriterUtils {
         .withProps(dataWriteConfig.getProps())
         .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(""))
         .withAllowInflightInstants(true)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(baseFileOption)
+        .withLogFiles(logFileStream)
+        .withPartitionPath(partition)
+        .withEnableOptimizedLogBlockScan(dataWriteConfig.enableOptimizedLogBlocksScan())
         .build();
     try {
       ClosableIterator<InternalRow> rowsForFilePath = fileGroupReader.getClosableIterator();
       SparkRowSerDe sparkRowSerDe = HoodieCatalystExpressionUtils.sparkAdapter().createSparkRowSerDe(HoodieInternalRowUtils.getCachedSchema(readerSchema));
       return getRowsWithExpressionIndexMetadata(rowsForFilePath, sparkRowSerDe, partition, relativeFilePath, fileSize);
     } catch (IOException ex) {
-      throw new HoodieIOException("Error reading file slice " + fileSlice, ex);
+      throw new HoodieIOException("Error reading file " + filePath, ex);
     }
   }
 
@@ -399,7 +401,9 @@ public class SparkMetadataWriterUtils {
             .collect(Collectors.toSet());
         // Fetch EI column stat records for above files
         List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
-            tableMetadata.getRecordsByKeyPrefixes(HoodieTableMetadataUtil.generateKeyPrefixes(validColumnsToIndex, partitionName), indexPartition, false)
+            tableMetadata.getRecordsByKeyPrefixes(
+                    HoodieListData.lazy(HoodieTableMetadataUtil.generateColumnStatsKeys(validColumnsToIndex, partitionName)),
+                    indexPartition, false)
                 // schema and properties are ignored in getInsertValue, so simply pass as null
                 .map(record -> record.getData().getInsertValue(null, null))
                 .filter(Option::isPresent)

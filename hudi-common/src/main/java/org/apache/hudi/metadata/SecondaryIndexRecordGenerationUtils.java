@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -46,14 +47,18 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.createSecondaryIndexRecord;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.filePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight;
@@ -133,7 +138,7 @@ public class SecondaryIndexRecordGenerationUtils {
         } else {
           // delete previous entry and insert new value if secondaryKey is different
           String previousSecondaryKey = recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey);
-          if (!previousSecondaryKey.equals(secondaryKey)) {
+          if (!Objects.equals(previousSecondaryKey, secondaryKey)) {
             records.add(createSecondaryIndexRecord(recordKey, previousSecondaryKey, indexDefinition.getIndexName(), true));
             records.add(createSecondaryIndexRecord(recordKey, secondaryKey, indexDefinition.getIndexName(), false));
           }
@@ -148,14 +153,14 @@ public class SecondaryIndexRecordGenerationUtils {
     });
   }
 
-  private static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
+  public static <T> Map<String, String> getRecordKeyToSecondaryKey(HoodieTableMetaClient metaClient,
                                                                     HoodieReaderContext<T> readerContext,
                                                                     FileSlice fileSlice,
                                                                     Schema tableSchema,
                                                                     HoodieIndexDefinition indexDefinition,
                                                                     String instantTime,
                                                                     TypedProperties props,
-                                                                    boolean allowInflightInstants) throws Exception {
+                                                                    boolean allowInflightInstants) throws IOException {
     Map<String, String> recordKeyToSecondaryKey = new HashMap<>();
     try (ClosableIterator<Pair<String, String>> recordKeyAndSecondaryIndexValueIter =
              createSecondaryIndexRecordGenerator(readerContext, metaClient, fileSlice, tableSchema, indexDefinition, instantTime, props, allowInflightInstants)) {
@@ -214,8 +219,9 @@ public class SecondaryIndexRecordGenerationUtils {
                                                                                                 HoodieIndexDefinition indexDefinition,
                                                                                                 String instantTime,
                                                                                                 TypedProperties props,
-                                                                                                boolean allowInflightInstants) throws Exception {
-    String secondaryKeyField = String.join(".", indexDefinition.getSourceFields());
+                                                                                                boolean allowInflightInstants) throws IOException {
+    String secondaryKeyField = indexDefinition.getSourceFieldsKey();
+    Schema requestedSchema = getRequestedSchemaForSecondaryIndex(metaClient, tableSchema, secondaryKeyField);
     HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
         .withReaderContext(readerContext)
         .withFileSlice(fileSlice)
@@ -223,7 +229,7 @@ public class SecondaryIndexRecordGenerationUtils {
         .withProps(props)
         .withLatestCommitTime(instantTime)
         .withDataSchema(tableSchema)
-        .withRequestedSchema(tableSchema)
+        .withRequestedSchema(requestedSchema)
         .withAllowInflightInstants(allowInflightInstants)
         .build();
 
@@ -243,23 +249,14 @@ public class SecondaryIndexRecordGenerationUtils {
           return true;
         }
 
-        // Secondary key is null when there is a delete record, and we only have the record key.
-        // This can happen when the record is deleted in the log file.
-        // In this case, we need not index the record because for the given record key,
-        // we have already prepared the delete record before reaching this point.
-        // NOTE: Delete record should not happen when initializing the secondary index i.e. when called from readSecondaryKeysFromFileSlices,
-        // because from that call, we get the merged records as of some committed instant. So, delete records must have been filtered out.
-        // Loop to find the next valid record or exhaust the iterator.
         while (recordIterator.hasNext()) {
           T record = recordIterator.next();
-          Object secondaryKey = readerContext.getValue(record, tableSchema, secondaryKeyField);
-          if (secondaryKey != null) {
+          Object secondaryKey = readerContext.getRecordContext().getValue(record, requestedSchema, secondaryKeyField);
             nextValidRecord = Pair.of(
-                readerContext.getRecordKey(record, tableSchema),
-                secondaryKey.toString()
+                readerContext.getRecordContext().getRecordKey(record, requestedSchema),
+                secondaryKey == null ? null : secondaryKey.toString()
             );
-            return true;
-          }
+          return true;
         }
 
         // If no valid records are found
@@ -276,5 +273,17 @@ public class SecondaryIndexRecordGenerationUtils {
         return result;
       }
     };
+  }
+
+  private static Schema getRequestedSchemaForSecondaryIndex(HoodieTableMetaClient metaClient, Schema tableSchema, String secondaryKeyField) {
+    String[] recordKeyFields;
+    if (tableSchema.getField(RECORD_KEY_METADATA_FIELD) != null) {
+      recordKeyFields = new String[] {RECORD_KEY_METADATA_FIELD};
+    } else {
+      recordKeyFields = metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0]);
+    }
+    String[] projectionFields = Arrays.copyOf(recordKeyFields, recordKeyFields.length + 1);
+    projectionFields[recordKeyFields.length] = secondaryKeyField;
+    return HoodieAvroUtils.projectSchema(tableSchema, Arrays.asList(projectionFields));
   }
 }

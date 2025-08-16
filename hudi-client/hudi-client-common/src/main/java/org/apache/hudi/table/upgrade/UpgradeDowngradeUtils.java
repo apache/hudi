@@ -24,14 +24,23 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -44,6 +53,10 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -57,7 +70,12 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -71,6 +89,15 @@ public class UpgradeDowngradeUtils {
       Pair.of(REPLACE_COMMIT_ACTION, CLUSTERING_ACTION)
   );
   static final Map<String, String> EIGHT_TO_SIX_TIMELINE_ACTION_MAP = CollectionUtils.reverseMap(SIX_TO_EIGHT_TIMELINE_ACTION_MAP);
+  static final Set<String> PAYLOAD_CLASSES_TO_HANDLE = new HashSet<>(Arrays.asList(
+      AWSDmsAvroPayload.class.getName(),
+      DefaultHoodieRecordPayload.class.getName(),
+      EventTimeAvroPayload.class.getName(),
+      MySqlDebeziumAvroPayload.class.getName(),
+      OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+      OverwriteWithLatestAvroPayload.class.getName(),
+      PartialUpdateAvroPayload.class.getName(),
+      PostgresDebeziumAvroPayload.class.getName()));
 
   /**
    * Utility method to run compaction for MOR table as part of downgrade step.
@@ -107,7 +134,7 @@ public class UpgradeDowngradeUtils {
    */
   public static void syncCompactionRequestedFileToAuxiliaryFolder(HoodieTable table) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    TimelineFactory timelineFactory = metaClient.getTimelineLayout().getTimelineFactory();
+    TimelineFactory timelineFactory = metaClient.getTableFormat().getTimelineFactory();
     InstantFileNameGenerator instantFileNameGenerator = metaClient.getInstantFileNameGenerator();
     HoodieTimeline compactionTimeline = timelineFactory.createActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
@@ -174,13 +201,13 @@ public class UpgradeDowngradeUtils {
       properties.putAll(config.getProps());
       // TimeGenerators are cached and re-used based on table base path. Since here we are changing the lock configurations, avoiding the cache use
       // for upgrade code block.
-      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(),"false");
+      properties.put(HoodieTimeGeneratorConfig.TIME_GENERATOR_REUSE_ENABLE.key(), "false");
       // override w/ NoopLock Provider to avoid re-entrant locking. already upgrade is happening within the table level lock.
       // Below we do trigger rollback and compaction which might again try to acquire the lock. So, here we are explicitly overriding to
       // NoopLockProvider for just the upgrade code block.
       properties.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), NoopLockProvider.class.getName());
       // if auto adjust it not disabled, chances that InProcessLockProvider will get overridden for single writer use-cases.
-      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(),"false");
+      properties.put(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key(), "false");
       HoodieWriteConfig rollbackWriteConfig = HoodieWriteConfig.newBuilder()
           .withProps(properties)
           .withWriteTableVersion(tableVersion.versionCode())
@@ -212,6 +239,74 @@ public class UpgradeDowngradeUtils {
       }
     } catch (Exception e) {
       throw new HoodieException(e);
+    }
+  }
+
+  // If the metadata table is enabled for the data table, and
+  // existing metadata table is behind the data table, then delete it.
+  static void checkAndHandleMetadataTable(HoodieEngineContext context,
+                                                 HoodieTable table,
+                                                 HoodieWriteConfig config,
+                                                 HoodieTableMetaClient metaClient, boolean checkforMetadataLagging) {
+    if (!table.isMetadataTable()
+        && config.isMetadataTableEnabled()
+        && (!checkforMetadataLagging || isMetadataTableBehindDataTable(config, metaClient))) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+    }
+  }
+
+  static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config,
+                                                       HoodieTableMetaClient metaClient) {
+    // if metadata table does not exist, then it is not behind
+    if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
+      return false;
+    }
+    // get last commit instant in data table and metadata table
+    HoodieInstant lastCommitInstantInDataTable = metaClient.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTableMetaClient.builder()
+        .setConf(metaClient.getStorageConf().newInstance())
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()))
+        .build();
+    HoodieInstant lastCommitInstantInMetadataTable = metadataTableMetaClient.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
+    // if last commit instant in data table is greater than the last commit instant in metadata table, then metadata table is behind
+    return lastCommitInstantInDataTable != null && lastCommitInstantInMetadataTable != null
+        && InstantComparison.compareTimestamps(lastCommitInstantInMetadataTable.requestedTime(),
+        InstantComparison.LESSER_THAN,
+        lastCommitInstantInDataTable.requestedTime());
+  }
+
+  /**
+   * Drops secondary index partitions from metadata table that are V2 or higher.
+   *
+   * @param config        Write config
+   * @param context       Engine context
+   * @param table         Hoodie table
+   * @param operationType Type of operation (upgrade/downgrade)
+   */
+  public static void dropNonV1SecondaryIndexPartitions(HoodieWriteConfig config, HoodieEngineContext context,
+                                                       HoodieTable table, SupportsUpgradeDowngrade upgradeDowngradeHelper, String operationType) {
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
+      List<String> mdtPartitions = metaClient.getTableConfig().getMetadataPartitions()
+          .stream()
+          .filter(partition -> {
+            // Only drop secondary indexes that are not V1
+            return metaClient.getIndexForMetadataPartition(partition)
+                .map(indexDef -> {
+                  if (MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX)) {
+                    return HoodieIndexVersion.V1.lowerThan(indexDef.getVersion());
+                  }
+                  return false;
+                })
+                .orElse(false);
+          })
+          .collect(Collectors.toList());
+      LOG.info("Dropping from MDT partitions for {}: {}", operationType, mdtPartitions);
+      if (!mdtPartitions.isEmpty()) {
+        writeClient.dropIndex(mdtPartitions);
+      }
     }
   }
 }

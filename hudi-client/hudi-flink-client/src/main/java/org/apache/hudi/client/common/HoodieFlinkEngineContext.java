@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -43,11 +43,12 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.FlinkClientUtil;
 
-import org.apache.flink.api.common.functions.RuntimeContext;
-
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -70,8 +71,6 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrap
 public class HoodieFlinkEngineContext extends HoodieEngineContext {
   public static final HoodieFlinkEngineContext DEFAULT = new HoodieFlinkEngineContext();
 
-  private final RuntimeContext runtimeContext;
-
   private HoodieFlinkEngineContext() {
     this(HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
   }
@@ -86,7 +85,6 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   public HoodieFlinkEngineContext(StorageConfiguration<?> storageConf, TaskContextSupplier taskContextSupplier) {
     super(storageConf, taskContextSupplier);
-    this.runtimeContext = ((FlinkTaskContextSupplier) taskContextSupplier).getFlinkRuntimeContext();
   }
 
   @Override
@@ -107,10 +105,6 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public <T> HoodieData<T> parallelize(List<T> data, int parallelism) {
     return HoodieListData.eager(data);
-  }
-
-  public RuntimeContext getRuntimeContext() {
-    return this.runtimeContext;
   }
 
   @Override
@@ -210,26 +204,35 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public <K extends Comparable<K>, V extends Comparable<V>, R> HoodieData<R> mapGroupsByKey(HoodiePairData<K, V> data,
+                                                                                            SerializableFunction<Iterator<V>, Iterator<R>> processFunc,
+                                                                                            List<K> keySpace,
+                                                                                            boolean preservesPartitioning) {
+    throw new UnsupportedOperationException("processKeyGroups() is not supported in FlinkEngineContext");
+  }
+
+  @Override
+  public KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
+    return HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
+  }
+
+  @Override
   public ReaderContextFactory<?> getReaderContextFactory(HoodieTableMetaClient metaClient) {
     // metadata table reads are only supported by the AvroReaderContext.
     if (metaClient.isMetadataTable()) {
       return new AvroReaderContextFactory(metaClient);
     }
+    return getEngineReaderContextFactory(metaClient);
+  }
+
+  public ReaderContextFactory<?> getEngineReaderContextFactory(HoodieTableMetaClient metaClient) {
     return (ReaderContextFactory<?>) ReflectionUtils.loadClass("org.apache.hudi.table.format.FlinkReaderContextFactory", metaClient);
   }
 
   /**
-   * Override the flink context supplier to return constant write token.
+   * Default task context supplier to return constant write token.
    */
-  private static class DefaultTaskContextSupplier extends FlinkTaskContextSupplier {
-
-    public DefaultTaskContextSupplier() {
-      this(null);
-    }
-
-    public DefaultTaskContextSupplier(RuntimeContext flinkRuntimeContext) {
-      super(flinkRuntimeContext);
-    }
+  public static class DefaultTaskContextSupplier extends TaskContextSupplier {
 
     public Supplier<Integer> getPartitionIdSupplier() {
       return () -> 0;
@@ -245,6 +248,16 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
     public Option<String> getProperty(EngineProperty prop) {
       return Option.empty();
+    }
+
+    @Override
+    public Supplier<Integer> getTaskAttemptNumberSupplier() {
+      return () -> -1;
+    }
+
+    @Override
+    public Supplier<Integer> getStageAttemptNumberSupplier() {
+      return () -> -1;
     }
   }
 }

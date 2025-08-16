@@ -193,7 +193,7 @@ public class CompactionCommitSinkV2 extends CleanFunctionV2<CompactionCommitEven
 
     long numErrorRecords = statuses.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
 
-    if (numErrorRecords > 0 && !this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
+    if (numErrorRecords > 0 && !this.conf.get(FlinkOptions.IGNORE_FAILED)) {
       // handle failure case
       LOG.error("Got {} error records during compaction of instant {},\n"
           + "option '{}' is configured as false,"
@@ -213,7 +213,7 @@ public class CompactionCommitSinkV2 extends CleanFunctionV2<CompactionCommitEven
     this.compactionMetrics.markCompactionCompleted();
 
     // Whether to clean up the old log file when compaction
-    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
+    if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
       this.writeClient.clean();
     }
   }

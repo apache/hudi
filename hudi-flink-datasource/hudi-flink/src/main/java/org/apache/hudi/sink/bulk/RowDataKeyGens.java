@@ -34,7 +34,7 @@ public class RowDataKeyGens {
    * Creates a {@link RowDataKeyGen} with given configuration.
    */
   public static RowDataKeyGen instance(Configuration conf, RowType rowType, int taskId, String instantTime) {
-    String recordKeys = conf.getString(FlinkOptions.RECORD_KEY_FIELD);
+    String recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD);
     if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
       return RowDataKeyGen.instance(conf, rowType);
     } else {

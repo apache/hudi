@@ -21,6 +21,7 @@ package org.apache.hudi.utils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -72,7 +73,7 @@ public class TestCompactionUtil {
 
   void beforeEach(Map<String, String> options) throws IOException {
     this.conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     options.forEach((k, v) -> conf.setString(k, v));
 
     StreamerUtil.initTableIfNotExists(conf);
@@ -80,7 +81,7 @@ public class TestCompactionUtil {
     this.table = FlinkTables.createTable(conf);
     this.metaClient = table.getMetaClient();
     // initialize the metadata table path
-    if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
+    if (conf.get(FlinkOptions.METADATA_ENABLED)) {
       FlinkHoodieBackedTableMetadataWriter.create(table.getStorageConf(), table.getConfig(),
           table.getContext(), Option.empty());
     }
@@ -108,7 +109,7 @@ public class TestCompactionUtil {
   @Test
   void rollbackEarliestCompaction() throws Exception {
     beforeEach();
-    conf.setInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS, 0);
+    conf.set(FlinkOptions.COMPACTION_TIMEOUT_SECONDS, 0);
     List<String> oriInstants = IntStream.range(0, 3)
         .mapToObj(i -> generateCompactionPlan()).collect(Collectors.toList());
     List<HoodieInstant> instants = metaClient.getActiveTimeline()
@@ -164,7 +165,7 @@ public class TestCompactionUtil {
     beforeEach(options);
     CompactionUtil.inferMetadataConf(this.conf, this.metaClient);
     assertThat("Metadata table should be disabled after inference",
-        this.conf.getBoolean(FlinkOptions.METADATA_ENABLED), is(metadataEnabled));
+        this.conf.get(FlinkOptions.METADATA_ENABLED), is(metadataEnabled));
   }
 
   /**
@@ -173,7 +174,7 @@ public class TestCompactionUtil {
   private String generateCompactionPlan() {
     HoodieCompactionOperation operation = new HoodieCompactionOperation();
     HoodieCompactionPlan plan = new HoodieCompactionPlan(Collections.singletonList(operation), Collections.emptyMap(), 1, null, null, null);
-    String instantTime = table.getMetaClient().createNewInstantTime();
+    String instantTime = WriteClientTestUtils.createNewInstantTime();
     HoodieInstant compactionInstant =
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant, plan);

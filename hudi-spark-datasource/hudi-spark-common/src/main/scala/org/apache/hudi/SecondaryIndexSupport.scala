@@ -22,9 +22,11 @@ package org.apache.hudi
 import org.apache.hudi.RecordLevelIndexSupport.{filterQueryWithRecordKey, getPrunedStoragePaths}
 import org.apache.hudi.SecondaryIndexSupport.filterQueriesWithSecondaryKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
 import org.apache.hudi.storage.StoragePath
 
@@ -77,19 +79,26 @@ class SecondaryIndexSupport(spark: SparkSession,
    * @return Sequence of file names which need to be queried
    */
   private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
-    val recordKeyLocationsMap = metadataTable.readSecondaryIndex(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava, secondaryIndexName)
-    val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
-    val candidateFiles: mutable.Set[String] = mutable.Set.empty
-    recordKeyLocationsMap.values().forEach(location => fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath))
+    val secondaryIndexData = metadataTable.readSecondaryIndexLocationsWithKeys(
+        HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName)
+    try {
+      val recordKeyLocationsMap = HoodieDataUtils.dedupeAndCollectAsMap(secondaryIndexData)
+      val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
+      val candidateFiles: mutable.Set[String] = mutable.Set.empty
+      recordKeyLocationsMap.values().forEach(location => fileIdToPartitionMap.put(location.getFileId, location.getPartitionPath))
 
-    for (file <- allFiles) {
-      val fileId = FSUtils.getFileIdFromFilePath(file)
-      val partitionOpt = fileIdToPartitionMap.get(fileId)
-      if (partitionOpt.isDefined) {
-        candidateFiles += file.getName
+      for (file <- allFiles) {
+        val fileId = FSUtils.getFileIdFromFilePath(file)
+        val partitionOpt = fileIdToPartitionMap.get(fileId)
+        if (partitionOpt.isDefined) {
+          candidateFiles += file.getName
+        }
       }
+      candidateFiles.toSet
+    } finally {
+      // Clean up the RDD to avoid memory leaks
+      secondaryIndexData.unpersistWithDependencies()
     }
-    candidateFiles.toSet
   }
 
   /**

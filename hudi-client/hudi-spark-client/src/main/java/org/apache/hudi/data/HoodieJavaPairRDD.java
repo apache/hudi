@@ -23,6 +23,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairPredicate;
 import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -87,6 +88,11 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   @Override
   public void unpersist() {
     pairRDDData.unpersist();
+  }
+
+  @Override
+  public void unpersistWithDependencies() {
+    HoodieSparkRDDUtils.unpersistRDDWithDependencies(pairRDDData.rdd());
   }
 
   @Override
@@ -156,6 +162,11 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
+  public HoodiePairData<K, V> filter(SerializablePairPredicate<K, V> filter) {
+    return HoodieJavaPairRDD.of(pairRDDData.filter(p -> filter.call(p._1, p._2)));
+  }
+
+  @Override
   public <W> HoodiePairData<K, Pair<V, W>> join(HoodiePairData<K, W> other) {
     return HoodieJavaPairRDD.of(JavaPairRDD.fromJavaRDD(
         pairRDDData.join(HoodieJavaPairRDD.getJavaPairRDD(other))
@@ -187,4 +198,5 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
       return pairRDDData.getNumPartitions();
     }
   }
+
 }

@@ -20,9 +20,9 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -119,44 +118,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   static boolean isMetadataTable(StoragePath basePath) {
     return isMetadataTable(basePath.toString());
-  }
-
-  static HoodieTableMetadata create(HoodieEngineContext engineContext,
-                                    HoodieStorage storage,
-                                    HoodieMetadataConfig metadataConfig,
-                                    String datasetBasePath) {
-    return create(engineContext, storage, metadataConfig, datasetBasePath, false);
-  }
-
-  static HoodieTableMetadata create(HoodieEngineContext engineContext,
-                                    HoodieStorage storage,
-                                    HoodieMetadataConfig metadataConfig,
-                                    String datasetBasePath,
-                                    boolean reuse) {
-    if (metadataConfig.isEnabled()) {
-      HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
-      // If the MDT is not initialized then we fallback to FSBackedTableMetadata
-      if (metadata.isMetadataTableInitialized()) {
-        return metadata;
-      }
-      LOG.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
-    }
-    return createFSBackedTableMetadata(engineContext, storage, datasetBasePath);
-  }
-
-  static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
-                                                                   HoodieStorage storage,
-                                                                   String datasetBasePath) {
-    return new FileSystemBackedTableMetadata(
-        engineContext, storage, datasetBasePath);
-  }
-
-  static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
-                                                                   HoodieStorage storage,
-                                                                   HoodieMetadataConfig metadataConfig,
-                                                                   String datasetBasePath,
-                                                                   boolean reuse) {
-    return new HoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
   }
 
   /**
@@ -254,7 +215,6 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<Pair<String, String>, HoodieMetadataColumnStats> getColumnStats(final List<Pair<String, String>> partitionNameFileNameList, final String columnName)
       throws HoodieMetadataException;
 
-
   /**
    * Get column stats for files from the metadata table index.
    *
@@ -267,28 +227,58 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       throws HoodieMetadataException;
 
   /**
+   * Returns pairs of (record key, location of record key) which are found in the record index.
+   * Records that are not found are ignored and wont be part of map object that is returned.
+   */
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys);
+
+  /**
+   * Returns pairs of (record key, location of record key) which are found in the record index.
+   * Records that are not found are ignored and wont be part of map object that is returned.
+   * @param recordKeys list of recordkeys to look up in the index
+   * @param dataTablePartition option of the data table partition to look up from. This is only applicable to partitioned rli
+   *                           record keys are not globally unique so the record key alone does not sufficiently identify an
+   *                           individual record.
+   * @return map from recordkey to the location of the record that was read from the index
+   *
+   */
+  HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocationsWithKeys(HoodieData<String> recordKeys, Option<String> dataTablePartition);
+
+  /**
    * Returns the location of record keys which are found in the record index.
    * Records that are not found are ignored and wont be part of map object that is returned.
    */
-  Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys);
+  default HoodieData<HoodieRecordGlobalLocation> readRecordIndexLocations(HoodieData<String> recordKeys) {
+    return readRecordIndexLocationsWithKeys(recordKeys).values();
+  }
 
   /**
-   * Returns the location of records which the provided secondary keys maps to.
+   * Returns pairs of (secondary key, location of secondary key) which the provided secondary keys maps to.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  Map<String, HoodieRecordGlobalLocation> readSecondaryIndex(List<String> secondaryKeys, String partitionName);
+  HoodiePairData<String, HoodieRecordGlobalLocation> readSecondaryIndexLocationsWithKeys(HoodieData<String> secondaryKeys, String partitionName);
 
   /**
-   * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
-   * actual keys in metadata partition is encoded values of column name, partition name and file name. So, key prefixes passed to this method is expected to be encoded already.
-   *
-   * @param keyPrefixes   list of key prefixes for which interested records are looked up for.
-   * @param partitionName partition name in metadata table where the records are looked up for.
-   * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the passed in key prefixes.
+   * Returns the location of secondary keys which are found in the secondary index.
+   * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(List<String> keyPrefixes,
-                                                                          String partitionName,
-                                                                          boolean shouldLoadInMemory);
+  default HoodieData<HoodieRecordGlobalLocation> readSecondaryIndexLocations(HoodieData<String> secondaryKeys, String partitionName) {
+    return readSecondaryIndexLocationsWithKeys(secondaryKeys, partitionName).values();
+  }
+
+  /**
+   * Fetch records by key prefixes. The raw keys are encoded using their encode() method to generate
+   * the actual key prefixes used for lookup in the metadata table partitions.
+   *
+   * @param rawKeys           list of raw key objects to be encoded into key prefixes
+   * @param partitionName     partition name in metadata table where the records are looked up for
+   * @param shouldLoadInMemory whether to load records in memory
+   * @return {@link HoodieData} of {@link HoodieRecord}s with records matching the encoded key prefixes
+   */
+  HoodieData<HoodieRecord<HoodieMetadataPayload>> getRecordsByKeyPrefixes(
+      HoodieData<? extends RawKey> rawKeys,
+      String partitionName,
+      boolean shouldLoadInMemory);
 
   /**
    * Get the instant time to which the metadata is synced w.r.t data timeline.
@@ -309,6 +299,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Returns the number of shards in a metadata table partition.
    */
   int getNumFileGroupsForPartition(MetadataPartitionType partition);
+
+  /**
+   * Get file groups in the record index partition grouped by bucket
+   * @param partition the metadata table partition type
+   * @return map from data table partition to list of filegroups that index that partition
+   */
+  Map<String, List<FileSlice>> getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType partition);
 
   /**
    * @param partitionPathList A list of pairs of the relative and absolute paths of the partitions.

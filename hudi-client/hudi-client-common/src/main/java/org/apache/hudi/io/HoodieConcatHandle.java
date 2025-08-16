@@ -42,7 +42,7 @@ import java.util.Map;
 
 /**
  * Handle to concatenate new records to old records w/o any merging. If Operation is set to Inserts, and if {{@link HoodieWriteConfig#allowDuplicateInserts()}}
- * is set, this handle will be used instead of {@link HoodieMergeHandle}.
+ * is set, this handle will be used instead of {@link HoodieWriteMergeHandle}.
  *
  * Simplified Logic:
  * For every existing record
@@ -67,7 +67,7 @@ import java.util.Map;
  * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
  */
 @NotThreadSafe
-public class HoodieConcatHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+public class HoodieConcatHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieConcatHandle.class);
   // a representation of incoming records that tolerates duplicate keys
@@ -83,8 +83,7 @@ public class HoodieConcatHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
                             Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                             HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, dataFileToBeMerged, taskContextSupplier,
-        Option.empty());
+    super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, Option.empty());
     this.recordItr = keyToNewRecords.values().iterator();
   }
 

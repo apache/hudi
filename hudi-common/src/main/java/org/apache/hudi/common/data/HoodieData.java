@@ -78,6 +78,13 @@ public interface HoodieData<T> extends Serializable {
   void unpersist();
 
   /**
+   * Un-persists this data and all its upstream dependencies recursively.
+   * This method traverses the dependency graph and unpersists any cached dependencies
+   * if the underlying hoodie engine has such capability.
+   */
+  void unpersistWithDependencies();
+
+  /**
    * Returns whether the collection is empty.
    */
   boolean isEmpty();

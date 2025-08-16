@@ -65,7 +65,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
-  protected final HoodieWriteConfig writeConfig;
+  protected HoodieWriteConfig writeConfig;
   protected final HoodieRecordType recordType;
   protected final Schema readerSchemaWithMetaFields;
 
@@ -103,9 +103,11 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
     FileSlice fileSlice = clusteringOperationToFileSlice(table.getMetaClient().getBasePath().toString(), operation);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
+    final boolean enableLogBlocksScan = getWriteConfig().enableOptimizedLogBlocksScan();
     Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
-      return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema, readerContextFactory, instantTime, props, usePosition).getClosableHoodieRecordIterator();
+      return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema,
+              readerContextFactory, instantTime, props, usePosition, enableLogBlocksScan).getClosableHoodieRecordIterator();
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading file slices", e);
     }
@@ -145,11 +147,12 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
   }
 
   protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, Schema readerSchema, Option<InternalSchema> internalSchemaOption,
-                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime, TypedProperties properties, boolean usePosition) {
+                                                                   ReaderContextFactory<R> readerContextFactory, String instantTime,
+                                                                   TypedProperties properties, boolean usePosition, boolean enableLogBlocksScan) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     return HoodieFileGroupReader.<R>newBuilder()
         .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
         .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
-        .withShouldUseRecordPosition(usePosition).withProps(properties).build();
+        .withShouldUseRecordPosition(usePosition).withEnableOptimizedLogBlockScan(enableLogBlocksScan).withProps(properties).build();
   }
 }

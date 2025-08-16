@@ -71,6 +71,8 @@ import org.apache.hudi.estimator.AverageRecordSizeEstimator;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.io.HoodieConcatHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -98,6 +100,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -146,7 +149,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(HoodieTableVersion.current().versionCode())
       .withValidValues(
           String.valueOf(HoodieTableVersion.SIX.versionCode()),
-          String.valueOf(HoodieTableVersion.current().versionCode())
+          String.valueOf(HoodieTableVersion.EIGHT.versionCode()),
+          String.valueOf(HoodieTableVersion.NINE.versionCode())
       )
       .sinceVersion("1.0.0")
       .withDocumentation("The table version this writer is storing the table in. This should match the current table version.");
@@ -168,8 +172,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
       .noDefaultValue()
-      .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
-          + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
+      .withDocumentation("Comma separated list of fields used in preCombining before actual write. When two records have the same key value, "
+          + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..). "
+          + "For multiple fields if first key comparison is same, second key comparison is made and so on. This config is used for combining records "
+          + "within the same batch and also for merging using event time merge mode");
 
   public static final ConfigProperty<String> WRITE_PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.payload.class")
@@ -839,7 +845,46 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.0.0")
-      .withDocumentation("Whether to enable incremental table service. So far Clustering and Compaction support incremental processing.");
+      .withDocumentation("Whether to enable incremental table service. "
+          + "So far Clustering and Compaction support incremental processing.");
+
+  public static final ConfigProperty<Boolean> TRACK_EVENT_TIME_WATERMARK = ConfigProperty
+      .key("hoodie.write.track.event.time.watermark")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Records event time watermark metadata in commit metadata when enabled");
+
+  public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.write.merge.handle.class")
+      .defaultValue(FileGroupReaderBasedMergeHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The merge handle class that implements interface{@link HoodieMergeHandle} to merge the records "
+          + "from a base file with an iterator of incoming records or a map of updates and deletes from log files at a file group level.");
+
+  public static final ConfigProperty<String> CONCAT_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.write.concat.handle.class")
+      .defaultValue(HoodieConcatHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The merge handle class to use to concat the records from a base file with an iterator of incoming records.");
+
+  public static final ConfigProperty<String> COMPACT_MERGE_HANDLE_CLASS_NAME = ConfigProperty
+      .key("hoodie.compact.merge.handle.class")
+      .defaultValue(FileGroupReaderBasedMergeHandle.class.getName())
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Merge handle class for compaction");
+
+  public static final ConfigProperty<Boolean> MERGE_HANDLE_PERFORM_FALLBACK = ConfigProperty
+      .key("hoodie.write.merge.handle.fallback")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("When using a custom Hoodie Merge Handle Implementation controlled by the config " + MERGE_HANDLE_CLASS_NAME.key()
+          + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
+              + ", enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -1222,7 +1267,6 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   @Deprecated
   public static final String DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE.defaultValue();
-
   /**
    * Use Spark engine by default.
    */
@@ -1314,6 +1358,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieTableVersion.fromVersionCode(getIntOrDefault(WRITE_TABLE_VERSION));
   }
 
+  public void setWriteVersion(HoodieTableVersion version) {
+    setValue(WRITE_TABLE_VERSION, String.valueOf(version.versionCode()));
+  }
+
   public boolean autoUpgrade() {
     return getBoolean(AUTO_UPGRADE_VERSION);
   }
@@ -1359,8 +1407,13 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
   }
 
-  public String getPreCombineField() {
-    return getString(PRECOMBINE_FIELD_NAME);
+  public List<String> getPreCombineFields() {
+    return Option.ofNullable(getString(PRECOMBINE_FIELD_NAME))
+        .map(preCombine -> Arrays.asList(preCombine.split(",")))
+        .orElse(Collections.emptyList())
+        .stream()
+        .filter(StringUtils::nonEmpty)
+        .collect(Collectors.toList());
   }
 
   public String getKeyGeneratorClass() {
@@ -1391,6 +1444,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       default:
         return false;
     }
+  }
+
+  public boolean isMergeHandleFallbackEnabled() {
+    return getBooleanOrDefault(HoodieWriteConfig.MERGE_HANDLE_PERFORM_FALLBACK);
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {
@@ -1487,6 +1544,18 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getWriteStatusClassName() {
     return getString(WRITE_STATUS_CLASS_NAME);
+  }
+
+  public String getMergeHandleClassName() {
+    return getStringOrDefault(MERGE_HANDLE_CLASS_NAME);
+  }
+
+  public String getConcatHandleClassName() {
+    return getStringOrDefault(CONCAT_HANDLE_CLASS_NAME);
+  }
+
+  public String getCompactionMergeHandleClassName() {
+    return getStringOrDefault(COMPACT_MERGE_HANDLE_CLASS_NAME);
   }
 
   public int getFinalizeWriteParallelism() {
@@ -2044,6 +2113,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.isRecordIndexEnabled();
   }
 
+  public boolean isPartitionedRecordIndexEnabled() {
+    return metadataConfig.isPartitionedRecordIndexEnabled();
+  }
+
   public int getPartitionStatsIndexParallelism() {
     return metadataConfig.getPartitionStatsIndexParallelism();
   }
@@ -2135,7 +2208,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getRecordIndexInputStorageLevel() {
     return getStringOrDefault(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE);
   }
-  
+
   public boolean isUsingRemotePartitioner() {
     return getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER);
   }
@@ -2571,6 +2644,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getRecordIndexMaxFileGroupCount() {
     return metadataConfig.getRecordIndexMaxFileGroupCount();
+  }
+
+  public int getPartitionedRecordIndexMinFileGroupCount() {
+    return metadataConfig.getPartitionedRecordIndexMinFileGroupCount();
+  }
+
+  public int getPartitionedRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getPartitionedRecordIndexMaxFileGroupCount();
   }
 
   public float getRecordIndexGrowthFactor() {
@@ -3388,6 +3469,21 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withIncrementalTableServiceEnabled(boolean incrementalTableServiceEnabled) {
       writeConfig.setValue(INCREMENTAL_TABLE_SERVICE_ENABLED, String.valueOf(incrementalTableServiceEnabled));
+      return this;
+    }
+
+    public Builder withMergeHandleClassName(String className) {
+      writeConfig.setValue(MERGE_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withConcatHandleClassName(String className) {
+      writeConfig.setValue(CONCAT_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withFileGroupReaderMergeHandleClassName(String className) {
+      writeConfig.setValue(COMPACT_MERGE_HANDLE_CLASS_NAME, className);
       return this;
     }
 

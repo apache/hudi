@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.FileSlice
 
@@ -27,36 +26,30 @@ import org.apache.spark.sql.execution.datasources.PartitionDirectory
 
 object PartitionDirectoryConverter extends SparkAdapterSupport {
 
-  def convertFileSlicesToPartitionDirectory(partitionOpt: Option[PartitionPath],
-                                            fileSlices: Seq[FileSlice],
-                                            options: Map[String, String]): PartitionDirectory = {
+  def convertFileSliceToPartitionDirectory(partitionValues: InternalRow,
+                                           fileSlice: FileSlice,
+                                           options: Map[String, String]): PartitionDirectory = {
     val logFileEstimationFraction = options.getOrElse(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.key(),
       HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO_FRACTION.defaultValue()).toDouble
-    // 1. Generate a delegate file for each file slice, which spark uses to optimize rdd partition parallelism based on data such as file size
-    // For file slice only has base file, we directly use the base file size as delegate file size
-    // For file slice has log file, we estimate the delegate file size based on the log file size and option(base file) size
-    val delegateFiles = fileSlices.map(slice => {
-      val estimationFileSize = slice.getTotalFileSizeAsParquetFormat(logFileEstimationFraction)
-      val fileInfo = if (slice.getBaseFile.isPresent) {
-        slice.getBaseFile.get().getPathInfo
-      } else if (slice.hasLogFiles) {
-        slice.getLogFiles.findAny().get().getPathInfo
-      } else {
-        null
-      }
-      (fileInfo, estimationFileSize)
-    }).filter(_._1 != null).map(f => {
-      val (fileInfo, estimationFileSize) = f
-      new FileStatus(estimationFileSize, fileInfo.isDirectory, 0, fileInfo.getBlockSize, fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))
-    })
-    // 2. Generate a mapping from fileId to file slice
-    val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
-    if (c.nonEmpty) {
-      sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-        new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(partitionOpt.get.values), c), delegateFiles)
+    // 1. Generate a delegate file for file slice, which spark uses to optimize rdd partition parallelism based on data such as file size
+    //    - For file slice only has base file, we directly use the base file size as delegate file size
+    //    - For file slice has log file, we estimate the delegate file size based on the log file size and option(base file) size
+    val estimationFileSize = fileSlice.getTotalFileSizeAsParquetFormat(logFileEstimationFraction)
+    val fileInfo = if (fileSlice.getBaseFile.isPresent) {
+      fileSlice.getBaseFile.get().getPathInfo
     } else {
+      fileSlice.getLogFiles.findAny().get().getPathInfo
+    }
+    // create a delegate file status based on the file size estimation
+    val delegateFile = new FileStatus(estimationFileSize, fileInfo.isDirectory, 0, fileInfo.getBlockSize, fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri))
+
+    // 2. Generate a partition directory based on the delegate file and partition values
+    if (fileSlice.hasLogFiles || fileSlice.hasBootstrapBase) {
+      // should read as file slice, so we need to create a mapping from fileId to file slice
       sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-        InternalRow.fromSeq(partitionOpt.get.values), delegateFiles)
+        new HoodiePartitionFileSliceMapping(partitionValues, Map(fileSlice.getFileId -> fileSlice)), Seq(delegateFile))
+    } else {
+      sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(partitionValues, Seq(delegateFile))
     }
   }
 

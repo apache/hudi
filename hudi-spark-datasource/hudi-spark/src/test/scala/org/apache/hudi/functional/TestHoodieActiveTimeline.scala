@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.client.WriteClientTestUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
@@ -30,7 +31,6 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue, fail}
-import org.slf4j.LoggerFactory
 
 import java.io.FileNotFoundException
 
@@ -40,11 +40,7 @@ import scala.collection.JavaConverters._
  * Tests on HoodieTimeline using the real hudi table.
  */
 class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
-
   var spark: SparkSession = null
-
-  private val log = LoggerFactory.getLogger(classOf[TestHoodieActiveTimeline])
-
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -250,12 +246,65 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val activeTimeline = metaClient.getActiveTimeline
     try {
       activeTimeline.getInstantContentStream(HoodieTestUtils.INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT,
-        HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))
+        HoodieTimeline.CLUSTERING_ACTION, WriteClientTestUtils.createNewInstantTime()))
     } catch {
       // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour
       // where FileNotFoundException is the cause of exception thrown by the API getInstantDetails
       case e: HoodieIOException => assertTrue(classOf[FileNotFoundException].equals(e.getCause.getClass))
       case _ => fail("Should have failed with FileNotFoundException")
+    }
+  }
+
+  @Test
+  def testEventTimeTracking(): Unit = {
+    val eventTimeOpts = commonOpts ++ Map(
+      HoodieWriteConfig.TRACK_EVENT_TIME_WATERMARK.key -> "true",
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> "EVENT_TIME_ORDERING",
+      "hoodie.payload.event.time.field" -> "current_ts"
+    )
+
+    // Initial insert
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(eventTimeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val metaClient = createMetaClient(basePath)
+    validateEventTimeMetadata(metaClient)
+
+    // Insert again
+    inputDF1.write.format("org.apache.hudi")
+      .options(eventTimeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    validateEventTimeMetadata(metaClient)
+
+    // Update records
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).asScala.toList
+    val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
+    inputDF3.write.format("org.apache.hudi")
+      .options(eventTimeOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    validateEventTimeMetadata(metaClient)
+  }
+
+  def validateEventTimeMetadata(metaClient: HoodieTableMetaClient): Unit = {
+    val localMetaClient = HoodieTableMetaClient.reload(metaClient)
+    val ret = localMetaClient.getActiveTimeline.getLastCommitMetadataWithValidData
+    assertTrue(ret.isPresent)
+    val stats = ret.get().getRight.getPartitionToWriteStats.values().asScala
+    for {
+      statList <- stats
+      stat <- statList.asScala
+    } {
+      assertNotNull(stat.getMaxEventTime)
+      assertNotNull(stat.getMinEventTime)
     }
   }
 }

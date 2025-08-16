@@ -20,9 +20,12 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.util.Option;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 public class WriteClientTestUtils {
   private WriteClientTestUtils() {
@@ -39,5 +42,22 @@ public class WriteClientTestUtils {
 
   public static Option<String> scheduleTableService(BaseHoodieWriteClient<?, ?, ?, ?> writeClient, String instantTime, Option<Map<String, String>> extraMetadata, TableServiceType tableServiceType) {
     return writeClient.scheduleTableService(Option.of(instantTime), extraMetadata, tableServiceType);
+  }
+
+  public static String createNewInstantTime() {
+    return HoodieInstantTimeGenerator.createNewInstantTime(false, TestTimeGenerator.INSTANCE, 0);
+  }
+
+  private static class TestTimeGenerator implements TimeGenerator {
+    private static final TimeGenerator INSTANCE = new TestTimeGenerator();
+
+    @Override
+    public long generateTime(boolean skipLocking) {
+      return System.currentTimeMillis();
+    }
+
+    @Override
+    public void consumeTime(boolean skipLocking, Consumer<Long> func) {
+    }
   }
 }

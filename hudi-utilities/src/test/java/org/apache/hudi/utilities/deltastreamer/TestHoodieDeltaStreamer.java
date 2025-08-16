@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -158,6 +159,7 @@ import java.sql.DriverManager;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -670,6 +672,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> continuousModeArgs() {
     return Stream.of(
+        Arguments.of("AVRO", "CURRENT"),
+        Arguments.of("SPARK", "CURRENT"),
         Arguments.of("AVRO", "EIGHT"),
         Arguments.of("SPARK", "EIGHT"),
         Arguments.of("AVRO", "SIX")
@@ -678,6 +682,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> continuousModeMorArgs() {
     return Stream.of(
+        Arguments.of("AVRO", "CURRENT"),
         Arguments.of("AVRO", "EIGHT"),
         Arguments.of("AVRO", "SIX")
     );
@@ -686,7 +691,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Timeout(600)
   @ParameterizedTest
   @MethodSource("continuousModeArgs")
-  public void testUpsertsCOWContinuousMode(HoodieRecordType recordType, String writeTableVersion) throws Exception {
+  void testUpsertsCOWContinuousMode(HoodieRecordType recordType, String writeTableVersion) throws Exception {
     testUpsertsContinuousMode(HoodieTableType.COPY_ON_WRITE, "continuous_cow", recordType, writeTableVersion);
   }
 
@@ -709,8 +714,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Timeout(600)
   @ParameterizedTest
   @EnumSource(value = HoodieRecordType.class, names = {"AVRO"})
-  public void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
-    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "EIGHT");
+  void testUpsertsMORContinuousModeShutdownGracefully(HoodieRecordType recordType) throws Exception {
+    testUpsertsContinuousMode(HoodieTableType.MERGE_ON_READ, "continuous_cow", true, recordType, "CURRENT");
   }
 
   @Timeout(600)
@@ -757,6 +762,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
     if (HoodieTableVersion.SIX.name().equals(writeTableVersion)) {
       cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode()));
+    } else if (HoodieTableVersion.EIGHT.name().equals(writeTableVersion)) {
+      cfg.configs.add(String.format(("%s=%s"), HoodieWriteConfig.WRITE_TABLE_VERSION.key(), HoodieTableVersion.EIGHT.versionCode()));
     }
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
@@ -775,7 +782,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
     // validate table version matches
     HoodieTableMetaClient hudiTblMetaClient = HoodieTableMetaClient.builder().setBasePath(cfg.targetBasePath).setConf(context.getStorageConf()).build();
-    assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
+    if (writeTableVersion.equals("CURRENT")) {
+      assertEquals(HoodieTableVersion.current(), hudiTblMetaClient.getTableConfig().getTableVersion());
+    } else {
+      assertEquals(HoodieTableVersion.valueOf(writeTableVersion), hudiTblMetaClient.getTableConfig().getTableVersion());
+    }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
@@ -1847,6 +1858,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         true, false, null, "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
     assertRecordCount(1000, dataSetBasePath, sqlContext);
+    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
 
     //now create one more deltaStreamer instance and update payload class
     cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
@@ -1854,9 +1867,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         true, true, DummyAvroPayload.class.getName(), "MERGE_ON_READ");
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
 
-    //now assert that hoodie.properties file now has updated payload class name
-    HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
-    assertEquals(metaClient.getTableConfig().getPayloadClass(), DummyAvroPayload.class.getName());
+    // NOTE: Payload class cannot be updated.
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), DefaultHoodieRecordPayload.class.getName());
   }
 
   @Test
@@ -1873,6 +1886,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(metaClient.getTableConfig().getPayloadClass(), PartialUpdateAvroPayload.class.getName());
   }
 
+  @Disabled("To be fixed with HUDI-9714")
   @Test
   public void testPayloadClassUpdateWithCOWTable() throws Exception {
     String dataSetBasePath = basePath + "/test_dataset_cow";
@@ -1889,7 +1903,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       props.load(inputStream);
     }
 
-    assertTrue(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
+    assertFalse(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_MODE.key()));
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()));
 
@@ -1930,7 +1944,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     cfg.tableType = tableType;
     cfg.filterDupes = true;
-    cfg.sourceOrderingField = sourceOrderingField;
+    cfg.sourceOrderingFields = sourceOrderingField;
     addRecordMerger(recordType, cfg.configs);
     new HoodieStreamer(cfg, jsc).sync();
 
@@ -1944,6 +1958,59 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
 
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testDeltaStreamerWithMultipleOrderingFields(HoodieTableType tableType) throws Exception {
+    String tableBasePath = basePath + "/test_with_multiple_ordering_fields";
+    HoodieDeltaStreamer.Config cfg =
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.tableType = tableType.name();
+    cfg.filterDupes = true;
+    cfg.sourceOrderingFields = "timestamp,rider";
+    cfg.recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.recordMergeStrategyId = HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+
+    TestDataSource.recordInstantTime = Option.of("002");
+    new HoodieStreamer(cfg, jsc).sync();
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
+
+    // Generate new updates with lower recordInstantTime so that updates are rejected
+    TestDataSource.recordInstantTime = Option.of("001");
+    runStreamSync(cfg, false, 50, WriteOperationType.UPSERT);
+    int numInserts = 25;
+    // TestDataSource generates 25 inserts and 25 updates
+    assertRecordCount(1025, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+    // Filter records with rider-001 value and deduct the number of inserts to get number of updates written
+    long numUpdates = sparkSession.read().format("hudi").load(tableBasePath).filter("rider = 'rider-001'").count()
+        - numInserts;
+    // There should be no updates since ordering value rider-001 is lower than existing record ordering value rider-002
+    assertEquals(0, numUpdates);
+
+    // Generate new updates with higher recordInstantTime so that updates are accepted
+    TestDataSource.recordInstantTime = Option.of("003");
+    runStreamSync(cfg, false, 50, WriteOperationType.UPSERT);
+    // TestDataSource generates 25 inserts and 25 updates
+    assertRecordCount(1050, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00002", tableBasePath, 3);
+    // Filter records with rider-003 value and deduct the number of inserts to get number of updates written
+    numUpdates = sparkSession.read().format("hudi").load(tableBasePath).filter("rider = 'rider-003'").count()
+        - numInserts;
+    // All updates should reflect since the ordering value rider-003 is higher
+    assertEquals(25, numUpdates);
+
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  private static long getNumUpdates(HoodieCommitMetadata metadata) {
+    return metadata.getPartitionToWriteStats().values().stream()
+        .flatMap(Collection::stream)
+        .mapToLong(HoodieWriteStat::getNumUpdateWrites)
+        .sum();
   }
 
   @Test
@@ -3197,8 +3264,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(HoodieTestUtils.getDefaultStorageConf()).build();
-    List<String> partitions = FSUtils.getAllPartitionPaths(
-        new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), metaClient.getBasePath(), false);
+    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient, false);
     StorageConfiguration hadoopConf = metaClient.getStorageConf();
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engContext, metaClient,

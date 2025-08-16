@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -83,15 +84,15 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCommit() throws Exception {
-    createCommit(metaClient.createNewInstantTime());
+    createCommit(WriteClientTestUtils.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = metaClient.createNewInstantTime();
+    String currentWriterInstant = WriteClientTestUtils.createNewInstantTime();
     createInflightCommit(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
     // writer 2 starts and finishes
-    String newInstantTime = metaClient.createNewInstantTime();
+    String newInstantTime = WriteClientTestUtils.createNewInstantTime();
     createCommit(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -115,15 +116,15 @@ public class TestBucketIndexConcurrentFileWritesConflictResolutionStrategy exten
 
   @Test
   public void testConcurrentWritesWithDifferentPartition() throws Exception {
-    createCommit(metaClient.createNewInstantTime());
+    createCommit(WriteClientTestUtils.createNewInstantTime());
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = metaClient.createNewInstantTime();
+    String currentWriterInstant = WriteClientTestUtils.createNewInstantTime();
     createInflightCommit(currentWriterInstant, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH);
     // writer 2 starts and finishes
-    String newInstantTime = metaClient.createNewInstantTime();
+    String newInstantTime = WriteClientTestUtils.createNewInstantTime();
     createCommit(newInstantTime);
 
     Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));

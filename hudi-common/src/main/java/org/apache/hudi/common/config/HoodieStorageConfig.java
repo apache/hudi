@@ -524,6 +524,50 @@ public class HoodieStorageConfig extends HoodieConfig {
       return this;
     }
 
+    /**
+     * Sets the bloom filter type for the configuration.
+     *
+     * @param bloomFilterType The bloom filter type (SIMPLE or DYNAMIC_V0)
+     * @return this builder instance for method chaining
+     */
+    public Builder withBloomFilterType(String bloomFilterType) {
+      storageConfig.setValue(BLOOM_FILTER_TYPE, bloomFilterType);
+      return this;
+    }
+
+    /**
+     * Sets the number of entries to be stored in the bloom filter.
+     *
+     * @param numEntries The number of entries for the bloom filter
+     * @return this builder instance for method chaining
+     */
+    public Builder withBloomFilterNumEntries(int numEntries) {
+      storageConfig.setValue(BLOOM_FILTER_NUM_ENTRIES_VALUE, String.valueOf(numEntries));
+      return this;
+    }
+
+    /**
+     * Sets the false positive probability (FPP) for the bloom filter.
+     *
+     * @param fpp The false positive probability as a double
+     * @return this builder instance for method chaining
+     */
+    public Builder withBloomFilterFpp(double fpp) {
+      storageConfig.setValue(BLOOM_FILTER_FPP_VALUE, String.valueOf(fpp));
+      return this;
+    }
+
+    /**
+     * Sets the maximum number of entries for dynamic bloom filter.
+     *
+     * @param maxEntries The maximum number of entries for dynamic bloom filter
+     * @return this builder instance for method chaining
+     */
+    public Builder withBloomFilterDynamicMaxEntries(int maxEntries) {
+      storageConfig.setValue(BLOOM_FILTER_DYNAMIC_MAX_ENTRIES, String.valueOf(maxEntries));
+      return this;
+    }
+
     public HoodieStorageConfig build() {
       storageConfig.setDefaults(HoodieStorageConfig.class.getName());
       return storageConfig;

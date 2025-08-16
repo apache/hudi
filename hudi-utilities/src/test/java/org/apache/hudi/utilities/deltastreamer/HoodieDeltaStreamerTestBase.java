@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -150,6 +151,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     testUtils.setup();
     topicName = "topic" + testNum;
     prepareInitialConfigs(storage, basePath, testUtils.brokerAddress());
+    // reset TestDataSource recordInstantTime which may be set by any other test
+    TestDataSource.recordInstantTime = Option.empty();
   }
 
   @AfterEach
@@ -520,7 +523,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
         ? new HoodieReplaceCommitMetadata() : new HoodieCommitMetadata();
     commitMetadata.setOperationType(writeOperationType);
     extraMetadata.forEach((k, v) -> commitMetadata.getExtraMetadata().put(k, v));
-    String commitTime = metaClient.createNewInstantTime();
+    String commitTime = WriteClientTestUtils.createNewInstantTime();
     metaClient.getActiveTimeline().createNewInstant(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
     HoodieInstant inflightInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
@@ -635,7 +638,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       cfg.transformerClassNames = transformerClassNames;
       cfg.operation = op;
       cfg.enableHiveSync = enableHiveSync;
-      cfg.sourceOrderingField = sourceOrderingField;
+      cfg.sourceOrderingFields = sourceOrderingField;
       cfg.propsFilePath = UtilitiesTestBase.basePath + "/" + propsFilename;
       cfg.sourceLimit = sourceLimit;
       cfg.checkpoint = checkpoint;
@@ -647,8 +650,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       }
       cfg.allowCommitOnNoCheckpointChange = allowCommitOnNoCheckpointChange;
       Triple<RecordMergeMode, String, String> mergeCfgs =
-          HoodieTableConfig.inferCorrectMergingBehavior(
-              cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField,
+          HoodieTableConfig.inferMergingConfigsForWrites(
+              cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
               HoodieTableVersion.current());
       cfg.recordMergeMode = mergeCfgs.getLeft();
       cfg.payloadClassName = mergeCfgs.getMiddle();
@@ -664,7 +667,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       cfg.tableType = "COPY_ON_WRITE";
       cfg.sourceClassName = HoodieIncrSource.class.getName();
       cfg.operation = op;
-      cfg.sourceOrderingField = "timestamp";
+      cfg.sourceOrderingFields = "timestamp";
       cfg.propsFilePath = UtilitiesTestBase.basePath + "/test-downstream-source.properties";
       cfg.sourceLimit = 1000;
       if (null != schemaProviderClassName) {
@@ -719,7 +722,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       HoodieInstant lastInstant = timeline.lastInstant().get();
       HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(lastInstant);
       assertEquals(totalCommits, timeline.countInstants());
-      if (meta.getTableConfig().getTableVersion() == HoodieTableVersion.EIGHT) {
+      if (meta.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
         assertEquals(expected, commitMetadata.getMetadata(StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2));
       } else {
         assertEquals(expected, commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));

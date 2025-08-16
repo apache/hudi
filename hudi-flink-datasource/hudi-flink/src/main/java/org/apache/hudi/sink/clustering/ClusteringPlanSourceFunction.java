@@ -18,15 +18,15 @@
 
 package org.apache.hudi.sink.clustering;
 
+import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
+import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
  *   as the instant time.</li>
  * </ul>
  */
-public class ClusteringPlanSourceFunction extends AbstractRichFunction implements SourceFunction<ClusteringPlanEvent> {
+public class ClusteringPlanSourceFunction extends AbstractRichFunctionAdapter implements SourceFunctionAdapter<ClusteringPlanEvent> {
 
   protected static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanSourceFunction.class);
 

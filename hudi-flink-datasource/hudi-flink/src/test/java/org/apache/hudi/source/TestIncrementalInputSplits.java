@@ -360,12 +360,12 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     conf.set(FlinkOptions.READ_AS_STREAMING, true);
     conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
-    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true);
-    conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       // enable CSI for MOR table to collect col stats for delta write stats,
       // which will be used to construct partition stats then.
-      conf.setBoolean(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true);
+      conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
     }
     metaClient = HoodieTestUtils.init(basePath, tableType);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -373,7 +373,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     // uuid > 'id5' and age < 30, only column stats of 'par3' matches the filter.
     ColumnStatsProbe columnStatsProbe =
         ColumnStatsProbe.newInstance(Arrays.asList(
-            new CallExpression(
+            CallExpression.permanent(
                 FunctionIdentifier.of("greaterThan"),
                 BuiltInFunctionDefinitions.GREATER_THAN,
                 Arrays.asList(
@@ -381,7 +381,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
                     new ValueLiteralExpression("id5", DataTypes.STRING().notNull())
                 ),
                 DataTypes.BOOLEAN()),
-            new CallExpression(
+            CallExpression.permanent(
                 FunctionIdentifier.of("lessThan"),
                 BuiltInFunctionDefinitions.LESS_THAN,
                 Arrays.asList(
@@ -391,7 +391,7 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
                 DataTypes.BOOLEAN())));
 
     PartitionPruners.PartitionPruner partitionPruner =
-        PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(basePath).conf(conf).columnStatsProbe(columnStatsProbe).build();
+        PartitionPruners.builder().rowType(TestConfigurations.ROW_TYPE).basePath(basePath).metaClient(metaClient).conf(conf).columnStatsProbe(columnStatsProbe).build();
     IncrementalInputSplits iis = IncrementalInputSplits.builder()
         .conf(conf)
         .path(new Path(basePath))

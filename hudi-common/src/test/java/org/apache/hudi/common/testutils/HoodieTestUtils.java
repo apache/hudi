@@ -63,10 +63,17 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.junit.jupiter.api.Assumptions;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -236,11 +243,14 @@ public class HoodieTestUtils {
     if (properties.containsKey("hoodie.write.table.version")) {
       builder.setTableVersion(Integer.parseInt(properties.getProperty("hoodie.write.table.version")));
     }
+    if (properties.containsKey(HoodieTableConfig.TABLE_FORMAT.key())) {
+      builder.setTableFormat(properties.getProperty(HoodieTableConfig.TABLE_FORMAT.key()));
+    }
 
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
-      builder.setPartitionFields("some_nonexistent_field");
+      builder.setPartitionFields("partition_path");
     }
     builder.fromProperties(properties);
     return builder;
@@ -439,6 +449,49 @@ public class HoodieTestUtils {
       deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(partition, entry)));
     });
     return deleteFileList;
+  }
+
+  /**
+   * Extracts a ZIP file from resources to a target directory.
+   * 
+   * @param resourcePath the path to the ZIP resource (relative to classpath)
+   * @param targetDirectory the target directory to extract files to
+   * @param resourceClass the class to use for resource loading
+   * @throws IOException if extraction fails
+   */
+  public static void extractZipToDirectory(String resourcePath, Path targetDirectory, Class<?> resourceClass) throws IOException {
+    InputStream resourceStream = resourceClass.getClassLoader().getResourceAsStream(resourcePath);
+    if (resourceStream == null) {
+      // Fallback to getResourceAsStream if getClassLoader().getResourceAsStream() fails
+      resourceStream = resourceClass.getResourceAsStream(resourcePath);
+    }
+    
+    if (resourceStream == null) {
+      throw new IOException("Resource not found at: " + resourcePath);
+    }
+
+    try (ZipInputStream zip = new ZipInputStream(resourceStream)) {
+      ZipEntry entry;
+      while ((entry = zip.getNextEntry()) != null) {
+        File file = targetDirectory.resolve(entry.getName()).toFile();
+        if (entry.isDirectory()) {
+          file.mkdirs();
+          continue;
+        }
+        
+        // Create parent directories if they don't exist
+        file.getParentFile().mkdirs();
+        
+        // Extract file content
+        byte[] buffer = new byte[10000];
+        try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(file.toPath()))) {
+          int count;
+          while ((count = zip.read(buffer)) != -1) {
+            out.write(buffer, 0, count);
+          }
+        }
+      }
+    }
   }
 
   public static void validateTableConfig(HoodieStorage storage,

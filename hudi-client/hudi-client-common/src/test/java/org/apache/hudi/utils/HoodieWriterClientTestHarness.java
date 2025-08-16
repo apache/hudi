@@ -31,6 +31,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -39,7 +40,6 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -50,6 +50,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -93,6 +95,7 @@ import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.jetbrains.annotations.NotNull;
 
@@ -129,6 +132,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
+import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
 import static org.apache.hudi.config.HoodieClusteringConfig.SCHEDULE_INLINE_CLUSTERING;
 import static org.apache.hudi.testutils.Assertions.assertNoDupesWithinPartition;
 import static org.apache.hudi.testutils.Assertions.assertNoDuplicatesInPartition;
@@ -154,9 +158,23 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
   protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
                                                  boolean isMetadataTable) {
-    if (!populateMetaFields) {
-      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen(populateMetaFields)))
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
+    try {
+      if (!populateMetaFields) {
+        boolean recreateMetaClient = false;
+        if (metaClient != null && metaClient.getTableConfig().populateMetaFields()) {
+          // need to recreate the meta client on the next write since this was initialized with populate meta fields as true by default
+          recreateMetaClient = true;
+          storage.deleteDirectory(metaClient.getBasePath());
+        }
+        configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen(populateMetaFields)))
+            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build())
+            .withPopulateMetaFields(false);
+        if (recreateMetaClient) {
+          HoodieTestUtils.init(basePath, getTableType(), configBuilder.build().getProps());
+        }
+      }
+    } catch (IOException ex) {
+      throw new HoodieIOException("Failed to update table: " + metaClient.getBasePath(), ex);
     }
   }
 
@@ -544,8 +562,32 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(isGlobal);
     int dedupParallelism = records.getNumPartitions() + additionalParallelism;
-    HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd = (HoodieData<HoodieRecord<RawTripTestPayload>>) HoodieWriteHelper.newInstance()
-            .deduplicateRecords(records, index, dedupParallelism, writeConfig.getSchema(), writeConfig.getProps(), HoodiePreCombineAvroRecordMerger.INSTANCE);
+    BaseHoodieWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    HoodieReaderContext readerContext = writeClient.getEngineContext()
+        .getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, writeConfig.getProps(), true).getContext();
+    List<String> orderingFieldNames = getOrderingFieldNames(
+        readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+    BufferedRecordMerger<HoodieRecord> recordMerger = BufferedRecordMergerFactory.create(
+        readerContext,
+        metaClient.getTableConfig().getRecordMergeMode(),
+        false,
+        Option.ofNullable(writeClient.getConfig().getRecordMerger()),
+        orderingFieldNames,
+        Option.ofNullable(writeClient.getConfig().getPayloadClass()),
+        new Schema.Parser().parse(writeClient.getConfig().getSchema()),
+        writeClient.getConfig().getProps(),
+        metaClient.getTableConfig().getPartialUpdateMode());
+    HoodieData<HoodieRecord<RawTripTestPayload>> dedupedRecsRdd =
+        (HoodieData<HoodieRecord<RawTripTestPayload>>) HoodieWriteHelper.newInstance()
+            .deduplicateRecords(
+                records,
+                index,
+                dedupParallelism,
+                writeConfig.getSchema(),
+                writeConfig.getProps(),
+                recordMerger,
+                readerContext,
+                orderingFieldNames.toArray(new String[0]));
     assertEquals(expectedNumPartitions, dedupedRecsRdd.getNumPartitions());
     List<HoodieRecord<RawTripTestPayload>> dedupedRecs = dedupedRecsRdd.collectAsList();
     assertEquals(isGlobal ? 1 : 2, dedupedRecs.size());
@@ -672,12 +714,12 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     }
 
     dataGen = new HoodieTestDataGenerator(new String[] {partitionPath});
-    String commitTime1 = client.createNewInstantTime();
+    String commitTime1 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
     List<WriteStatus> statuses1 = writeAndVerifyBatch(client, records1, commitTime1, populateMetaFields, true);
     Set<HoodieFileGroupId> fileIds1 = getFileGroupIdsFromWriteStatus(statuses1);
 
-    String commitTime2 = client.createNewInstantTime();
+    String commitTime2 = WriteClientTestUtils.createNewInstantTime();
     List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
     List<WriteStatus> statuses2 = writeAndVerifyBatch(client, records2, commitTime2, populateMetaFields, true);
     client.close();
@@ -1022,9 +1064,8 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
   private void generateInsertsAndCommit(HoodieWriteConfig config, Function transformInputFn, Function transformOutputFn) {
     try (BaseHoodieWriteClient client = getHoodieWriteClient(config)) {
-      String commitTime = client.createNewInstantTime();
+      String commitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
-      WriteClientTestUtils.startCommitWithTime(client, commitTime);
       List<WriteStatus> statusList = (List<WriteStatus>) transformOutputFn.apply(client.insert(transformInputFn.apply(records), commitTime));
       assertNoWriteErrors(statusList);
       client.commit(commitTime, transformInputFn.apply(statusList));
@@ -1058,7 +1099,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       List<WriteStatus> statuses = writeFn.apply(client, recordList, newCommitTime);
       assertNoWriteErrors(statuses);
       assertEquals(2, statuses.size());
-      assertNoDuplicatesInPartition(statuses.stream().map(WriteStatus::getWrittenRecordDelegates).flatMap(Collection::stream)
+      assertNoDuplicatesInPartition(statuses.stream().map(ws -> ws.getIndexStats().getWrittenRecordDelegates()).flatMap(Collection::stream)
               .collect(Collectors.toList()));
     }
   }
@@ -1188,24 +1229,22 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    */
   protected void testUpsertsInternal(Function3<Object, BaseHoodieWriteClient, Object, String> writeFn, boolean populateMetaFields, boolean isPrepped,
                                      SupportsUpgradeDowngrade upgradeDowngrade) throws Exception {
-
     metaClient.getStorage().deleteDirectory(new StoragePath(basePath));
-
-    metaClient = HoodieTableMetaClient.newTableBuilder()
-        .fromMetaClient(metaClient)
-        .setTableVersion(6)
-        .setPopulateMetaFields(populateMetaFields)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
-
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withRollbackUsingMarkers(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).withColumnStatsIndexForColumns("driver,rider")
             .withMetadataIndexColumnStatsFileGroupCount(1).withEngineType(getEngineType()).build())
         .withWriteTableVersion(6);
 
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
-    metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.SIX);
-
     HoodieWriteConfig config = cfgBuilder.build();
+    metaClient = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(config.getProps())
+        .setTableVersion(6)
+        .setTableType(metaClient.getTableType())
+        .setPopulateMetaFields(populateMetaFields)
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+
+    metaClient = HoodieTestUtils.createMetaClient(storageConf, new StoragePath(basePath), HoodieTableVersion.SIX);
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (only inserts)
@@ -1230,7 +1269,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     numRecords = 50;
 
     castDeleteBatch(config, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true,
-        0, 150, config.populateMetaFields(), metaClient.getTimelineLayout().getTimelineFactory(),
+        0, 150, config.populateMetaFields(), metaClient.getTableFormat().getTimelineFactory(),
         metaClient.getInstantGenerator());
 
     // Now perform an upgrade and perform a restore operation
@@ -1256,7 +1295,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     numRecords = 50;
 
     castDeleteBatch(newConfig, client, newCommitTime, prevCommitTime, initCommitTime, numRecords, isPrepped, true, 0, 150,
-        metaClient.getTimelineLayout().getTimelineFactory(), metaClient.getInstantGenerator());
+        metaClient.getTableFormat().getTimelineFactory(), metaClient.getInstantGenerator());
 
     checkTimelineForUpsertsInternal(metaClient);
 

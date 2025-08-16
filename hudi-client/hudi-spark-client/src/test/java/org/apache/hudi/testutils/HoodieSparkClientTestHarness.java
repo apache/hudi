@@ -220,6 +220,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // NOTE: It's important to set Spark's `Tests.IS_TESTING` so that our tests are recognized
     //       as such by Spark
     System.setProperty("spark.testing", "true");
+    sparkSession.sparkContext().persistentRdds().foreach(rdd -> rdd._2.persist());
   }
 
   /**
@@ -238,11 +239,14 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    * Cleanups Spark contexts ({@link JavaSparkContext} and {@link SQLContext}).
    */
   protected void cleanupSparkContexts() {
-    if (sqlContext != null) {
-      LOG.info("Clearing sql context cache of spark-session used in previous test-case");
-      sqlContext.clearCache();
-      sqlContext = null;
+    if (sparkSession != null) {
+      sparkSession.stop();
       sparkSession = null;
+    }
+
+    // SparkSession.stop() should clean the necessary resources.
+    if (sqlContext != null) {
+      sqlContext = null;
     }
 
     if (jsc != null) {
@@ -574,7 +578,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig,
                                       HoodieEngineContext hoodieEngineContext) {
-    return HoodieTableMetadata.create(
+    return metaClient.getTableFormat().getMetadataFactory().create(
         hoodieEngineContext, storage, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
@@ -651,8 +655,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(
-        engineContext, storage, HoodieTableMetadata.getMetadataTableBasePath(basePath), false);
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoClean / compaction happens end of commits

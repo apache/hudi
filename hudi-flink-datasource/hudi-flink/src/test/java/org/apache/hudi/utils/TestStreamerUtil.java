@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for {@link StreamerUtil}.
  */
-public class TestStreamerUtil {
+class TestStreamerUtil {
 
   @TempDir
   File tempFile;
@@ -86,9 +86,9 @@ public class TestStreamerUtil {
     assertTrue(metaClient1.getTableConfig().getPartitionFields().isPresent(),
         "Missing partition columns in the hoodie.properties.");
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
-    assertEquals(metaClient1.getTableConfig().getPreCombineField(), "ts");
+    assertEquals(metaClient1.getTableConfig().getPreCombineFieldsStr().get(), "ts");
     assertEquals(metaClient1.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
-    assertEquals(HoodieTableVersion.EIGHT, metaClient1.getTableConfig().getTableVersion());
+    assertEquals(HoodieTableVersion.current(), metaClient1.getTableConfig().getTableVersion());
 
     // Test for non-partitioned table.
     conf.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);

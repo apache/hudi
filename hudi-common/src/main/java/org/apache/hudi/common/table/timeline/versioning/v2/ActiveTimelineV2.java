@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantReader;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
+import org.apache.hudi.common.table.timeline.TableFormatCompletionAction;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -61,6 +62,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
@@ -89,12 +91,7 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
                            boolean applyLayoutFilters) {
     // Filter all the filter in the metapath and include only the extensions passed and
     // convert them into HoodieInstant
-    try {
-      this.setInstants(metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
-          includedExtensions, applyLayoutFilters));
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to scan metadata", e);
-    }
+    this.setInstants(getInstantsFromFileSystem(metaClient, includedExtensions, applyLayoutFilters));
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
@@ -155,28 +152,32 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     return instant;
   }
 
-  public String createCompletionTime() {
-    return this.metaClient.createNewInstantTime(false);
+  @Override
+  public <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata) {
+    return saveAsComplete(true, instant, metadata);
   }
 
   @Override
-  public <T> void saveAsComplete(HoodieInstant instant, Option<T> metadata) {
-    saveAsComplete(true, instant, metadata);
+  public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+    return saveAsComplete(shouldLock, instant, metadata, Option.empty());
   }
 
   @Override
-  public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
-    saveAsComplete(shouldLock, instant, metadata, Option.empty());
-  }
-
-  @Override
-  public <T> void saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt) {
+  public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, Option<String> completionTimeOpt) {
     LOG.info("Marking instant complete {}", instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, instant.getAction(), instant.requestedTime());
-    transitionStateToComplete(shouldLock, instant, commitInstant, metadata, completionTimeOpt);
+    HoodieInstant completedInstant = transitionStateToComplete(shouldLock, instant, commitInstant, metadata, completionTimeOpt);
     LOG.info("Completed " + instant);
+    return completedInstant;
+  }
+
+  @Override
+  public <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata, TableFormatCompletionAction tableFormatCompletionAction) {
+    HoodieInstant completedInstant = saveAsComplete(shouldLock, instant, metadata);
+    tableFormatCompletionAction.execute(completedInstant);
+    return completedInstant;
   }
 
   @Override
@@ -417,8 +418,15 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, CLEAN_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, metadata);
-    return commitInstant;
+    return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, metadata);
+  }
+
+  @Override
+  public HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata,
+                                                         TableFormatCompletionAction tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionCleanInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.execute(completedInstant);
+    return completedInstant;
   }
 
   @Override
@@ -436,8 +444,15 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, ROLLBACK_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
-    return commitInstant;
+    return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
+  }
+
+  @Override
+  public HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata,
+                                                            TableFormatCompletionAction tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionRollbackInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.execute(completedInstant);
+    return completedInstant;
   }
 
   @Override
@@ -486,8 +501,15 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
-    return commitInstant;
+    return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata));
+  }
+
+  @Override
+  public HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
+                                                           TableFormatCompletionAction tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionReplaceInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.execute(completedInstant);
+    return completedInstant;
   }
 
   @Override
@@ -497,20 +519,27 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = instantGenerator.createNewInstant(HoodieInstant.State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.requestedTime());
     // Then write to timeline
-    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata), Option.empty());
-    return commitInstant;
+    return transitionStateToComplete(shouldLock, inflightInstant, commitInstant, Option.of(metadata), Option.empty());
+  }
+
+  @Override
+  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata,
+                                                           TableFormatCompletionAction tableFormatCompletionAction) {
+    HoodieInstant completedInstant = transitionClusterInflightToComplete(shouldLock, inflightInstant, metadata);
+    tableFormatCompletionAction.execute(completedInstant);
+    return completedInstant;
   }
 
   private <T> void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
     transitionPendingState(fromInstant, toInstant, metadata, false);
   }
 
-  protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
-    transitionStateToComplete(shouldLock, fromInstant, toInstant, metadata, Option.empty());
+  protected <T> HoodieInstant transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata) {
+    return transitionStateToComplete(shouldLock, fromInstant, toInstant, metadata, Option.empty());
   }
 
-  protected <T> void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata,
-                                               Option<String> completionTimeOpt) {
+  protected <T> HoodieInstant transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<T> metadata,
+                                                        Option<String> completionTimeOpt) {
     ValidationUtils.checkArgument(fromInstant.requestedTime().equals(toInstant.requestedTime()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
     String fromInstantFileName = instantFileNameGenerator.getFileName(fromInstant);
     try {
@@ -528,12 +557,14 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
           throw new HoodieIOException(
               "Could not rename " + fromInstantPath + " to " + toInstantPath);
         }
+        return instantWithCompletionTime;
       } else {
         // Ensures old state exists in timeline
         ValidationUtils.checkArgument(
             metaClient.getStorage().exists(getInstantFileNamePath(fromInstantFileName)),
             "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
-        createCompleteFileInMetaPath(shouldLock, toInstant, metadata);
+        String completionTime = createCompleteFileInMetaPath(shouldLock, toInstant, metadata);
+        return new HoodieInstant(toInstant.getState(), toInstant.getAction(), toInstant.requestedTime(), completionTime, instantComparator.requestedTimeOrderedComparator());
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete " + fromInstant, e);
@@ -712,10 +743,11 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
     }
   }
 
-  protected <T> void createCompleteFileInMetaPath(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+  protected <T> String createCompleteFileInMetaPath(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
     Option<HoodieInstantWriter> writerOption = getHoodieInstantWriterOption(this, metadata);
     TimeGenerator timeGenerator = TimeGenerators
         .getTimeGenerator(metaClient.getTimeGeneratorConfig(), metaClient.getStorageConf());
+    final AtomicReference<String> completionTimeRef = new AtomicReference<>();
     timeGenerator.consumeTime(!shouldLock, currentTimeMillis -> {
       String completionTime = HoodieInstantTimeGenerator.formatDateBasedOnTimeZone(new Date(currentTimeMillis));
       String fileName = instantFileNameGenerator.getFileName(completionTime, instant);
@@ -725,8 +757,10 @@ public class ActiveTimelineV2 extends BaseTimelineV2 implements HoodieActiveTime
       } else {
         metaClient.getStorage().createImmutableFileInPath(fullPath, writerOption);
       }
-      LOG.info("Created new file for toInstant ?{}", fullPath);
+      completionTimeRef.set(completionTime);
+      LOG.info("Created new file for toInstant: {}", fullPath);
     });
+    return completionTimeRef.get();
   }
 
   protected Option<byte[]> readDataFromPath(StoragePath detailPath) {

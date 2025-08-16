@@ -288,7 +288,7 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
     // This operation is resource costly.
     synchronized (this) {
       if (InstantComparison.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
-        metaClient.getTimelineLayout().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
+        metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
             new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
             HoodieArchivedTimeline.LoadMode.TIME,
             r -> true,
@@ -310,7 +310,7 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
         .filterCompletedInstants().getInstantsAsStream()
         .forEach(instant -> setCompletionTime(instant.requestedTime(), instant.getCompletionTime()));
     // then load the archived instants.
-    metaClient.getTimelineLayout().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
+    metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
         new HoodieArchivedTimeline.StartTsFilter(this.cursorInstant),
         HoodieArchivedTimeline.LoadMode.TIME,
         r -> true,

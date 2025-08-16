@@ -20,7 +20,6 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -47,7 +46,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 import java.util.Properties;
@@ -88,23 +88,24 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     schema = new Schema.Parser().parse(jsonSchema);
   }
 
-  @Test
-  public void test() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieOperation.class, names = {"UPDATE_BEFORE", "DELETE"})
+  public void test(HoodieOperation hoodieOperation) throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig();
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
 
     String[] dataset1 = new String[] {"I,id1,Danny,23,1,par1", "I,id2,Tony,20,1,par1"};
     SparkRDDWriteClient client = getHoodieWriteClient(config);
-    String insertTime1 = client.createNewInstantTime();
+    String insertTime1 = client.startCommit();
     List<WriteStatus> writeStatuses1 = writeData(client, insertTime1, dataset1);
     client.commit(insertTime1, jsc().parallelize(writeStatuses1));
 
     String[] dataset2 = new String[] {
         "I,id1,Danny,30,2,par1",
-        "D,id2,Tony,20,2,par1",
+        hoodieOperation.getName() + ",id2,Tony,20,2,par1",
         "I,id3,Julian,40,2,par1",
         "D,id4,Stephan,35,2,par1"};
-    String insertTime2 = client.createNewInstantTime();
+    String insertTime2 = client.startCommit();
     List<WriteStatus> writeStatuses2 = writeData(client, insertTime2, dataset2);
     client.commit(insertTime2, jsc().parallelize(writeStatuses2));
 
@@ -156,7 +157,6 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     List<HoodieRecord> recordList = str2HoodieRecord(records);
     JavaRDD<HoodieRecord> writeRecords = jsc().parallelize(recordList, 2);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    WriteClientTestUtils.startCommitWithTime(client, instant);
     List<WriteStatus> writeStatuses = client.upsert(writeRecords, instant).collect();
     assertNoWriteErrors(writeStatuses);
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -166,7 +166,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
   private List<HoodieRecord> str2HoodieRecord(String[] records) {
     return Stream.of(records).map(rawRecordStr -> {
       String[] parts = rawRecordStr.split(",");
-      boolean isDelete = parts[0].equalsIgnoreCase("D");
+      String hoodieOperationStr = parts[0];
       GenericRecord record = new GenericData.Record(schema);
       record.put("id", parts[1]);
       record.put("name", parts[2]);
@@ -177,7 +177,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
       return new HoodieAvroRecord<>(
           new HoodieKey((String) record.get("id"), (String) record.get("partition_path")),
           payload,
-          isDelete ? HoodieOperation.DELETE : HoodieOperation.INSERT);
+          HoodieOperation.fromName(hoodieOperationStr));
     }).collect(Collectors.toList());
   }
 }

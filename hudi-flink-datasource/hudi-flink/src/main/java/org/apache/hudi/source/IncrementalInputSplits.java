@@ -136,13 +136,13 @@ public class IncrementalInputSplits implements Serializable {
 
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .startCompletionTime(this.conf.getString(FlinkOptions.READ_START_COMMIT))
-        .endCompletionTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
+        .startCompletionTime(this.conf.get(FlinkOptions.READ_START_COMMIT))
+        .endCompletionTime(this.conf.get(FlinkOptions.READ_END_COMMIT))
         .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .skipInsertOverwrite(skipInsertOverwrite)
-        .readCdcFromChangelog(this.conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG))
+        .readCdcFromChangelog(this.conf.get(FlinkOptions.READ_CDC_FROM_CHANGELOG))
         .build();
 
     IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
@@ -177,7 +177,7 @@ public class IncrementalInputSplits implements Serializable {
     final List<StoragePathInfo> fileInfoList;
     if (fullTableScan) {
       // scans the partitions and files directly.
-      FileIndex fileIndex = getFileIndex();
+      FileIndex fileIndex = getFileIndex(metaClient);
       readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
         LOG.warn("No partitions found for reading in user provided path.");
@@ -191,7 +191,7 @@ public class IncrementalInputSplits implements Serializable {
         return Result.instance(inputSplits, endInstant);
       }
       // case2: normal incremental read
-      String tableName = conf.getString(FlinkOptions.TABLE_NAME);
+      String tableName = conf.get(FlinkOptions.TABLE_NAME);
       List<HoodieInstant> instants = analyzingResult.getActiveInstants();
       List<HoodieCommitMetadata> metadataList = instants.stream()
           .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline))
@@ -208,7 +208,7 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("Found deleted files in metadata, fall back to full table scan.");
         // fallback to full table scan
         // reading from the earliest, scans the partitions and files directly.
-        FileIndex fileIndex = getFileIndex();
+        FileIndex fileIndex = getFileIndex(metaClient);
         readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
         if (readPartitions.size() == 0) {
           LOG.warn("No partitions found for reading in user provided path.");
@@ -247,13 +247,13 @@ public class IncrementalInputSplits implements Serializable {
     metaClient.reloadActiveTimeline();
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .startCompletionTime(issuedOffset != null ? issuedOffset : this.conf.getString(FlinkOptions.READ_START_COMMIT))
-        .endCompletionTime(this.conf.getString(FlinkOptions.READ_END_COMMIT))
+        .startCompletionTime(issuedOffset != null ? issuedOffset : this.conf.get(FlinkOptions.READ_START_COMMIT))
+        .endCompletionTime(this.conf.get(FlinkOptions.READ_END_COMMIT))
         .rangeType(issuedOffset != null ? InstantRange.RangeType.OPEN_CLOSED : InstantRange.RangeType.CLOSED_CLOSED)
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .skipInsertOverwrite(skipInsertOverwrite)
-        .readCdcFromChangelog(this.conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG))
+        .readCdcFromChangelog(this.conf.get(FlinkOptions.READ_CDC_FROM_CHANGELOG))
         .limit(OptionsResolver.getReadCommitsLimit(conf))
         .build();
 
@@ -275,7 +275,7 @@ public class IncrementalInputSplits implements Serializable {
 
     if (instantRange.isEmpty()) {
       // reading from the earliest, scans the partitions and files directly.
-      FileIndex fileIndex = getFileIndex();
+      FileIndex fileIndex = getFileIndex(metaClient);
 
       Set<String> readPartitions = new TreeSet<>(fileIndex.getOrBuildPartitionPaths());
       if (readPartitions.size() == 0) {
@@ -318,7 +318,7 @@ public class IncrementalInputSplits implements Serializable {
       return getCdcInputSplits(metaClient, instantRange);
     }
     // case2: normal streaming read
-    String tableName = conf.getString(FlinkOptions.TABLE_NAME);
+    String tableName = conf.get(FlinkOptions.TABLE_NAME);
     List<HoodieCommitMetadata> activeMetadataList = queryContext.getActiveInstants().stream()
         .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
     List<HoodieCommitMetadata> archivedMetadataList = queryContext.getArchivedInstants().stream()
@@ -361,7 +361,7 @@ public class IncrementalInputSplits implements Serializable {
       boolean skipBaseFiles) {
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, pathInfoList);
     final AtomicInteger cnt = new AtomicInteger(0);
-    final String mergeType = this.conf.getString(FlinkOptions.MERGE_TYPE);
+    final String mergeType = this.conf.get(FlinkOptions.MERGE_TYPE);
     return readPartitions.stream()
         .map(relPartitionPath -> getFileSlices(fsView, relPartitionPath, maxCompletionTime, skipBaseFiles)
             .map(fileSlice -> {
@@ -411,11 +411,12 @@ public class IncrementalInputSplits implements Serializable {
         : fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, endInstant);
   }
 
-  private FileIndex getFileIndex() {
+  private FileIndex getFileIndex(HoodieTableMetaClient metaClient) {
     return FileIndex.builder()
         .path(new StoragePath(path.toUri()))
         .conf(conf)
         .rowType(rowType)
+        .metaClient(metaClient)
         .partitionPruner(partitionPruner)
         .build();
   }

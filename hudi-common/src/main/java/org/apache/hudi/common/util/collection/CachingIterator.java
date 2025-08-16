@@ -19,8 +19,6 @@
 
 package org.apache.hudi.common.util.collection;
 
-import org.apache.hudi.common.engine.HoodieReaderContext;
-
 public abstract class CachingIterator<T> implements ClosableIterator<T> {
 
   protected T nextRecord;
@@ -38,41 +36,4 @@ public abstract class CachingIterator<T> implements ClosableIterator<T> {
     nextRecord = null;
     return record;
   }
-
-  public static <U> CachingIterator<U> wrap(ClosableIterator<U> iterator) {
-    return new CachingIterator<U>() {
-      @Override
-      protected boolean doHasNext() {
-        if (iterator.hasNext()) {
-          nextRecord = iterator.next();
-          return true;
-        }
-        return false;
-      }
-
-      @Override
-      public void close() {
-        iterator.close();
-      }
-    };
-  }
-
-  public static <U> CachingIterator<U> wrap(ClosableIterator<U> iterator, HoodieReaderContext<U> readerContext) {
-    return new CachingIterator<U>() {
-      @Override
-      protected boolean doHasNext() {
-        if (iterator.hasNext()) {
-          nextRecord = readerContext.seal(iterator.next());
-          return true;
-        }
-        return false;
-      }
-
-      @Override
-      public void close() {
-        iterator.close();
-      }
-    };
-  }
-
 }

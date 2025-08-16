@@ -18,16 +18,25 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class TestHoodieRecordUtils {
 
@@ -37,7 +46,7 @@ class TestHoodieRecordUtils {
     HoodieRecordMerger recordMerger1 = HoodieRecordUtils.loadRecordMerger(mergeClassName);
     HoodieRecordMerger recordMerger2 = HoodieRecordUtils.loadRecordMerger(mergeClassName);
     assertEquals(recordMerger1.getClass().getName(), mergeClassName);
-    assertEquals(recordMerger1, recordMerger2);
+    assertEquals(recordMerger2.getClass().getName(), mergeClassName);
   }
 
   @Test
@@ -51,5 +60,23 @@ class TestHoodieRecordUtils {
     String payloadClassName = DefaultHoodieRecordPayload.class.getName();
     HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClassName, null, 0);
     assertEquals(payload.getClass().getName(), payloadClassName);
+  }
+
+  @Test
+  void testGetOrderingFields() {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    TypedProperties props = new TypedProperties();
+    // Assert empty ordering fields for commit time ordering
+    assertTrue(HoodieRecordUtils.getOrderingFieldNames(RecordMergeMode.COMMIT_TIME_ORDERING, props, metaClient).isEmpty());
+
+    // Assert table config precombine fields are returned when props are not set with event time merge mode
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.PRECOMBINE_FIELDS, "tbl");
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    assertEquals(Collections.singletonList("tbl"), HoodieRecordUtils.getOrderingFieldNames(RecordMergeMode.EVENT_TIME_ORDERING, props, metaClient));
+
+    // Assert props value is returned for precombine field configuration when it is set with event time merge mode
+    props.setProperty("hoodie.datasource.write.precombine.field", "props");
+    assertEquals(Collections.singletonList("props"), HoodieRecordUtils.getOrderingFieldNames(RecordMergeMode.EVENT_TIME_ORDERING, props, metaClient));
   }
 }

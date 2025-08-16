@@ -47,8 +47,10 @@ public enum HoodieTableVersion {
   // 0.16.0
   SEVEN(7, CollectionUtils.createImmutableList("0.16.0"), TimelineLayoutVersion.LAYOUT_VERSION_1),
   // 1.0
-  EIGHT(8, CollectionUtils.createImmutableList("1.0.0"), TimelineLayoutVersion.LAYOUT_VERSION_2);
-  
+  EIGHT(8, CollectionUtils.createImmutableList("1.0.0"), TimelineLayoutVersion.LAYOUT_VERSION_2),
+  // 1.1
+  NINE(9, CollectionUtils.createImmutableList("1.1.0"), TimelineLayoutVersion.LAYOUT_VERSION_2);
+
   private final int versionCode;
 
   private final List<String> releaseVersions;
@@ -70,7 +72,7 @@ public enum HoodieTableVersion {
   }
 
   public static HoodieTableVersion current() {
-    return EIGHT;
+    return NINE;
   }
 
   public static HoodieTableVersion fromVersionCode(int versionCode) {

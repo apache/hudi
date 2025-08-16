@@ -60,6 +60,7 @@
     <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
+    <module>hudi-flink-datasource/${hudi.flink.module}</module>
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
@@ -111,10 +112,10 @@
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.13.0</junit.jupiter.version>
-    <junit.vintage.version>5.13.0</junit.vintage.version>
-    <junit.platform.version>1.13.0</junit.platform.version>
-    <mockito.jupiter.version>3.12.4</mockito.jupiter.version>
+    <junit.jupiter.version>5.13.4</junit.jupiter.version>
+    <junit.vintage.version>5.13.4</junit.vintage.version>
+    <junit.platform.version>1.13.4</junit.platform.version>
+    <mockito.jupiter.version>4.11.0</mockito.jupiter.version>
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
@@ -140,12 +141,11 @@
     <spark.version>${spark3.version}</spark.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink2.0.version>2.0.0</flink2.0.version>
     <flink1.20.version>1.20.1</flink1.20.version>
     <flink1.19.version>1.19.2</flink1.19.version>
     <flink1.18.version>1.18.1</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
-    <flink1.16.version>1.16.2</flink1.16.version>
-    <flink1.15.version>1.15.1</flink1.15.version>
     <flink.version>${flink1.20.version}</flink.version>
     <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
     <flink.bundle.version>1.20</flink.bundle.version>
@@ -153,7 +153,7 @@
     <flink.avro.version>1.11.4</flink.avro.version>
     <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
     <!-- check kafka version -->
-    <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version> 
+    <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
@@ -201,7 +201,7 @@
     <spark.bundle.hive.shade.prefix/>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
-    <argLine>-Xmx2g -Xms128m</argLine>
+    <argLine>-Xmx2g -Xms128m -XX:-OmitStackTraceInFastThrow</argLine>
     <jacoco.version>0.8.12</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
@@ -464,8 +464,6 @@
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
               <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
-              <!-- native HFile reader uses protobuf -->
-              <include>com.google.protobuf:protobuf-java</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -482,10 +480,6 @@
               <pattern>com.fasterxml.jackson.module</pattern>
               <shadedPattern>org.apache.hudi.com.fasterxml.jackson.module
               </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>com.google.protobuf.</pattern>
-              <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
             </relocation>
           </relocations>
         </configuration>
@@ -1687,7 +1681,7 @@
       <!-- Other Utils -->
       <dependency>
         <groupId>org.apache.flink</groupId>
-        <artifactId>flink-test-utils_${scala.binary.version}</artifactId>
+        <artifactId>${flink.test.utils.artifactId}</artifactId>
         <version>${flink.version}</version>
         <scope>test</scope>
         <exclusions>
@@ -2557,13 +2551,38 @@
     </profile>
 
     <profile>
+      <id>flink2.0</id>
+      <properties>
+        <flink.version>${flink2.0.version}</flink.version>
+        <hudi.flink.module>hudi-flink2.0.x</hudi.flink.module>
+        <flink.bundle.version>2.0</flink.bundle.version>
+        <!-- check kafka version -->
+        <flink.connector.kafka.version>4.0.0-2.0</flink.connector.kafka.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
+        <flink.format.parquet.version>1.14.4</flink.format.parquet.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
+      </properties>
+      <activation>
+        <property>
+          <name>flink2.0</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
       <id>flink1.20</id>
       <properties>
+        <flink.version>${flink1.20.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
+        <flink.bundle.version>1.20</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
       <activation>
+        <activeByDefault>true</activeByDefault>
         <property>
           <name>flink1.20</name>
         </property>
@@ -2579,6 +2598,7 @@
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
       <activation>
         <property>
@@ -2596,6 +2616,7 @@
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
       <activation>
         <property>
@@ -2613,44 +2634,11 @@
         <flink.avro.version>1.11.4</flink.avro.version>
         <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
       <activation>
         <property>
           <name>flink1.17</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
-      <id>flink1.16</id>
-      <properties>
-        <flink.version>${flink1.16.version}</flink.version>
-        <hudi.flink.module>hudi-flink1.16.x</hudi.flink.module>
-        <flink.bundle.version>1.16</flink.bundle.version>
-        <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
-        <flink.connector.kafka.version>${flink1.16.version}</flink.connector.kafka.version>
-      </properties>
-      <activation>
-        <property>
-          <name>flink1.16</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
-    <id>flink1.15</id>
-      <properties>
-        <flink.version>${flink1.15.version}</flink.version>
-        <hudi.flink.module>hudi-flink1.15.x</hudi.flink.module>
-        <flink.bundle.version>1.15</flink.bundle.version>
-        <orc.flink.version>1.5.6</orc.flink.version>
-        <flink.avro.version>1.11.4</flink.avro.version>
-        <flink.format.parquet.version>1.12.3</flink.format.parquet.version>
-        <flink.connector.kafka.version>${flink1.15.version}</flink.connector.kafka.version>
-      </properties>
-      <activation>
-        <property>
-          <name>flink1.15</name>
         </property>
       </activation>
     </profile>
@@ -2670,7 +2658,7 @@
     <profile>
       <id>java17</id>
       <properties>
-        <argLine>-Xmx2g --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -Djol.magicFieldOffset=true</argLine>
+        <argLine>-Xmx2g --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -Djol.magicFieldOffset=true -XX:-OmitStackTraceInFastThrow</argLine>
       </properties>
       <activation>
         <property>

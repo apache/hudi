@@ -614,7 +614,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       .setBaseFileFormat(fooTableParams.getOrElse(HoodieWriteConfig.BASE_FILE_FORMAT.key,
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name))
       .setArchiveLogFolder(HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue())
-      .setPreCombineField(fooTableParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, null))
+      .setPreCombineFields(fooTableParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, null))
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
       .setKeyGeneratorClassProp(fooTableParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key,
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue()))
@@ -1000,7 +1000,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key -> "false",
       "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1"
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key -> "org.apache.hudi.io.HoodieWriteMergeHandle"
     )
 
     val df = spark.range(0, 10).toDF("keyid")

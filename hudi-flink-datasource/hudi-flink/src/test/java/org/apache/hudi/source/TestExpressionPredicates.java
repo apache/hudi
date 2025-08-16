@@ -85,7 +85,7 @@ public class TestExpressionPredicates {
     IntColumn intColumn = intColumn("f_int");
 
     // equals
-    CallExpression equalsExpression = new CallExpression(
+    CallExpression equalsExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.EQUALS, expressions, DataTypes.BOOLEAN());
     Predicate predicate1 = Equals.getInstance().bindValueLiteral(valueLiteral).bindFieldReference(fieldReference);
     Eq<Integer> eq = eq(intColumn, 10);
@@ -94,7 +94,7 @@ public class TestExpressionPredicates {
     assertEquals(eq, predicate2.filter());
 
     // not equals
-    CallExpression notEqualsExpression = new CallExpression(
+    CallExpression notEqualsExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.NOT_EQUALS, expressions, DataTypes.BOOLEAN());
     Predicate predicate3 = NotEquals.getInstance().bindValueLiteral(valueLiteral).bindFieldReference(fieldReference);
     Predicate predicate4 = fromExpression(notEqualsExpression);
@@ -102,7 +102,7 @@ public class TestExpressionPredicates {
     assertEquals(notEq(intColumn, 10), predicate4.filter());
 
     // less than
-    CallExpression lessThanExpression = new CallExpression(
+    CallExpression lessThanExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.LESS_THAN, expressions, DataTypes.BOOLEAN());
     Predicate predicate5 = LessThan.getInstance().bindValueLiteral(valueLiteral).bindFieldReference(fieldReference);
     Lt<Integer> lt = lt(intColumn, 10);
@@ -111,7 +111,7 @@ public class TestExpressionPredicates {
     assertEquals(lt, predicate6.filter());
 
     // greater than
-    CallExpression greaterThanExpression = new CallExpression(
+    CallExpression greaterThanExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.GREATER_THAN, expressions, DataTypes.BOOLEAN());
     Predicate predicate7 = GreaterThan.getInstance().bindValueLiteral(valueLiteral).bindFieldReference(fieldReference);
     Gt<Integer> gt = gt(intColumn, 10);
@@ -120,7 +120,7 @@ public class TestExpressionPredicates {
     assertEquals(gt, predicate8.filter());
 
     // less than or equal
-    CallExpression lessThanOrEqualExpression = new CallExpression(
+    CallExpression lessThanOrEqualExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL, expressions, DataTypes.BOOLEAN());
     Predicate predicate9 = LessThanOrEqual.getInstance().bindValueLiteral(valueLiteral).bindFieldReference(fieldReference);
     Predicate predicate10 = fromExpression(lessThanOrEqualExpression);
@@ -128,7 +128,7 @@ public class TestExpressionPredicates {
     assertEquals(ltEq(intColumn, 10), predicate10.filter());
 
     // greater than or equal
-    CallExpression greaterThanOrEqualExpression = new CallExpression(
+    CallExpression greaterThanOrEqualExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL, expressions, DataTypes.BOOLEAN());
     Predicate predicate11 = GreaterThanOrEqual.getInstance().bindValueLiteral(valueLiteral).bindFieldReference(fieldReference);
     Predicate predicate12 = fromExpression(greaterThanOrEqualExpression);
@@ -138,7 +138,7 @@ public class TestExpressionPredicates {
     // in
     ValueLiteralExpression valueLiteral1 = new ValueLiteralExpression(11);
     ValueLiteralExpression valueLiteral2 = new ValueLiteralExpression(12);
-    CallExpression inExpression = new CallExpression(
+    CallExpression inExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.IN,
         Arrays.asList(fieldReference, valueLiteral1, valueLiteral2),
         DataTypes.BOOLEAN());
@@ -148,7 +148,7 @@ public class TestExpressionPredicates {
     assertEquals(or(eq(intColumn, 11), eq(intColumn, 12)), predicate14.filter());
 
     // not
-    CallExpression notExpression = new CallExpression(
+    CallExpression notExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.NOT,
         Collections.singletonList(equalsExpression),
         DataTypes.BOOLEAN());
@@ -158,7 +158,7 @@ public class TestExpressionPredicates {
     assertEquals(not(eq), predicate16.filter());
 
     // and
-    CallExpression andExpression = new CallExpression(
+    CallExpression andExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.AND,
         Arrays.asList(lessThanExpression, greaterThanExpression),
         DataTypes.BOOLEAN());
@@ -168,7 +168,7 @@ public class TestExpressionPredicates {
     assertEquals(and(lt, gt), predicate18.filter());
 
     // or
-    CallExpression orExpression = new CallExpression(
+    CallExpression orExpression = CallExpression.permanent(
         BuiltInFunctionDefinitions.OR,
         Arrays.asList(lessThanExpression, greaterThanExpression),
         DataTypes.BOOLEAN());
@@ -184,9 +184,9 @@ public class TestExpressionPredicates {
     ValueLiteralExpression valueLiteral = new ValueLiteralExpression(BigDecimal.valueOf(100.00));
     List<ResolvedExpression> expressions = Arrays.asList(fieldReference, valueLiteral);
 
-    CallExpression greaterThanExpression = new CallExpression(BuiltInFunctionDefinitions.GREATER_THAN, expressions, DataTypes.DECIMAL(7, 2));
+    CallExpression greaterThanExpression = CallExpression.permanent(BuiltInFunctionDefinitions.GREATER_THAN, expressions, DataTypes.DECIMAL(7, 2));
     Predicate greaterThanPredicate = fromExpression(greaterThanExpression);
-    CallExpression lessThanExpression = new CallExpression(BuiltInFunctionDefinitions.LESS_THAN, expressions, DataTypes.DECIMAL(7, 2));
+    CallExpression lessThanExpression = CallExpression.permanent(BuiltInFunctionDefinitions.LESS_THAN, expressions, DataTypes.DECIMAL(7, 2));
     Predicate lessThanPredicate = fromExpression(lessThanExpression);
 
     assertNull(And.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");

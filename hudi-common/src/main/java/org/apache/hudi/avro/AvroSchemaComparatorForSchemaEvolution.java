@@ -23,9 +23,7 @@ import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -140,10 +138,16 @@ import java.util.stream.Collectors;
  */
 public class AvroSchemaComparatorForSchemaEvolution {
 
-  private AvroSchemaComparatorForSchemaEvolution() {
+  protected AvroSchemaComparatorForSchemaEvolution() {
   }
 
+  private static final AvroSchemaComparatorForSchemaEvolution VALIDATOR = new AvroSchemaComparatorForSchemaEvolution();
+
   public static boolean schemaEquals(Schema s1, Schema s2) {
+    return VALIDATOR.schemaEqualsInternal(s1, s2);
+  }
+
+  protected boolean schemaEqualsInternal(Schema s1, Schema s2) {
     if (s1 == s2) {
       return true;
     }
@@ -181,8 +185,16 @@ public class AvroSchemaComparatorForSchemaEvolution {
     }
   }
 
-  private static boolean recordSchemaEquals(Schema s1, Schema s2) {
+  protected boolean validateRecord(Schema s1, Schema s2) {
     if (s1.isError() != s2.isError()) {
+      return false;
+    }
+
+    return logicalTypeSchemaEquals(s1, s2);
+  }
+
+  private boolean recordSchemaEquals(Schema s1, Schema s2) {
+    if (!validateRecord(s1, s2)) {
       return false;
     }
 
@@ -193,23 +205,15 @@ public class AvroSchemaComparatorForSchemaEvolution {
       return false;
     }
 
-    Map<String, Schema.Field> fieldMap1 = fields1.stream()
-        .collect(Collectors.toMap(Schema.Field::name, Function.identity()));
-
-    for (Schema.Field f2 : fields2) {
-      Schema.Field f1 = fieldMap1.get(f2.name());
-      if (f1 == null) {
-        return false;
-      }
-      if (!fieldEquals(f1, f2)) {
+    for (int i = 0; i < fields1.size(); i++) {
+      if (!fieldEquals(fields1.get(i), fields2.get(i))) {
         return false;
       }
     }
-
-    return logicalTypeSchemaEquals(s1, s2);
+    return true;
   }
 
-  private static boolean fieldEquals(Schema.Field f1, Schema.Field f2) {
+  protected boolean validateField(Schema.Field f1, Schema.Field f2) {
     if (!f1.name().equals(f2.name())) {
       return false;
     }
@@ -223,10 +227,6 @@ public class AvroSchemaComparatorForSchemaEvolution {
       return false;
     }
 
-    if (!schemaEquals(f1.schema(), f2.schema())) {
-      return false;
-    }
-
     // If both have default values, they must be equal
     if (f1.hasDefaultValue() && !f1.defaultVal().equals(f2.defaultVal())) {
       return false;
@@ -235,7 +235,15 @@ public class AvroSchemaComparatorForSchemaEvolution {
     return true;
   }
 
-  private static boolean enumSchemaEquals(Schema s1, Schema s2) {
+  private boolean fieldEquals(Schema.Field f1, Schema.Field f2) {
+    if (!validateField(f1, f2)) {
+      return false;
+    }
+
+    return schemaEqualsInternal(f1.schema(), f2.schema());
+  }
+
+  protected boolean enumSchemaEquals(Schema s1, Schema s2) {
     // Check name equality first
     if (!s1.getName().equals(s2.getName())) {
       return false;
@@ -252,7 +260,7 @@ public class AvroSchemaComparatorForSchemaEvolution {
     return symbols1.equals(symbols2);
   }
 
-  private static boolean unionSchemaEquals(Schema s1, Schema s2) {
+  protected boolean unionSchemaEquals(Schema s1, Schema s2) {
     List<Schema> types1 = s1.getTypes();
     List<Schema> types2 = s2.getTypes();
 
@@ -268,17 +276,23 @@ public class AvroSchemaComparatorForSchemaEvolution {
     return set1.equals(set2);
   }
 
-  private static boolean arraySchemaEquals(Schema s1, Schema s2) {
-    return schemaEquals(s1.getElementType(), s2.getElementType());
+  private boolean arraySchemaEquals(Schema s1, Schema s2) {
+    return schemaEqualsInternal(s1.getElementType(), s2.getElementType());
   }
 
-  private static boolean mapSchemaEquals(Schema s1, Schema s2) {
-    return schemaEquals(s1.getValueType(), s2.getValueType());
+  private boolean mapSchemaEquals(Schema s1, Schema s2) {
+    return schemaEqualsInternal(s1.getValueType(), s2.getValueType());
   }
 
-  private static boolean fixedSchemaEquals(Schema s1, Schema s2) {
-    return s1.getName().equals(s2.getName()) && s1.getFixedSize() == s2.getFixedSize()
-        && logicalTypeSchemaEquals(s1, s2);
+  protected boolean validateFixed(Schema s1, Schema s2) {
+    return s1.getName().equals(s2.getName()) && s1.getFixedSize() == s2.getFixedSize();
+  }
+
+  private boolean fixedSchemaEquals(Schema s1, Schema s2) {
+    if (!validateFixed(s1, s2)) {
+      return false;
+    }
+    return logicalTypeSchemaEquals(s1, s2);
   }
 
   private static boolean primitiveSchemaEquals(Schema s1, Schema s2) {

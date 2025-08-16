@@ -24,30 +24,32 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
-import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
+import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
+import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
-
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * {@link HoodieRecord} implementation for Hive records of {@link ArrayWritable}.
@@ -55,40 +57,38 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   private boolean copy;
-  private final boolean isDeleted;
 
-  public boolean isDeleted() {
-    return isDeleted;
-  }
-
-  private final ArrayWritableObjectInspector objectInspector;
-
-  private final ObjectInspectorCache objectInspectorCache;
+  private final HiveAvroSerializer avroSerializer;
 
   protected Schema schema;
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, ObjectInspectorCache objectInspectorCache) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer) {
     super(key, data);
-    this.objectInspector = objectInspectorCache.getObjectInspector(schema);
-    this.objectInspectorCache = objectInspectorCache;
+    this.avroSerializer = avroSerializer;
     this.schema = schema;
     this.copy = false;
-    isDeleted = data == null;
+    isDelete = data == null;
+  }
+
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, boolean isDelete) {
+    super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.avroSerializer = avroSerializer;
+    this.schema = schema;
+    this.copy = false;
   }
 
   private HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HoodieOperation operation, boolean isCopy,
-                           ArrayWritableObjectInspector objectInspector, ObjectInspectorCache objectInspectorCache) {
+                           HiveAvroSerializer avroSerializer) {
     super(key, data, operation, Option.empty());
     this.schema = schema;
     this.copy = isCopy;
-    isDeleted = data == null;
-    this.objectInspector = objectInspector;
-    this.objectInspectorCache = objectInspectorCache;
+    isDelete = data == null;
+    this.avroSerializer = avroSerializer;
   }
 
   @Override
   public HoodieRecord<ArrayWritable> newInstance() {
-    return new HoodieHiveRecord(this.key, this.data, this.schema, this.operation, this.copy, this.objectInspector, this.objectInspectorCache);
+    return new HoodieHiveRecord(this.key, this.data, this.schema, this.operation, this.copy, this.avroSerializer);
   }
 
   @Override
@@ -102,12 +102,12 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField)) {
-      return DEFAULT_ORDERING_VALUE;
+  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
+    } else {
+      return OrderingValues.create(orderingFields, field -> (Comparable<?>) getValue(field));
     }
-    return (Comparable<?>) getValue(orderingField);
   }
 
   @Override
@@ -136,6 +136,27 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    if (fieldValue == null) {
+      return null;
+    }
+    LogicalType logicalType = fieldSchema.getLogicalType();
+
+    if (logicalType == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(((IntWritable) fieldValue).get());
+    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
+      return ((LongWritable) fieldValue).get();
+    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
+      return ((LongWritable) fieldValue).get() / 1000;
+    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      return ((HiveDecimalWritable) fieldValue).getHiveDecimal().bigDecimalValue();
+    }
+    return fieldValue;
+  }
+
+  @Override
   public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     Object[] objects = new Object[columns.length];
     for (int i = 0; i < objects.length; i++) {
@@ -146,7 +167,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
-    throw new UnsupportedOperationException("Unsupported yet for " + this.getClass().getSimpleName());
+    return avroSerializer.getValueAsJava(data, column);
   }
 
   @Override
@@ -165,7 +186,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+  public boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
     if (null == data) {
       return true;
     }
@@ -224,7 +245,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   private Object getValue(String name) {
-    return HoodieArrayWritableAvroUtils.getWritableValue(data, objectInspector, name);
+    return avroSerializer.getValue(data, name);
   }
 
   protected Schema getSchema() {

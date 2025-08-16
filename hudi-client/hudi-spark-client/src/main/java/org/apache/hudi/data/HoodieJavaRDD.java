@@ -109,6 +109,11 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
+  public void unpersistWithDependencies() {
+    HoodieSparkRDDUtils.unpersistRDDWithDependencies(rddData.rdd());
+  }
+
+  @Override
   public boolean isEmpty() {
     return rddData.isEmpty();
   }

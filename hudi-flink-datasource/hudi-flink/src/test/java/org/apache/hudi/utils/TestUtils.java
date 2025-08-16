@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -117,7 +118,7 @@ public class TestUtils {
   }
 
   public static StreamReadMonitoringFunction getMonitorFunc(Configuration conf) {
-    final String basePath = conf.getString(FlinkOptions.PATH);
+    final String basePath = conf.get(FlinkOptions.PATH);
     return new StreamReadMonitoringFunction(conf, new Path(basePath), TestConfigurations.ROW_TYPE, 1024 * 1024L, null);
   }
 
@@ -149,7 +150,7 @@ public class TestUtils {
 
   public static String amendCompletionTimeToLatest(HoodieTableMetaClient metaClient, java.nio.file.Path sourcePath, String instantTime) throws IOException {
     String fileExt = sourcePath.getFileName().toString().split("\\.")[1];
-    String newCompletionTime = metaClient.createNewInstantTime();
+    String newCompletionTime = WriteClientTestUtils.createNewInstantTime();
     String newFileName = instantTime + "_" + newCompletionTime + "." + fileExt;
 
     java.nio.file.Path newFilePath = sourcePath.getParent().resolve(newFileName);

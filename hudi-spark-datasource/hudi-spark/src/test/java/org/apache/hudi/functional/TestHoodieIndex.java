@@ -50,11 +50,18 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.RawTripTestPayloadKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.commit.BaseSparkBucketIndexBucketInfoGetter;
+import org.apache.hudi.table.action.commit.BucketInfo;
+import org.apache.hudi.table.action.commit.BucketType;
+import org.apache.hudi.table.action.commit.SparkBucketIndexBucketInfoGetter;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
+import org.apache.hudi.table.action.commit.SparkPartitionBucketIndexBucketInfoGetter;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -73,9 +80,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -145,13 +154,15 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(RawTripTestPayload.class.getName())
-            .withPayloadOrderingField("number").build())
+            .withPayloadOrderingFields("number").build())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(indexBuilder.build())
         .withMetadataConfig(metadataConfigBuilder.build())
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().fromProperties(indexBuilder.build().getProps())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
         .build();
+    KeyGeneratorType keyGeneratorType = HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(config.getProps());
+    config.setValue(HoodieWriteConfig.KEYGENERATOR_TYPE, keyGeneratorType.name());
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
   }
@@ -173,7 +184,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
       properties.put("hoodie.datasource.write.partitionpath.field", "time");
       properties.put("hoodie.datasource.write.precombine.field", "number");
       properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "time");
-      properties.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "number");
+      properties.put(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "number");
     }
     return properties;
   }
@@ -235,8 +246,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(javaRDD.filter(record -> record.isCurrentLocationKnown()).collect().isEmpty());
 
     // Insert totalRecords records
-    String newCommitTime = writeClient.createNewInstantTime();
-    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+    String newCommitTime = writeClient.startCommit();
     JavaRDD<WriteStatus> writeStatusRdd = writeClient.upsert(writtenRecords, newCommitTime);
     List<WriteStatus> writeStatuses = writeStatusRdd.collect();
     assertNoWriteErrors(writeStatuses);
@@ -351,8 +361,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
 
-    String newCommitTime = writeClient.createNewInstantTime();
-    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+    String newCommitTime = writeClient.startCommit();
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     JavaRDD<HoodieRecord> javaRDD1 = tagLocation(index, writeRecords, hoodieTable);
 
@@ -517,13 +526,13 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     HoodieTimeline timeline = TIMELINE_FACTORY.createDefaultTimeline(Collections.EMPTY_LIST.stream(), metaClient.getActiveTimeline());
     assertTrue(timeline.empty());
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, "001"));
-    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, writeClient.createNewInstantTime()));
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, WriteClientTestUtils.createNewInstantTime()));
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
 
     // Valid when timeline contains the timestamp or the timestamp is before timeline start
     final HoodieInstant instant1 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "010");
-    String instantTimestamp = writeClient.createNewInstantTime();
-    final HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, writeClient.createNewInstantTime());
+    String instantTimestamp = WriteClientTestUtils.createNewInstantTime();
+    final HoodieInstant instant2 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, WriteClientTestUtils.createNewInstantTime());
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant1, instant2), metaClient.getActiveTimeline());
     assertFalse(timeline.empty());
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instant1.requestedTime()));
@@ -531,13 +540,13 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // no instant on timeline
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestamp));
     // future timestamp
-    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, writeClient.createNewInstantTime()));
+    assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, WriteClientTestUtils.createNewInstantTime()));
     // timestamp before timeline starts
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, "001"));
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP));
 
     // Check for older timestamp which have sec granularity and an extension of DEFAULT_MILLIS_EXT may have been added via Timeline operations
-    instantTimestamp = writeClient.createNewInstantTime();
+    instantTimestamp = WriteClientTestUtils.createNewInstantTime();
     String instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant3 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTimestampSec);
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant1, instant3), metaClient.getActiveTimeline());
@@ -546,7 +555,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestampSec));
 
     // With a sec format instant time lesser than first entry in the active timeline, checkifContainsOrBefore() should return true
-    instantTimestamp = writeClient.createNewInstantTime();
+    instantTimestamp = WriteClientTestUtils.createNewInstantTime();
     final HoodieInstant instant4 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instantTimestamp);
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant4), metaClient.getActiveTimeline());
     instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
@@ -555,8 +564,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestampSec));
 
     // With a sec format instant time checkIfValid should return false assuming its > first entry in the active timeline
-    Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
-    instantTimestamp = writeClient.createNewInstantTime();
+    Thread.sleep(2010); // sleep required so that new timestamp differs in the seconds rather than msec
+    instantTimestamp = WriteClientTestUtils.createNewInstantTime();
     instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     assertFalse(timeline.empty());
     assertFalse(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestamp));
@@ -567,8 +576,8 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Timestamp contain in inflight timeline, checkContainsInstant() should return true
     String checkInstantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     String checkInstantTimestamp = checkInstantTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT;
-    Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
-    String newTimestamp = writeClient.createNewInstantTime();
+    Thread.sleep(2010); // sleep required so that new timestamp differs in the seconds rather than msec
+    String newTimestamp = WriteClientTestUtils.createNewInstantTime();
     String newTimestampSec = newTimestamp.substring(0, newTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestamp);
     timeline = TIMELINE_FACTORY.createDefaultTimeline(Stream.of(instant5), metaClient.getActiveTimeline());
@@ -590,10 +599,9 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     setUp(IndexType.INMEMORY, true, false);
 
     // Insert records
-    String newCommitTime = writeClient.createNewInstantTime();
+    String newCommitTime = writeClient.startCommit();
     List<HoodieRecord> records = getInserts();
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
-    WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
     JavaRDD<WriteStatus> writeStatues = writeClient.upsert(writeRecords, newCommitTime);
     assertNoWriteErrors(writeStatues.collect());
     writeClient.commit(newCommitTime, writeStatues);
@@ -625,8 +633,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Delete some of the keys
     final int numDeletes = records.size() / 2;
     List<HoodieKey> keysToDelete = records.stream().limit(numDeletes).map(r -> new HoodieKey(r.getRecordKey(), r.getPartitionPath())).collect(Collectors.toList());
-    String deleteCommitTime = writeClient.createNewInstantTime();
-    WriteClientTestUtils.startCommitWithTime(writeClient, deleteCommitTime);
+    String deleteCommitTime = writeClient.startCommit();
     writeStatues = writeClient.delete(jsc.parallelize(keysToDelete, 1), deleteCommitTime);
     assertNoWriteErrors(writeStatues.collect());
     writeClient.commit(deleteCommitTime, writeStatues);
@@ -662,5 +669,151 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
         ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
         : Option.empty())
     );
+  }
+
+  @Test
+  public void testSparkBucketIndexBucketInfoGetterOverwrite() {
+    int numBuckets = 2;
+    List<String> partitions = Arrays.asList("part1", "part2", "part3");
+    Integer[] partitionNumberToLocalBucketId = {0, 1, 0, 1, 0, 1};
+    String[] partitionNumberToPath = {"part1", "part1", "part2", "part2", "part3", "part3"};
+
+    SparkBucketIndexBucketInfoGetter overwriteGetter = new SparkBucketIndexBucketInfoGetter(
+        numBuckets,
+        partitions,
+        Collections.emptyMap(),
+        true,
+        false
+    );
+    SparkPartitionBucketIndexBucketInfoGetter partitionOverwriteGetter = new SparkPartitionBucketIndexBucketInfoGetter(
+        partitionNumberToLocalBucketId,
+        partitionNumberToPath,
+        Collections.emptyMap(),
+        true,
+        false
+    );
+
+    // bucketId -> expectedPartition, expectedPrefix
+    Object[][] testCases = new Object[][]{
+        {1, "part1", "00000001-"},
+        {2, "part2", "00000000-"},
+        {5, "part3", "00000001-"}
+    };
+
+    for (Object[] testCase : testCases) {
+      int bucketId = (int) testCase[0];
+      String expectedPartition = (String) testCase[1];
+      String expectedPrefix = (String) testCase[2];
+
+      for (BaseSparkBucketIndexBucketInfoGetter getter : Arrays.asList(overwriteGetter, partitionOverwriteGetter)) {
+        BucketInfo info = getter.getBucketInfo(bucketId);
+        assertEquals(BucketType.INSERT, info.getBucketType());
+        assertEquals(expectedPartition, info.getPartitionPath());
+        assertTrue(info.getFileIdPrefix().startsWith(expectedPrefix));
+      }
+    }
+  }
+
+  @Test
+  public void testSparkBucketIndexBucketInfoGetter() {
+    int numBuckets = 2;
+    List<String> partitions = Arrays.asList("part1", "part2", "part3");
+    Map<String, Set<String>> updateMap = new HashMap<>();
+    updateMap.put("part1", new HashSet<>(Arrays.asList("00000000-fileA", "00000001-fileB")));
+    updateMap.put("part2", new HashSet<>(Arrays.asList("00000000-fileC", "00000001-fileD")));
+    Integer[] partitionNumberToLocalBucketId = {0, 1, 0, 1, 0, 1};
+    String[] partitionNumberToPath = {"part1", "part1", "part2", "part2", "part3", "part3"};
+
+    SparkBucketIndexBucketInfoGetter updateGetter = new SparkBucketIndexBucketInfoGetter(
+        numBuckets,
+        partitions,
+        updateMap,
+        false,
+        false
+    );
+
+    SparkPartitionBucketIndexBucketInfoGetter partitionOverwriteGetter = new SparkPartitionBucketIndexBucketInfoGetter(
+        partitionNumberToLocalBucketId,
+        partitionNumberToPath,
+        updateMap,
+        false,
+        false
+    );
+
+    // Bucket ID 0
+    BucketInfo updateInfo = updateGetter.getBucketInfo(0);
+    assertEquals(BucketType.UPDATE, updateInfo.getBucketType());
+    assertEquals("part1", updateInfo.getPartitionPath());
+    assertEquals("00000000-fileA", updateInfo.getFileIdPrefix());
+
+    BucketInfo partitionInfo = partitionOverwriteGetter.getBucketInfo(0);
+    assertEquals(BucketType.UPDATE, partitionInfo.getBucketType());
+    assertEquals("part1", partitionInfo.getPartitionPath());
+    assertEquals("00000000-fileA", partitionInfo.getFileIdPrefix());
+
+    // Bucket ID 3
+    updateInfo = updateGetter.getBucketInfo(3);
+    assertEquals(BucketType.UPDATE, updateInfo.getBucketType());
+    assertEquals("part2", updateInfo.getPartitionPath());
+    assertEquals("00000001-fileD", updateInfo.getFileIdPrefix());
+
+    partitionInfo = partitionOverwriteGetter.getBucketInfo(3);
+    assertEquals(BucketType.UPDATE, partitionInfo.getBucketType());
+    assertEquals("part2", partitionInfo.getPartitionPath());
+    assertEquals("00000001-fileD", partitionInfo.getFileIdPrefix());
+
+    // Bucket ID 4
+    updateInfo = updateGetter.getBucketInfo(4);
+    assertEquals(BucketType.INSERT, updateInfo.getBucketType());
+    assertEquals("part3", updateInfo.getPartitionPath());
+    assertTrue(updateInfo.getFileIdPrefix().startsWith("00000000-"));
+
+    partitionInfo = partitionOverwriteGetter.getBucketInfo(4);
+    assertEquals(BucketType.INSERT, partitionInfo.getBucketType());
+    assertEquals("part3", partitionInfo.getPartitionPath());
+    assertTrue(partitionInfo.getFileIdPrefix().startsWith("00000000-"));
+  }
+
+  @Test
+  public void testSparkBucketIndexBucketInfoGetterWithNBCC() {
+    int numBuckets = 2;
+    List<String> partitions = Arrays.asList("part1", "part2", "part3");
+    Map<String, Set<String>> updateMap = new HashMap<>();
+    updateMap.put("part1", new HashSet<>(Arrays.asList("00000000-fileA", "00000001-fileB")));
+    updateMap.put("part2", new HashSet<>(Arrays.asList("00000000-fileC", "00000001-fileD")));
+    Integer[] partitionNumberToLocalBucketId = {0, 1, 0, 1, 0, 1};
+    String[] partitionNumberToPath = {"part1", "part1", "part2", "part2", "part3", "part3"};
+
+    SparkBucketIndexBucketInfoGetter updateGetterNBCC = new SparkBucketIndexBucketInfoGetter(
+        numBuckets,
+        partitions,
+        updateMap,
+        false,
+        true
+    );
+    SparkPartitionBucketIndexBucketInfoGetter partitionOverwriteGetter = new SparkPartitionBucketIndexBucketInfoGetter(
+        partitionNumberToLocalBucketId,
+        partitionNumberToPath,
+        updateMap,
+        false,
+        true
+    );
+
+    int[] testBucketIds = {0, 3, 4};
+    String[] expectedPartitions = {"part1", "part2", "part3"};
+    String[] expectedFileIds = {
+        "00000000-fileA", "00000001-fileD", "00000000-0000-0000-0000-000000000000-0"
+    };
+
+    BaseSparkBucketIndexBucketInfoGetter[] getters = {updateGetterNBCC, partitionOverwriteGetter};
+
+    for (BaseSparkBucketIndexBucketInfoGetter getter : getters) {
+      for (int i = 0; i < testBucketIds.length; i++) {
+        BucketInfo info = getter.getBucketInfo(testBucketIds[i]);
+        assertEquals(BucketType.UPDATE, info.getBucketType());
+        assertEquals(expectedPartitions[i], info.getPartitionPath());
+        assertEquals(expectedFileIds[i], info.getFileIdPrefix());
+      }
+    }
   }
 }

@@ -132,13 +132,13 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // start the 1st txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
     SparkRDDWriteClient client1 = getHoodieWriteClient(config);
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
 
     // start the 2nd txn and insert record: [id1,null,23,2,par1], suspend the tx commit
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.INSERT);
 
     // step to commit the 1st txn
@@ -179,13 +179,13 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // start the 1st txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     SparkRDDWriteClient client1 = getHoodieWriteClient(config);
     List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
 
     // start the 2nd txn and insert record: [id1,null,23,2,par1], suspend the tx commit
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     writeData(client2, insertTime2, dataset2, false, WriteOperationType.INSERT);
 
     // step to commit the 1st txn
@@ -200,7 +200,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // step to commit the 3rd txn, insert record: [id3,Julian,53,4,par1] and commit 3rd txn
     List<String> dataset3 = Collections.singletonList("id3,Julian,53,4,par1");
-    String insertTime3 = client1.createNewInstantTime();
+    String insertTime3 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses3 = writeData(client1, insertTime3, dataset3, false, WriteOperationType.INSERT);
     client1.commitStats(
         insertTime3,
@@ -237,7 +237,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     if (bulkInsertFirst) {
       SparkRDDWriteClient client0 = getHoodieWriteClient(config);
       List<String> dataset0 = Collections.singletonList("id0,Danny,0,0,par1");
-      String insertTime0 = client0.createNewInstantTime();
+      String insertTime0 = WriteClientTestUtils.createNewInstantTime();
       List<WriteStatus> writeStatuses0 = writeData(client0, insertTime0, dataset0, false, WriteOperationType.BULK_INSERT, true);
       client0.commitStats(
           insertTime0,
@@ -257,7 +257,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     SparkRDDWriteClient client1 = getHoodieWriteClient(config);
     List<String> dataset1 = Collections.singletonList("id1,Danny,22,1,par1");
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT, true);
     for (WriteStatus status : writeStatuses1) {
       if (fileID == null) {
@@ -270,7 +270,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,Danny,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.UPSERT, true);
     for (WriteStatus status : writeStatuses2) {
       assertEquals(fileID, status.getFileId());
@@ -331,13 +331,13 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // start the 1st txn and insert record: [id1,Danny,null,1,par1], commit the 1st txn
     SparkRDDWriteClient client1 = getHoodieWriteClient(config);
     List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     writeData(client1, insertTime1, dataset1, true, WriteOperationType.INSERT);
 
     // start the 2nd txn and bulk_insert record: [id1,null,23,2,par1], commit the 2nd txn
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     writeData(client2, insertTime2, dataset2, true, WriteOperationType.BULK_INSERT);
 
     // do compaction
@@ -373,13 +373,13 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // start the 1st txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
 
     // start the 2nd txn and bulk insert record: [id1,null,23,2,par1], suspend the tx commit
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.BULK_INSERT);
 
     // step to commit the 1st txn
@@ -422,12 +422,12 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // start the 1st txn and bulk insert record: [id1,null,23,2,par1], suspend the tx commit
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.BULK_INSERT);
 
     // start the 2nd txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
 
     // step to commit the 2nd txn
@@ -469,13 +469,13 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
 
     // start the 1st txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
 
     // start the 2nd txn and bulk insert record: [id1,null,23,2,par1], suspend the tx commit
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.BULK_INSERT);
 
     // step to commit the 2nd txn
@@ -526,12 +526,12 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // start the 1st txn and bulk insert record: [id1,null,23,2,par1], suspend the tx commit
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.BULK_INSERT);
 
     // start the 2nd txn and insert record: [id1,Danny,null,1,par1], suspend the tx commit
     List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
 
     // step to commit the 1st txn
@@ -581,13 +581,13 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // start the 1st txn and bulk insert record: [id1,Danny,null,1,par1], commit the 1st txn
     SparkRDDWriteClient client1 = getHoodieWriteClient(config);
     List<String> dataset1 = Collections.singletonList("id1,Danny,,1,par1");
-    String insertTime1 = client1.createNewInstantTime();
+    String insertTime1 = WriteClientTestUtils.createNewInstantTime();
     writeData(client1, insertTime1, dataset1, true, WriteOperationType.BULK_INSERT);
 
     // start the 2nd txn and insert record: [id1,null,23,2,par1], commit the 2nd txn
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
     List<String> dataset2 = Collections.singletonList("id1,,23,2,par1");
-    String insertTime2 = client2.createNewInstantTime();
+    String insertTime2 = WriteClientTestUtils.createNewInstantTime();
     writeData(client2, insertTime2, dataset2, true, WriteOperationType.INSERT);
 
     // do compaction
@@ -617,7 +617,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     props.put(ENABLE_SCHEMA_CONFLICT_RESOLUTION.key(), "false");
     String basePath = basePath();
     return HoodieWriteConfig.newBuilder()
-        .withProps(Collections.singletonMap(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts"))
+        .withProps(Collections.singletonMap(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "ts"))
         .forTable("test")
         .withPath(basePath)
         .withSchema(jsonSchema)

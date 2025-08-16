@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -31,12 +32,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
 
 /**
  * Default payload.
@@ -49,7 +47,6 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
   public static final String DELETE_KEY = "hoodie.payload.delete.field";
   public static final String DELETE_MARKER = "hoodie.payload.delete.marker";
-  private Option<Object> eventTime = Option.empty();
   private final AtomicBoolean isDeleteComputed = new AtomicBoolean(false);
   private boolean isDefaultRecordPayloadDeleted = false;
 
@@ -58,7 +55,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, DEFAULT_ORDERING_VALUE); // natural order
+    this(record.isPresent() ? record.get() : null, OrderingValues.getDefault()); // natural order
   }
 
   @Override
@@ -89,11 +86,6 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
       return Option.of(currentValue);
     }
 
-    /*
-     * We reached a point where the value is disk is older than the incoming record.
-     */
-    eventTime = updateEventTime(incomingRecord, properties);
-
     if (!isDeleteComputed.getAndSet(true)) {
       isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, properties);
     }
@@ -109,7 +101,6 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
       return Option.empty();
     }
     GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
-    eventTime = updateEventTime(incomingRecord, properties);
 
     if (!isDeleteComputed.getAndSet(true)) {
       isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, properties);
@@ -155,31 +146,9 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     return deleteMarker != null && properties.getProperty(DELETE_MARKER).equals(deleteMarker.toString());
   }
 
-  private static Option<Object> updateEventTime(GenericRecord record, Properties properties) {
-    boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
-        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    String eventTimeField = properties
-        .getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY);
-    if (eventTimeField == null) {
-      return Option.empty();
-    }
-    return Option.ofNullable(
-        HoodieAvroUtils.getNestedFieldVal(
-            record,
-            eventTimeField,
-            true,
-            consistentLogicalTimestampEnabled)
-    );
-  }
-
   @Override
   public Option<Map<String, String>> getMetadata() {
-    Map<String, String> metadata = new HashMap<>();
-    if (eventTime.isPresent()) {
-      metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime.get()));
-    }
-    return metadata.isEmpty() ? Option.empty() : Option.of(metadata);
+    return Option.empty();
   }
 
   protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
@@ -193,20 +162,20 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
      */
-    String orderField = ConfigUtils.getOrderingField(properties);
-    if (orderField == null) {
+    String[] orderingFields = ConfigUtils.getOrderingFields(properties);
+    if (orderingFields == null) {
       return true;
     }
     boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(properties.getProperty(
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
-    Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
-        orderField,
-        true, consistentLogicalTimestampEnabled);
-    Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
-        orderField,
-        true, consistentLogicalTimestampEnabled);
-    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+    Comparable persistedOrderingVal = OrderingValues.create(
+        orderingFields,
+        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled));
+    Comparable incomingOrderingVal = OrderingValues.create(
+        orderingFields,
+        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord, field, true, consistentLogicalTimestampEnabled));
+    return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
   }
 
 }

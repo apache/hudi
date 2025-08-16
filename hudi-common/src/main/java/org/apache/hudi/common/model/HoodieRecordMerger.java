@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -152,6 +151,7 @@ public interface HoodieRecordMerger extends Serializable {
    * If false, whenever we have log files, we will need to read all columns
    * If true, mor merging can be done without all columns. The columns required can be configured
    * by overriding getMandatoryFieldsForMerging
+   * EventTime based merging and CommitTime based merging are projection compatible
    */
   default boolean isProjectionCompatible() {
     return false;
@@ -172,10 +172,8 @@ public interface HoodieRecordMerger extends Serializable {
       }
     }
 
-    String preCombine = cfg.getPreCombineField();
-    if (!StringUtils.isNullOrEmpty(preCombine)) {
-      requiredFields.add(preCombine);
-    }
+    List<String> preCombineFields = cfg.getPreCombineFields();
+    requiredFields.addAll(preCombineFields);
     return requiredFields.toArray(new String[0]);
   }
 

@@ -521,6 +521,7 @@ public class HiveTestUtil {
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
         writeStat.setFileId(dataFile.getFileId());
         writeStat.setPath(logFile.getPath().toString());
+        writeStat.setNumUpdateWrites(10);
         commitMetadata.addWriteStat(partitionPath, writeStat);
       }
     }
@@ -541,6 +542,7 @@ public class HiveTestUtil {
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
         writeStat.setFileId(dataFile.getFileId());
         writeStat.setPath(logFile.getPath().toString());
+        writeStat.setNumUpdateWrites(10);
         commitMetadata.addWriteStat(partitionPath, writeStat);
       }
     }
@@ -611,6 +613,7 @@ public class HiveTestUtil {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setFileId(fileId);
       writeStat.setPath(filePath.toString());
+      writeStat.setNumInserts(10);
       writeStats.add(writeStat);
     }
     return writeStats;

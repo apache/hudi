@@ -60,7 +60,7 @@ public class SparkMetadataTableUpsertPartitioner<T> extends SparkHoodiePartition
   }
 
   @Override
-  public BucketInfo getBucketInfo(int bucketNumber) {
-    return bucketInfoList.get(bucketNumber);
+  public SparkBucketInfoGetter getSparkBucketInfoGetter() {
+    return new ListBasedSparkBucketInfoGetter(bucketInfoList);
   }
 }

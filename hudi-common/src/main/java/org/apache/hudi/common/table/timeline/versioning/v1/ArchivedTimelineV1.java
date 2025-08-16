@@ -271,7 +271,8 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
                                            TimeRangeFilter timeRangeFilter) {
     final String action = record.get(ACTION_TYPE_KEY).toString();
     final String stateTransitionTime = (String) record.get(STATE_TRANSITION_TIME);
-    final HoodieInstant hoodieInstant = new HoodieInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+    final HoodieInstant.State actionState = Option.ofNullable(record.get(ACTION_STATE)).map(state -> HoodieInstant.State.valueOf(state.toString())).orElse(HoodieInstant.State.COMPLETED);
+    final HoodieInstant hoodieInstant = new HoodieInstant(actionState, action,
         instantTime, stateTransitionTime, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     if (timeRangeFilter != null && !timeRangeFilter.isInRange(hoodieInstant.requestedTime())) {
       return Option.empty();

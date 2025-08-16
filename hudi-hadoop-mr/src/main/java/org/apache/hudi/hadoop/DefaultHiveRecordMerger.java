@@ -22,6 +22,7 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,13 +35,16 @@ import java.io.IOException;
  * Record merger for hive that implements the default merger strategy
  */
 public class DefaultHiveRecordMerger extends HoodieHiveRecordMerger {
+
+  private String[] orderingFields;
+
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.HIVE);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.HIVE);
     if (newer instanceof HoodieHiveRecord) {
       HoodieHiveRecord newHiveRecord = (HoodieHiveRecord) newer;
-      if (newHiveRecord.isDeleted()) {
+      if (newHiveRecord.isDelete(newSchema, props)) {
         return Option.empty();
       }
     } else if (newer.getData() == null) {
@@ -49,13 +53,16 @@ public class DefaultHiveRecordMerger extends HoodieHiveRecordMerger {
 
     if (older instanceof HoodieHiveRecord) {
       HoodieHiveRecord oldHiveRecord = (HoodieHiveRecord) older;
-      if (oldHiveRecord.isDeleted()) {
+      if (oldHiveRecord.isDelete(oldSchema, props)) {
         return Option.of(Pair.of(newer, newSchema));
       }
     } else if (older.getData() == null) {
       return Option.empty();
     }
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+    }
+    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
       return Option.of(Pair.of(older, oldSchema));
     } else {
       return Option.of(Pair.of(newer, newSchema));

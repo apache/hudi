@@ -33,8 +33,6 @@ import java.io.IOException;
  */
 public class CommitTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
-  public static final CommitTimeFlinkRecordMerger INSTANCE = new CommitTimeFlinkRecordMerger();
-
   @Override
   public String getMergingStrategy() {
     return COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;

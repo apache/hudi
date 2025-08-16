@@ -366,8 +366,6 @@ public class StreamSync implements Serializable, Closeable {
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
             .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
-            .setPayloadClassName(cfg.payloadClassName)
-            .setRecordMergerStrategy(null)
             .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
             .build();
         if (refreshTimeline) {
@@ -444,7 +442,7 @@ public class StreamSync implements Serializable, Closeable {
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
         .setKeyGeneratorClassProp(keyGenClassName)
-        .setPreCombineField(cfg.sourceOrderingField)
+        .setPreCombineFields(cfg.sourceOrderingFields)
         .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
         .setCDCEnabled(props.getBoolean(HoodieTableConfig.CDC_ENABLED.key(),
@@ -456,6 +454,7 @@ public class StreamSync implements Serializable, Closeable {
             Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
+        .setTableFormat(props.getProperty(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
         .initTable(storageConf, cfg.targetBasePath);
   }
 
@@ -1103,7 +1102,7 @@ public class StreamSync implements Serializable, Closeable {
             .withPayloadConfig(
                 HoodiePayloadConfig.newBuilder()
                     .withPayloadClass(cfg.payloadClassName)
-                    .withPayloadOrderingField(cfg.sourceOrderingField)
+                    .withPayloadOrderingFields(cfg.sourceOrderingFields)
                     .build())
             .withRecordMergeMode(cfg.recordMergeMode)
             .withRecordMergeStrategyId(cfg.recordMergeStrategyId)

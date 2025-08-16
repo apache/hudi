@@ -270,7 +270,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
   @ValueSource(booleans = {true, false})
   public void testSimpleInsertUpdateAndDelete(boolean populateMetaFields) throws Exception {
     Properties properties = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
-    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "timestamp");
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 

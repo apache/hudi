@@ -41,7 +41,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
+ * A {@link HoodieWriteMergeHandle} that supports MERGE write incrementally(small data buffers).
  *
  * <P>This handle is needed from the second mini-batch write for COW data bucket
  * when the data bucket is written using multiple mini-batches.
@@ -51,7 +51,7 @@ import java.util.List;
  * behaves like the new data buffer are appended to the old file.
  */
 public class FlinkMergeAndReplaceHandle<T, I, K, O>
-    extends HoodieMergeHandle<T, I, K, O>
+    extends HoodieWriteMergeHandle<T, I, K, O>
     implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeAndReplaceHandle.class);
@@ -135,7 +135,7 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
   }
 
   @Override
-  protected void initializeIncomingRecordsMap() {
+  protected void initIncomingRecordsMap() {
     LOG.info("Initialize on-heap keyToNewRecords for incoming records.");
     // the incoming records are already buffered on heap and the underlying bytes are managed by memory pool
     // in Flink write buffer, so there is no need to use ExternalSpillableMap.
@@ -156,6 +156,7 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
     writeStatus.getStat().setPath(new StoragePath(config.getBasePath()), oldFilePath);
   }
 
+  @Override
   boolean needsUpdateLocation() {
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.
@@ -184,6 +185,9 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
   @Override
   public List<WriteStatus> close() {
     try {
+      if (isClosed()) {
+        return getWriteStatuses();
+      }
       List<WriteStatus> writeStatuses = super.close();
       finalizeWrite();
       return writeStatuses;

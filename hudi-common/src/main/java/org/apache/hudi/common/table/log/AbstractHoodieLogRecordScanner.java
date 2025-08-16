@@ -105,7 +105,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Partition name override
   private final Option<String> partitionNameOverrideOpt;
   // Pre-combining field
-  protected final String preCombineField;
+  protected final String preCombineFields;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
   private final TypedProperties payloadProps;
@@ -175,11 +175,13 @@ public abstract class AbstractHoodieLogRecordScanner {
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
-    this.preCombineField = tableConfig.getPreCombineField();
+    this.preCombineFields = tableConfig.getPreCombineFieldsStr().orElse(null);
     // Log scanner merge log with precombine
     TypedProperties props = new TypedProperties();
-    if (this.preCombineField != null) {
-      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
+    if (preCombineFields != null) {
+      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, preCombineFields);
+      props.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), preCombineFields);
+      props.setProperty("hoodie.datasource.write.precombine.field", preCombineFields);
     }
     this.tableVersion = tableConfig.getTableVersion();
     this.payloadProps = props;

@@ -165,15 +165,14 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   public JavaRDD<WriteStatus> streamWriteToMetadataTable(Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> fileGroupIdToTaggedRecords, String instantTime) {
     JavaRDD<HoodieRecord> mdtRecords = HoodieJavaRDD.getJavaRDD(fileGroupIdToTaggedRecords.getValue());
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting with instant %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-    JavaRDD<WriteStatus> partialMetadataWriteStatuses = getSparkWriteClient(Option.empty()).upsertPreppedRecords(mdtRecords, instantTime, Option.of(
-        fileGroupIdToTaggedRecords.getKey()));
+    JavaRDD<WriteStatus> partialMetadataWriteStatuses = getSparkWriteClient(Option.empty()).firstUpsertPreppedRecords(mdtRecords, instantTime, fileGroupIdToTaggedRecords.getKey());
     return partialMetadataWriteStatuses;
   }
 
   @Override
   public JavaRDD<WriteStatus> secondaryWriteToMetadataTablePartitions(JavaRDD<HoodieRecord> preppedRecords, String instantTime) {
     engineContext.setJobStatus(this.getClass().getSimpleName(), String.format("Upserting at %s into metadata table %s", instantTime, metadataWriteConfig.getTableName()));
-    JavaRDD<WriteStatus> partialMetadataWriteStatuses = getWriteClient().upsertPreppedRecords(preppedRecords, instantTime);
+    JavaRDD<WriteStatus> partialMetadataWriteStatuses = getSparkWriteClient(Option.empty()).secondaryUpsertPreppedRecords(preppedRecords, instantTime);
     return partialMetadataWriteStatuses;
   }
 
@@ -188,6 +187,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs) {
+    // When specified, reduce the parallelism of input record RDD to improve write performance.
+    int parallelism = dataWriteConfig.getMetadataConfig().getRecordPreparationParallelism();
+    if (parallelism > 0 && preppedRecordInputs.getNumPartitions() > parallelism) {
+      preppedRecordInputs = preppedRecordInputs.coalesce(parallelism);
+    }
+
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
@@ -197,16 +202,15 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                  String instantTime,
                                  JavaRDD<HoodieRecord> preppedRecordInputs,
                                  List<HoodieFileGroupId> fileGroupsIdsToUpdate) {
-    JavaRDD<WriteStatus> writeStatusJavaRDD = getSparkWriteClient(Option.of(writeClient)).upsertPreppedRecords(preppedRecordInputs, instantTime, Option.of(fileGroupsIdsToUpdate));
+    JavaRDD<WriteStatus> writeStatusJavaRDD = getSparkWriteClient(Option.of(writeClient)).firstUpsertPreppedRecords(preppedRecordInputs, instantTime, fileGroupsIdsToUpdate);
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
 
   @Override
-  protected void bulkCommit(
-      String instantTime, String partitionName, HoodieData<HoodieRecord> records,
-      int fileGroupCount) {
-    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
-    commitInternal(instantTime, Collections.singletonMap(partitionName, records), true, Option.of(partitioner));
+  protected void bulkCommit(String instantTime, String partitionPath, HoodieData<HoodieRecord> records,
+      MetadataTableFileGroupIndexParser indexParser) {
+    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(indexParser);
+    commitInternal(instantTime, Collections.singletonMap(partitionPath, records), true, Option.of(partitioner));
   }
 
   @Override

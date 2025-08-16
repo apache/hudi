@@ -582,7 +582,7 @@ public class TimelineUtils {
       } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
         // Deltacommit is used by both ingestion and logcompaction.
         // So, distinguish both of them check for the inflight file being present.
-        HoodieActiveTimeline rawActiveTimeline = metaClient.getTimelineLayout().getTimelineFactory().createActiveTimeline(metaClient, false);
+        HoodieActiveTimeline rawActiveTimeline = metaClient.getTableFormat().getTimelineFactory().createActiveTimeline(metaClient, false);
         Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstantsAsStream()
             .filter(hoodieInstant -> hoodieInstant.requestedTime().equals(instant.requestedTime())
                 && LOG_COMPACTION_ACTION.equals(hoodieInstant.getAction())).findFirst());
@@ -603,7 +603,7 @@ public class TimelineUtils {
    */
   public static HoodieTimeline concatTimeline(HoodieTimeline timeline1, HoodieTimeline timeline2,
                                               HoodieTableMetaClient metaClient) {
-    return metaClient.getTimelineLayout().getTimelineFactory().createDefaultTimeline(
+    return metaClient.getTableFormat().getTimelineFactory().createDefaultTimeline(
         Stream.concat(timeline1.getInstantsAsStream(), timeline2.getInstantsAsStream()).sorted(),
         metaClient.getActiveTimeline());
   }

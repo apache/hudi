@@ -21,6 +21,7 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -35,7 +36,9 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -146,14 +149,14 @@ class TestHoodieAvroReaderContext {
   void getField() {
     HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
     IndexedRecord indexedRecord = createSkeletonRecord("field1", "field2", 3);
-    assertEquals("field2", avroReaderContext.getValue(indexedRecord, SKELETON_SCHEMA, "skeleton_field_2"));
+    assertEquals("field2", avroReaderContext.getRecordContext().getValue(indexedRecord, SKELETON_SCHEMA, "skeleton_field_2"));
   }
 
   @Test
   void getFieldNotInSchema() {
     HoodieAvroReaderContext avroReaderContext = getReaderContextWithMetaFields();
     IndexedRecord indexedRecord = createSkeletonRecord("field1", "field2", 3);
-    assertNull(avroReaderContext.getValue(indexedRecord, SKELETON_SCHEMA, "missing_field"));
+    assertNull(avroReaderContext.getRecordContext().getValue(indexedRecord, SKELETON_SCHEMA, "missing_field"));
   }
 
   @Test
@@ -162,7 +165,7 @@ class TestHoodieAvroReaderContext {
     HoodieAvroReaderContext avroReaderContext =
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
-    assertEquals(3.2, avroReaderContext.getValue(indexedRecord, BASE_SCHEMA, "base_field_3.nested_field"));
+    assertEquals(3.2, avroReaderContext.getRecordContext().getValue(indexedRecord, BASE_SCHEMA, "base_field_3.nested_field"));
   }
 
   @Test
@@ -173,7 +176,7 @@ class TestHoodieAvroReaderContext {
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     String recordKey = "record_key";
     IndexedRecord indexedRecord = createSkeletonRecord(recordKey, "field2", 3);
-    assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, SKELETON_SCHEMA));
+    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, SKELETON_SCHEMA));
   }
 
   @Test
@@ -184,7 +187,7 @@ class TestHoodieAvroReaderContext {
         new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     String recordKey = "base_field_1:compound,base_field_3.nested_field:3.2";
     IndexedRecord indexedRecord = createBaseRecord("compound", "field2", 3.2);
-    assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, BASE_SCHEMA));
+    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, BASE_SCHEMA));
   }
 
   @Test
@@ -199,7 +202,37 @@ class TestHoodieAvroReaderContext {
     indexedRecord.put(5, "field1");
     indexedRecord.put(6, "field2");
     indexedRecord.put(7, 3);
-    assertEquals(recordKey, avroReaderContext.getRecordKey(indexedRecord, schemaWithMetaFields));
+    assertEquals(recordKey, avroReaderContext.getRecordContext().getRecordKey(indexedRecord, schemaWithMetaFields));
+  }
+
+  @Test
+  void testConstructEngineRecordWithNoUpdate() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema();
+    IndexedRecord engineRecord = createSkeletonRecord("String1", "String2", 1);
+    BufferedRecord<IndexedRecord> baseRecord =
+        new BufferedRecord<>("key1", 1, engineRecord, 0, null);
+    Map<Integer, Object> updates = new HashMap<>();
+    IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema, updates, baseRecord);
+    assertEquals("String1", output.get(0));
+    assertEquals("String2", output.get(1));
+    assertEquals(1, output.get(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithUpdates() {
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    Schema schema = getSkeletonSchema();
+    IndexedRecord engineRecord = createSkeletonRecord("String1", "String2", 1);
+    BufferedRecord<IndexedRecord> baseRecord =
+        new BufferedRecord<>("key1", 1, engineRecord, 0, null);
+    Map<Integer, Object> updates = new HashMap<>();
+    updates.put(0, "String1_0");
+    updates.put(2, 2);
+    IndexedRecord output = readerContext.getRecordContext().mergeWithEngineRecord(schema, updates, baseRecord);
+    assertEquals("String1_0", output.get(0));
+    assertEquals("String2", output.get(1));
+    assertEquals(2, output.get(2));
   }
 
   private HoodieAvroReaderContext getReaderContextWithMetaFields() {

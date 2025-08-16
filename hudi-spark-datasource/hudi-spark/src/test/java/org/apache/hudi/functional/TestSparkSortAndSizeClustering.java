@@ -20,7 +20,6 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -113,7 +112,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
 
     int numRecords = 1000;
-    writeData(writeClient.createNewInstantTime(), numRecords, true);
+    writeData(numRecords, true);
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
@@ -146,12 +145,12 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     });
   }
 
-  private List<WriteStatus> writeData(String commitTime, int totalRecords, boolean doCommit) {
+  private List<WriteStatus> writeData(int totalRecords, boolean doCommit) {
+    String commitTime = writeClient.startCommit();
     List<HoodieRecord> records = dataGen.generateInserts(commitTime, totalRecords);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    WriteClientTestUtils.startCommitWithTime(writeClient, commitTime);
     List<WriteStatus> writeStatues = writeClient.insert(writeRecords, commitTime).collect();
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
 

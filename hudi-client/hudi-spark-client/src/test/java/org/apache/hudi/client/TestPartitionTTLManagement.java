@@ -98,7 +98,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       String partitionPath1 = dataGen.getPartitionPaths()[1];
       writeRecordsForPartition(client, dataGen, partitionPath1, instant1);
 
-      String currentInstant = client.createNewInstantTime();
+      String currentInstant = WriteClientTestUtils.createNewInstantTime();
       String partitionPath2 = dataGen.getPartitionPaths()[2];
       writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant);
 
@@ -131,7 +131,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       String partitionPath1 = dataGen.getPartitionPaths()[1];
       writeRecordsForPartition(client, dataGen, partitionPath1, instant1);
 
-      String currentInstant = client.createNewInstantTime();
+      String currentInstant = WriteClientTestUtils.createNewInstantTime();
       String partitionPath2 = dataGen.getPartitionPaths()[2];
       writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant);
 
@@ -175,7 +175,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
       // All records will be deleted
       Assertions.assertEquals(0, readRecords(new String[] {partitionPath1}).size());
 
-      String currentInstant = client.createNewInstantTime();
+      String currentInstant = WriteClientTestUtils.createNewInstantTime();
       String partitionPath2 = dataGen.getPartitionPaths()[2];
       writeRecordsForPartition(client, dataGen, partitionPath2, currentInstant);
 

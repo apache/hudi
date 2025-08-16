@@ -442,9 +442,10 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     //TODO : Find race condition that causes the timeline sometime to reflect 000.commit and sometimes not
     final HoodieJavaCopyOnWriteTable reloadedTable = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, HoodieTableMetaClient.reload(metaClient));
 
-    final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
-
     String partitionPath = writeStatus.getPartitionPath();
+    final List<HoodieRecord> updates = dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts)
+        .stream().filter(record -> record.getPartitionPath().equals(partitionPath)).collect(Collectors.toList());
+
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
     BaseJavaCommitActionExecutor newActionExecutor = new JavaUpsertCommitActionExecutor(context, config, reloadedTable,
         instantTime, updates);
@@ -454,24 +455,6 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator())
         .forEachRemaining(x -> updateStatus.add((List<WriteStatus>)x));
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
-  }
-
-  public void testBulkInsertRecords(String bulkInsertMode) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
-        .withBulkInsertParallelism(2).withBulkInsertSortMode(bulkInsertMode).build();
-    String instantTime = makeNewCommitTime();
-    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
-    WriteClientTestUtils.startCommitWithTime(writeClient, instantTime);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieJavaCopyOnWriteTable table = (HoodieJavaCopyOnWriteTable) HoodieJavaTable.create(config, context, metaClient);
-
-    // Insert new records
-    final List<HoodieRecord> inputRecords = generateTestRecordsForBulkInsert();
-    JavaBulkInsertCommitActionExecutor bulkInsertExecutor = new JavaBulkInsertCommitActionExecutor(
-        context, config, table, instantTime, inputRecords, Option.empty());
-    List<WriteStatus> returnedStatuses = (List<WriteStatus>)bulkInsertExecutor.execute().getWriteStatuses();
-    verifyStatusResult(returnedStatuses, generateExpectedPartitionNumRecords(inputRecords));
   }
 
   @Test

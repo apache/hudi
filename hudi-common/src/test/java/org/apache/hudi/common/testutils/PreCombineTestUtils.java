@@ -30,7 +30,7 @@ import java.util.stream.Stream;
 
 public class PreCombineTestUtils {
   private static String[] preCombineConfigs = new String[] {
-      HoodieTableConfig.PRECOMBINE_FIELD.key(),
+      HoodieTableConfig.PRECOMBINE_FIELDS.key(),
       "hoodie.datasource.write.precombine.field",
       HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY
   };

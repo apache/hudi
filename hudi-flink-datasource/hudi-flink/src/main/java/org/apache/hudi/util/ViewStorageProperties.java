@@ -55,7 +55,7 @@ public class ViewStorageProperties {
       String basePath,
       FileSystemViewStorageConfig config,
       Configuration flinkConf) throws IOException {
-    Path propertyPath = getPropertiesFilePath(basePath, flinkConf.getString(FlinkOptions.WRITE_CLIENT_ID));
+    Path propertyPath = getPropertiesFilePath(basePath, flinkConf.get(FlinkOptions.WRITE_CLIENT_ID));
     FileSystem fs = HadoopFSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(flinkConf));
     fs.delete(propertyPath, false);
     try (OutputStream outputStream = fs.create(propertyPath)) {
@@ -68,7 +68,7 @@ public class ViewStorageProperties {
    * Read the {@link FileSystemViewStorageConfig} with given table base path.
    */
   public static FileSystemViewStorageConfig loadFromProperties(String basePath, Configuration conf) {
-    Path propertyPath = getPropertiesFilePath(basePath, conf.getString(FlinkOptions.WRITE_CLIENT_ID));
+    Path propertyPath = getPropertiesFilePath(basePath, conf.get(FlinkOptions.WRITE_CLIENT_ID));
     LOG.info("Loading filesystem view storage properties from " + propertyPath);
     FileSystem fs = HadoopFSUtils.getFs(basePath, HadoopConfigurations.getHadoopConf(conf));
     Properties props = new Properties();

@@ -238,13 +238,13 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
-                                                  HoodieStorage storage,
-                                                  String basePathStr,
+                                                  HoodieTableMetaClient metaClient,
                                                   boolean useFileListingFromMetadata) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(useFileListingFromMetadata)
         .build();
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig, basePathStr)) {
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory()
+        .create(engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString())) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
@@ -252,38 +252,22 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
-                                                  HoodieStorage storage,
-                                                  HoodieMetadataConfig metadataConfig,
-                                                  String basePathStr) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig,
-        basePathStr)) {
+                                                  HoodieTableMetaClient metaClient,
+                                                  HoodieMetadataConfig metadataConfig) {
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory()
+        .create(engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString())) {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
     }
-  }
-
-  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
-                                                  HoodieStorage storage,
-                                                  StoragePath basePath,
-                                                  boolean useFileListingFromMetadata) {
-    return getAllPartitionPaths(engineContext, storage, basePath.toString(), useFileListingFromMetadata);
-  }
-
-  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
-                                                  HoodieStorage storage,
-                                                  HoodieMetadataConfig metadataConfig,
-                                                  StoragePath basePath) {
-    return getAllPartitionPaths(engineContext, storage, metadataConfig, basePath.toString());
   }
 
   public static Map<String, List<StoragePathInfo>> getFilesInPartitions(HoodieEngineContext engineContext,
-                                                                        HoodieStorage storage,
+                                                                        HoodieTableMetaClient metaClient,
                                                                         HoodieMetadataConfig metadataConfig,
-                                                                        String basePathStr,
                                                                         String[] partitionPaths) {
-    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, storage, metadataConfig,
-        basePathStr)) {
+    try (HoodieTableMetadata tableMetadata = metaClient.getTableFormat().getMetadataFactory()
+        .create(engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString())) {
       return tableMetadata.getAllFilesInPartitions(Arrays.asList(partitionPaths));
     } catch (Exception ex) {
       throw new HoodieException("Error get files in partitions: " + String.join(",", partitionPaths), ex);
@@ -756,5 +740,33 @@ public class FSUtils {
 
   private static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
     return Option.fromJavaOptional(logFiles.min(HoodieLogFile.getReverseLogFileComparator()));
+  }
+  
+  public static Map<String, Boolean> deleteFilesParallelize(
+      HoodieTableMetaClient metaClient,
+      List<String> paths,
+      HoodieEngineContext context,
+      int parallelism,
+      boolean ignoreFailed) {
+    return parallelizeFilesProcess(context,
+        metaClient.getStorage(),
+        parallelism,
+        pairOfSubPathAndConf -> {
+          StoragePath file = new StoragePath(pairOfSubPathAndConf.getKey());
+          try {
+            if (metaClient.getStorage().exists(file)) {
+              return metaClient.getStorage().deleteFile(file);
+            }
+            return true;
+          } catch (IOException e) {
+            if (!ignoreFailed) {
+              throw new HoodieIOException("Failed to delete : " + file, e);
+            } else {
+              LOG.warn("Ignore failed deleting : " + file);
+              return true;
+            }
+          }
+        },
+        paths);
   }
 }

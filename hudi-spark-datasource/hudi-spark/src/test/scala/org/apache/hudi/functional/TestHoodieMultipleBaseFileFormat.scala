@@ -44,7 +44,6 @@ import scala.collection.JavaConverters._
 class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
-  private val log = LoggerFactory.getLogger(classOf[TestMORDataSource])
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -114,7 +113,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     val viewManager: FileSystemViewManager = FileSystemViewManager.createViewManager(
       engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
       HoodieCommonConfig.newBuilder.build,
-      (mc: HoodieTableMetaClient) => HoodieTableMetadata.create(engineContext, mc.getStorage, metadataConfig, basePath))
+      (mc: HoodieTableMetaClient) => metaClient.getTableFormat.getMetadataFactory.create(engineContext, mc.getStorage, metadataConfig, basePath))
     val fsView: SyncableFileSystemView = viewManager.getFileSystemView(metaClient)
     val orcFiles = fsView.getAllBaseFiles(DEFAULT_SECOND_PARTITION_PATH).filter(bf => bf.getFileName.endsWith("orc"))
     assertTrue(orcFiles.count() > 0)
@@ -135,5 +134,13 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     // Snapshot Read the table
     val hudiDfAfterUpdate = spark.read.format("hudi").load(basePath)
     assertEquals(20, hudiDfAfterUpdate.count())
+
+    // Select subset of columns
+    val rows = spark.read.format("hudi").load(basePath).select("driver", "rider").collect()
+    assertEquals(20, rows.length);
+    rows.foreach(row => {
+      assertTrue(row.getAs[String](0).nonEmpty)
+      assertTrue(row.getAs[String](1).nonEmpty)
+    })
   }
 }

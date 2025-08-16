@@ -306,7 +306,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     cfg.targetTableName = "table1";
     cfg.tableType = tableType;
     cfg.sourceClassName = AvroDFSSource.class.getName();
-    cfg.sourceOrderingField = SchemaUtils.SOURCE_ORDERING_FIELD;
+    cfg.sourceOrderingFields = SchemaUtils.SOURCE_ORDERING_FIELD;
     cfg.propsFilePath = basePath + "/test-source.properties";
     cfg.outputTypeName = DeltaOutputMode.DFS.name();
     cfg.inputFormatName = DeltaInputType.AVRO.name();

@@ -34,6 +34,7 @@ STAGING_REPO_NUM=$4
 MAVEN_BASE_URL=$5
 echo "HUDI_VERSION: $HUDI_VERSION JAVA_RUNTIME_VERSION: $JAVA_RUNTIME_VERSION"
 echo "SPARK_RUNTIME: $SPARK_RUNTIME SPARK_PROFILE (optional): $SPARK_PROFILE"
+echo "FLINK_PROFILE: $FLINK_PROFILE"
 echo "SCALA_PROFILE: $SCALA_PROFILE"
 echo "MAVEN_BASE_URL: $MAVEN_BASE_URL"
 echo "STAGING_REPO_NUM: $STAGING_REPO_NUM"
@@ -53,36 +54,26 @@ elif [[ -n "$MAVEN_BASE_URL" ]]; then
 fi
 
 # choose versions based on build profiles
-if [[ ${SPARK_RUNTIME} == 'spark3.3.1' ]]; then
+if [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.15.3
-  SPARK_VERSION=3.3.1
-  SPARK_HADOOP_VERSION=2
-  CONFLUENT_VERSION=5.5.12
-  KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1153hive313spark331
-elif [[ ${SPARK_RUNTIME} == 'spark3.3.4' ]]; then
-  HADOOP_VERSION=2.7.7
-  HIVE_VERSION=3.1.3
-  DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.15.3
+  FLINK_VERSION=1.17.1
   SPARK_VERSION=3.3.4
   SPARK_HADOOP_VERSION=2
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1153hive313spark334
+  IMAGE_TAG=flink1171hive313spark334
 elif [[ ${SPARK_RUNTIME} == 'spark3.4.3' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.16.2
+  FLINK_VERSION=1.18.1
   SPARK_VERSION=3.4.3
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1162hive313spark343
+  IMAGE_TAG=flink1181hive313spark343
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' && ${SCALA_PROFILE} == 'scala-2.12' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
@@ -107,12 +98,17 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
-  FLINK_VERSION=1.17.0
   SPARK_VERSION=3.5.1
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1170hive313spark351
+  if [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
+    IMAGE_TAG=flink200hive313spark351
+    FLINK_VERSION=2.0.0
+  else
+    IMAGE_TAG=flink1170hive313spark351
+    FLINK_VERSION=1.17.0
+  fi
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
@@ -177,18 +173,16 @@ else
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   fi
 
-  if [[ ${FLINK_PROFILE} == 'flink1.15' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.15-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.16' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.16-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
+  if [[ ${FLINK_PROFILE} == 'flink1.17' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.19-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.20' ]]; then
-    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.20-bundle    
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink1.20-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink2.0-bundle
   fi
 
   echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."

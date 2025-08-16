@@ -28,16 +28,22 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.util.CommonClientUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.stream.Stream;
+
+import static org.apache.hudi.util.CommonClientUtils.areTableVersionsCompatible;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestCommonClientUtils {
+class TestCommonClientUtils {
 
   @Test
-  public void testDisallowPartialUpdatesPreVersion8() {
+  void testDisallowPartialUpdatesPreVersion8() {
     // given:
     HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
     HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
@@ -50,7 +56,7 @@ public class TestCommonClientUtils {
   }
 
   @Test
-  public void testDisallowNBCCPreVersion8() {
+  void testDisallowNBCCPreVersion8() {
     // given:
     HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
     HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
@@ -63,12 +69,60 @@ public class TestCommonClientUtils {
   }
 
   @Test
-  public void testGenerateTokenOnError() {
+  void testGenerateTokenOnError() {
     // given: a task context supplies that throws errors.
     TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
     when(taskContextSupplier.getPartitionIdSupplier()).thenThrow(new RuntimeException("generated under testing"));
 
     // when:
     assertEquals("0-0-0", CommonClientUtils.generateWriteToken(taskContextSupplier));
+  }
+
+  @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")
+  @MethodSource("provideValidTableVersionWriteVersionPairs")
+  void testValidTableVersionWriteVersionPairs(
+      HoodieTableVersion tableVersion, HoodieTableVersion writeVersion, boolean expectedResult) throws Exception {
+    boolean result = areTableVersionsCompatible(tableVersion, writeVersion);
+    assertEquals(expectedResult, result);
+  }
+
+  private static Stream<Arguments> provideValidTableVersionWriteVersionPairs() {
+    return Stream.concat(
+        Stream.concat(
+            // Rule 1: writer > table version - always allowed
+            generateWriterGreaterThanTableCases(),
+            // Rule 2: same versions - always allowed  
+            generateSameVersionCases()
+        ),
+        Stream.of(
+            // Rule 3: downgrade scenarios
+            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true),
+            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, true),
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, true),
+            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SEVEN, true),
+            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.SIX, true),
+            // Rule 4: disallowed scenarios
+            Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.SEVEN, HoodieTableVersion.FIVE, false),
+            Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.FIVE, false)
+        )
+    );
+  }
+
+  private static Stream<Arguments> generateWriterGreaterThanTableCases() {
+    HoodieTableVersion[] allVersions = HoodieTableVersion.values();
+    return Stream.of(allVersions)
+        .flatMap(tableVersion -> 
+            Stream.of(allVersions)
+                .filter(writeVersion -> writeVersion.greaterThan(tableVersion))
+                .map(writeVersion -> Arguments.of(tableVersion, writeVersion, true))
+        );
+  }
+
+  private static Stream<Arguments> generateSameVersionCases() {
+    return Stream.of(HoodieTableVersion.values())
+        .map(version -> Arguments.of(version, version, true));
   }
 }

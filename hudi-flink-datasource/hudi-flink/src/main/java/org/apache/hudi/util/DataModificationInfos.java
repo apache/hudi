@@ -18,17 +18,17 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.adapter.SupportsRowLevelDeleteAdapter;
-import org.apache.hudi.adapter.SupportsRowLevelUpdateAdapter;
+import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
+import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
 
 /**
  * Utilities for all kinds of data modification infos.
  *
- * @see SupportsRowLevelUpdateAdapter
- * @see SupportsRowLevelDeleteAdapter
+ * @see SupportsRowLevelUpdate
+ * @see SupportsRowLevelDelete
  */
 public class DataModificationInfos {
-  public static final SupportsRowLevelDeleteAdapter.RowLevelDeleteInfoAdapter DEFAULT_DELETE_INFO = new SupportsRowLevelDeleteAdapter.RowLevelDeleteInfoAdapter() {};
+  public static final SupportsRowLevelDelete.RowLevelDeleteInfo DEFAULT_DELETE_INFO = new SupportsRowLevelDelete.RowLevelDeleteInfo() {};
 
-  public static final SupportsRowLevelUpdateAdapter.RowLevelUpdateInfoAdapter DEFAULT_UPDATE_INFO = new SupportsRowLevelUpdateAdapter.RowLevelUpdateInfoAdapter() {};
+  public static final SupportsRowLevelUpdate.RowLevelUpdateInfo DEFAULT_UPDATE_INFO = new SupportsRowLevelUpdate.RowLevelUpdateInfo() {};
 }

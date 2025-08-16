@@ -276,7 +276,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
         new ArrayList<>());
 
     // Schedule compaction but do not run them
-    String compactionInstantTime = client.createNewInstantTime();
+    String compactionInstantTime = WriteClientTestUtils.createNewInstantTime();
     scheduleCompaction(compactionInstantTime, client, cfg);
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
     HoodieInstant pendingCompactionInstant =
@@ -359,7 +359,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
     assertNull(tryScheduleCompaction(secondInstantTime, client, cfg),
         "Compaction Instant to be scheduled can have same timestamp as committed instant");
 
-    final String compactionInstantTime2 = client.createNewInstantTime();
+    final String compactionInstantTime2 = WriteClientTestUtils.createNewInstantTime();
     // Schedule compaction but do not run them
     assertNotNull(tryScheduleCompaction(compactionInstantTime2, client, cfg),
         "Compaction Instant can be scheduled with greater timestamp");

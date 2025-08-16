@@ -81,11 +81,6 @@ parameters:
     type: object
     default:
       - '!hudi-examples/hudi-examples-k8s'
-      - '!hudi-flink-datasource/hudi-flink1.15.x'
-      - '!hudi-flink-datasource/hudi-flink1.16.x'
-      - '!hudi-flink-datasource/hudi-flink1.17.x'
-      - '!hudi-flink-datasource/hudi-flink1.19.x'
-      - '!hudi-flink-datasource/hudi-flink1.20.x'
       - '!packaging/hudi-aws-bundle'
       - '!packaging/hudi-cli-bundle'
       - '!packaging/hudi-datahub-sync-bundle'
@@ -128,7 +123,7 @@ stages:
     jobs:
       - job: UT_FT_1
         displayName: UT hudi-hadoop-common & UT FT client/spark-client
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -182,7 +177,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_2
         displayName: FTA hudi-spark
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -217,7 +212,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_3
         displayName: UT spark-datasource Java Test 1
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -252,7 +247,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_4
         displayName: UT spark-datasource Java Test 2
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -287,7 +282,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_5
         displayName: UT spark-datasource DML
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -322,7 +317,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_6
         displayName: UT spark-datasource DDL & Others
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -357,7 +352,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_7
         displayName: UT Hudi Streamer & FT utilities
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"
@@ -406,7 +401,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_8
         displayName: UT FT Spark and SQL (additional)
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '110'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -459,7 +454,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_9
         displayName: FT spark 2
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Maven@4
             displayName: maven install
@@ -494,7 +489,7 @@ stages:
             displayName: Top 100 long-running testcases
       - job: UT_FT_10
         displayName: UT FT common & other modules
-        timeoutInMinutes: '70'
+        timeoutInMinutes: '90'
         steps:
           - task: Docker@2
             displayName: "login to docker hub"

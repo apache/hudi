@@ -18,7 +18,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
@@ -35,7 +34,6 @@ import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -43,7 +41,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -62,12 +59,10 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
   protected HoodieFlinkWriteClient writeClient;
   protected HoodieTableFileSystemView tableView;
 
-  protected final FlinkTaskContextSupplier supplier = new FlinkTaskContextSupplier(null);
-
   protected void initFileSystem() {
     storageConf = HoodieTestUtils.getDefaultStorageConf();
     initFileSystemWithConfiguration(storageConf);
-    context = new HoodieFlinkEngineContext(supplier);
+    context = HoodieFlinkEngineContext.DEFAULT;
   }
 
   private void initFileSystemWithConfiguration(StorageConfiguration<Configuration> configuration) {
@@ -125,20 +120,6 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness {
     cleanupFileSystem();
     cleanupExecutorService();
     System.gc();
-  }
-
-  /**
-   * Simple test sink function.
-   */
-  public static class SimpleTestSinkFunction implements SinkFunction<HoodieRecord> {
-
-    // must be static
-    public static List<HoodieRecord> valuesList = new ArrayList<>();
-
-    @Override
-    public synchronized void invoke(HoodieRecord value, Context context) throws Exception {
-      valuesList.add(value);
-    }
   }
 
   /**

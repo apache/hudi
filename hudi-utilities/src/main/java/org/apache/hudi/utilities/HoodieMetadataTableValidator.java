@@ -33,6 +33,8 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
@@ -70,6 +72,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.data.HoodieSparkRDDUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -84,6 +87,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.util.BloomFilterData;
+import org.apache.hudi.common.util.HoodieDataUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -734,10 +738,9 @@ public class HoodieMetadataTableValidator implements Serializable {
   List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath, HoodieTableMetaClient metaClient) {
     // compare partitions
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
-    List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, metaClient.getStorage(),
-        completedTimeline);
+    List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, metaClient, completedTimeline);
 
-    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath, metaClient.getStorage());
+    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, metaClient);
 
     Collections.sort(allPartitionPathsFromFS);
     Collections.sort(allPartitionPathsMeta);
@@ -801,20 +804,18 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   @VisibleForTesting
-  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, StoragePath basePath,
-                                    HoodieStorage storage) {
-    return FSUtils.getAllPartitionPaths(engineContext, storage, basePath, true);
+  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient) {
+    return FSUtils.getAllPartitionPaths(engineContext, metaClient, true);
   }
 
   @VisibleForTesting
-  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, StoragePath basePath,
-                                           HoodieStorage storage, HoodieTimeline completedTimeline) {
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, storage, basePath, false);
+  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, HoodieTimeline completedTimeline) {
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, metaClient, false);
 
     // ignore partitions created by uncommitted ingestion.
     return allPartitionPathsFromFS.stream().parallel().filter(part -> {
       HoodiePartitionMetadata hoodiePartitionMetadata =
-          new HoodiePartitionMetadata(storage, FSUtils.constructAbsolutePath(basePath, part));
+          new HoodiePartitionMetadata(metaClient.getStorage(), FSUtils.constructAbsolutePath(metaClient.getBasePath().toString(), part));
       Option<String> instantOption = hoodiePartitionMetadata.readPartitionCreatedCommitTime();
       if (instantOption.isPresent()) {
         String instantTime = instantOption.get();
@@ -1124,7 +1125,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
-  private void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
+  void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
                                       HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
     String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
@@ -1135,16 +1136,26 @@ public class HoodieMetadataTableValidator implements Serializable {
     long numSecondaryKeys = secondaryKeys.count();
     int numPartitions = (int) Math.max(1, numSecondaryKeys / 100);
     secondaryKeys = secondaryKeys.sortBy(x -> x, true, numPartitions);
-    for (int i = 0; i < numPartitions; i++) {
-      List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
-      Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = ((HoodieBackedTableMetadata) metadataContext.tableMetadata).getSecondaryIndexRecords(secKeys, indexDefinition.getIndexName());
-      Map<String, Set<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
-      if (!fsSecondaryKeyToRecordKeys.equals(mdtSecondaryKeyToRecordKeys)) {
-        throw new HoodieValidationException(String.format("Secondary Index does not match : \nMDT secondary index: %s \nFS secondary index: %s",
-            StringUtils.join(mdtSecondaryKeyToRecordKeys), StringUtils.join(fsSecondaryKeyToRecordKeys)));
+    try {
+      for (int i = 0; i < numPartitions; i++) {
+        List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
+        HoodiePairData<String, String> secondaryIndexData = ((HoodieBackedTableMetadata) metadataContext.tableMetadata).readSecondaryIndexDataTableRecordKeysWithKeys(
+            HoodieListData.lazy(secKeys), indexDefinition.getIndexName());
+        try {
+          Map<String, Set<String>> mdtSecondaryKeyToRecordKeys = HoodieDataUtils.collectPairDataAsMap(secondaryIndexData);
+          Map<String, Set<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
+          if (!fsSecondaryKeyToRecordKeys.equals(mdtSecondaryKeyToRecordKeys)) {
+            throw new HoodieValidationException(String.format("Secondary Index does not match : \nMDT secondary index: %s \nFS secondary index: %s",
+                StringUtils.join(mdtSecondaryKeyToRecordKeys), StringUtils.join(fsSecondaryKeyToRecordKeys)));
+          }
+        } finally {
+          // Clean up the RDD to avoid memory leaks
+          secondaryIndexData.unpersistWithDependencies();
+        }
       }
+    } finally {
+      HoodieSparkRDDUtils.unpersistRDDWithDependencies(secondaryKeys.rdd());
     }
-    secondaryKeys.unpersist();
   }
 
   /**
@@ -1285,9 +1296,9 @@ public class HoodieMetadataTableValidator implements Serializable {
             return Pair.of(errorCount, list2);
           }
         });
-
+    HoodieSparkRDDUtils.unpersistRDDWithDependencies(keyToLocationFromRecordIndexRdd.rdd());
     long countKey = keyToLocationOnFsRdd.count();
-    keyToLocationOnFsRdd.unpersist();
+    HoodieSparkRDDUtils.unpersistRDDWithDependencies(keyToLocationOnFsRdd.rdd());
 
     long diffCount = result.getLeft();
     if (diffCount > 0) {
@@ -1758,7 +1769,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
         ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
         HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
-        this.tableMetadata = HoodieTableMetadata.create(
+        this.tableMetadata = metaClient.getTableFormat().getMetadataFactory().create(
             engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
         this.fileSystemView = getFileSystemView(engineContext,
             metaClient, metadataConfig, viewConf, commonConfig);

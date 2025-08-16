@@ -40,7 +40,6 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.ValidationException;
-import org.apache.flink.table.api.constraints.UniqueConstraint;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -84,23 +83,23 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     StoragePath path = new StoragePath(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should not be empty.")));
-    setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
+    setupTableOptions(conf.get(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
     return new HoodieTableSource(
         SerializableSchema.create(schema),
         path,
         context.getCatalogTable().getPartitionKeys(),
-        conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
+        conf.get(FlinkOptions.PARTITION_DEFAULT_NAME),
         conf);
   }
 
   @Override
   public DynamicTableSink createDynamicTableSink(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
-    checkArgument(!StringUtils.isNullOrEmpty(conf.getString(FlinkOptions.PATH)),
+    checkArgument(!StringUtils.isNullOrEmpty(conf.get(FlinkOptions.PATH)),
         "Option [path] should not be empty.");
-    setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
+    setupTableOptions(conf.get(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     sanityCheck(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
@@ -116,15 +115,15 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         .ifPresent(tableConfig -> {
           if (tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)
               && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
-            conf.setString(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
+            conf.set(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
           }
-          if (tableConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)
+          if (tableConfig.contains(HoodieTableConfig.PRECOMBINE_FIELDS)
               && !conf.contains(FlinkOptions.PRECOMBINE_FIELD)) {
-            conf.setString(FlinkOptions.PRECOMBINE_FIELD, tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
+            conf.set(FlinkOptions.PRECOMBINE_FIELD, tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELDS));
           }
           if (tableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)
               && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
-            conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, tableConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
+            conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, tableConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
           }
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
@@ -132,16 +131,16 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
                   String.format("Table type conflict : %s in %s and %s in table options. Fix the table type as to be in line with the hoodie.properties.",
                       tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE,
                       conf.get(FlinkOptions.TABLE_TYPE)));
-              conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
+              conf.set(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
             }
           }
           if (tableConfig.contains(HoodieTableConfig.TYPE)
               && !conf.contains(FlinkOptions.TABLE_TYPE)) {
-            conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
+            conf.set(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
           }
           if (tableConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME)
               && !conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
-            conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+            conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
           }
         });
   }
@@ -270,26 +269,26 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private static void setupHoodieKeyOptions(Configuration conf, CatalogTable table) {
     List<String> pkColumns = table.getSchema().getPrimaryKey()
-        .map(UniqueConstraint::getColumns).orElse(Collections.emptyList());
+        .map(pk -> pk.getColumns()).orElse(Collections.emptyList());
     if (pkColumns.size() > 0) {
       // the PRIMARY KEY syntax always has higher priority than option FlinkOptions#RECORD_KEY_FIELD
       String recordKey = String.join(",", pkColumns);
-      conf.setString(FlinkOptions.RECORD_KEY_FIELD, recordKey);
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, recordKey);
     }
     List<String> partitionKeys = table.getPartitionKeys();
     if (partitionKeys.size() > 0) {
       // the PARTITIONED BY syntax always has higher priority than option FlinkOptions#PARTITION_PATH_FIELD
-      conf.setString(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys));
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys));
     }
     // set index key for bucket index if not defined
-    if (conf.getString(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())) {
-      if (conf.getString(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
-        conf.setString(FlinkOptions.INDEX_KEY_FIELD, conf.getString(FlinkOptions.RECORD_KEY_FIELD));
+    if (conf.get(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())) {
+      if (conf.get(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
+        conf.set(FlinkOptions.INDEX_KEY_FIELD, conf.get(FlinkOptions.RECORD_KEY_FIELD));
       } else {
         Set<String> recordKeySet =
-            Arrays.stream(conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",")).collect(Collectors.toSet());
+            Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",")).collect(Collectors.toSet());
         Set<String> indexKeySet =
-            Arrays.stream(conf.getString(FlinkOptions.INDEX_KEY_FIELD).split(",")).collect(Collectors.toSet());
+            Arrays.stream(conf.get(FlinkOptions.INDEX_KEY_FIELD).split(",")).collect(Collectors.toSet());
         if (!recordKeySet.containsAll(indexKeySet)) {
           throw new HoodieValidationException(
               FlinkOptions.INDEX_KEY_FIELD + " should be a subset of or equal to the recordKey fields");
@@ -298,12 +297,12 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     }
 
     // tweak the key gen class if possible
-    final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
-    final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+    final String[] partitions = conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+    final String[] pks = conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
     if (partitions.length == 1) {
       final String partitionField = partitions[0];
       if (partitionField.isEmpty()) {
-        conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
+        conf.set(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
         LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
             FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
         return;
@@ -331,7 +330,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       return;
     }
 
-    conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, TimestampBasedAvroKeyGenerator.class.getName());
+    conf.set(FlinkOptions.KEYGEN_CLASS_NAME, TimestampBasedAvroKeyGenerator.class.getName());
     LOG.info("Table option [{}] is reset to {} because datetime partitioning turns on",
         FlinkOptions.KEYGEN_CLASS_NAME.key(), TimestampBasedAvroKeyGenerator.class.getName());
     if (DataTypeUtils.isTimestampType(fieldType)) {
@@ -364,15 +363,15 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * Sets up the compaction options from the table definition.
    */
   private static void setupCompactionOptions(Configuration conf) {
-    int commitsToRetain = conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS);
-    int minCommitsToKeep = conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS);
+    int commitsToRetain = conf.get(FlinkOptions.CLEAN_RETAIN_COMMITS);
+    int minCommitsToKeep = conf.get(FlinkOptions.ARCHIVE_MIN_COMMITS);
     if (commitsToRetain >= minCommitsToKeep) {
       LOG.info("Table option [{}] is reset to {} to be greater than {}={},\n"
               + "to avoid risk of missing data from few instants in incremental pull",
           FlinkOptions.ARCHIVE_MIN_COMMITS.key(), commitsToRetain + 10,
           FlinkOptions.CLEAN_RETAIN_COMMITS.key(), commitsToRetain);
-      conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
-      conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
+      conf.set(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
+      conf.set(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
     }
   }
 
@@ -381,10 +380,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private static void setupHiveOptions(Configuration conf, ObjectIdentifier tablePath) {
     if (!conf.contains(FlinkOptions.HIVE_SYNC_DB)) {
-      conf.setString(FlinkOptions.HIVE_SYNC_DB, tablePath.getDatabaseName());
+      conf.set(FlinkOptions.HIVE_SYNC_DB, tablePath.getDatabaseName());
     }
     if (!conf.contains(FlinkOptions.HIVE_SYNC_TABLE)) {
-      conf.setString(FlinkOptions.HIVE_SYNC_TABLE, tablePath.getObjectName());
+      conf.set(FlinkOptions.HIVE_SYNC_TABLE, tablePath.getObjectName());
     }
   }
 
@@ -393,7 +392,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private static void setupReadOptions(Configuration conf) {
     if (OptionsResolver.isIncrementalQuery(conf)) {
-      conf.setString(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+      conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
     }
   }
 
@@ -403,7 +402,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private static void setupWriteOptions(Configuration conf) {
     if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.OPERATION)
         && OptionsResolver.isCowTable(conf)) {
-      conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+      conf.set(FlinkOptions.PRE_COMBINE, true);
     }
   }
 
@@ -440,8 +439,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private static void inferAvroSchema(Configuration conf, LogicalType rowType) {
     if (!conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()
         && !conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
-      String inferredSchema = AvroSchemaConverter.convertToSchema(rowType, AvroSchemaUtils.getAvroRecordQualifiedName(conf.getString(FlinkOptions.TABLE_NAME))).toString();
-      conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, inferredSchema);
+      String inferredSchema = AvroSchemaConverter.convertToSchema(rowType, AvroSchemaUtils.getAvroRecordQualifiedName(conf.get(FlinkOptions.TABLE_NAME))).toString();
+      conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, inferredSchema);
     }
   }
 }

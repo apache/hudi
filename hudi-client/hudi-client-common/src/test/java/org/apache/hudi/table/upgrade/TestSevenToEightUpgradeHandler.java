@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -61,8 +62,6 @@ class TestSevenToEightUpgradeHandler {
   private HoodieWriteConfig config;
   @Mock
   private HoodieTableConfig tableConfig;
-  @Mock
-  private SupportsUpgradeDowngrade upgradeDowngradeHelper;
 
   private SevenToEightUpgradeHandler upgradeHandler;
 
@@ -98,6 +97,7 @@ class TestSevenToEightUpgradeHandler {
     // Mock record merge mode configuration for merging behavior
     when(tableConfig.contains(isA(ConfigProperty.class))).thenAnswer(i -> i.getArguments()[0].equals(PAYLOAD_CLASS_NAME));
     when(tableConfig.getPayloadClass()).thenReturn(OverwriteWithLatestAvroPayload.class.getName());
+    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
     SevenToEightUpgradeHandler.upgradeMergeMode(tableConfig, tablePropsToAdd);
     assertTrue(tablePropsToAdd.containsKey(RECORD_MERGE_MODE));
     assertNotNull(tablePropsToAdd.get(RECORD_MERGE_MODE));
@@ -140,7 +140,7 @@ class TestSevenToEightUpgradeHandler {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
 
     when(tableConfig.getPayloadClass()).thenReturn(payloadClass);
-    when(tableConfig.getPreCombineField()).thenReturn(preCombineField);
+    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.ofNullable(preCombineField));
 
     SevenToEightUpgradeHandler.upgradeMergeMode(tableConfig, tablePropsToAdd);
 

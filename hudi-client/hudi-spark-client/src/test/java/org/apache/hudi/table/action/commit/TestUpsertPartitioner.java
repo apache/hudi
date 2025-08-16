@@ -58,6 +58,7 @@ import scala.Tuple2;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestUpsertPartitioner extends HoodieClientTestBase {
@@ -195,11 +196,12 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
     assertEquals(3, partitioner.numPartitions(), "Should have 3 partitions");
-    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+    SparkBucketInfoGetter bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
+    assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
         "Bucket 0 is UPDATE");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(1).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(1).bucketType,
         "Bucket 1 is INSERT");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(2).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(2).bucketType,
         "Bucket 2 is INSERT");
     assertEquals(3, insertBuckets.size(), "Total of 3 insert buckets");
 
@@ -212,13 +214,14 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
     assertEquals(4, partitioner.numPartitions(), "Should have 4 partitions");
-    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+    bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
+    assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
         "Bucket 0 is UPDATE");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(1).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(1).bucketType,
         "Bucket 1 is INSERT");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(2).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(2).bucketType,
         "Bucket 2 is INSERT");
-    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(3).bucketType,
+    assertEquals(BucketType.INSERT, bucketInfoGetter.getBucketInfo(3).bucketType,
         "Bucket 3 is INSERT");
     assertEquals(4, insertBuckets.size(), "Total of 4 insert buckets");
 
@@ -256,9 +259,10 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
-    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+    SparkBucketInfoGetter bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
+    assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
             "Bucket 0 is UPDATE");
-    assertEquals("2", partitioner.getBucketInfo(0).fileIdPrefix,
+    assertEquals("2", bucketInfoGetter.getBucketInfo(0).fileIdPrefix,
             "Should be assigned to only file id not pending compaction which is 2");
   }
 
@@ -333,9 +337,10 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
-    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+    SparkBucketInfoGetter bucketInfoGetter = partitioner.getSparkBucketInfoGetter();
+    assertEquals(BucketType.UPDATE, bucketInfoGetter.getBucketInfo(0).bucketType,
             "Bucket 0 should be UPDATE");
-    assertEquals("fg1", partitioner.getBucketInfo(0).fileIdPrefix,
+    assertEquals("fg1", bucketInfoGetter.getBucketInfo(0).fileIdPrefix,
             "Insert should be assigned to fg1");
   }
 
@@ -385,5 +390,37 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString());
+  }
+
+  @Test
+  void testMapAndListBasedSparkBucketInfoGetter() {
+    List<BucketInfo> bucketInfos = Arrays.asList(new BucketInfo(BucketType.UPDATE, "bucket1", "partition1"),
+        new BucketInfo(BucketType.UPDATE, "bucket2", "partition2"));
+    Map<Integer, BucketInfo> bucketInfoMap = new HashMap<>();
+    bucketInfoMap.put(0, bucketInfos.get(0));
+    bucketInfoMap.put(1, bucketInfos.get(1));
+    MapBasedSparkBucketInfoGetter getter = new MapBasedSparkBucketInfoGetter(bucketInfoMap);
+    ListBasedSparkBucketInfoGetter listGetter = new ListBasedSparkBucketInfoGetter(bucketInfos);
+    assertEquals(bucketInfos.get(0), getter.getBucketInfo(0));
+    assertEquals(bucketInfos.get(0), listGetter.getBucketInfo(0));
+    assertEquals(bucketInfos.get(1), getter.getBucketInfo(1));
+    assertEquals(bucketInfos.get(1), listGetter.getBucketInfo(1));
+  }
+
+  @Test
+  void testInsertOverwriteBucketInfoGetter() {
+    BucketInfo insertInfo = new BucketInfo(BucketType.INSERT, "bucket1", "partition1");
+    BucketInfo updateInfo = new BucketInfo(BucketType.UPDATE, "bucket2", "partition2");
+    Map<Integer, BucketInfo> map = new HashMap<>();
+    map.put(0, insertInfo);
+    map.put(1, updateInfo);
+
+    InsertOverwriteBucketInfoGetter getter = new InsertOverwriteBucketInfoGetter(map);
+    BucketInfo result = getter.getBucketInfo(0);
+    assertEquals(insertInfo, result);
+    result = getter.getBucketInfo(1);
+    assertEquals(BucketType.INSERT, result.getBucketType());
+    assertEquals(updateInfo.getPartitionPath(), result.getPartitionPath());
+    assertNotEquals(updateInfo.getFileIdPrefix(), result.getFileIdPrefix());
   }
 }

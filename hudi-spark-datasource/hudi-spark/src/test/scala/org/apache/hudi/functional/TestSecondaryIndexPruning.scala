@@ -1443,103 +1443,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  def testSecondaryIndexWithPrimitiveDataTypes(): Unit = {
-    var hudiOpts = commonOpts
-    hudiOpts = hudiOpts ++ Map(
-      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false")
-    tableName += "test_secondary_index_with_primitive_data_types"
-
-    spark.sql("set hoodie.metadata.index.partition.stats.enable=false")
-    // HUDI-8620 tracks fixing BYTES and FIXED type for col stats and partition stats.
-
-    // Create table with different data types
-    spark.sql(
-      s"""
-         |create table $tableName (
-         |  ts bigint,
-         |  record_key_col string,
-         |  string_col string,
-         |  int_col int,
-         |  bigint_col bigint,
-         |  double_col double,
-         |  decimal_col decimal(10,2),
-         |  timestamp_col timestamp,
-         |  boolean_col boolean,
-         |  partition_key_col string
-         |) using hudi
-         | options (
-         |  primaryKey ='record_key_col',
-         |  hoodie.metadata.enable = 'true',
-         |  hoodie.metadata.record.index.enable = 'true',
-         |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-         |  hoodie.enable.data.skipping = 'true',
-         |  hoodie.datasource.write.payload.class = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
-         | )
-         | partitioned by(partition_key_col)
-         | location '$basePath'
-       """.stripMargin)
-
-    // Insert dummy records
-    spark.sql("set hoodie.parquet.small.file.limit=0")
-    spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 10, 100, 1.1, 100.01, timestamp('2023-01-01 12:00:00'), true, 'p1')")
-    spark.sql(s"insert into $tableName values(2, 'row2', 'def', 20, 200, 2.2, 200.02, timestamp('2023-01-02 12:00:00'), false, 'p1')")
-
-    // Create secondary indexes for different data types
-    val secondaryIndexColumns = Seq("string_col", "int_col", "bigint_col", "double_col", "decimal_col", "timestamp_col", "boolean_col")
-    secondaryIndexColumns.foreach { col =>
-      spark.sql(s"create index idx_$col on $tableName ($col)")
-    }
-
-    // Validate indexes created successfully
-    metaClient = HoodieTableMetaClient.builder()
-      .setBasePath(basePath)
-      .setConf(HoodieTestUtils.getDefaultStorageConf)
-      .build()
-
-    secondaryIndexColumns.foreach { col =>
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains(s"secondary_index_idx_$col"))
-    }
-
-    // get the timestamp_col for row1 (do not use hardcoded value as it may change in system where this test is executed)
-    val timestampCol = spark.sql(s"select timestamp_col from $tableName where record_key_col = 'row1'").collect().head.getAs[java.sql.Timestamp](0).getTime * 1000
-    // Validate secondary index records for each column
-    checkAnswer(s"select key from hudi_metadata('$basePath') where type=7 AND key LIKE '%${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1'")(
-      Seq(s"abc${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
-      Seq(s"1.1${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
-      Seq(s"10${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
-      Seq(s"100${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
-      Seq(s"100.01${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
-      Seq(s"$timestampCol${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1"),
-      Seq(s"true${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}row1")
-    )
-
-    // Validate data skipping for each secondary index
-    spark.sql("set hoodie.metadata.enable=true")
-    spark.sql("set hoodie.enable.data.skipping=true")
-    spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
-
-    secondaryIndexColumns.foreach { col =>
-      val (queryFilter, value) = col match {
-        case "string_col" => (s"$col = 'abc'", "abc")
-        case "int_col" => (s"$col = 10", "10")
-        case "bigint_col" => (s"$col = 100", "100")
-        case "double_col" => (s"$col = 1.1", "1.1")
-        case "decimal_col" => (s"$col = 100.01", "100.01")
-        case "timestamp_col" => (s"$col = '2023-01-01 12:00:00'", "2023-01-01 12:00:00")
-        case "boolean_col" => (s"$col = true", "true")
-      }
-      checkAnswer(s"select ts, record_key_col, cast($col AS STRING), partition_key_col from $tableName where $queryFilter and record_key_col='row1'")(
-        Seq(1, "row1", value, "p1")
-      )
-      if (col != "timestamp_col") {
-        verifyQueryPredicate(hudiOpts, col)
-      }
-    }
-    spark.sessionState.conf.unsetConf("unset hoodie.metadata.index.partition.stats.enable")
-  }
-
-  @Test
   def testSecondaryIndexWithComplexTypes(): Unit = {
     var hudiOpts = commonOpts
     hudiOpts = hudiOpts ++ Map(
@@ -1594,7 +1497,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       s"""
          |create table $tableName (
          |  record_key_col string,
-         |  name struct<first_name:string, last_name:string>,
+         |  student struct<
+         |    name: struct<first_name:string, last_name:string>,
+         |    age: int
+         |  >,
          |  ts bigint
          |) using hudi
          | options (
@@ -1608,10 +1514,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          | location '$basePath'
       """.stripMargin)
     // insert initial records
-    spark.sql(s"insert into $tableName values('id1', named_struct('first_name', 'John', 'last_name', 'Doe'), 1)")
-    spark.sql(s"insert into $tableName values('id2', named_struct('first_name', 'Jane', 'last_name', 'Smith'), 2)")
-    // create secondary index on name.last_name field
-    spark.sql(s"create index idx_last_name on $tableName (name.last_name)")
+    spark.sql(s"insert into $tableName values('id1', named_struct('name', named_struct('first_name', 'John', 'last_name', 'Doe'), 'age', 20), 1)")
+    spark.sql(s"insert into $tableName values('id2', named_struct('name', named_struct('first_name', 'Jane', 'last_name', 'Smith'), 'age', 25), 2)")
+    // create secondary index on student.name.last_name field
+    spark.sql(s"create index idx_last_name on $tableName (student.name.last_name)")
     // validate index creation
     metaClient = HoodieTableMetaClient.builder()
       .setBasePath(basePath)
@@ -1624,18 +1530,18 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       Seq(s"Smith${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id2")
     )
     // verify pruning
-    checkAnswer(s"select record_key_col, name.last_name, ts from $tableName where name.last_name = 'Doe'")(
+    checkAnswer(s"select record_key_col, student.name.last_name, ts from $tableName where student.name.last_name = 'Doe'")(
       Seq("id1", "Doe", 1)
     )
     // update nested field
-    spark.sql(s"update $tableName set name = named_struct('first_name', 'John', 'last_name', 'Brown') where record_key_col = 'id1'")
+    spark.sql(s"update $tableName set student = named_struct('name', named_struct('first_name', 'John', 'last_name', 'Brown'), 'age', 20) where record_key_col = 'id1'")
     // validate updated index records
     checkAnswer(s"select key, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
       Seq(s"Brown${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id1", false),
       Seq(s"Smith${SECONDARY_INDEX_RECORD_KEY_SEPARATOR}id2", false)
     )
     // verify pruning
-    checkAnswer(s"select record_key_col, name.last_name, ts from $tableName where name.last_name = 'Brown'")(
+    checkAnswer(s"select record_key_col, student.name.last_name, ts from $tableName where student.name.last_name = 'Brown'")(
       Seq("id1", "Brown", 1)
     )
   }

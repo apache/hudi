@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieFileFormat
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
@@ -133,9 +133,9 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       val newProps: URL = this.getClass.getClassLoader.getResource("table-config.properties")
 
       // overwrite hoodie props
-      val expectedOutput ="""
+      val tableVersion = HoodieTableVersion.current().versionCode()
+      val expectedOutput =s"""
           |[hoodie.archivelog.folder,archived,archive]
-          |[hoodie.compaction.payload.class,org.apache.hudi.common.model.DefaultHoodieRecordPayload,null]
           |[hoodie.database.name,default,null]
           |[hoodie.datasource.write.drop.partition.columns,false,false]
           |[hoodie.datasource.write.hive_style_partitioning,true,null]
@@ -144,7 +144,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.record.merge.strategy.id,eeb8d96f-b1e4-49fd-bbf8-28ac514178e5,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
-          |[hoodie.table.initial.version,8,8]
+          |[hoodie.table.format,native,null]
+          |[hoodie.table.initial.version,$tableVersion,$tableVersion]
           |[hoodie.table.keygenerator.type,NON_PARTITION,null]
           |[hoodie.table.name,,]
           |[hoodie.table.precombine.field,ts,null]

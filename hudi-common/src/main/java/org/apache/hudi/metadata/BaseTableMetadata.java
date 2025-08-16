@@ -1,4 +1,3 @@
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -24,20 +23,20 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.hash.ColumnIndexID;
-import org.apache.hudi.common.util.hash.FileIndexID;
-import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -56,10 +55,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -195,20 +192,24 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     }
 
     HoodieTimer timer = HoodieTimer.start();
-    Set<String> partitionIDFileIDStrings = new HashSet<>();
     Map<String, Pair<String, String>> fileToKeyMap = new HashMap<>();
+    List<BloomFilterIndexRawKey> bloomFilterKeys = new ArrayList<>();
     partitionNameFileNameList.forEach(partitionNameFileNamePair -> {
-      final String bloomFilterIndexKey = HoodieMetadataPayload.getBloomFilterIndexKey(
-          new PartitionIndexID(HoodieTableMetadataUtil.getBloomFilterIndexPartitionIdentifier(partitionNameFileNamePair.getLeft())), new FileIndexID(partitionNameFileNamePair.getRight()));
-      partitionIDFileIDStrings.add(bloomFilterIndexKey);
-      fileToKeyMap.put(bloomFilterIndexKey, partitionNameFileNamePair);
+      BloomFilterIndexRawKey rawKey = new BloomFilterIndexRawKey(partitionNameFileNamePair.getLeft(), partitionNameFileNamePair.getRight());
+      bloomFilterKeys.add(rawKey);
+      fileToKeyMap.put(rawKey.encode(), partitionNameFileNamePair);
     });
 
-    List<String> partitionIDFileIDStringsList = new ArrayList<>(partitionIDFileIDStrings);
-    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
-        getRecordsByKeys(partitionIDFileIDStringsList, metadataPartitionName);
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR, partitionIDFileIDStringsList.size()));
+    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
+        readIndexRecordsWithKeys(HoodieListData.eager(bloomFilterKeys), metadataPartitionName);
+    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords;
+    try {
+      hoodieRecords = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
+      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
+      metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR, bloomFilterKeys.size()));
+    } finally {
+      recordsData.unpersistWithDependencies();
+    }
 
     Map<Pair<String, String>, BloomFilter> partitionFileToBloomFilterMap = new HashMap<>(hoodieRecords.size());
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
@@ -250,62 +251,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
       return Collections.emptyMap();
     }
 
-    Map<String, Pair<String, String>> columnStatKeyToFileNameMap = computeColStatKeyToFileName(partitionNameFileNameList, columnNames);
-    return computeFileToColumnStatsMap(columnStatKeyToFileNameMap);
-  }
-
-  /**
-   * Reads record keys from record-level index.
-   * <p>
-   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
-   *
-   * @param recordKeys The list of record keys to read
-   */
-  @Override
-  public Map<String, HoodieRecordGlobalLocation> readRecordIndex(List<String> recordKeys) {
-    // If record index is not initialized yet, we cannot return an empty result here unlike the code for reading from other
-    // indexes. This is because results from this function are used for upserts and returning an empty result here would lead
-    // to existing records being inserted again causing duplicates.
-    // The caller is required to check for record index existence in MDT before calling this method.
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
-        "Record index is not initialized in MDT");
-
-    HoodieTimer timer = HoodieTimer.start();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> result = getRecordsByKeys(recordKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-    Map<String, HoodieRecordGlobalLocation> recordKeyToLocation = new HashMap<>(result.size());
-    result.forEach((key, record) -> {
-      if (!record.getData().isDeleted()) {
-        recordKeyToLocation.put(key, record.getData().getRecordGlobalLocation());
-      }
-    });
-
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_TIME_STR, timer.endTimer()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_COUNT_STR, recordKeys.size()));
-    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR, recordKeyToLocation.size()));
-
-    return recordKeyToLocation;
-  }
-
-  /**
-   * Get record-location using secondary-index and record-index
-   * <p>
-   * If the Metadata Table is not enabled, an exception is thrown to distinguish this from the absence of the key.
-   *
-   * @param secondaryKeys The list of secondary keys to read
-   */
-  @Override
-  public Map<String, HoodieRecordGlobalLocation> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
-        "Record index is not initialized in MDT");
-    ValidationUtils.checkState(
-        dataMetaClient.getTableConfig().getMetadataPartitions().contains(partitionName),
-        "Secondary index is not initialized in MDT for: " + partitionName);
-    // Fetch secondary-index records
-    Map<String, Set<String>> secondaryKeyRecords = getSecondaryIndexRecords(secondaryKeys, partitionName);
-    // Now collect the record-keys and fetch the RLI records
-    List<String> recordKeys = new ArrayList<>();
-    secondaryKeyRecords.values().forEach(recordKeys::addAll);
-    return readRecordIndex(recordKeys);
+    Pair<List<ColumnStatsIndexRawKey>, Map<String, Pair<String, String>>> rawKeysAndMap = computeColStatRawKeys(partitionNameFileNameList, columnNames);
+    return computeFileToColumnStatsMap(rawKeysAndMap.getLeft(), rawKeysAndMap.getRight());
   }
 
   /**
@@ -313,7 +260,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    */
   protected List<String> fetchAllPartitionPaths() {
     HoodieTimer timer = HoodieTimer.start();
-    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = getRecordByKey(RECORDKEY_PARTITION_LIST,
+    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = readFilesIndexRecords(RECORDKEY_PARTITION_LIST,
         MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
 
@@ -345,7 +292,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     String recordKey = relativePartitionPath.isEmpty() ? NON_PARTITIONED_NAME : relativePartitionPath;
 
     HoodieTimer timer = HoodieTimer.start();
-    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = getRecordByKey(recordKey,
+    Option<HoodieRecord<HoodieMetadataPayload>> recordOpt = readFilesIndexRecords(recordKey,
         MetadataPartitionType.FILES.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
@@ -377,9 +324,18 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
             );
 
     HoodieTimer timer = HoodieTimer.start();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs =
-        getRecordsByKeys(new ArrayList<>(partitionIdToPathMap.keySet()),
+    List<FilesIndexRawKey> filesKeys = partitionIdToPathMap.keySet().stream()
+        .map(FilesIndexRawKey::new)
+        .collect(Collectors.toList());
+    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
+        readIndexRecordsWithKeys(HoodieListData.eager(filesKeys),
             MetadataPartitionType.FILES.getPartitionPath());
+    Map<String, HoodieRecord<HoodieMetadataPayload>> partitionIdRecordPairs;
+    try {
+      partitionIdRecordPairs = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
+    } finally {
+      recordsData.unpersistWithDependencies();
+    }
     metrics.ifPresent(
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
@@ -395,7 +351,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
               List<StoragePathInfo> files = metadataPayload.getFileList(dataMetaClient.getStorage(), partitionPath);
               return Pair.of(partitionPath.toString(), files);
             })
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+            .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     LOG.info("Listed files in {} partitions from metadata", partitionPaths.size());
 
@@ -403,39 +359,50 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   /**
-   * Computes a map from col-stats key to partition and file name pair.
+   * Computes raw keys and metadata for column stats lookup.
    *
    * @param partitionNameFileNameList - List of partition and file name pair for which bloom filters need to be retrieved.
    * @param columnNames - List of column name for which stats are needed.
+   * @return Pair of raw keys list and a map from encoded key to partition/file pair
    */
-  private Map<String, Pair<String, String>> computeColStatKeyToFileName(
+  private Pair<List<ColumnStatsIndexRawKey>, Map<String, Pair<String, String>>> computeColStatRawKeys(
       final List<Pair<String, String>> partitionNameFileNameList,
       final List<String> columnNames) {
+    List<ColumnStatsIndexRawKey> rawKeys = new ArrayList<>();
     Map<String, Pair<String, String>> columnStatKeyToFileNameMap = new HashMap<>();
+    
     for (String columnName : columnNames) {
-      final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
       for (Pair<String, String> partitionNameFileNamePair : partitionNameFileNameList) {
-        final String columnStatsIndexKey = HoodieMetadataPayload.getColumnStatsIndexKey(
-            new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionNameFileNamePair.getLeft())),
-            new FileIndexID(partitionNameFileNamePair.getRight()),
-            columnIndexID);
-        columnStatKeyToFileNameMap.put(columnStatsIndexKey, partitionNameFileNamePair);
+        ColumnStatsIndexRawKey rawKey = new ColumnStatsIndexRawKey(
+            partitionNameFileNamePair.getLeft(),
+            partitionNameFileNamePair.getRight(),
+            columnName);
+        rawKeys.add(rawKey);
+        columnStatKeyToFileNameMap.put(rawKey.encode(), partitionNameFileNamePair);
       }
     }
-    return columnStatKeyToFileNameMap;
+    return Pair.of(rawKeys, columnStatKeyToFileNameMap);
   }
 
   /**
    * Computes the map from partition and file name pair to HoodieMetadataColumnStats record.
    *
+   * @param rawKeys - List of raw keys for column stats
    * @param columnStatKeyToFileNameMap - A map from col-stats key to partition and file name pair.
    */
-  private Map<Pair<String, String>, List<HoodieMetadataColumnStats>> computeFileToColumnStatsMap(Map<String, Pair<String, String>> columnStatKeyToFileNameMap) {
-    List<String> columnStatKeylist = new ArrayList<>(columnStatKeyToFileNameMap.keySet());
+  private Map<Pair<String, String>, List<HoodieMetadataColumnStats>> computeFileToColumnStatsMap(
+      List<ColumnStatsIndexRawKey> rawKeys, Map<String, Pair<String, String>> columnStatKeyToFileNameMap) {
     HoodieTimer timer = HoodieTimer.start();
-    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
-        getRecordsByKeys(columnStatKeylist, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
+    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData =
+        readIndexRecordsWithKeys(
+            HoodieListData.eager(rawKeys), MetadataPartitionType.COLUMN_STATS.getPartitionPath());
+    Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords;
+    try {
+      hoodieRecords = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
+      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
+    } finally {
+      recordsData.unpersistWithDependencies();
+    }
     Map<Pair<String, String>, List<HoodieMetadataColumnStats>> fileToColumnStatMap = new HashMap<>();
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
       final Option<HoodieMetadataColumnStats> columnStatMetadata =
@@ -466,14 +433,46 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     }
   }
 
-  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key, String partitionName);
-
-  protected abstract Map<String, HoodieRecord<HoodieMetadataPayload>> getRecordsByKeys(List<String> keys, String partitionName);
+  /**
+   * Retrieves a single record from the metadata table by its key.
+   *
+   * @param key The escaped/encoded key to look up in the metadata table
+   * @param partitionName The partition name where the record is stored
+   * @return Option containing the record if found, empty Option if not found
+   */
+  protected abstract Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key, String partitionName);
 
   /**
-   * Returns a map of (secondary-key -> set-of-record-keys) for the provided secondary keys.
+   * Retrieves a collection of pairs (key -> record) from the metadata table by its keys.
+   *
+   * @param rawKeys The raw keys to look up in the metadata table
+   * @param partitionName The partition name where the records are stored
+   * @return A collection of pairs (key -> record)
    */
-  public abstract Map<String, Set<String>> getSecondaryIndexRecords(List<String> keys, String partitionName);
+  public abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
+          HoodieData<? extends RawKey> rawKeys, String partitionName);
+
+  /**
+   * Retrieves a collection of pairs (key -> record) from the metadata table by its keys.
+   *
+   * @param rawKeys The raw keys to look up in the metadata table
+   * @param partitionName The partition name where the records are stored
+   * @param dataTablePartition The data table partition to look up from
+   * @return A collection of pairs (key -> record)
+   */
+  protected abstract HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(HoodieData<? extends RawKey> rawKeys,
+                                                                                                          String partitionName,
+                                                                                                          Option<String> dataTablePartition);
+
+  /**
+   * Returns a collection of pairs (secondary-key -> record-keys) for the provided secondary keys.
+   *
+   * @param keys The unescaped/decoded secondary keys to look up in the metadata table
+   * @param partitionName The partition name where the secondary index records are stored
+   * @return A collection of pairs where each key is a secondary key and the value is record key that are indexed by that secondary key.
+   * If a secondary key value is mapped to different record keys, they are tracked as multiple pairs for each of them.
+   */
+  public abstract HoodiePairData<String, String> readSecondaryIndexDataTableRecordKeysWithKeys(HoodieData<String> keys, String partitionName);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;

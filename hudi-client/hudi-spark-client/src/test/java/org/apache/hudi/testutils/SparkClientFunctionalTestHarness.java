@@ -176,12 +176,16 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     return getHoodieMetaClient(storageConf(), basePath(), tableType, props);
   }
 
-  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType, Properties props) throws IOException {
-    return HoodieTableMetaClient.newTableBuilder()
-        .setTableName(RAW_TRIPS_TEST_NAME)
-        .setTableType(tableType)
-        .fromProperties(props)
-        .initTable(storageConf.newInstance(), basePath);
+  public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType, Properties props) {
+    try {
+      return HoodieTableMetaClient.newTableBuilder()
+          .setTableName(RAW_TRIPS_TEST_NAME)
+          .setTableType(tableType)
+          .fromProperties(props)
+          .initTable(storageConf.newInstance(), basePath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to create HoodieTableMetaClient for basePath: " + basePath, e);
+    }
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath) throws IOException {
@@ -232,6 +236,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
           context, basePath(), incrementTimelineServicePortToUse());
       timelineServicePort = timelineService.getServerPort();
     }
+    spark.sparkContext().persistentRdds().foreach(rdd -> rdd._2.unpersist(false));
   }
 
   /**

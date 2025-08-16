@@ -139,7 +139,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult(true)(tableConfig.contains(HoodieTableConfig.CREATE_SCHEMA.key))
     assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
-    assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELD.key))
+    assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELDS.key))
     assertResult(KeyGeneratorType.SIMPLE.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
     assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
     assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
@@ -907,7 +907,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
-        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
+        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
         assertResult("hudi_database")(metaClient.getTableConfig.getDatabaseName)
         assertResult(s"original_$tableName")(metaClient.getTableConfig.getTableName)
 
@@ -978,7 +978,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
-        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
+        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
 
         val escapedPathPart = escapePathName(day)
 
@@ -1045,7 +1045,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
       assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
-      assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELD.key))
+      assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
 
       // Test insert into
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
@@ -1454,7 +1454,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val hoodieCatalogTable = HoodieCatalogTable(spark, TableIdentifier(tableName))
         assertResult(Array("id"))(hoodieCatalogTable.primaryKeys)
         assertResult(tableType)(hoodieCatalogTable.tableTypeName)
-        assertResult("ts")(hoodieCatalogTable.preCombineKey.get)
+        assertResult(java.util.Collections.singletonList[String]("ts"))(hoodieCatalogTable.preCombineKeys)
       }
     }
   }

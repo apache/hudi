@@ -19,6 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.avro.AvroSchemaCache;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -35,12 +37,14 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -54,8 +58,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
@@ -81,18 +91,27 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected final TaskContextSupplier taskContextSupplier;
   // For full schema evolution
   protected final boolean schemaOnReadEnabled;
+  protected final boolean preserveMetadata;
+  /**
+   * Flag saying whether secondary index streaming writes is enabled for the table.
+   */
+  protected final boolean isSecondaryIndexStatsStreamingWritesEnabled;
+  List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
 
   private boolean closed = false;
+  protected boolean isTrackingEventTimeWatermark;
+  protected boolean keepConsistentLogicalTimestamp;
+  protected String eventTimeFieldName;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
-        Option.empty(), taskContextSupplier);
+        Option.empty(), taskContextSupplier, preserveMetadata);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
                               HoodieTable<T, I, K, O> hoodieTable, Option<Schema> overriddenSchema,
-                              TaskContextSupplier taskContextSupplier) {
+                              TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, Option.of(instantTime), hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
@@ -103,9 +122,38 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
     this.schemaOnReadEnabled = !isNullOrEmpty(hoodieTable.getConfig().getInternalSchema());
+    this.preserveMetadata = preserveMetadata;
     this.recordMerger = config.getRecordMerger();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         hoodieTable.shouldTrackSuccessRecords(), config.getWriteStatusFailureFraction(), hoodieTable.isMetadataTable());
+    boolean isMetadataStreamingWritesEnabled = config.isMetadataStreamingWritesEnabled(hoodieTable.getMetaClient().getTableConfig().getTableVersion());
+    if (isMetadataStreamingWritesEnabled) {
+      initSecondaryIndexStats(preserveMetadata);
+      this.isSecondaryIndexStatsStreamingWritesEnabled = !secondaryIndexDefns.isEmpty();
+    } else {
+      this.isSecondaryIndexStatsStreamingWritesEnabled = false;
+    }
+
+    // For tracking event time watermark.
+    this.eventTimeFieldName = ConfigUtils.getEventTimeFieldName(config.getProps());
+    this.isTrackingEventTimeWatermark = this.eventTimeFieldName != null
+        && hoodieTable.getMetaClient().getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
+        && ConfigUtils.isTrackingEventTimeWatermark(config.getProps());
+    this.keepConsistentLogicalTimestamp = isTrackingEventTimeWatermark && ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
+  }
+
+  private void initSecondaryIndexStats(boolean preserveMetadata) {
+    // Secondary index should not be updated for clustering and compaction
+    // Since for clustering and compaction preserveMetadata is true, we are checking for it before enabling secondary index update
+    if (config.isSecondaryIndexEnabled() && !preserveMetadata) {
+      secondaryIndexDefns = hoodieTable.getMetaClient().getIndexMetadata()
+          .map(indexMetadata -> indexMetadata.getIndexDefinitions().values())
+          .orElse(Collections.emptyList())
+          .stream()
+          .filter(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+          .collect(Collectors.toList());
+      secondaryIndexDefns.forEach(def -> writeStatus.getIndexStats().initSecondaryIndexStats(def.getIndexName()));
+    }
   }
 
   /**
@@ -301,8 +349,26 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     try {
       return record.toIndexedRecord(writerSchema, props).map(HoodieAvroIndexedRecord::getData);
     } catch (IOException e) {
-      LOG.error("Fail to get indexRecord from " + record, e);
+      LOG.error("Failed to convert to IndexedRecord", e);
       return Option.empty();
     }
+  }
+
+  protected Option<Map<String, String>> getRecordMetadata(HoodieRecord record, Schema schema, Properties props) {
+    Option<Map<String, String>> recordMetadata = record.getMetadata();
+    if (isTrackingEventTimeWatermark) {
+      Object eventTime = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
+      if (eventTime != null) {
+        // Append event_time.
+        Option<Schema.Field> field = AvroSchemaUtils.findNestedField(schema, eventTimeFieldName);
+        // Field should definitely exist.
+        eventTime = record.convertColumnValueForLogicalType(
+            field.get().schema(), eventTime, keepConsistentLogicalTimestamp);
+        Map<String, String> metadata = recordMetadata.orElse(new HashMap<>());
+        metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
+        return Option.of(metadata);
+      }
+    }
+    return recordMetadata;
   }
 }
