@@ -44,7 +44,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -81,6 +81,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getRevivedAndDeletedKeysFromMergedLogs;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.reduceByKeys;
@@ -485,7 +487,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       });
       // There should 0 deleted records because compaction does not update any records.
       assertEquals(0, deletedSecondaryIndexRecords3.size());
-      assertEquals(initialRecordsCount, dataGen.getNumExistingKeys(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA));
+      assertEquals(initialRecordsCount, dataGen.getNumExistingKeys(TRIP_EXAMPLE_SCHEMA));
     }
   }
 
@@ -608,14 +610,14 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
   private void assertHoodieRecordListEquality(List<HoodieRecord> actualList, List<HoodieRecord> expectedList) {
     assertEquals(expectedList.size(), actualList.size());
-    List<String> expectedInsertRecordKeys = expectedList.stream().filter(record -> !(record.getData() instanceof EmptyHoodieRecordPayload))
+    List<String> expectedInsertRecordKeys = expectedList.stream().filter(record -> !record.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());
-    List<String> expectedDeletedRecordKeys = expectedList.stream().filter(record -> (record.getData() instanceof EmptyHoodieRecordPayload))
+    List<String> expectedDeletedRecordKeys = expectedList.stream().filter(record -> record.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());
 
-    List<String> actualInsertRecordKeys = actualList.stream().filter(record -> !(record.getData() instanceof EmptyHoodieRecordPayload))
+    List<String> actualInsertRecordKeys = actualList.stream().filter(record -> !record.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());
-    List<String> actualDeletedRecordKeys = actualList.stream().filter(record -> (record.getData() instanceof EmptyHoodieRecordPayload))
+    List<String> actualDeletedRecordKeys = actualList.stream().filter(record -> record.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps()))
         .map(record -> record.getRecordKey()).collect(Collectors.toList());
 
     assertListEquality(expectedInsertRecordKeys, actualInsertRecordKeys);
