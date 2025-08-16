@@ -30,9 +30,8 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataU
 
 import org.apache.spark.sql._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.scalatest.Assertions.assertResult
 
-import scala.collection.{mutable, JavaConverters, Seq}
+import scala.collection.{mutable, JavaConverters}
 import scala.collection.JavaConverters._
 import scala.util.Using
 
@@ -161,9 +160,5 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     assertEquals(0, nonMatchingRecords.count())
     assertEquals(readDf.count(), prevDf.count())
     readDf.unpersist()
-  }
-
-  protected def checkAnswer(sql: String)(expects: collection.immutable.Seq[Any]*): Unit = {
-    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
   }
 }
