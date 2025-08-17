@@ -74,6 +74,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.io.UncheckedIOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -667,7 +668,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .map(r -> HoodieAvroUtils.removeFields(r, metaCols))
         .collect(Collectors.toSet());
     Set<GenericRecord> expectedRecordSet = expectedRecords.stream()
-        .map(r -> (GenericRecord) r.getRight())
+        .map(r -> resetByteBufferPosition((GenericRecord) r.getRight()))
         .map(r -> HoodieAvroUtils.rewriteRecordWithNewSchema(r, avroSchemaWithoutMeta))
         .collect(Collectors.toSet());
     compareRecordSets(expectedRecordSet, actualRecordSet);
@@ -963,4 +964,30 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     return partitionPath;
   }
 
+  private static IndexedRecord resetByteBufferPosition(IndexedRecord record) {
+    for (Schema.Field field : record.getSchema().getFields()) {
+      Object value = record.get(field.pos());
+      resetByteBufferField(value, field.schema());
+    }
+    return record;
+  }
+
+  private static void resetByteBufferField(Object value, Schema fieldSchema) {
+    if (value == null) {
+      return;
+    }
+    Schema.Type fieldType = HoodieAvroUtils.unwrapNullable(fieldSchema).getType();
+    if (fieldType == Schema.Type.BYTES || fieldType == Schema.Type.FIXED) {
+      // Reset position of ByteBuffer or Fixed type fields
+      if (value instanceof ByteBuffer) {
+        ((ByteBuffer) value).rewind();
+      }
+    } else if (fieldType == Schema.Type.RECORD) {
+      resetByteBufferPosition((IndexedRecord) value);
+    } else if (fieldType == Schema.Type.ARRAY) {
+      ((List<Object>) value).forEach(element -> resetByteBufferField(element, fieldSchema.getElementType()));
+    } else if (fieldType == Schema.Type.MAP) {
+      ((Map<Object, Object>) value).values().forEach(element -> resetByteBufferField(element, fieldSchema.getValueType()));
+    }
+  }
 }
