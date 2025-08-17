@@ -94,6 +94,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   private Option<HoodieCDCLogger> cdcLogger;
   private final TypedProperties props;
   private final Iterator<HoodieRecord<T>> incomingRecordsItr;
+  private final List<RetractionCallback> retractionCallbacks = new ArrayList<>(2);
 
   /**
    * Constructor for Copy-On-Write (COW) merge path.
@@ -281,6 +282,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           } catch (Exception e) {
             LOG.error("Error writing record {}", record, e);
             writeStatus.markFailure(record, e, recordMetadata);
+            retractionCallbacks.forEach(callback -> callback.onFailure(record.getRecordKey()));
           }
         }
 
@@ -357,15 +359,19 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       // record index callback
       if (this.writeStatus.isTrackingSuccessfulWrites()) {
         writeStatus.manuallyTrackSuccess();
-        callbacks.add(new RecordLevelIndexCallback<>(writeStatus, newRecordLocation, partitionPath));
+        RecordLevelIndexCallback<T> recordLevelIndexCallback = new RecordLevelIndexCallback<>(writeStatus, newRecordLocation, partitionPath);
+        callbacks.add(recordLevelIndexCallback);
+        retractionCallbacks.add(recordLevelIndexCallback);
       }
       // Stream secondary index stats.
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
-        callbacks.add(new SecondaryIndexCallback<>(
+        SecondaryIndexCallback<T> secondaryIndexCallback = new SecondaryIndexCallback<>(
             partitionPath,
             readerContext,
             writeStatus,
-            secondaryIndexDefns));
+            secondaryIndexDefns);
+        callbacks.add(secondaryIndexCallback);
+        //retractionCallbacks.add(secondaryIndexCallback);
       }
     }
     return callbacks.isEmpty() ? Option.empty() : Option.of(CompositeCallback.of(callbacks));
@@ -407,7 +413,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
   }
 
-  private static class RecordLevelIndexCallback<T> implements BaseFileUpdateCallback<T> {
+  private static class RecordLevelIndexCallback<T> implements BaseFileUpdateCallback<T>, RetractionCallback {
     private final WriteStatus writeStatus;
     private final HoodieRecordLocation fileRecordLocation;
     private final String partitionPath;
@@ -436,9 +442,17 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         writeStatus.addRecordDelegate(HoodieRecordDelegate.create(recordKey, partitionPath, fileRecordLocation, null));
       }
     }
+
+    @Override
+    public void onFailure(String recordKey) {
+      int lastIndex = writeStatus.getWrittenRecordDelegates().size() - 1;
+      if (writeStatus.getWrittenRecordDelegates().get(lastIndex).getRecordKey().equals(recordKey)) {
+        writeStatus.getWrittenRecordDelegates().remove(lastIndex);
+      }
+    }
   }
 
-  private static class SecondaryIndexCallback<T> implements BaseFileUpdateCallback<T> {
+  private static class SecondaryIndexCallback<T> implements BaseFileUpdateCallback<T>, RetractionCallback {
     private final String partitionPath;
     private final HoodieReaderContext<T> readerContext;
     private final WriteStatus writeStatus;
@@ -492,6 +506,16 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }
+
+    @Override
+    public void onFailure(String recordKey) {
+      writeStatus.getIndexStats().getSecondaryIndexStats().forEach((partition, indexStats) -> {
+        int lastIndex = indexStats.size() - 1;
+        if (indexStats.get(lastIndex).getRecordKey().equals(recordKey)) {
+          indexStats.remove(lastIndex);
+        }
+      });
+    }
   }
 
   private static class CompositeCallback<T> implements BaseFileUpdateCallback<T> {
@@ -522,5 +546,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     public void onDelete(String recordKey, BufferedRecord<T> previousRecord, HoodieOperation hoodieOperation) {
       this.callbacks.forEach(callback -> callback.onDelete(recordKey, previousRecord, hoodieOperation));
     }
+  }
+
+  @FunctionalInterface
+  interface RetractionCallback {
+    void onFailure(String recordKey);
   }
 }
