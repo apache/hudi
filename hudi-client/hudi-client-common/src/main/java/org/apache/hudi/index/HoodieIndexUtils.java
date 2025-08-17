@@ -253,6 +253,7 @@ public class HoodieIndexUtils {
       // separate filenames that the record is found in. This will result in setting
       // currentLocation 2 times and it will fail the second time. So creating a new in memory
       // copy of the hoodie record.
+      record.newInstance();
       HoodieRecord<R> newRecord = record.newInstance();
       newRecord.unseal();
       newRecord.setCurrentLocation(location.get());

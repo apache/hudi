@@ -78,7 +78,7 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T> extends UpdateStrat
     HoodieData<HoodieRecord<T>> redirectedRecordsRDD = filteredRecordsRDD.map(r -> {
       Pair<String, ConsistentBucketIdentifier> identifierPair = partitionToIdentifier.get(r.getPartitionPath());
       ConsistentHashingNode node = identifierPair.getValue().getBucket(r.getKey(), indexKeyFields);
-      return tagAsNewRecordIfNeeded(r.newInstance().clearLocation(),
+      return tagAsNewRecordIfNeeded(r.newInstance(r.getKey(), r.getOperation()),
           Option.ofNullable(new HoodieRecordLocation(identifierPair.getKey(), FSUtils.createNewFileId(node.getFileIdPrefix(), 0))));
     });
 

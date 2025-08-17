@@ -278,12 +278,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return this;
   }
 
-  public HoodieRecord clearLocation() {
-    checkState();
-    this.currentLocation = null;
-    return this;
-  }
-
   @Nullable
   public HoodieRecordLocation getCurrentLocation() {
     return currentLocation;
