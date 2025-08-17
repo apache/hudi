@@ -860,8 +860,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   private void assertRecords(List<HoodieRecord> inputRecords, List<GenericRecord> recordsRead) {
     assertEquals(recordsRead.size(), inputRecords.size());
     Map<String, GenericRecord> expectedRecords = new HashMap<>();
-    inputRecords.forEach(entry ->
-      expectedRecords.put(entry.getRecordKey(), (GenericRecord) entry.getData()));
+    inputRecords.forEach(entry -> expectedRecords.put(entry.getRecordKey(), (GenericRecord) entry.getData()));
 
     Map<String, GenericRecord> actualRecords = new HashMap<>();
     recordsRead.forEach(entry -> actualRecords.put(String.valueOf(entry.get("_row_key")), entry));
