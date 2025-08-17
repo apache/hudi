@@ -1577,4 +1577,9 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       return Option.empty();
     }
   }
+
+  public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
+    return records.stream().map(record -> "{\"_row_key\": \"" + record.getRecordKey() + "\",\"partition\": \"" + record.getPartitionPath() + "\"}")
+        .collect(Collectors.toList());
+  }
 }
