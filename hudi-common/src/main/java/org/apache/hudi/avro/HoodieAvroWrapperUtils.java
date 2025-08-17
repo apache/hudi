@@ -190,7 +190,7 @@ public class HoodieAvroWrapperUtils {
     } else if (avroValueWrapper instanceof ArrayWrapper) {
       return unwrapArray(avroValueWrapper, HoodieAvroWrapperUtils::unwrapAvroValueWrapper);
     } else if (avroValueWrapper instanceof GenericRecord) {
-     return unwrapGenericRecord(avroValueWrapper);
+      return unwrapGenericRecord(avroValueWrapper);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
@@ -233,7 +233,8 @@ public class HoodieAvroWrapperUtils {
   }
 
   public enum PrimitiveWrapperType {
-    NONE(Object.class, HoodieAvroWrapperUtils::wrapValueIntoAvro, HoodieAvroWrapperUtils::unwrapAvroValueWrapper),
+    V1(Object.class, HoodieAvroWrapperUtils::wrapValueIntoAvro, HoodieAvroWrapperUtils::unwrapAvroValueWrapper),
+    NULL(Void.class, HoodieAvroWrapperUtils::wrapNull, HoodieAvroWrapperUtils::unwrapNull),
     BOOLEAN(Boolean.class, HoodieAvroWrapperUtils::wrapBoolean, HoodieAvroWrapperUtils::unwrapBoolean),
     INT(Integer.class, HoodieAvroWrapperUtils::wrapInt, HoodieAvroWrapperUtils::unwrapInt),
     LONG(Long.class, HoodieAvroWrapperUtils::wrapLong, HoodieAvroWrapperUtils::unwrapLong),
@@ -263,6 +264,10 @@ public class HoodieAvroWrapperUtils {
     Comparable<?> unwrap(Object value) {
       return unwrapper.apply(value);
     }
+  }
+
+  private static Object wrapNull(Comparable<?> value) {
+    return value;
   }
 
   private static Object wrapBoolean(Comparable<?> value) {
@@ -296,6 +301,10 @@ public class HoodieAvroWrapperUtils {
   public static Object wrapArray(Comparable<?> value, Function<Comparable<?>, Object> wrapper) {
     List<Object> avroValues = OrderingValues.getValues((ArrayComparable) value).stream().map(wrapper::apply).collect(Collectors.toList());
     return ArrayWrapper.newBuilder(ARRAY_WRAPPER_BUILDER_STUB.get()).setWrappedValues(avroValues).build();
+  }
+
+  private static Comparable<?> unwrapNull(Object val) {
+    return (Comparable<?>) val;
   }
 
   private static Comparable<?> unwrapBoolean(Object val) {

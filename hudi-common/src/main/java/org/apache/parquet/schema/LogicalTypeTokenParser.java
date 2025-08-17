@@ -27,8 +27,6 @@ public class LogicalTypeTokenParser {
     switch (primitiveType.getLogicalTypeAnnotation().getType()) {
       case STRING:
         return ValueType.STRING;
-      case ENUM:
-        return ValueType.ENUM;
       case DECIMAL:
         return ValueType.DECIMAL;
       case DATE:

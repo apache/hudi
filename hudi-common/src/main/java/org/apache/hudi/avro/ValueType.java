@@ -57,8 +57,10 @@ import static org.apache.hudi.common.util.DateTimeUtils.nanosToInstant;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public enum ValueType {
-  V1,
-  NULL,
+  V1(HoodieAvroWrapperUtils.PrimitiveWrapperType.V1.getClazz(), HoodieAvroWrapperUtils.PrimitiveWrapperType.V1,
+      ValueType::passThrough, ValueType::passThrough, ValueType::passThrough),
+  NULL(HoodieAvroWrapperUtils.PrimitiveWrapperType.NULL.getClazz(), HoodieAvroWrapperUtils.PrimitiveWrapperType.NULL,
+      ValueType::passThrough, ValueType::passThrough, ValueType::passThrough),
   BOOLEAN(HoodieAvroWrapperUtils.PrimitiveWrapperType.BOOLEAN, ValueType::castToBoolean),
   INT(HoodieAvroWrapperUtils.PrimitiveWrapperType.INT, ValueType::castToInteger),
   LONG(HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG, ValueType::castToLong),
@@ -88,13 +90,7 @@ public enum ValueType {
   LOCAL_TIMESTAMP_MICROS(LocalDateTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
       ValueType::castToLocalTimestampMicros, ValueType::toLocalTimestampMicros, ValueType::fromLocalTimestampMicros),
   LOCAL_TIMESTAMP_NANOS(LocalDateTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
-      ValueType::castToLocalTimestampNanos, ValueType::toLocalTimestampNanos, ValueType::fromLocalTimestampNanos),
-  RECORD,
-  ENUM,
-  ARRAY,
-  MAP,
-  UNION,
-  DURATION;
+      ValueType::castToLocalTimestampNanos, ValueType::toLocalTimestampNanos, ValueType::fromLocalTimestampNanos);
 
   private final Class<?> internalType;
   private final HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType;
@@ -106,14 +102,6 @@ public enum ValueType {
     this(primitiveWrapperType.getClazz(),
         primitiveWrapperType,
         (val, meta) -> (Comparable<?>) single.apply(val),
-        ValueType::passThrough,
-        ValueType::passThrough);
-  }
-
-  ValueType() {
-    this(HoodieAvroWrapperUtils.PrimitiveWrapperType.NONE.getClazz(),
-        HoodieAvroWrapperUtils.PrimitiveWrapperType.NONE,
-        ValueType::passThrough,
         ValueType::passThrough,
         ValueType::passThrough);
   }
