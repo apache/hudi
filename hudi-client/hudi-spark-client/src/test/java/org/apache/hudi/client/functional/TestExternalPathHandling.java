@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -291,8 +292,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     writeStat.setTotalCorruptLogBlock(0);
     writeStat.setTotalRollbackBlocks(0);
     Map<String, HoodieColumnRangeMetadata<Comparable>> stats = new HashMap<>();
-    stats.put(FIELD_1, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_1, 1, 2, 0, 2, 5, 10, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
-    stats.put(FIELD_2, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_2, "a", "b", 1, 3, 10, 20, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
+    stats.put(FIELD_1, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_1, 1, 2, 0, 2, 5, 10, ValueMetadata.V1EmptyMetadata.get()));
+    stats.put(FIELD_2, HoodieColumnRangeMetadata.<Comparable>create(filePath, FIELD_2, "a", "b", 1, 3, 10, 20, ValueMetadata.V1EmptyMetadata.get()));
     writeStat.putRecordsStats(stats);
     writeStatus.setStat(writeStat);
     return writeStatus;

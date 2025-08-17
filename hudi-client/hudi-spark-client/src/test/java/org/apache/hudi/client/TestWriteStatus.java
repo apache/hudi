@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -211,7 +212,7 @@ public class TestWriteStatus {
     WriteStatus status = new WriteStatus(true, 0.1);
     status.markSuccess(HoodieRecordDelegate.create(new HoodieKey("key", "partition")), Option.empty());
     Map<String, HoodieColumnRangeMetadata<Comparable>> stats = new HashMap<>();
-    stats.put("field1", HoodieColumnRangeMetadata.<Comparable>create("f1", "field1", 1, 2, 0, 2, 5, 10, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
+    stats.put("field1", HoodieColumnRangeMetadata.<Comparable>create("f1", "field1", 1, 2, 0, 2, 5, 10, ValueMetadata.V1EmptyMetadata.get()));
     status.setStat(new HoodieWriteStat());
     status.getStat().putRecordsStats(stats);
     assertEquals(1, status.getIndexStats().getWrittenRecordDelegates().size());

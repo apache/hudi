@@ -80,7 +80,7 @@ public abstract class FileFormatUtils {
             T maxValue = (T) valueMetadata.standardizeJavaTypeAndPromote(e.getMaxValue());
             return HoodieColumnRangeMetadata.create(
                 relativePartitionPath, e.getColumnName(), minValue, maxValue, e.getNullCount(), e.getValueCount(), e.getTotalSize(),
-                e.getTotalUncompressedSize(), valueMetadata, indexVersion);
+                e.getTotalUncompressedSize(), valueMetadata);
           }).reduce(HoodieColumnRangeMetadata::merge).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
     }
     // we are reducing using merge so IDK why we think there are multiple cols that need to go through schema evolution
@@ -108,7 +108,7 @@ public abstract class FileFormatUtils {
         .map(e -> HoodieColumnRangeMetadata.create(
             relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
             e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize(),
-            e.getValueMetadata(), indexVersion))
+            e.getValueMetadata()))
         .reduce((a,b) -> {
           if (colsWithSchemaEvolved.isEmpty() || colsToIndexSchemaMap.isEmpty()
               || a.getMinValue() == null || a.getMaxValue() == null || b.getMinValue() == null || b.getMaxValue() == null
@@ -120,11 +120,11 @@ public abstract class FileFormatUtils {
             HoodieColumnRangeMetadata<T> left = HoodieColumnRangeMetadata.create(a.getFilePath(), a.getColumnName(),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMinValue()),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, a.getMaxValue()), a.getNullCount(),
-                a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize(), a.getValueMetadata(), indexVersion);
+                a.getValueCount(), a.getTotalSize(), a.getTotalUncompressedSize(), a.getValueMetadata());
             HoodieColumnRangeMetadata<T> right = HoodieColumnRangeMetadata.create(b.getFilePath(), b.getColumnName(),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMinValue()),
                 (T) HoodieTableMetadataUtil.coerceToComparable(schema, b.getMaxValue()), b.getNullCount(),
-                b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize(), b.getValueMetadata(), indexVersion);
+                b.getValueCount(), b.getTotalSize(), b.getTotalUncompressedSize(), b.getValueMetadata());
             return HoodieColumnRangeMetadata.merge(left, right);
           }
         }).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));

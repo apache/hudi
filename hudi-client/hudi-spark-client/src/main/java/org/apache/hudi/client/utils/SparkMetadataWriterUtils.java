@@ -193,8 +193,7 @@ public class SparkMetadataWriterUtils {
                   valueCount,
                   totalFileSize,
                   totalUncompressedSize,
-                  ValueMetadata.getValueMetadata(columnSchema, indexVersion),
-                  indexVersion
+                  ValueMetadata.getValueMetadata(columnSchema, indexVersion)
               );
               return Collections.singletonList(Pair.of(partitionName, rangeMetadata)).iterator();
             });
@@ -433,7 +432,7 @@ public class SparkMetadataWriterUtils {
                 .filter(Option::isPresent)
                 .map(data -> ((HoodieMetadataRecord) data.get()).getColumnStatsMetadata())
                 .filter(stats -> fileNames.contains(stats.getFileName()))
-                .map(stats -> HoodieColumnRangeMetadata.fromColumnStats(stats, indexVersion))
+                .map(HoodieColumnRangeMetadata::fromColumnStats)
                 .collectAsList();
         return Pair.of(partitionName, partitionColumnMetadata);
       });

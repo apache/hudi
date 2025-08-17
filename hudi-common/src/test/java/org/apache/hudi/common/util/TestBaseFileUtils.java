@@ -41,9 +41,9 @@ public class TestBaseFileUtils {
     HoodieIndexVersion indexVersion = HoodieIndexVersion.V1;
     // Step 1: Set Up Test Data
     HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", COLUMN_NAME, 1, 5, 0, 10, 100, 200, ValueMetadata.NoneMetadata.INSTANCE, indexVersion);
+        "path/to/file1", COLUMN_NAME, 1, 5, 0, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file2", COLUMN_NAME, 3, 8, 1, 15, 120, 250, ValueMetadata.NoneMetadata.INSTANCE, indexVersion);
+        "path/to/file2", COLUMN_NAME, 3, 8, 1, 15, 120, 250, ValueMetadata.V1EmptyMetadata.get());
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
     HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, COLUMN_NAME, fileColumnRanges, Collections.emptyMap(), indexVersion);
@@ -63,9 +63,9 @@ public class TestBaseFileUtils {
     HoodieIndexVersion indexVersion = HoodieIndexVersion.V1;
     // Step 1: Set Up Test Data
     HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", COLUMN_NAME, 1, null, 0, 10, 100, 200, ValueMetadata.NoneMetadata.INSTANCE, indexVersion);
+        "path/to/file1", COLUMN_NAME, 1, null, 0, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file2", COLUMN_NAME, null, 8, 1, 15, 120, 250, ValueMetadata.NoneMetadata.INSTANCE, indexVersion);
+        "path/to/file2", COLUMN_NAME, null, 8, 1, 15, 120, 250, ValueMetadata.V1EmptyMetadata.get());
 
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
@@ -86,9 +86,9 @@ public class TestBaseFileUtils {
     HoodieIndexVersion indexVersion = HoodieIndexVersion.V1;
     // Step 1: Set Up Test Data
     HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "columnName1", 1, null, 0, 10, 100, 200, ValueMetadata.NoneMetadata.INSTANCE, indexVersion);
+        "path/to/file1", "columnName1", 1, null, 0, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file2", "columnName2", null, 8, 1, 15, 120, 250, ValueMetadata.NoneMetadata.INSTANCE, indexVersion);
+        "path/to/file2", "columnName2", null, 8, 1, 15, 120, 250, ValueMetadata.V1EmptyMetadata.get());
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
     assertThrows(IllegalArgumentException.class, () -> FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, COLUMN_NAME, fileColumnRanges,

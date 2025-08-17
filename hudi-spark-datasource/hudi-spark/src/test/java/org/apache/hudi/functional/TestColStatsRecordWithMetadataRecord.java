@@ -19,6 +19,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.avro.AvroSchemaCache;
+import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.avro.model.DecimalWrapper;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -81,6 +82,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -169,7 +171,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     AtomicInteger finalCounter1 = counter;
     minMaxValues.forEach(entry -> {
       columnRangeMetadata.add(HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColNamePrefix + "_" + (finalCounter1.getAndIncrement()),
-          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get()));
     });
 
     // create mdt records
@@ -321,33 +323,33 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
 
     // Integer vals
     HoodieColumnRangeMetadata aIntegerVal = HoodieColumnRangeMetadata.create(fileName, colName, (Integer)1, (Integer)1000, nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata bIntegerVal = HoodieColumnRangeMetadata.create(fileName, colName, (Integer)(-1), (Integer)10000, nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
 
     // Long vals
     HoodieColumnRangeMetadata aLongVal = HoodieColumnRangeMetadata.create(fileName, colName, (Long)1L, (Long)1000L, nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata bLongVal = HoodieColumnRangeMetadata.create(fileName, colName, (Long)(-1L), (Long)10000L, nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
 
     // Float vals
     HoodieColumnRangeMetadata aFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, new Float(1), new Float(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata bFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, new Float(-1.0), new Float(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
 
     // Double vals
     HoodieColumnRangeMetadata aDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, new Double(0.1), new Double(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata bDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, new Double(-1.0), new Double(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
 
     // String vals
     HoodieColumnRangeMetadata aStringVal = HoodieColumnRangeMetadata.create(fileName, colName, new String("1"), new String("1000"), nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata bStringVal = HoodieColumnRangeMetadata.create(fileName, colName, new String("-1"), new String("10000"), nullCount, valueCount, totalSize, totalUncompressedSize,
-        HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        ValueMetadata.V1EmptyMetadata.get());
 
     // Merging Integer and Integer.
     HoodieColumnRangeMetadata actualColumnRange = mergeAndAssert(aIntegerVal, bIntegerVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize,
@@ -449,7 +451,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     Map<String, Schema> colsToIndexSchemaMap = new HashMap<>();
     colsToIndexSchemaMap.put(colName, Schema.create(schemaType));
 
-    HoodieColumnRangeMetadata actualColumnRange = FileFormatUtils.getColumnRangeInPartition(relativePartitionPath, fileColumnRanges, colsToIndexSchemaMap);
+    HoodieColumnRangeMetadata actualColumnRange = FileFormatUtils.getColumnRangeInPartition(relativePartitionPath, colName, fileColumnRanges, colsToIndexSchemaMap, V1);
 
     validateColumnRangeMetadata(actualColumnRange, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize);
     return actualColumnRange;
@@ -483,7 +485,7 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata = new ArrayList<>();
     minMaxValues.forEach(entry -> {
       columnRangeMetadata.add(HoodieColumnRangeMetadata.<Comparable>create(fileName, colName,
-          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get()));
     });
 
     HoodieColumnRangeMetadata<Comparable> mergedColStatsRangeMetadata = (HoodieColumnRangeMetadata<Comparable>) columnRangeMetadata.stream()

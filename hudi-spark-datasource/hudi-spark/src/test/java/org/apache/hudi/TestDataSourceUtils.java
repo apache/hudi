@@ -19,6 +19,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
@@ -293,7 +294,7 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
     String targetColName = "c1";
 
     HoodieColumnRangeMetadata<Comparable> columnStatsRecord =
-        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 500, 0, 100, 12345, 12345, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE);
+        HoodieColumnRangeMetadata.<Comparable>create(fileName, targetColName, 0, 500, 0, 100, 12345, 12345, ValueMetadata.V1EmptyMetadata.get());
 
     HoodieRecord<HoodieMetadataPayload> hoodieMetadataPayload =
         HoodieMetadataPayload.createColumnStatsRecords(partitionPath, Collections.singletonList(columnStatsRecord), false)

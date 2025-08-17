@@ -29,6 +29,8 @@ import org.apache.parquet.schema.LogicalTypeTokenParser;
 import org.apache.parquet.schema.PrimitiveType;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL;
@@ -37,7 +39,7 @@ public class ValueMetadata {
 
   public static ValueMetadata getEmptyValueMetadata(HoodieIndexVersion indexVersion) {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
-      return ValueMetadata.NoneMetadata.INSTANCE;
+      return V1EmptyMetadata.get();
     }
     return NULL_METADATA;
   }
@@ -45,12 +47,12 @@ public class ValueMetadata {
   public static ValueMetadata getValueMetadata(HoodieValueTypeInfo valueTypeInfo) {
     // valueTypeInfo will always be null when version is v1
     if (valueTypeInfo == null) {
-      return NoneMetadata.INSTANCE;
+      return V1EmptyMetadata.get();
     }
 
     ValueType valueType = ValueType.fromInt(valueTypeInfo.getTypeOrdinal());
-    if (valueType == ValueType.NONE) {
-      return NoneMetadata.INSTANCE;
+    if (valueType == ValueType.V1) {
+      return V1EmptyMetadata.get();
     } else if (valueType == ValueType.DECIMAL) {
       return DecimalMetadata.create(valueTypeInfo.getAdditionalInfo());
     } else {
@@ -60,17 +62,18 @@ public class ValueMetadata {
 
   public static ValueMetadata getValueMetadata(GenericRecord columnStatsRecord) {
     if (columnStatsRecord == null) {
-      return NoneMetadata.INSTANCE;
+      // TODO: Should we return V1EmptyMetadata here?
+      return NULL_METADATA;
     }
 
     GenericRecord valueTypeInfo = (GenericRecord) columnStatsRecord.get(COLUMN_STATS_FIELD_VALUE_TYPE);
     if (valueTypeInfo == null) {
-      return NoneMetadata.INSTANCE;
+      return V1EmptyMetadata.get();
     }
 
     ValueType valueType = ValueType.fromInt((Integer) valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL));
-    if (valueType == ValueType.NONE) {
-      return NoneMetadata.INSTANCE;
+    if (valueType == ValueType.V1) {
+      throw new IllegalArgumentException("Unsupported value type: " + valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL));
     } else if (valueType == ValueType.DECIMAL) {
       return DecimalMetadata.create((String) valueTypeInfo.get(COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO));
     } else {
@@ -80,15 +83,15 @@ public class ValueMetadata {
 
   public static ValueMetadata getValueMetadata(Schema fieldSchema, HoodieIndexVersion indexVersion) {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
-      return NoneMetadata.INSTANCE;
+      return V1EmptyMetadata.get();
     }
     if (fieldSchema == null) {
       return NULL_METADATA;
     }
     Schema valueSchema = resolveNullableSchema(fieldSchema);
     ValueType valueType = ValueType.fromSchema(valueSchema);
-    if (valueType == ValueType.NONE) {
-      return NoneMetadata.INSTANCE;
+    if (valueType == ValueType.V1) {
+      throw new IllegalArgumentException("Unsupported logical type for: " + valueSchema.getLogicalType());
     } else if (valueType == ValueType.DECIMAL) {
       return DecimalMetadata.create((LogicalTypes.Decimal) valueSchema.getLogicalType());
     } else {
@@ -98,15 +101,14 @@ public class ValueMetadata {
 
   public static ValueMetadata getValueMetadata(PrimitiveType primitiveType, HoodieIndexVersion indexVersion) {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
-      return NoneMetadata.INSTANCE;
+      return V1EmptyMetadata.get();
     }
     if (primitiveType == null) {
-      return NoneMetadata.INSTANCE;
+      return NULL_METADATA;
     }
-
     ValueType valueType = ValueType.fromPrimitiveType(primitiveType);
-    if (valueType == ValueType.NONE) {
-      return NoneMetadata.INSTANCE;
+    if (valueType == ValueType.V1) {
+      throw new IllegalArgumentException("Unsupported logical type: " + primitiveType.getLogicalTypeAnnotation());
     } else if (valueType == ValueType.DECIMAL) {
       return DecimalMetadata.create(primitiveType);
     } else {
@@ -125,7 +127,10 @@ public class ValueMetadata {
   }
 
   public HoodieValueTypeInfo getValueTypeInfo() {
-    return new HoodieValueTypeInfo(valueType.ordinal(), getAdditionalInfo());
+    return HoodieValueTypeInfo.newBuilder()
+        .setTypeOrdinal(valueType.ordinal())
+        .setAdditionalInfo(getAdditionalInfo())
+        .build();
   }
 
   public String getAdditionalInfo() {
@@ -136,36 +141,55 @@ public class ValueMetadata {
     return this.getValueType().standardizeJavaTypeAndPromote(val, this);
   }
 
-  public Comparable<?> convertIntoPrimitive(Comparable<?> value) {
-    return this.getValueType().convertIntoPrimitive(value, this);
+  public Object wrapValue(Comparable<?> value) {
+    return this.getValueType().wrapValue(value, this);
   }
 
-  public Comparable<?> convertIntoComplex(Comparable<?> value) {
-    return this.getValueType().convertIntoComplex(value, this);
+  public Comparable<?> unwrapValue(Object value) {
+    return this.getValueType().unwrapValue(value, this);
   }
 
-  public void validate(Object minVal, Object maxVal, HoodieIndexVersion indexVersion) {
-    if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
-      if (getValueType() != ValueType.NONE) {
-        throw new IllegalArgumentException("Value type should be NONE");
-      }
-    }
-    if (getValueType() == ValueType.NONE) {
-      throw new IllegalArgumentException("Value type should not be NONE");
+  // legacy for V1
+  public Object unwrapAndWrapValue(Object value) {
+    return value;
+  }
+
+  public void validate(Object minVal, Object maxVal) {
+    if (getValueType() == ValueType.V1) {
+      return;
     }
     this.getValueType().validate(minVal);
     this.getValueType().validate(maxVal);
   }
 
-  public static class NoneMetadata extends ValueMetadata {
-    public static final ValueMetadata INSTANCE = new NoneMetadata();
-    private NoneMetadata() {
-      super(ValueType.NONE);
+  public static class V1EmptyMetadata extends ValueMetadata {
+    private static final V1EmptyMetadata V_1_EMPTY_METADATA = new V1EmptyMetadata();
+    public static V1EmptyMetadata get() {
+      return V_1_EMPTY_METADATA;
+    }
+
+    private V1EmptyMetadata() {
+      super(ValueType.V1);
     }
 
     @Override
     public HoodieValueTypeInfo getValueTypeInfo() {
       return null;
+    }
+
+    @Override
+    public Object wrapValue(Comparable<?> value) {
+      return wrapValueIntoAvro(value);
+    }
+
+    @Override
+    public Comparable<?> unwrapValue(Object value) {
+      return unwrapAvroValueWrapper(value);
+    }
+
+    @Override
+    public Object unwrapAndWrapValue(Object value) {
+      return wrapValue(unwrapValue(value));
     }
   }
 

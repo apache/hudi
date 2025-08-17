@@ -28,7 +28,6 @@ import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.Objects;
 
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.ValueMetadata.getEmptyValueMetadata;
 
 /**
@@ -85,9 +84,17 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     return this.minValue;
   }
 
+  public Object getMinValueWrapped() {
+    return getValueMetadata().wrapValue(getMinValue());
+  }
+
   @Nullable
   public T getMaxValue() {
     return this.maxValue;
+  }
+
+  public Object getMaxValueWrapped() {
+    return getValueMetadata().wrapValue(getMaxValue());
   }
 
   public long getNullCount() {
@@ -156,31 +163,26 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                                                               long valueCount,
                                                                               long totalSize,
                                                                               long totalUncompressedSize,
-                                                                              ValueMetadata valueMetadata,
-                                                                              HoodieIndexVersion indexVersion) throws IllegalArgumentException {
-    valueMetadata.validate(minValue, maxValue, indexVersion);
+                                                                              ValueMetadata valueMetadata) throws IllegalArgumentException {
+    valueMetadata.validate(minValue, maxValue);
     return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize, valueMetadata);
   }
 
   /**
    * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
    */
-  public static HoodieColumnRangeMetadata<Comparable> fromColumnStats(HoodieMetadataColumnStats columnStats, HoodieIndexVersion indexVersion) {
-    if (indexVersion.lowerThan(HoodieIndexVersion.V2) && columnStats.getValueType() != null) {
-      throw new IllegalArgumentException("Value type should always be null for V1");
-    }
+  public static HoodieColumnRangeMetadata<Comparable> fromColumnStats(HoodieMetadataColumnStats columnStats) {
     ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnStats.getValueType());
     return HoodieColumnRangeMetadata.<Comparable>create(
         columnStats.getFileName(),
         columnStats.getColumnName(),
-        unwrapAvroValueWrapper(columnStats.getMinValue(), valueMetadata),
-        unwrapAvroValueWrapper(columnStats.getMaxValue(), valueMetadata),
+        valueMetadata.unwrapValue(columnStats.getMinValue()),
+        valueMetadata.unwrapValue(columnStats.getMaxValue()),
         columnStats.getNullCount(),
         columnStats.getValueCount(),
         columnStats.getTotalSize(),
         columnStats.getTotalUncompressedSize(),
-        valueMetadata,
-        indexVersion);
+        valueMetadata);
   }
 
   @SuppressWarnings("rawtype")

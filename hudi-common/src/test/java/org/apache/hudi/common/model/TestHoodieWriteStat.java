@@ -44,7 +44,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -143,7 +142,7 @@ public class TestHoodieWriteStat {
     minMaxValues.forEach(entry -> {
       String colName = targetColNamePrefix + "_" + (finalCounter1.getAndIncrement());
       columnRangeMetadataMap.put(colName, HoodieColumnRangeMetadata.<Comparable>create(fileName, colName,
-          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.NoneMetadata.INSTANCE, V1));
+          entry.getKey(), entry.getValue(), 5, 1000, 123456, 123456, ValueMetadata.V1EmptyMetadata.get()));
     });
 
     Map<String, HoodieColumnRangeMetadata<Comparable>> clonedInput = new HashMap<>();

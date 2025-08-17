@@ -277,8 +277,6 @@ public class ParquetUtils extends FileFormatUtils {
                 .map(columnChunkMetaData -> {
                   Statistics stats = columnChunkMetaData.getStatistics();
                   ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType(), indexVersion);
-
-
                   return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                       filePath,
                       columnChunkMetaData.getPath().toDotString(),
@@ -297,7 +295,7 @@ public class ParquetUtils extends FileFormatUtils {
                       columnChunkMetaData.getValueCount(),
                       columnChunkMetaData.getTotalSize(),
                       columnChunkMetaData.getTotalUncompressedSize(),
-                      valueMetadata, indexVersion);
+                      valueMetadata);
                 })
         );
 
@@ -469,7 +467,7 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val, ValueMetadata valueMetadata) {
-    if (valueMetadata.getValueType() != ValueType.NONE) {
+    if (valueMetadata.getValueType() != ValueType.V1) {
       return valueMetadata.standardizeJavaTypeAndPromote(val);
     }
     if (val == null) {

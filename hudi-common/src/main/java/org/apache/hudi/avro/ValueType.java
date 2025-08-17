@@ -19,7 +19,9 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.avro.model.ArrayWrapper;
 import org.apache.hudi.common.util.DateTimeUtils;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -54,27 +56,38 @@ import static org.apache.hudi.common.util.DateTimeUtils.nanosToInstant;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public enum ValueType {
-  NONE,
+  V1,
   NULL,
-  BOOLEAN(Boolean.class, ValueType::castToBoolean),
-  INT(Integer.class, ValueType::castToInteger),
-  LONG(Long.class, ValueType::castToLong),
-  FLOAT(Float.class, ValueType::castToFloat),
-  DOUBLE(Double.class, ValueType::castToDouble),
-  STRING(String.class, ValueType::castToString),
-  BYTES(ByteBuffer.class, ValueType::castToBytes),
-  FIXED(ByteBuffer.class, ValueType::castToFixed),
-  DECIMAL(BigDecimal.class, ByteBuffer.class, ValueType::castToDecimal, ValueType::toDecimal, ValueType::fromDecimal),
-  UUID(UUID.class, String.class, ValueType::castToUUID, ValueType::toUUID, ValueType::fromUUID),
-  DATE(Date.class, Integer.class, ValueType::castToDate, ValueType::toDate, ValueType::fromDate),
-  TIME_MILLIS(LocalTime.class, Integer.class, ValueType::castToTimeMillis, ValueType::toTimeMillis, ValueType::fromTimeMillis),
-  TIME_MICROS(LocalTime.class, Long.class, ValueType::castToTimeMicros, ValueType::toTimeMicros, ValueType::fromTimeMicros),
-  TIMESTAMP_MILLIS(Instant.class, Long.class, ValueType::castToTimestampMillis, ValueType::toTimestampMillis, ValueType::fromTimestampMillis),
-  TIMESTAMP_MICROS(Instant.class, Long.class, ValueType::castToTimestampMicros, ValueType::toTimestampMicros, ValueType::fromTimestampMicros),
-  TIMESTAMP_NANOS(Instant.class, Long.class, ValueType::castToTimestampNanos, ValueType::toTimestampNanos, ValueType::fromTimestampNanos),
-  LOCAL_TIMESTAMP_MILLIS(LocalDateTime.class, Long.class, ValueType::castToLocalTimestampMillis, ValueType::toLocalTimestampMillis, ValueType::fromLocalTimestampMillis),
-  LOCAL_TIMESTAMP_MICROS(LocalDateTime.class, Long.class, ValueType::castToLocalTimestampMicros, ValueType::toLocalTimestampMicros, ValueType::fromLocalTimestampMicros),
-  LOCAL_TIMESTAMP_NANOS(LocalDateTime.class, Long.class, ValueType::castToLocalTimestampNanos, ValueType::toLocalTimestampNanos, ValueType::fromLocalTimestampNanos),
+  BOOLEAN(HoodieAvroWrapperUtils.PrimitiveWrapperType.BOOLEAN, ValueType::castToBoolean),
+  INT(HoodieAvroWrapperUtils.PrimitiveWrapperType.INT, ValueType::castToInteger),
+  LONG(HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG, ValueType::castToLong),
+  FLOAT(HoodieAvroWrapperUtils.PrimitiveWrapperType.FLOAT, ValueType::castToFloat),
+  DOUBLE(HoodieAvroWrapperUtils.PrimitiveWrapperType.DOUBLE, ValueType::castToDouble),
+  STRING(HoodieAvroWrapperUtils.PrimitiveWrapperType.STRING, ValueType::castToString),
+  BYTES(HoodieAvroWrapperUtils.PrimitiveWrapperType.BYTES, ValueType::castToBytes),
+  FIXED(HoodieAvroWrapperUtils.PrimitiveWrapperType.BYTES, ValueType::castToFixed),
+  DECIMAL(BigDecimal.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.BYTES,
+      ValueType::castToDecimal, ValueType::toDecimal, ValueType::fromDecimal),
+  UUID(UUID.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.STRING,
+      ValueType::castToUUID, ValueType::toUUID, ValueType::fromUUID),
+  DATE(Date.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.INT,
+      ValueType::castToDate, ValueType::toDate, ValueType::fromDate),
+  TIME_MILLIS(LocalTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.INT,
+      ValueType::castToTimeMillis, ValueType::toTimeMillis, ValueType::fromTimeMillis),
+  TIME_MICROS(LocalTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
+      ValueType::castToTimeMicros, ValueType::toTimeMicros, ValueType::fromTimeMicros),
+  TIMESTAMP_MILLIS(Instant.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
+      ValueType::castToTimestampMillis, ValueType::toTimestampMillis, ValueType::fromTimestampMillis),
+  TIMESTAMP_MICROS(Instant.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
+      ValueType::castToTimestampMicros, ValueType::toTimestampMicros, ValueType::fromTimestampMicros),
+  TIMESTAMP_NANOS(Instant.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
+      ValueType::castToTimestampNanos, ValueType::toTimestampNanos, ValueType::fromTimestampNanos),
+  LOCAL_TIMESTAMP_MILLIS(LocalDateTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
+      ValueType::castToLocalTimestampMillis, ValueType::toLocalTimestampMillis, ValueType::fromLocalTimestampMillis),
+  LOCAL_TIMESTAMP_MICROS(LocalDateTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
+      ValueType::castToLocalTimestampMicros, ValueType::toLocalTimestampMicros, ValueType::fromLocalTimestampMicros),
+  LOCAL_TIMESTAMP_NANOS(LocalDateTime.class, HoodieAvroWrapperUtils.PrimitiveWrapperType.LONG,
+      ValueType::castToLocalTimestampNanos, ValueType::toLocalTimestampNanos, ValueType::fromLocalTimestampNanos),
   RECORD,
   ENUM,
   ARRAY,
@@ -83,34 +96,34 @@ public enum ValueType {
   DURATION;
 
   private final Class<?> internalType;
-  private final Class<?> primitiveType;
+  private final HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType;
   private final BiFunction<Object, ValueMetadata, Comparable<?>> standardize;
   private final BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toPrimitive;
   private final BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toComplex;
 
-  ValueType(Class<?> internalType, Function<Object, Object> single) {
-    this(internalType,
-        internalType,
+  ValueType(HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType, Function<Object, Object> single) {
+    this(primitiveWrapperType.getClazz(),
+        primitiveWrapperType,
         (val, meta) -> (Comparable<?>) single.apply(val),
-        (val, meta) -> (Comparable<?>) single.apply(val),
-        (val, meta) -> (Comparable<?>) single.apply(val));
+        ValueType::passThrough,
+        ValueType::passThrough);
   }
 
   ValueType() {
-    this(Object.class,
-        Object.class,
+    this(HoodieAvroWrapperUtils.PrimitiveWrapperType.NONE.getClazz(),
+        HoodieAvroWrapperUtils.PrimitiveWrapperType.NONE,
         ValueType::passThrough,
         ValueType::passThrough,
         ValueType::passThrough);
   }
 
   ValueType(Class<?> internalType,
-            Class<?> primitiveType,
+            HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType,
             BiFunction<Object, ValueMetadata, Comparable<?>> standardize,
             BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toComplex,
             BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toPrimitive) {
     this.internalType = internalType;
-    this.primitiveType = primitiveType;
+    this.primitiveWrapperType = primitiveWrapperType;
     this.standardize = standardize;
     this.toPrimitive = toPrimitive;
     this.toComplex = toComplex;
@@ -120,11 +133,11 @@ public enum ValueType {
     return standardize.apply(val, meta);
   }
 
-  Comparable<?> convertIntoPrimitive(Comparable<?> val, ValueMetadata meta) {
+  private Comparable<?> convertIntoPrimitive(Comparable<?> val, ValueMetadata meta) {
     return toPrimitive.apply(val, meta);
   }
 
-  Comparable<?> convertIntoComplex(Comparable<?> val, ValueMetadata meta) {
+  private Comparable<?> convertIntoComplex(Comparable<?> val, ValueMetadata meta) {
     return toComplex.apply(val, meta);
   }
 
@@ -140,6 +153,26 @@ public enum ValueType {
           val.getClass().getSimpleName()
       ));
     }
+  }
+
+  public Object wrapValue(Comparable<?> val, ValueMetadata meta) {
+    if (val == null) {
+      return null;
+    }
+    if (val instanceof ArrayComparable) {
+      return HoodieAvroWrapperUtils.wrapArray(val, v -> wrapValue(v, meta));
+    }
+    return primitiveWrapperType.wrap(convertIntoPrimitive(val, meta));
+  }
+
+  public Comparable<?> unwrapValue(Object val, ValueMetadata meta) {
+    if (val == null) {
+      return null;
+    }
+    if (val instanceof ArrayWrapper) {
+      return HoodieAvroWrapperUtils.unwrapArray(val, v -> unwrapValue(v, meta));
+    }
+    return convertIntoComplex(primitiveWrapperType.unwrap(val), meta);
   }
 
   private static ValueType[] myEnumValues;

@@ -240,7 +240,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     boolean isExprIndexUsingColumnStats = indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS);
     Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt = Option.empty();
     if (isExprIndexUsingColumnStats) {
-      HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(indexPartition, dataMetaClient);
       // Fetch column range metadata for affected partitions in the commit
       HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> exprIndexPartitionStatUpdates =
           SparkMetadataWriterUtils.getExpressionIndexPartitionStatUpdates(commitMetadata, indexPartition, engineContext, getTableMetadata(), dataMetaClient, dataWriteConfig.getMetadataConfig(),
@@ -248,7 +247,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
               .flatMapValues(List::iterator);
       // The function below merges the column range metadata from the updated data with latest column range metadata of affected partition computed above
       partitionRecordsFunctionOpt = Option.of(rangeMetadata ->
-          HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(exprIndexPartitionStatUpdates.union(rangeMetadata), true, Option.of(indexDefinition.getIndexName()), indexVersion));
+          HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(exprIndexPartitionStatUpdates.union(rangeMetadata), true, Option.of(indexDefinition.getIndexName())));
     }
 
     // Step 1: Generate partition name, file path and size triplets from the newly created files in the commit metadata
@@ -277,11 +276,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                HoodieTableMetaClient metaClient, int parallelism,
                                                                Schema tableSchema, Schema readerSchema, StorageConfiguration<?> storageConf,
                                                                String instantTime) {
-    HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(indexDefinition.getIndexName(), metaClient);
     ExpressionIndexComputationMetadata expressionIndexComputationMetadata = SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathAndSizeTriplet, indexDefinition,
         metaClient, parallelism, tableSchema, readerSchema, instantTime, engineContext, dataWriteConfig,
         Option.of(rangeMetadata ->
-            HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(rangeMetadata, true, Option.of(indexDefinition.getIndexName()), indexVersion)));
+            HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(rangeMetadata, true, Option.of(indexDefinition.getIndexName()))));
     HoodieData<HoodieRecord> exprIndexRecords = expressionIndexComputationMetadata.getExpressionIndexRecords();
     if (indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS)) {
       exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get());

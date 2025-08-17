@@ -162,8 +162,6 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.avro.ValueMetadata.getValueMetadata;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
@@ -344,8 +342,7 @@ public class HoodieTableMetadataUtil {
                 //       since those are not directly comparable
                 0L,
                 0L,
-                getValueMetadata(fieldSchema, indexVersion),
-                indexVersion
+                getValueMetadata(fieldSchema, indexVersion)
             );
           } else {
             return HoodieColumnRangeMetadata.<Comparable>create(
@@ -360,8 +357,7 @@ public class HoodieTableMetadataUtil {
                 //       since those are not directly comparable
                 0L,
                 0L,
-                ValueMetadata.NoneMetadata.INSTANCE,
-                indexVersion
+                ValueMetadata.V1EmptyMetadata.get()
             );
           }
         });
@@ -2623,7 +2619,7 @@ public class HoodieTableMetadataUtil {
   }
 
   public static HoodieData<HoodieRecord> collectAndProcessExprIndexPartitionStatRecords(HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata,
-                                                                                        boolean isTightBound, Option<String> indexPartitionOpt, HoodieIndexVersion indexVersion) {
+                                                                                        boolean isTightBound, Option<String> indexPartitionOpt) {
     // Step 1: Group by partition name
     HoodiePairData<String, Iterable<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.groupByKey();
     // Step 2: Aggregate Column Ranges
@@ -2634,7 +2630,7 @@ public class HoodieTableMetadataUtil {
       iterable.forEach(e -> {
         HoodieColumnRangeMetadata<Comparable> rangeMetadata = HoodieColumnRangeMetadata.create(
             partitionName, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
-            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize(), e.getValueMetadata(), indexVersion);
+            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize(), e.getValueMetadata());
         finalMetadata[0] = HoodieColumnRangeMetadata.merge(finalMetadata[0], rangeMetadata);
       });
       return HoodieMetadataPayload.createPartitionStatsRecords(partitionName, Collections.singletonList(finalMetadata[0]), false, isTightBound, indexPartitionOpt)
@@ -2811,7 +2807,7 @@ public class HoodieTableMetadataUtil {
               .filter(Option::isPresent)
               .map(colStatsOpt -> colStatsOpt.get())
               .filter(stats -> fileNames.contains(stats.getFileName()))
-              .map(stats -> HoodieColumnRangeMetadata.fromColumnStats(stats, partitionStatsIndexVersion)).collectAsList();
+              .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
           if (!partitionColumnMetadata.isEmpty()) {
             // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
             // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
@@ -2924,27 +2920,25 @@ public class HoodieTableMetadataUtil {
     ValueMetadata prevValueMetadata = getValueMetadata(prevColumnStats.getValueType());
     ValueMetadata newValueMetadata = getValueMetadata(newColumnStats.getValueType());
 
-    Comparable minValue =
-        (Comparable) Stream.of(
-                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMinValue(), prevValueMetadata),
-                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMinValue(), newValueMetadata))
+    Comparable minValue = newValueMetadata.standardizeJavaTypeAndPromote(
+        (Comparable) Stream.of((Comparable) prevValueMetadata.unwrapValue(prevColumnStats.getMinValue()),
+            (Comparable) newValueMetadata.unwrapValue(newColumnStats.getMinValue()))
             .filter(Objects::nonNull)
             .min(Comparator.naturalOrder())
-            .orElse(null);
+            .orElse(null));
 
-    Comparable maxValue =
-        (Comparable) Stream.of(
-                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMaxValue(), prevValueMetadata),
-                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMaxValue(), newValueMetadata))
+    Comparable maxValue = newValueMetadata.standardizeJavaTypeAndPromote(
+        (Comparable) Stream.of(prevValueMetadata.unwrapValue(prevColumnStats.getMaxValue()),
+                (Comparable) newValueMetadata.unwrapValue(newColumnStats.getMaxValue()))
             .filter(Objects::nonNull)
             .max(Comparator.naturalOrder())
-            .orElse(null);
+            .orElse(null));
 
     HoodieMetadataColumnStats.Builder columnStatsBuilder = HoodieMetadataColumnStats.newBuilder(HoodieMetadataPayload.METADATA_COLUMN_STATS_BUILDER_STUB.get())
         .setFileName(newColumnStats.getFileName())
         .setColumnName(newColumnStats.getColumnName())
-        .setMinValue(wrapValueIntoAvro(minValue, newValueMetadata))
-        .setMaxValue(wrapValueIntoAvro(maxValue, newValueMetadata))
+        .setMinValue(newValueMetadata.wrapValue(minValue))
+        .setMaxValue(newValueMetadata.wrapValue(maxValue))
         .setValueCount(prevColumnStats.getValueCount() + newColumnStats.getValueCount())
         .setNullCount(prevColumnStats.getNullCount() + newColumnStats.getNullCount())
         .setTotalSize(prevColumnStats.getTotalSize() + newColumnStats.getTotalSize())

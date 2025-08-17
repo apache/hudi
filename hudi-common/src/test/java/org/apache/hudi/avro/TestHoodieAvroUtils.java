@@ -693,14 +693,14 @@ public class TestHoodieAvroUtils {
 
     for (String fieldName : fieldValueMapping.keySet()) {
       Object value = fieldValueMapping.get(fieldName);
-      Object wrapperValue = wrapValueIntoAvro((Comparable) value, ValueMetadata.NoneMetadata.INSTANCE);
+      Object wrapperValue = wrapValueIntoAvro((Comparable) value);
       assertTrue(expectedWrapperClass.get(fieldName).isInstance(wrapperValue));
       if (value instanceof Utf8) {
         assertEquals(value.toString(), ((GenericRecord) wrapperValue).get(0));
-        assertEquals(value.toString(), unwrapAvroValueWrapper(wrapperValue, ValueMetadata.NoneMetadata.INSTANCE));
+        assertEquals(value.toString(), unwrapAvroValueWrapper(wrapperValue));
       } else {
         assertEquals(value, ((GenericRecord) wrapperValue).get(0));
-        assertEquals(value, unwrapAvroValueWrapper(wrapperValue, ValueMetadata.NoneMetadata.INSTANCE));
+        assertEquals(value, unwrapAvroValueWrapper(wrapperValue));
       }
     }
   }
@@ -763,26 +763,26 @@ public class TestHoodieAvroUtils {
   @ParameterizedTest
   @MethodSource("javaValueParams")
   public void testWrapAndUnwrapJavaValues(Comparable value, Class expectedWrapper) {
-    Object wrapperValue = wrapValueIntoAvro(value, ValueMetadata.NoneMetadata.INSTANCE);
+    Object wrapperValue = wrapValueIntoAvro(value);
     assertTrue(expectedWrapper.isInstance(wrapperValue));
     if (value instanceof Timestamp) {
       assertEquals(((Timestamp) value).getTime() * 1000L,
           ((GenericRecord) wrapperValue).get(0));
       assertEquals(((Timestamp) value).getTime(),
-          ((Timestamp) unwrapAvroValueWrapper(wrapperValue, ValueMetadata.NoneMetadata.INSTANCE)).getTime());
+          ((Timestamp) unwrapAvroValueWrapper(wrapperValue)).getTime());
     } else if (value instanceof Date) {
       assertEquals((int) ChronoUnit.DAYS.between(
               LocalDate.ofEpochDay(0), ((Date) value).toLocalDate()),
           ((GenericRecord) wrapperValue).get(0));
-      assertEquals(((Date)value).toString(), ((Date)unwrapAvroValueWrapper(wrapperValue, ValueMetadata.NoneMetadata.INSTANCE)).toString());
+      assertEquals(((Date)value).toString(), ((Date)unwrapAvroValueWrapper(wrapperValue)).toString());
     } else if (value instanceof LocalDate) {
       assertEquals((int) ChronoUnit.DAYS.between(LocalDate.ofEpochDay(0), (LocalDate) value),
           ((GenericRecord) wrapperValue).get(0));
-      assertEquals(value, unwrapAvroValueWrapper(wrapperValue, ValueMetadata.NoneMetadata.INSTANCE));
+      assertEquals(value, unwrapAvroValueWrapper(wrapperValue));
     } else {
       assertEquals("0.000000000000000",
           ((BigDecimal) value)
-              .subtract((BigDecimal) unwrapAvroValueWrapper(wrapperValue, ValueMetadata.NoneMetadata.INSTANCE)).toPlainString());
+              .subtract((BigDecimal) unwrapAvroValueWrapper(wrapperValue)).toPlainString());
     }
   }
 

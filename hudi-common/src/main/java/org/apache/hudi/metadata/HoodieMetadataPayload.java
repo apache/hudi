@@ -67,7 +67,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -573,8 +572,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         HoodieMetadataColumnStats.newBuilder()
             .setFileName(new StoragePath(columnRangeMetadata.getFilePath()).getName())
             .setColumnName(columnRangeMetadata.getColumnName())
-            .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue(), columnRangeMetadata.getValueMetadata()))
-            .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue(), columnRangeMetadata.getValueMetadata()))
+            .setMinValue(columnRangeMetadata.getMinValueWrapped())
+            .setMaxValue(columnRangeMetadata.getMaxValueWrapped())
             .setNullCount(columnRangeMetadata.getNullCount())
             .setValueCount(columnRangeMetadata.getValueCount())
             .setTotalSize(columnRangeMetadata.getTotalSize())
@@ -607,8 +606,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(columnRangeMetadata.getFilePath())
               .setColumnName(columnRangeMetadata.getColumnName())
-              .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue(), columnRangeMetadata.getValueMetadata()))
-              .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue(), columnRangeMetadata.getValueMetadata()))
+              .setMinValue(columnRangeMetadata.getMinValueWrapped())
+              .setMaxValue(columnRangeMetadata.getMaxValueWrapped())
               .setNullCount(columnRangeMetadata.getNullCount())
               .setValueCount(columnRangeMetadata.getValueCount())
               .setTotalSize(columnRangeMetadata.getTotalSize())
