@@ -211,8 +211,8 @@ public class TestMergeHandle extends BaseTestHandle {
     HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
     String fileId = fileGroup.getFileGroupId().getFileId();
 
+    instantTime = client.startCommit();
     List<HoodieRecord> updates = dataGenerator.generateUniqueUpdates(instantTime, 10);
-
     FileGroupReaderBasedMergeHandle fileGroupReaderBasedMergeHandle = new FileGroupReaderBasedMergeHandle(
         config, instantTime, table, updates.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
         Option.empty());
@@ -235,7 +235,7 @@ public class TestMergeHandle extends BaseTestHandle {
     assertEquals(1, writeStatus.getErrors().size());
     // check that record and secondary index stats are non-empty
     assertFalse(writeStatus.getWrittenRecordDelegates().isEmpty());
-    assertFalse(writeStatus.getIndexStats().getSecondaryIndexStats().isEmpty());
+    assertFalse(writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream).count() == 0L);
 
     writeStatus.getWrittenRecordDelegates().forEach(recordDelegate -> assertNotEquals(recordKeyForFailure, recordDelegate.getRecordKey()));
     writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream)

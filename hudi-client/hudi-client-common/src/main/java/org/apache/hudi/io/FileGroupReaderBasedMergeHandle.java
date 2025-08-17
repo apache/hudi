@@ -371,7 +371,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
             writeStatus,
             secondaryIndexDefns);
         callbacks.add(secondaryIndexCallback);
-        //retractionCallbacks.add(secondaryIndexCallback);
+        retractionCallbacks.add(secondaryIndexCallback);
       }
     }
     return callbacks.isEmpty() ? Option.empty() : Option.of(CompositeCallback.of(callbacks));
@@ -446,7 +446,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     @Override
     public void onFailure(String recordKey) {
       int lastIndex = writeStatus.getWrittenRecordDelegates().size() - 1;
-      if (writeStatus.getWrittenRecordDelegates().get(lastIndex).getRecordKey().equals(recordKey)) {
+      if (lastIndex >= 0 && writeStatus.getWrittenRecordDelegates().get(lastIndex).getRecordKey().equals(recordKey)) {
         writeStatus.getWrittenRecordDelegates().remove(lastIndex);
       }
     }
@@ -510,10 +510,15 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     @Override
     public void onFailure(String recordKey) {
       writeStatus.getIndexStats().getSecondaryIndexStats().forEach((partition, indexStats) -> {
-        int lastIndex = indexStats.size() - 1;
-        if (indexStats.get(lastIndex).getRecordKey().equals(recordKey)) {
-          indexStats.remove(lastIndex);
+        List<Integer> indicesToRemove = new ArrayList<>();
+        for (int i = indexStats.size() - 1; i >= 0; i--) {
+          if (indexStats.get(i).getRecordKey().equals(recordKey)) {
+            indicesToRemove.add(i);
+          } else {
+            break;
+          }
         }
+        indicesToRemove.forEach(index -> indexStats.remove((int) index));
       });
     }
   }
