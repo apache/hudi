@@ -97,7 +97,7 @@ public class HoodieStreamerUtils {
     boolean requiresPayload;
     try {
       requiresPayload = !(isChangingRecords(cfg.operation)
-          && FileGroupReaderBasedMergeHandle.class.isAssignableFrom(Class.forName(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME))));
+          && FileGroupReaderBasedMergeHandle.class.isAssignableFrom(Class.forName(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, true))));
     } catch (ClassNotFoundException e) {
       throw new HoodieException("Failed to load merge handle class", e);
     }
