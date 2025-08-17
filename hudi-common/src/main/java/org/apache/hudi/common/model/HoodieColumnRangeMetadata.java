@@ -20,13 +20,16 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.LogicalTypeTokenParser;
 import org.apache.parquet.schema.PrimitiveType;
 
@@ -34,14 +37,28 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.Objects;
+import java.util.UUID;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.HoodieAvroUtils.convertBytesToBigDecimal;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
+import static org.apache.hudi.common.util.DateTimeUtils.instantToNanos;
+import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
+import static org.apache.hudi.common.util.DateTimeUtils.nanosToInstant;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ADDITIONAL_INFO;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.COLUMN_STATS_FIELD_VALUE_TYPE_ORDINAL;
@@ -86,53 +103,60 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     this.totalSize = totalSize;
     this.totalUncompressedSize = totalUncompressedSize;
     this.valueMetadata = valueMetadata;
-    if (valueMetadata.getValueType() == ValueType.NONE) {
-      // TODO: get rid of this when we add backwards compat
-      throw new IllegalArgumentException("Value type should not be NONE");
-    }
+  }
 
-    switch (valueMetadata.getValueType()) {
-      case BOOLEAN:
-        validateMinMaxTypes(minValue, maxValue, Boolean.class);
-        break;
-      case INT:
-        validateMinMaxTypes(minValue, maxValue, Integer.class);
-        break;
-      case LONG:
-        validateMinMaxTypes(minValue, maxValue, Long.class);
-        break;
-      case FLOAT:
-        validateMinMaxTypes(minValue, maxValue, Float.class);
-        break;
-      case DOUBLE:
-        validateMinMaxTypes(minValue, maxValue, Double.class);
-        break;
-      case STRING:
-        validateMinMaxTypes(minValue, maxValue, new Class<?>[]{String.class, Utf8.class}, "String or Utf8");
-        break;
-      case BYTES:
-        validateMinMaxTypes(minValue, maxValue, ByteBuffer.class);
-        break;
-      case FIXED:
-        validateMinMaxTypes(minValue, maxValue, GenericData.Fixed.class);
-        break;
-      case DECIMAL:
-        validateMinMaxTypes(minValue, maxValue, BigDecimal.class);
-        break;
-      case TIMESTAMP_MILLIS:
-      case TIMESTAMP_MICROS:
-        validateMinMaxTypes(minValue, maxValue, Instant.class);
-        break;
-      case LOCAL_TIMESTAMP_MILLIS:
-      case LOCAL_TIMESTAMP_MICROS:
-        validateMinMaxTypes(minValue, maxValue, LocalDateTime.class);
-        break;
-      case DATE:
-        validateMinMaxTypes(minValue, maxValue, Date.class);
-        break;
+  private static <T extends Comparable<T>> void validateTypes(HoodieIndexVersion indexVersion, ValueMetadata valueMetadata, T minValue, T maxValue) {
+    if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
+      if (valueMetadata.getValueType() != ValueType.NONE) {
+        throw new IllegalArgumentException("Value type should be NONE");
+      }
+    } else {
+      if (valueMetadata.getValueType() == ValueType.NONE) {
+        throw new IllegalArgumentException("Value type should not be NONE");
+      }
+      switch (valueMetadata.getValueType()) {
+        case BOOLEAN:
+          validateMinMaxTypes(minValue, maxValue, Boolean.class);
+          break;
+        case INT:
+          validateMinMaxTypes(minValue, maxValue, Integer.class);
+          break;
+        case LONG:
+          validateMinMaxTypes(minValue, maxValue, Long.class);
+          break;
+        case FLOAT:
+          validateMinMaxTypes(minValue, maxValue, Float.class);
+          break;
+        case DOUBLE:
+          validateMinMaxTypes(minValue, maxValue, Double.class);
+          break;
+        case STRING:
+          validateMinMaxTypes(minValue, maxValue, new Class<?>[]{String.class, Utf8.class}, "String or Utf8");
+          break;
+        case BYTES:
+          validateMinMaxTypes(minValue, maxValue, ByteBuffer.class);
+          break;
+        case FIXED:
+          validateMinMaxTypes(minValue, maxValue, GenericData.Fixed.class);
+          break;
+        case DECIMAL:
+          validateMinMaxTypes(minValue, maxValue, BigDecimal.class);
+          break;
+        case TIMESTAMP_MILLIS:
+        case TIMESTAMP_MICROS:
+          validateMinMaxTypes(minValue, maxValue, Instant.class);
+          break;
+        case LOCAL_TIMESTAMP_MILLIS:
+        case LOCAL_TIMESTAMP_MICROS:
+          validateMinMaxTypes(minValue, maxValue, LocalDateTime.class);
+          break;
+        case DATE:
+          validateMinMaxTypes(minValue, maxValue, Date.class);
+          break;
 
-      default:
-        throw new IllegalArgumentException("Unsupported value type: " + valueMetadata.getValueType());
+        default:
+          throw new IllegalArgumentException("Unsupported value type: " + valueMetadata.getValueType());
+      }
     }
   }
 
@@ -261,14 +285,16 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                                                               long valueCount,
                                                                               long totalSize,
                                                                               long totalUncompressedSize,
-                                                                              ValueMetadata valueMetadata) throws IllegalArgumentException {
+                                                                              ValueMetadata valueMetadata,
+                                                                              HoodieIndexVersion indexVersion) throws IllegalArgumentException {
+    validateTypes(indexVersion, valueMetadata, minValue, maxValue);
     return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize, valueMetadata);
   }
 
   /**
    * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
    */
-  public static HoodieColumnRangeMetadata<Comparable> fromColumnStats(HoodieMetadataColumnStats columnStats) {
+  public static HoodieColumnRangeMetadata<Comparable> fromColumnStats(HoodieMetadataColumnStats columnStats, HoodieIndexVersion indexVersion) {
     ValueMetadata valueMetadata = getValueMetadata(columnStats.getValueType());
     return HoodieColumnRangeMetadata.<Comparable>create(
         columnStats.getFileName(),
@@ -279,13 +305,23 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
         columnStats.getValueCount(),
         columnStats.getTotalSize(),
         columnStats.getTotalUncompressedSize(),
-        valueMetadata);
+        valueMetadata,
+        indexVersion);
   }
 
   @SuppressWarnings("rawtype")
   public static HoodieColumnRangeMetadata<Comparable> stub(String filePath,
-                                                           String columnName) {
-    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1, NoneMetadata.INSTANCE);
+                                                           String columnName,
+                                                           HoodieIndexVersion indexVersion) {
+    ValueMetadata valueMetadata = indexVersion.greaterThanOrEquals(HoodieIndexVersion.V1) ? NULL_METADATA : NoneMetadata.INSTANCE;
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, null, null, -1, -1, -1, -1, valueMetadata);
+  }
+
+  public static HoodieColumnRangeMetadata<Comparable> createEmpty(String filePath,
+                                                                  String columnName,
+                                                                  HoodieIndexVersion indexVersion) {
+    ValueMetadata valueMetadata = indexVersion.greaterThanOrEquals(HoodieIndexVersion.V1) ? NULL_METADATA : NoneMetadata.INSTANCE;
+    return new HoodieColumnRangeMetadata(filePath, columnName, null, null, 0L, 0L, 0L, 0L, valueMetadata);
   }
 
   /**
@@ -317,7 +353,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     long totalSize = left.getTotalSize() + right.getTotalSize();
     long totalUncompressedSize = left.getTotalUncompressedSize() + right.getTotalUncompressedSize();
 
-    return create(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize, left.getValueMetadata());
+    return new HoodieColumnRangeMetadata<>(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize, left.getValueMetadata());
   }
 
   private static <T extends Comparable<T>> T minVal(T val1, T val2) {
@@ -375,12 +411,14 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     }
   }
 
-  public static ValueMetadata getValueMetadata(Schema fieldSchema) {
-    Schema valueSchema = resolveNullableSchema(fieldSchema);
-    if (valueSchema == null) {
+  public static ValueMetadata getValueMetadata(Schema fieldSchema, HoodieIndexVersion indexVersion) {
+    if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
       return NoneMetadata.INSTANCE;
     }
-
+    if (fieldSchema == null) {
+      return NULL_METADATA;
+    }
+    Schema valueSchema = resolveNullableSchema(fieldSchema);
     ValueType valueType = ValueType.fromSchema(valueSchema);
     if (valueType == ValueType.NONE) {
       return NoneMetadata.INSTANCE;
@@ -391,7 +429,10 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     }
   }
 
-  public static ValueMetadata getValueMetadata(PrimitiveType primitiveType) {
+  public static ValueMetadata getValueMetadata(PrimitiveType primitiveType, HoodieIndexVersion indexVersion) {
+    if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
+      return NoneMetadata.INSTANCE;
+    }
     if (primitiveType == null) {
       return NoneMetadata.INSTANCE;
     }
@@ -407,8 +448,6 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   }
 
   public static class ValueMetadata {
-
-
     private final ValueType valueType;
 
     private ValueMetadata(ValueType valueType) {
@@ -426,6 +465,333 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     public String getAdditionalInfo() {
       return null;
     }
+
+    //TODO: Put the cases into the enums as lambda args
+
+    public Comparable<?> standardizeJavaTypeAndPromote(Object val) {
+      if (val == null) {
+        return null;
+      }
+
+      switch (getValueType()) {
+        case BOOLEAN:
+          if (val instanceof Boolean) {
+            return (Comparable<?>) val;
+          } else {
+            throw new UnsupportedOperationException("Unable to convert boolean: " + val.getClass());
+          }
+
+        case INT:
+          return castToInteger(val);
+        case LONG:
+          return castToLong(val);
+        case FLOAT:
+          return castToFloat(val);
+        case DOUBLE:
+          return castToDouble(val);
+
+        case STRING:
+          if (val instanceof String) {
+            return (Comparable<?>) val;
+          } else if (val instanceof Utf8) {
+            return val.toString();
+          } else if (val instanceof Binary) {
+            return ((Binary) val).toStringUsingUTF8();
+          } else {
+            throw new UnsupportedOperationException("Unable to convert string: " + val.getClass());
+          }
+
+        case FIXED:
+        case BYTES:
+          if (val instanceof ByteBuffer) {
+            return (Comparable<?>) val;
+          } else if (val instanceof GenericData.Fixed) {
+            return ByteBuffer.wrap(((GenericData.Fixed) val).bytes());
+          } else if (val instanceof byte[]) {
+            return ByteBuffer.wrap((byte[]) val);
+          } else if (val instanceof Binary) {
+            return ((Binary) val).toByteBuffer();
+          } else if (val instanceof String) {
+            return ByteBuffer.wrap(getUTF8Bytes(val.toString()));
+          } else {
+            throw new UnsupportedOperationException("Unable to convert fixed to ByteBuffer: " + val.getClass());
+          }
+
+        case DECIMAL:
+          // todo allow widening
+          HoodieColumnRangeMetadata.DecimalMetadata decimalMetadata = (HoodieColumnRangeMetadata.DecimalMetadata) this;
+          int precision = decimalMetadata.getPrecision();
+          int scale = decimalMetadata.getScale();
+          if (val instanceof BigDecimal) {
+            return (Comparable<?>) val;
+          } else if (val instanceof GenericData.Fixed) {
+            return convertBytesToBigDecimal(((GenericData.Fixed) val).bytes(), precision, scale);
+          } else if (val instanceof ByteBuffer) {
+            return convertBytesToBigDecimal(((ByteBuffer) val).array(), precision, scale);
+          } else if (val instanceof byte[]) {
+            return convertBytesToBigDecimal((byte[]) val, precision, scale);
+          } else if (val instanceof Integer) {
+            return BigDecimal.valueOf((Integer) val, scale).round(new MathContext(precision, RoundingMode.HALF_UP));
+          } else if (val instanceof Long) {
+            return BigDecimal.valueOf((Long) val, scale).round(new MathContext(precision, RoundingMode.HALF_UP));
+          } else if (val instanceof Binary) {
+            // NOTE: Unscaled number is stored in BE format (most significant byte is 0th)
+            return new BigDecimal(new BigInteger(((Binary) val).getBytesUnsafe()), scale,
+                new MathContext(precision, RoundingMode.HALF_UP));
+          } else {
+            throw new UnsupportedOperationException("Unable to convert decimal: " + val.getClass());
+          }
+
+        case UUID:
+          if (val instanceof UUID) {
+            return (Comparable<?>) val;
+          } else if (val instanceof String) {
+            return UUID.fromString((String) val);
+          } else {
+            throw new UnsupportedOperationException("Unable to convert UUID: " + val.getClass());
+          }
+
+        case DATE:
+          if (val instanceof java.sql.Date) {
+            return (Comparable<?>) val;
+          } else if (val instanceof Integer) {
+            return java.sql.Date.valueOf(LocalDate.ofEpochDay((Integer) val));
+          } else {
+            throw new UnsupportedOperationException("Unable to convert date: " + val.getClass());
+          }
+
+        case TIME_MILLIS:
+          if (val instanceof LocalTime) {
+            return (Comparable<?>) val;
+          } else if (val instanceof Integer) {
+            return LocalTime.ofNanoOfDay((Integer) val * 1_000_000L);
+          } else {
+            throw new UnsupportedOperationException("Unable to convert time millis: " + val.getClass());
+          }
+
+        case TIME_MICROS:
+          if (val instanceof LocalTime) {
+            return (Comparable<?>) val;
+          } else if (val instanceof Long) {
+            return LocalTime.ofNanoOfDay((Long) val * 1_000L);
+          } else {
+            throw new UnsupportedOperationException("Unable to convert time micros: " + val.getClass());
+          }
+
+        case TIMESTAMP_MILLIS:
+          if (val instanceof Instant) {
+            return (Comparable<?>) val;
+          } else if (val instanceof Timestamp) {
+            return ((Timestamp) val).toInstant();
+          } else if (val instanceof Long) {
+            return Instant.ofEpochMilli((Long) val);
+          } else {
+            throw new UnsupportedOperationException("Unable to convert timestamp millis: " + val.getClass());
+          }
+
+        case TIMESTAMP_MICROS:
+          if (val instanceof Instant) {
+            return (Comparable<?>) val;
+          } else if (val instanceof Timestamp) {
+            return ((Timestamp) val).toInstant();
+          } else if (val instanceof Long) {
+            return DateTimeUtils.microsToInstant((Long) val);
+          } else {
+            throw new UnsupportedOperationException("Unable to convert timestamp micros: " + val.getClass());
+          }
+
+        case LOCAL_TIMESTAMP_MILLIS:
+          if (val instanceof LocalDateTime) {
+            return (Comparable<?>) val;
+          } else if (val instanceof Long) {
+            return LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) val), ZoneOffset.UTC);
+          } else {
+            throw new UnsupportedOperationException("Unable to convert local timestamp millis: " + val.getClass());
+          }
+
+        case LOCAL_TIMESTAMP_MICROS:
+          if (val instanceof LocalDateTime) {
+            return (Comparable<?>) val;
+          } else if (val instanceof Long) {
+            return LocalDateTime.ofInstant(microsToInstant((Long) val), ZoneOffset.UTC);
+          } else {
+            throw new UnsupportedOperationException("Unable to convert local timestamp micros: " + val.getClass());
+          }
+        default:
+          throw new IllegalStateException("Unexpected type: " + getValueType());
+      }
+    }
+
+    public Comparable<?> convertIntoPrimitive(Comparable<?> value) {
+      switch (getValueType()) {
+        case NONE:
+        case NULL:
+        case BYTES:
+        case FIXED:
+        case BOOLEAN:
+        case STRING:
+        case ARRAY:
+          return value;
+        case INT:
+          return castToInteger(value);
+        case LONG:
+          return castToLong(value);
+        case FLOAT:
+          return castToFloat(value);
+        case DOUBLE:
+          return castToDouble(value);
+        case DECIMAL:
+          return ByteBuffer.wrap(((BigDecimal) value).unscaledValue().toByteArray());
+        case UUID:
+          return ((UUID) value).toString();
+        case DATE:
+          return ((Long) ((java.sql.Date) value).toLocalDate().toEpochDay()).intValue();
+        case TIME_MILLIS:
+          return ((LocalTime) value).toSecondOfDay() * 1000 + (((LocalTime) value).getNano() / 1_000_000);
+        case TIME_MICROS:
+          return ((LocalTime) value).toSecondOfDay() * 1000_000L + (((LocalTime) value).getNano() / 1_000);
+        case TIMESTAMP_MILLIS:
+          return ((Instant) value).toEpochMilli();
+        case TIMESTAMP_MICROS:
+          return instantToMicros((Instant) value);
+        case TIMESTAMP_NANOS:
+          return instantToNanos((Instant) value);
+        case LOCAL_TIMESTAMP_MILLIS:
+          return ((LocalDateTime) value).toInstant(ZoneOffset.UTC).toEpochMilli();
+        case LOCAL_TIMESTAMP_MICROS:
+          return instantToMicros(((LocalDateTime) value).toInstant(ZoneOffset.UTC));
+        case LOCAL_TIMESTAMP_NANOS:
+          return instantToNanos(((LocalDateTime) value).toInstant(ZoneOffset.UTC));
+        default:
+          throw new UnsupportedOperationException("Unsupported type of the value " + value.getClass());
+      }
+    }
+
+    private static Integer castToInteger(Object val) {
+      if (val == null) {
+        return null;
+      }
+      if (val instanceof Integer) {
+        return (Integer) val;
+      } else if (val instanceof Long) {
+        return ((Long) val).intValue();
+      } else if (val instanceof Float) {
+        return ((Float)val).intValue();
+      } else if (val instanceof Double) {
+        return ((Double)val).intValue();
+      } else if (val instanceof Boolean) {
+        return ((Boolean) val) ? 1 : 0;
+      }  else {
+        // best effort casting
+        return Integer.parseInt(val.toString());
+      }
+    }
+
+    private static Long castToLong(Object val) {
+      if (val == null) {
+        return null;
+      }
+      if (val instanceof Integer) {
+        return ((Integer) val).longValue();
+      } else if (val instanceof Long) {
+        return ((Long) val);
+      } else if (val instanceof Float) {
+        return ((Float)val).longValue();
+      } else if (val instanceof Double) {
+        return ((Double)val).longValue();
+      } else if (val instanceof Boolean) {
+        return ((Boolean) val) ? 1L : 0L;
+      }  else {
+        // best effort casting
+        return Long.parseLong(val.toString());
+      }
+    }
+
+    private static Float castToFloat(Object val) {
+      if (val == null) {
+        return null;
+      }
+      if (val instanceof Integer) {
+        return ((Integer) val).floatValue();
+      } else if (val instanceof Long) {
+        return ((Long) val).floatValue();
+      } else if (val instanceof Float) {
+        return (Float) val;
+      } else if (val instanceof Double) {
+        return ((Double)val).floatValue();
+      } else if (val instanceof Boolean) {
+        return (Boolean) val ? 1.0f : 0.0f;
+      }  else {
+        // best effort casting
+        return Float.parseFloat(val.toString());
+      }
+    }
+
+    private static Double castToDouble(Object val) {
+      if (val == null) {
+        return null;
+      }
+      if (val instanceof Integer) {
+        return ((Integer) val).doubleValue();
+      } else if (val instanceof Long) {
+        return ((Long) val).doubleValue();
+      } else if (val instanceof Float) {
+        return Double.valueOf(val + "");
+      } else if (val instanceof Double) {
+        return (Double) val;
+      } else if (val instanceof Boolean) {
+        return (Boolean) val ? 1.0d : 0.0d;
+      }  else {
+        // best effort casting
+        return Double.parseDouble(val.toString());
+      }
+    }
+
+    public Comparable<?> convertIntoComplex(Comparable<?> value) {
+      switch (getValueType()) {
+        case NONE:
+        case NULL:
+        case BYTES:
+        case FIXED:
+        case BOOLEAN:
+        case STRING:
+        case ARRAY:
+          return value;
+        case INT:
+          return castToInteger(value);
+        case LONG:
+          return castToLong(value);
+        case FLOAT:
+          return castToFloat(value);
+        case DOUBLE:
+          return castToDouble(value);
+        case DECIMAL:
+          HoodieColumnRangeMetadata.DecimalMetadata decimalMetadata = (HoodieColumnRangeMetadata.DecimalMetadata) this;
+          return convertBytesToBigDecimal(((ByteBuffer) value).array(), decimalMetadata.getPrecision(), decimalMetadata.getScale());
+        case UUID:
+          return UUID.fromString((String) value);
+        case DATE:
+          return java.sql.Date.valueOf(LocalDate.ofEpochDay(castToInteger(value)));
+        case TIME_MILLIS:
+          return LocalTime.ofNanoOfDay(castToInteger(value) * 1_000_000L);
+        case TIME_MICROS:
+          return LocalTime.ofNanoOfDay(castToLong(value) * 1000);
+        case TIMESTAMP_MILLIS:
+          return Instant.ofEpochMilli(castToLong(value));
+        case TIMESTAMP_MICROS:
+          return microsToInstant(castToLong(value));
+        case TIMESTAMP_NANOS:
+          return nanosToInstant(castToLong(value));
+        case LOCAL_TIMESTAMP_MILLIS:
+          return LocalDateTime.ofInstant(Instant.ofEpochMilli(castToLong(value)), ZoneOffset.UTC);
+        case LOCAL_TIMESTAMP_MICROS:
+          return LocalDateTime.ofInstant(microsToInstant(castToLong(value)), ZoneOffset.UTC);
+        case LOCAL_TIMESTAMP_NANOS:
+          return LocalDateTime.ofInstant(nanosToInstant(castToLong(value)), ZoneOffset.UTC);
+        default:
+          throw new UnsupportedOperationException("Unsupported type of the value " + value.getClass());
+      }
+    }
   }
 
   public static class NoneMetadata extends ValueMetadata {
@@ -439,6 +805,8 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
       return null;
     }
   }
+
+  public static final ValueMetadata NULL_METADATA = new ValueMetadata(ValueType.NULL);
 
   public static class DecimalMetadata extends ValueMetadata {
 

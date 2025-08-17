@@ -63,6 +63,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.METADATA_FIELD_SCHEMA;
+import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -277,7 +278,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     columnList.add(dataField);
 
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = parquetUtils.readColumnStatsFromMetadata(
-            HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), columnList)
+            HoodieTestUtils.getStorage(filePath), new StoragePath(filePath), columnList, V1)
         .stream()
         .sorted(Comparator.comparing(HoodieColumnRangeMetadata::getColumnName))
         .collect(Collectors.toList());

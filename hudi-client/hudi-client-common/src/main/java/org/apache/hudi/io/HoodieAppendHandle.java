@@ -59,6 +59,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -83,6 +84,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRangeMetadata;
 
 /**
@@ -427,8 +429,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     updateWriteStatus(result, stat);
 
     if (config.isMetadataColumnStatsIndexEnabled()) {
+      HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, hoodieTable.getMetaClient());
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
-          .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
+          .getColumnsToIndex(indexVersion, hoodieTable.getMetaClient().getTableConfig(),
               config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
               Option.of(this.recordMerger.getRecordType())).keySet());
       final List<Pair<String, Schema.Field>> fieldsToIndex = columnsToIndexSet.stream()
@@ -436,7 +439,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       try {
         Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
             collectColumnRangeMetadata(recordList.iterator(), fieldsToIndex, stat.getPath(), writeSchemaWithMetaFields, storage.getConf(),
-                this.config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.NINE));
+                indexVersion);
         stat.putRecordsStats(columnRangeMetadataMap);
       } catch (HoodieException e) {
         throw new HoodieAppendException("Failed to extract append result", e);

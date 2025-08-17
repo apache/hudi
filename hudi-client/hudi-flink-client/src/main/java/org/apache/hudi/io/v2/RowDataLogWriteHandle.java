@@ -36,6 +36,7 @@ import org.apache.hudi.io.MiniBatchHandle;
 import org.apache.hudi.io.log.block.HoodieFlinkAvroDataBlock;
 import org.apache.hudi.io.log.block.HoodieFlinkParquetDataBlock;
 import org.apache.hudi.io.storage.ColumnRangeMetadataProvider;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketType;
@@ -55,6 +56,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 
 /**
  * A write handle that supports creating a log file and writing records based on record Iterator.
@@ -107,8 +109,9 @@ public class RowDataLogWriteHandle<T, I, K, O>
 
     // for parquet data block, we can get column stats from parquet footer directly.
     if (config.isMetadataColumnStatsIndexEnabled()) {
+      HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, hoodieTable.getMetaClient());
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
-          .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
+          .getColumnsToIndex(indexVersion, hoodieTable.getMetaClient().getTableConfig(),
               config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
               Option.of(HoodieRecord.HoodieRecordType.FLINK)).keySet());
 
@@ -116,15 +119,12 @@ public class RowDataLogWriteHandle<T, I, K, O>
       if (dataBlock.isEmpty()) {
         // only delete block exists
         columnRangeMetadata = new HashMap<>();
-        for (String col: columnsToIndexSet) {
-          columnRangeMetadata.put(col, HoodieColumnRangeMetadata.create(
-              stat.getPath(), col, null, null, 0L, 0L, 0L, 0L, HoodieColumnRangeMetadata.NoneMetadata.INSTANCE));
-        }
+        columnsToIndexSet.forEach(col -> columnRangeMetadata.put(col, HoodieColumnRangeMetadata.createEmpty(stat.getPath(), col, indexVersion)));
       } else {
         ValidationUtils.checkArgument(dataBlock.get() instanceof ColumnRangeMetadataProvider,
             "Log block for Flink ingestion should always be an instance of ColumnRangeMetadataProvider for collecting column stats efficiently.");
         columnRangeMetadata =
-            ((ColumnRangeMetadataProvider) dataBlock.get()).getColumnRangeMeta(stat.getPath()).entrySet().stream()
+            ((ColumnRangeMetadataProvider) dataBlock.get()).getColumnRangeMeta(stat.getPath(), indexVersion).entrySet().stream()
                 .filter(e -> columnsToIndexSet.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }

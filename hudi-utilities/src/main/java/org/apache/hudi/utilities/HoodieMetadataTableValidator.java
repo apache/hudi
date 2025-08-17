@@ -81,8 +81,10 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -1037,9 +1039,10 @@ public class HoodieMetadataTableValidator implements Serializable {
           baseDataFilesForCleaning);
       List<String> latestFileNames = new ArrayList<>();
       latestFileSlicesFromMetadataTable.stream().filter(fs -> fs.getBaseFile().isPresent()).forEach(fs -> getLatestFiles(fs, latestFileNames));
+      HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(partitionPath, metadataTableBasedContext.getMetaClient());
       List<HoodieColumnRangeMetadata<Comparable>> colStats = metadataTableBasedContext.getSortedColumnStatsList(partitionPath, latestFileNames, metadataTableBasedContext.getSchema());
 
-      TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = aggregateColumnStats(partitionPath, colStats);
+      TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = aggregateColumnStats(partitionPath, colStats, indexVersion);
       // TODO: fix `isTightBound` flag when stats based on log files are available
       List<HoodieRecord> partitionStatRecords = HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, new ArrayList<>(aggregatedColumnStats), false, false, Option.empty())
           .collect(Collectors.toList());
@@ -1071,12 +1074,13 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @param partitionPath Provided partition path
    * @param colStats Column stat records for the partition
    */
-  static TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregateColumnStats(String partitionPath, List<HoodieColumnRangeMetadata<Comparable>> colStats) {
+  static TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregateColumnStats(String partitionPath, List<HoodieColumnRangeMetadata<Comparable>> colStats,
+                                                                             HoodieIndexVersion indexVersion) {
     TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = new TreeSet<>(Comparator.comparing(HoodieColumnRangeMetadata::getColumnName));
     for (HoodieColumnRangeMetadata<Comparable> colStat : colStats) {
       HoodieColumnRangeMetadata<Comparable> partitionStat = HoodieColumnRangeMetadata.create(partitionPath, colStat.getColumnName(),
           colStat.getMinValue(), colStat.getMaxValue(), colStat.getNullCount(), colStat.getValueCount(), colStat.getTotalSize(), colStat.getTotalUncompressedSize(),
-          colStat.getValueMetadata());
+          colStat.getValueMetadata(), indexVersion);
       HoodieColumnRangeMetadata<Comparable> storedPartitionStat = aggregatedColumnStats.floor(partitionStat);
       if (storedPartitionStat == null || !storedPartitionStat.getColumnName().equals(partitionStat.getColumnName())) {
         aggregatedColumnStats.add(partitionStat);
@@ -1832,13 +1836,14 @@ public class HoodieMetadataTableValidator implements Serializable {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public List<HoodieColumnRangeMetadata<Comparable>> getSortedColumnStatsList(String partitionPath, List<String> fileNames, Schema readerSchema) throws Exception {
       LOG.info("All column names for getting column stats: {}", allColumnNameList);
+      HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(partitionPath, metaClient);
       if (enableMetadataTable) {
         List<Pair<String, String>> partitionFileNameList = fileNames.stream()
             .map(filename -> Pair.of(partitionPath, filename)).collect(Collectors.toList());
         return allColumnNameList.stream()
             .flatMap(columnName ->
                 tableMetadata.getColumnStats(partitionFileNameList, columnName).values().stream()
-                    .map(HoodieColumnRangeMetadata::fromColumnStats)
+                    .map(stats -> HoodieColumnRangeMetadata.fromColumnStats(stats, indexVersion))
                     .collect(Collectors.toList())
                     .stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
@@ -1850,7 +1855,7 @@ public class HoodieMetadataTableValidator implements Serializable {
             return formatUtils.readColumnStatsFromMetadata(
                 metaClient.getStorage(),
                 new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath), filename),
-                allColumnNameList
+                allColumnNameList, indexVersion
             ).stream();
           } else {
             StoragePath storagePartitionPath = new StoragePath(metaClient.getBasePath(), partitionPath);
@@ -1861,7 +1866,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                   .stream()
                   // We need to convert file path and use only the file name instead of the complete file path
                   .map(m -> (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.create(filename, m.getColumnName(), m.getMinValue(), m.getMaxValue(),
-                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize(), m.getValueMetadata()));
+                      m.getNullCount(), m.getValueCount(), m.getTotalSize(), m.getTotalUncompressedSize(), m.getValueMetadata(), indexVersion));
             } catch (IOException e) {
               throw new HoodieIOException(String.format("Failed to get column stats for file: %s", filePath), e);
             }

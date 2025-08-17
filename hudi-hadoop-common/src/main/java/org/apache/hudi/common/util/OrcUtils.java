@@ -32,6 +32,7 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hadoop.OrcReaderIterator;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -257,7 +258,7 @@ public class OrcUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList) {
+  public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(HoodieStorage storage, StoragePath filePath, List<String> columnList, HoodieIndexVersion indexVersion) {
     throw new UnsupportedOperationException(
         "Reading column statistics from metadata is not supported for ORC format yet");
   }
