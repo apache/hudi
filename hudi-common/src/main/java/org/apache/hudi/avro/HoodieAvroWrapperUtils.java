@@ -190,11 +190,7 @@ public class HoodieAvroWrapperUtils {
     } else if (avroValueWrapper instanceof ArrayWrapper) {
       return unwrapArray(avroValueWrapper, HoodieAvroWrapperUtils::unwrapAvroValueWrapper);
     } else if (avroValueWrapper instanceof GenericRecord) {
-      // NOTE: This branch could be hit b/c Avro records could be reconstructed
-      //       as {@code GenericRecord)
-      // TODO add logical type decoding
-      GenericRecord genRec = (GenericRecord) avroValueWrapper;
-      return (Comparable<?>) genRec.get("value");
+     return unwrapGenericRecord(avroValueWrapper);
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported type of the value (%s)", avroValueWrapper.getClass()));
     }
@@ -335,5 +331,12 @@ public class HoodieAvroWrapperUtils {
     return OrderingValues.create(arrayWrapper.getWrappedValues().stream()
         .map(unwrapper::apply)
         .toArray(Comparable[]::new));
+  }
+
+  // NOTE: This branch could be hit b/c Avro records could be reconstructed
+  //       as {@code GenericRecord)
+  public static Comparable<?> unwrapGenericRecord(Object val) {
+    GenericRecord genRec = (GenericRecord) val;
+    return (Comparable<?>) genRec.get("value");
   }
 }

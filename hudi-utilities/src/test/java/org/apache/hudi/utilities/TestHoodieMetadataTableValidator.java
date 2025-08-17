@@ -149,11 +149,11 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
         "path/to/file1", "col1", 1, 5, 0, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn1Range2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200,ValueMetadata.V1EmptyMetadata.get());
+        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn2Range1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250,ValueMetadata.V1EmptyMetadata.get());
+        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250, ValueMetadata.V1EmptyMetadata.get());
     HoodieColumnRangeMetadata<Comparable> fileColumn2Range2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150,ValueMetadata.V1EmptyMetadata.get());
+        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150, ValueMetadata.V1EmptyMetadata.get());
     List<HoodieColumnRangeMetadata<Comparable>> colStats = new ArrayList<>();
     colStats.add(fileColumn1Range1);
     colStats.add(fileColumn1Range2);
@@ -1117,34 +1117,34 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         HoodieColumnRangeMetadata<Integer> intMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             RANDOM.nextInt() % 30, RANDOM.nextInt() % 1000_000_000 + 30,
-            count / 3L, count, size, size / 8L,ValueMetadata.V1EmptyMetadata.get());
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(intMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(intMetadata.getFilePath()), new String(intMetadata.getColumnName()),
                 (int) intMetadata.getMinValue(), (int) intMetadata.getMaxValue(),
-                count / 3L, count, size, size / 8L,ValueMetadata.V1EmptyMetadata.get()));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
       case 1:
         HoodieColumnRangeMetadata<Long> longMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             RANDOM.nextLong() % 30L, RANDOM.nextInt() % 1000_000_000_000_000L + 30L,
-            count / 3L, count, size, size / 8L,ValueMetadata.V1EmptyMetadata.get());
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(longMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(longMetadata.getFilePath()), new String(longMetadata.getColumnName()),
                 (long) longMetadata.getMinValue(), (long) longMetadata.getMaxValue(),
-                count / 3L, count, size, size / 8L,ValueMetadata.V1EmptyMetadata.get()));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
       default:
         String stringValue1 = generateRandomString(20);
         String stringValue2 = generateRandomString(20);
         HoodieColumnRangeMetadata<String> stringMetadata = HoodieColumnRangeMetadata.create(
             generateRandomString(30), generateRandomString(5),
             stringValue1, stringValue2,
-            count / 3L, count, size, size / 8L,ValueMetadata.V1EmptyMetadata.get());
+            count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get());
         return Pair.of(stringMetadata,
             HoodieColumnRangeMetadata.create(
                 new String(stringMetadata.getFilePath()), new String(stringMetadata.getColumnName()),
                 new String(stringValue1), new String(stringValue2),
-                count / 3L, count, size, size / 8L,ValueMetadata.V1EmptyMetadata.get()));
+                count / 3L, count, size, size / 8L, ValueMetadata.V1EmptyMetadata.get()));
     }
   }
 

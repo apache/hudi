@@ -316,7 +316,8 @@ public class SparkMetadataWriterUtils {
       }
       return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, schemaToIndexOpt.get(), partitionRecordsFunctionOpt, indexDefinition.getVersion());
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-      return getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
+      return getExpressionIndexRecordsUsingBloomFilter(
+          rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
     } else {
       throw new UnsupportedOperationException(indexDefinition.getIndexType() + " is not yet supported");
     }

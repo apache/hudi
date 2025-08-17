@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.LogicalTypeTokenParser;
@@ -171,6 +172,8 @@ public enum ValueType {
     }
     if (val instanceof ArrayWrapper) {
       return HoodieAvroWrapperUtils.unwrapArray(val, v -> unwrapValue(v, meta));
+    } else if (val instanceof GenericRecord) {
+      return standardizeJavaTypeAndPromote(HoodieAvroWrapperUtils.unwrapGenericRecord(val), meta);
     }
     return convertIntoComplex(primitiveWrapperType.unwrap(val), meta);
   }
