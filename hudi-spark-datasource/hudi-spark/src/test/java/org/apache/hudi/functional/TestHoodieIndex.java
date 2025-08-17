@@ -416,7 +416,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     }
 
     // We create three parquet files, each having one record (two different partitions)
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA), metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(SIMPLE_RECORD_SCHEMA), metadataWriter);
     final String fileId1 = "fileID1";
     final String fileId2 = "fileID2";
     final String fileId3 = "fileID3";

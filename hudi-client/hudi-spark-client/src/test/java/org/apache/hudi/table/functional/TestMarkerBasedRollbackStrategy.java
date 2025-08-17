@@ -39,7 +39,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -317,7 +317,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     initMetaClient(tableType, props);
     String partition = "partA";
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(
-        metaClient, addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA));
+        metaClient, addMetadataFields(HoodieTestUtils.SIMPLE_RECORD_SCHEMA));
     String fileId = UUID.randomUUID().toString();
     HoodieRecord tripRecord = createSimpleRecord("key1", "2016-01-31T03:16:41.415Z", 123);
     String instantTime1 = "001";

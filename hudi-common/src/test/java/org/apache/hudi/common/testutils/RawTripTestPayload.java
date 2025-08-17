@@ -20,36 +20,24 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.createHoodieRecordFromAvro;
 import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.extractPartitionFromTimeField;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
@@ -58,10 +46,6 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * src/test/resources/schema1.
  */
 public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayload> {
-
-  public static final String JSON_DATA_SCHEMA_STR = "{\"type\":\"record\",\"name\":\"triprec\",\"fields\":[{\"name\":\"number\",\"type\":[\"null\",\"int\"],\"default\":null},"
-      + "{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"time\",\"type\":\"string\"}]}";
-  public static final Schema JSON_DATA_SCHEMA = new Schema.Parser().parse(JSON_DATA_SCHEMA_STR);
   private static final MercifulJsonConverter JSON_CONVERTER = new MercifulJsonConverter();
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -80,28 +64,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     this.partitionPath = extractPartitionFromTimeField(jsonRecordMap.get("time").toString());
     this.isDeleted = false;
     this.orderingVal = Integer.valueOf(jsonRecordMap.getOrDefault("number", 0).toString());
-  }
-
-  public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
-    return records.stream().map(record -> "{\"_row_key\": \"" + record.getRecordKey() + "\",\"partition\": \"" + record.getPartitionPath() + "\"}")
-        .collect(Collectors.toList());
-  }
-
-  public static List<HoodieRecord> asDefaultPayloadRecords(List<HoodieRecord> records) throws IOException {
-    return asDefaultPayloadRecords(records, false);
-  }
-
-  public static List<HoodieRecord> asDefaultPayloadRecords(List<HoodieRecord> records, boolean isDeleted) throws IOException {
-    List<HoodieRecord> convertedRecords = new ArrayList<>();
-    for (HoodieRecord r : records) {
-      GenericRecord avroData = (GenericRecord) ((RawTripTestPayload) r.getData()).getRecordToInsert(AVRO_SCHEMA);
-      avroData.put("_hoodie_is_deleted", isDeleted);
-      convertedRecords.add(
-          createHoodieRecordFromAvro(avroData, DefaultHoodieRecordPayload.class.getName(),
-              new String[] {"timestamp"}, Option.of(Pair.of("_row_key", "partition_path")),
-              false, Option.empty(), false, Option.of(AVRO_SCHEMA)));
-    }
-    return convertedRecords;
   }
 
   public String getPartitionPath() {
@@ -158,13 +120,6 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     return unCompressData(jsonDataCompressed);
   }
 
-  public Map<String, Object> getJsonDataAsMap() throws IOException {
-    if (jsonDataCompressed == null) {
-      return Collections.emptyMap();
-    }
-    return OBJECT_MAPPER.readValue(getJsonData(), Map.class);
-  }
-
   private byte[] compressData(String jsonData) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     DeflaterOutputStream dos = new DeflaterOutputStream(baos, new Deflater(Deflater.BEST_COMPRESSION), true);
@@ -182,9 +137,4 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
       return FileIOUtils.readAsUTFString(iis, dataSize);
     }
   }
-
-  public HoodieRecord toHoodieRecord() {
-    return new HoodieAvroRecord(new HoodieKey(getRowKey(), getPartitionPath()), this);
-  }
-
 }

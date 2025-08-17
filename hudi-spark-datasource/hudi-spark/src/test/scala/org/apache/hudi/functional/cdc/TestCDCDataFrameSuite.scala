@@ -27,8 +27,7 @@ import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplement
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
-import org.apache.hudi.common.testutils.RawTripTestPayload.deleteRecordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 
