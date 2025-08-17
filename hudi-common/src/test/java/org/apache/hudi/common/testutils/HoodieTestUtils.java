@@ -78,6 +78,7 @@ import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -121,7 +122,7 @@ public class HoodieTestUtils {
     record.put("time", time);
     record.put("number", number);
     String partition = partitionPath.orElseGet(() -> extractPartitionFromTimeField(time));
-    return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partition), record);
+    return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partition), record, null, Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")));
   }
 
   public static String extractPartitionFromTimeField(String timeField) {

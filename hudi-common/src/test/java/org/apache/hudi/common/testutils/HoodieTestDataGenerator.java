@@ -865,7 +865,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       populateKeysBySchema(schemaStr, currSize + i, kp);
       incrementNumExistingKeysBySchema(schemaStr);
       try {
-        return new HoodieAvroIndexedRecord(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened));
+        return new HoodieAvroIndexedRecord(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened),
+            null, Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }

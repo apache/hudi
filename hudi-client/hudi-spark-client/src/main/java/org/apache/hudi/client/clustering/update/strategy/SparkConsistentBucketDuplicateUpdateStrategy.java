@@ -22,11 +22,9 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
@@ -49,7 +47,7 @@ import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
  * If updates to file groups that are under clustering are identified, then generate
  * two same records for each update, routing to both old and new file groups
  */
-public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecordPayload<T>> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
+public class SparkConsistentBucketDuplicateUpdateStrategy<T> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
 
   public SparkConsistentBucketDuplicateUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
     super(engineContext, table, fileGroupsInPendingClustering);
@@ -80,7 +78,7 @@ public class SparkConsistentBucketDuplicateUpdateStrategy<T extends HoodieRecord
     HoodieData<HoodieRecord<T>> redirectedRecordsRDD = filteredRecordsRDD.map(r -> {
       Pair<String, ConsistentBucketIdentifier> identifierPair = partitionToIdentifier.get(r.getPartitionPath());
       ConsistentHashingNode node = identifierPair.getValue().getBucket(r.getKey(), indexKeyFields);
-      return tagAsNewRecordIfNeeded(new HoodieAvroRecord(r.getKey(), r.getData(), r.getOperation()),
+      return tagAsNewRecordIfNeeded(r.newInstance().clearLocation(),
           Option.ofNullable(new HoodieRecordLocation(identifierPair.getKey(), FSUtils.createNewFileId(node.getFileIdPrefix(), 0))));
     });
 
