@@ -23,8 +23,10 @@ import org.apache.hudi.avro.{AvroSchemaCache, HoodieAvroUtils}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
 import org.apache.hudi.common.util.{HoodieRecordUtils, Option => HOption, OrderingValues}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -127,6 +129,7 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
+          val requiresPayload = !(isChangingRecords(operation) && classOf[FileGroupReaderBasedMergeHandle[_, _, _, _]].getClass.isAssignableFrom(Class.forName(config.getMergeHandleClassName)))
 
           // handle dropping partition columns
           it.map { avroRec =>
@@ -151,10 +154,10 @@ object HoodieCreateRecordUtils {
                   field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
                     consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, null, recordLocation)
+                config.getPayloadClass, null, recordLocation, requiresPayload)
             } else {
               HoodieRecordUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getPayloadClass, recordLocation)
+                config.getPayloadClass, recordLocation, requiresPayload)
             }
             hoodieRecord
           }
