@@ -476,7 +476,7 @@ object ColumnStatsIndexSupport {
       //       manually encoding corresponding values as int and long w/in the Column Stats Index and
       //       here we have to decode those back into corresponding logical representation.
       case TimestampType =>
-        if (valueMetadata.getValueType.equals(ValueType.NONE)) {
+        if (valueMetadata.getValueType.equals(ValueType.V1)) {
           DateTimeUtils.toJavaTimestamp(value.asInstanceOf[Long])
         } else if (valueMetadata.getValueType.equals(ValueType.TIME_MICROS)) {
           // TODO: not sure what type it's supposed to be after looking at avro serde
@@ -503,7 +503,7 @@ object ColumnStatsIndexSupport {
       case DateType => DateTimeUtils.toJavaDate(value.asInstanceOf[Int])
       // Standard types
       case StringType =>
-        if (valueMetadata.getValueType.equals(ValueType.NONE)
+        if (valueMetadata.getValueType.equals(ValueType.V1)
           || valueMetadata.getValueType.equals(ValueType.STRING)
           || valueMetadata.getValueType.equals(ValueType.UUID)) {
           value
@@ -512,7 +512,7 @@ object ColumnStatsIndexSupport {
         }
 
       case BooleanType =>
-        if (valueMetadata.getValueType.equals(ValueType.NONE)
+        if (valueMetadata.getValueType.equals(ValueType.V1)
           || valueMetadata.getValueType.equals(ValueType.BOOLEAN)) {
           value
         } else {
@@ -521,14 +521,14 @@ object ColumnStatsIndexSupport {
 
       // Numeric types
       case FloatType =>
-        if (valueMetadata.getValueType.equals(ValueType.NONE)
+        if (valueMetadata.getValueType.equals(ValueType.V1)
           || valueMetadata.getValueType.equals(ValueType.FLOAT)) {
           value
         } else {
           throw new UnsupportedOperationException(s"Cannot deserialize value for FloatType: unexpected type ${valueMetadata.getValueType.name()}")
         }
       case DoubleType =>
-        if (valueMetadata.getValueType.equals(ValueType.NONE)
+        if (valueMetadata.getValueType.equals(ValueType.V1)
           || valueMetadata.getValueType.equals(ValueType.DOUBLE)) {
           value
         } else {
@@ -547,7 +547,7 @@ object ColumnStatsIndexSupport {
             if (valueMetadata.getValueType.equals(ValueType.DECIMAL)) {
               val decimalMetadata = valueMetadata.asInstanceOf[ValueMetadata.DecimalMetadata]
               convertBytesToBigDecimal(buffer.array(), decimalMetadata.getPrecision, decimalMetadata.getScale)
-            } else if (valueMetadata.getValueType.equals(ValueType.NONE)) {
+            } else if (valueMetadata.getValueType.equals(ValueType.V1)) {
               val logicalType = DecimalWrapper.SCHEMA$.getField("value").schema().getLogicalType
               decConv.fromBytes(buffer, null, logicalType).setScale(dt.scale, java.math.RoundingMode.UNNECESSARY)
             } else {

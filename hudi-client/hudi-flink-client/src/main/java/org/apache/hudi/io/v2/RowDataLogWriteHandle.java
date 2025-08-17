@@ -111,9 +111,9 @@ public class RowDataLogWriteHandle<T, I, K, O>
     if (config.isMetadataColumnStatsIndexEnabled()) {
       HoodieIndexVersion indexVersion = HoodieTableMetadataUtil.existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, hoodieTable.getMetaClient());
       Set<String> columnsToIndexSet = new HashSet<>(HoodieTableMetadataUtil
-          .getColumnsToIndex(indexVersion, hoodieTable.getMetaClient().getTableConfig(),
+          .getColumnsToIndex(hoodieTable.getMetaClient().getTableConfig(),
               config.getMetadataConfig(), Lazy.eagerly(Option.of(writeSchemaWithMetaFields)),
-              Option.of(HoodieRecord.HoodieRecordType.FLINK)).keySet());
+              Option.of(HoodieRecord.HoodieRecordType.FLINK), indexVersion).keySet());
 
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata;
       if (dataBlock.isEmpty()) {

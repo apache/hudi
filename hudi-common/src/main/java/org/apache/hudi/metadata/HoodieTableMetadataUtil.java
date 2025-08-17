@@ -833,8 +833,8 @@ public class HoodieTableMetadataUtil {
 
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataMetaClient);
 
-    List<String> columnsToIndex = new ArrayList<>(getColumnsToIndex(indexVersion, dataMetaClient.getTableConfig(), metadataConfig,
-        Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)), false, recordTypeOpt).keySet());
+    List<String> columnsToIndex = new ArrayList<>(getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig,
+        Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)), false, recordTypeOpt, indexVersion).keySet());
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
@@ -1582,8 +1582,8 @@ public class HoodieTableMetadataUtil {
         : writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
 
     HoodieIndexVersion indexVersion = existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataMetaClient);
-    return getColumnsToIndex(indexVersion, tableConfig, metadataConfig,
-        Lazy.eagerly(tableSchema), false, recordTypeOpt);
+    return getColumnsToIndex(tableConfig, metadataConfig,
+        Lazy.eagerly(tableSchema), false, recordTypeOpt, indexVersion);
   }
 
   @VisibleForTesting
@@ -1598,31 +1598,32 @@ public class HoodieTableMetadataUtil {
     }};
 
   @VisibleForTesting
-  public static Map<String, Schema> getColumnsToIndex(HoodieIndexVersion indexVersion,
+  public static Map<String, Schema> getColumnsToIndex(
                                                HoodieTableConfig tableConfig,
                                                HoodieMetadataConfig metadataConfig,
                                                Lazy<Option<Schema>> tableSchemaLazyOpt,
-                                               Option<HoodieRecordType> recordType) {
-    return getColumnsToIndex(indexVersion, tableConfig, metadataConfig, tableSchemaLazyOpt, false, recordType);
+                                               Option<HoodieRecordType> recordType,
+                                               HoodieIndexVersion indexVersion) {
+    return getColumnsToIndex(tableConfig, metadataConfig, tableSchemaLazyOpt, false, recordType, indexVersion);
   }
 
   @VisibleForTesting
-  public static Map<String, Schema> getColumnsToIndex(HoodieIndexVersion indexVersion,
-                                                      HoodieTableConfig tableConfig,
-                                                      HoodieMetadataConfig metadataConfig,
-                                                      Lazy<Option<Schema>> tableSchemaLazyOpt,
-                                                      boolean isTableInitializing) {
-    return getColumnsToIndex(indexVersion, tableConfig, metadataConfig, tableSchemaLazyOpt, isTableInitializing, Option.empty());
-  }
-
-  @VisibleForTesting
-  public static Map<String, Schema> getColumnsToIndex(HoodieIndexVersion indexVersion,
-                                                      HoodieTableConfig tableConfig,
+  public static Map<String, Schema> getColumnsToIndex(HoodieTableConfig tableConfig,
                                                       HoodieMetadataConfig metadataConfig,
                                                       Lazy<Option<Schema>> tableSchemaLazyOpt,
                                                       boolean isTableInitializing,
-                                                      Option<HoodieRecordType> recordType) {
-    Map<String, Schema> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetaFields(indexVersion,  metadataConfig, tableSchemaLazyOpt, isTableInitializing, recordType);
+                                                      HoodieIndexVersion indexVersion) {
+    return getColumnsToIndex(tableConfig, metadataConfig, tableSchemaLazyOpt, isTableInitializing, Option.empty(), indexVersion);
+  }
+
+  @VisibleForTesting
+  public static Map<String, Schema> getColumnsToIndex(HoodieTableConfig tableConfig,
+                                                      HoodieMetadataConfig metadataConfig,
+                                                      Lazy<Option<Schema>> tableSchemaLazyOpt,
+                                                      boolean isTableInitializing,
+                                                      Option<HoodieRecordType> recordType,
+                                                      HoodieIndexVersion indexVersion) {
+    Map<String, Schema> columnsToIndexWithoutRequiredMetas = getColumnsToIndexWithoutRequiredMetaFields(metadataConfig, tableSchemaLazyOpt, isTableInitializing, recordType, indexVersion);
     if (!tableConfig.populateMetaFields()) {
       return columnsToIndexWithoutRequiredMetas;
     }
@@ -1645,11 +1646,11 @@ public class HoodieTableMetadataUtil {
    * @param recordType           Option of record type. Used to determine which types are valid to index
    * @return list of columns that should be indexed
    */
-  private static Map<String, Schema> getColumnsToIndexWithoutRequiredMetaFields(HoodieIndexVersion indexVersion,
-                                                                                HoodieMetadataConfig metadataConfig,
+  private static Map<String, Schema> getColumnsToIndexWithoutRequiredMetaFields(HoodieMetadataConfig metadataConfig,
                                                                                 Lazy<Option<Schema>> tableSchemaLazyOpt,
                                                                                 boolean isTableInitializing,
-                                                                                Option<HoodieRecordType> recordType) {
+                                                                                Option<HoodieRecordType> recordType,
+                                                                                HoodieIndexVersion indexVersion) {
     List<String> columnsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
     if (!columnsToIndex.isEmpty()) {
       // if explicitly overridden
@@ -2648,8 +2649,8 @@ public class HoodieTableMetadataUtil {
       return engineContext.emptyHoodieData();
     }
     HoodieIndexVersion partitionStatsIndexVersion = existingIndexVersionOrDefault(PARTITION_NAME_PARTITION_STATS, dataTableMetaClient);
-    final Map<String, Schema> columnsToIndexSchemaMap = getColumnsToIndex(partitionStatsIndexVersion, dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt,
-        dataTableMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().empty(), recordTypeOpt);
+    final Map<String, Schema> columnsToIndexSchemaMap = getColumnsToIndex(dataTableMetaClient.getTableConfig(), metadataConfig, lazyWriterSchemaOpt,
+        dataTableMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().empty(), recordTypeOpt, partitionStatsIndexVersion);
     if (columnsToIndexSchemaMap.isEmpty()) {
       LOG.warn("No columns to index for partition stats index");
       return engineContext.emptyHoodieData();
@@ -2738,7 +2739,7 @@ public class HoodieTableMetadataUtil {
       }
       HoodieIndexVersion partitionStatsIndexVersion = existingIndexVersionOrDefault(PARTITION_NAME_PARTITION_STATS, dataMetaClient);
       Lazy<Option<Schema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
-      Map<String, Schema> columnsToIndexSchemaMap = getColumnsToIndex(partitionStatsIndexVersion, dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt, false, recordTypeOpt);
+      Map<String, Schema> columnsToIndexSchemaMap = getColumnsToIndex(dataMetaClient.getTableConfig(), metadataConfig, writerSchemaOpt, false, recordTypeOpt, partitionStatsIndexVersion);
       if (columnsToIndexSchemaMap.isEmpty()) {
         return engineContext.emptyHoodieData();
       }
