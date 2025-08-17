@@ -189,9 +189,7 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
         return getWriteStatuses();
       }
       List<WriteStatus> writeStatuses = super.close();
-      if (!isClosed()) {
-        finalizeWrite();
-      }
+      finalizeWrite();
       return writeStatuses;
     } finally {
       this.isClosed = true;

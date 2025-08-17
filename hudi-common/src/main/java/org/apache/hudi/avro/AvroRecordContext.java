@@ -35,6 +35,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
 import java.util.Map;
@@ -183,5 +184,13 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
     return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to, renamedColumns);
+  }
+
+  @Override
+  public Comparable convertValueToEngineType(Comparable value) {
+    if (value instanceof Utf8) {
+      return ((Utf8) value).toString();
+    }
+    return value;
   }
 }
