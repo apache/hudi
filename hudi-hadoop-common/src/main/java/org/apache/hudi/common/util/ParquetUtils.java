@@ -21,6 +21,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
+import org.apache.hudi.avro.ValueMetadata;
+import org.apache.hudi.avro.ValueType;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -274,7 +276,7 @@ public class ParquetUtils extends FileFormatUtils {
                 .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
                 .map(columnChunkMetaData -> {
                   Statistics stats = columnChunkMetaData.getStatistics();
-                  HoodieColumnRangeMetadata.ValueMetadata valueMetadata = HoodieColumnRangeMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType(), indexVersion);
+                  ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType(), indexVersion);
 
 
                   return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
@@ -466,8 +468,8 @@ public class ParquetUtils extends FileFormatUtils {
         .reduce(HoodieColumnRangeMetadata::merge).get();
   }
 
-  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val, HoodieColumnRangeMetadata.ValueMetadata valueMetadata) {
-    if (valueMetadata.getValueType() != HoodieColumnRangeMetadata.ValueType.NONE) {
+  private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val, ValueMetadata valueMetadata) {
+    if (valueMetadata.getValueType() != ValueType.NONE) {
       return valueMetadata.standardizeJavaTypeAndPromote(val);
     }
     if (val == null) {

@@ -19,28 +19,28 @@
 
 package org.apache.parquet.schema;
 
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.avro.ValueType;
 
 public class LogicalTypeTokenParser {
 
-  public static HoodieColumnRangeMetadata.ValueType fromLogicalTypeAnnotation(PrimitiveType primitiveType) {
+  public static ValueType fromLogicalTypeAnnotation(PrimitiveType primitiveType) {
     switch (primitiveType.getLogicalTypeAnnotation().getType()) {
       case STRING:
-        return HoodieColumnRangeMetadata.ValueType.STRING;
+        return ValueType.STRING;
       case ENUM:
-        return HoodieColumnRangeMetadata.ValueType.ENUM;
+        return ValueType.ENUM;
       case DECIMAL:
-        return HoodieColumnRangeMetadata.ValueType.DECIMAL;
+        return ValueType.DECIMAL;
       case DATE:
-        return HoodieColumnRangeMetadata.ValueType.DATE;
+        return ValueType.DATE;
       case TIME:
         // TODO: decide if we need to support adjusted to UTC
         boolean isAdjustedToUTCTime = ((LogicalTypeAnnotation.TimeLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).isAdjustedToUTC();
         LogicalTypeAnnotation.TimeUnit unit = ((LogicalTypeAnnotation.TimeLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getUnit();
         if (unit == LogicalTypeAnnotation.TimeUnit.MILLIS) {
-          return HoodieColumnRangeMetadata.ValueType.TIME_MILLIS;
+          return ValueType.TIME_MILLIS;
         } else if (unit == LogicalTypeAnnotation.TimeUnit.MICROS) {
-          return HoodieColumnRangeMetadata.ValueType.TIME_MICROS;
+          return ValueType.TIME_MICROS;
         } else {
           throw new IllegalArgumentException("Unsupported time unit: " + unit);
         }
@@ -48,16 +48,16 @@ public class LogicalTypeTokenParser {
         boolean isAdjustedToUTCTimestamp = ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).isAdjustedToUTC();
         LogicalTypeAnnotation.TimeUnit timestampUnit = ((LogicalTypeAnnotation.TimestampLogicalTypeAnnotation) primitiveType.getLogicalTypeAnnotation()).getUnit();
         if (timestampUnit == LogicalTypeAnnotation.TimeUnit.MILLIS) {
-          return isAdjustedToUTCTimestamp ? HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MILLIS : HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MILLIS;
+          return isAdjustedToUTCTimestamp ? ValueType.TIMESTAMP_MILLIS : ValueType.LOCAL_TIMESTAMP_MILLIS;
         } else if (timestampUnit == LogicalTypeAnnotation.TimeUnit.MICROS) {
-          return isAdjustedToUTCTimestamp ? HoodieColumnRangeMetadata.ValueType.TIMESTAMP_MICROS : HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_MICROS;
+          return isAdjustedToUTCTimestamp ? ValueType.TIMESTAMP_MICROS : ValueType.LOCAL_TIMESTAMP_MICROS;
         } else if (timestampUnit == LogicalTypeAnnotation.TimeUnit.NANOS) {
-          return isAdjustedToUTCTimestamp ? HoodieColumnRangeMetadata.ValueType.TIMESTAMP_NANOS : HoodieColumnRangeMetadata.ValueType.LOCAL_TIMESTAMP_NANOS;
+          return isAdjustedToUTCTimestamp ? ValueType.TIMESTAMP_NANOS : ValueType.LOCAL_TIMESTAMP_NANOS;
         } else {
           throw new IllegalArgumentException("Unsupported timestamp unit: " + timestampUnit);
         }
       case UUID:
-        return HoodieColumnRangeMetadata.ValueType.UUID;
+        return ValueType.UUID;
       default:
         throw new IllegalArgumentException("Unsupported logical type: " + primitiveType.getLogicalTypeAnnotation().getType());
     }

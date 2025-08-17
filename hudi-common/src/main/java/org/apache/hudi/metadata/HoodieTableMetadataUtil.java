@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.avro.model.BooleanWrapper;
 import org.apache.hudi.avro.model.DateWrapper;
 import org.apache.hudi.avro.model.DoubleWrapper;
@@ -161,8 +162,9 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.ValueMetadata.getValueMetadata;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -281,7 +283,7 @@ public class HoodieTableMetadataUtil {
       targetFields.forEach(fieldNameFieldPair -> {
         String fieldName = fieldNameFieldPair.getKey();
         Schema fieldSchema = resolveNullableSchema(fieldNameFieldPair.getValue().schema());
-        HoodieColumnRangeMetadata.ValueMetadata valueMetadata = HoodieColumnRangeMetadata.getValueMetadata(fieldSchema, indexVersion);
+        ValueMetadata valueMetadata = getValueMetadata(fieldSchema, indexVersion);
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats());
         Object fieldValue;
         if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
@@ -342,7 +344,7 @@ public class HoodieTableMetadataUtil {
                 //       since those are not directly comparable
                 0L,
                 0L,
-                HoodieColumnRangeMetadata.getValueMetadata(fieldSchema, indexVersion),
+                getValueMetadata(fieldSchema, indexVersion),
                 indexVersion
             );
           } else {
@@ -358,7 +360,7 @@ public class HoodieTableMetadataUtil {
                 //       since those are not directly comparable
                 0L,
                 0L,
-                HoodieColumnRangeMetadata.NoneMetadata.INSTANCE,
+                ValueMetadata.NoneMetadata.INSTANCE,
                 indexVersion
             );
           }
@@ -2920,8 +2922,8 @@ public class HoodieTableMetadataUtil {
       return newColumnStats;
     }
 
-    HoodieColumnRangeMetadata.ValueMetadata prevValueMetadata = HoodieColumnRangeMetadata.getValueMetadata(prevColumnStats.getValueType());
-    HoodieColumnRangeMetadata.ValueMetadata newValueMetadata = HoodieColumnRangeMetadata.getValueMetadata(newColumnStats.getValueType());
+    ValueMetadata prevValueMetadata = getValueMetadata(prevColumnStats.getValueType());
+    ValueMetadata newValueMetadata = getValueMetadata(newColumnStats.getValueType());
 
     Comparable minValue =
         (Comparable) Stream.of(

@@ -24,10 +24,11 @@ import org.apache.hudi.ExpressionIndexSupport._
 import org.apache.hudi.HoodieCatalystUtils.{withPersistedData, withPersistedDataset}
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
+import org.apache.hudi.avro.ValueMetadata.getValueMetadata
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.{HoodieData, HoodieListData}
-import org.apache.hudi.common.model.{FileSlice, HoodieColumnRangeMetadata, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.{collection, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -260,8 +261,8 @@ class ExpressionIndexSupport(spark: SparkSession,
           val colName = r.getColumnName
           val colType = tableSchemaFieldMap(colName).dataType
 
-          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType, HoodieColumnRangeMetadata.getValueMetadata(r.getValueType))
-          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType, HoodieColumnRangeMetadata.getValueMetadata(r.getValueType))
+          val minValue = deserialize(tryUnpackValueWrapper(minValueWrapper), colType, getValueMetadata(r.getValueType))
+          val maxValue = deserialize(tryUnpackValueWrapper(maxValueWrapper), colType, getValueMetadata(r.getValueType))
 
           // Update min-/max-value structs w/ unwrapped values in-place
           r.setMinValue(minValue)

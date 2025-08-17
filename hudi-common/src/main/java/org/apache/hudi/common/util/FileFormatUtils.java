@@ -20,6 +20,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -72,7 +73,7 @@ public abstract class FileFormatUtils {
 
     ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
     if (indexVersion.greaterThanOrEquals(HoodieIndexVersion.V2)) {
-      HoodieColumnRangeMetadata.ValueMetadata valueMetadata = HoodieColumnRangeMetadata.getValueMetadata(colsToIndexSchemaMap.get(columnName), indexVersion);
+      ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(colsToIndexSchemaMap.get(columnName), indexVersion);
       return fileColumnRanges.stream()
           .map(e -> {
             T minValue = (T) valueMetadata.standardizeJavaTypeAndPromote(e.getMinValue());

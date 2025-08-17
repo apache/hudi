@@ -23,6 +23,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.ValueMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -192,7 +193,7 @@ public class SparkMetadataWriterUtils {
                   valueCount,
                   totalFileSize,
                   totalUncompressedSize,
-                  HoodieColumnRangeMetadata.getValueMetadata(columnSchema, indexVersion),
+                  ValueMetadata.getValueMetadata(columnSchema, indexVersion),
                   indexVersion
               );
               return Collections.singletonList(Pair.of(partitionName, rangeMetadata)).iterator();
