@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -88,7 +89,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.extractPartitionFromTimeField;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -1302,12 +1302,12 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       return new RecordIdentifier(toClone.recordKey, toClone.partitionPath, orderingVal, toClone.riderValue);
     }
 
-    public static RecordIdentifier fromTripTestPayload(GenericRecord record) {
-      String recordKey = record.get("_row_key").toString();
-      String partitionPath = extractPartitionFromTimeField(record.get("time").toString());
-      Comparable orderingValue = record.hasField("number") ? (int) record.get("number") : 0;
+    public static RecordIdentifier fromTripTestPayload(HoodieAvroIndexedRecord record, String[] orderingValues) {
+      String recordKey = record.getRecordKey();
+      String partitionPath = record.getPartitionPath();
+      Comparable orderingValue = record.getOrderingValue(record.getData().getSchema(), CollectionUtils.emptyProps(), orderingValues);
       String orderingValStr = orderingValue.toString();
-      String riderValue = record.hasField("rider") ? record.get("rider").toString() : "";
+      String riderValue = ((GenericRecord) record.getData()).hasField("rider") ? ((GenericRecord) record.getData()).get("rider").toString() : "";
       return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);
     }
 
