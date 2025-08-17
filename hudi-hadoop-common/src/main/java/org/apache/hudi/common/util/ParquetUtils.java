@@ -195,7 +195,7 @@ public class ParquetUtils extends FileFormatUtils {
    * @param storage         {@link HoodieStorage} instance.
    * @param filePath        The parquet file path
    * @param keyGeneratorOpt instance of KeyGenerator
-   * @param partitionPath   optional partition path for the file, if provided only the record key is read from the file
+   * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the parquet file
    */
   @Override
@@ -220,7 +220,7 @@ public class ParquetUtils extends FileFormatUtils {
    * @param storage         {@link HoodieStorage} instance.
    * @param filePath        The parquet file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @param partitionPath   optional partition path for the file, if provided only the record key is read from the file
+   * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override

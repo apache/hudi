@@ -1746,7 +1746,6 @@ public class HoodieTableMetadataUtil {
     try {
       StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePath(), partitionPathFileName);
       if (partitionPathFileName.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-
         return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
             .getFileFormatUtils(HoodieFileFormat.PARQUET)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex, indexVersion);

@@ -112,8 +112,6 @@ public class HoodieAvroUtils {
   private static final ThreadLocal<BinaryEncoder> BINARY_ENCODER = ThreadLocal.withInitial(() -> null);
   private static final ThreadLocal<BinaryDecoder> BINARY_DECODER = ThreadLocal.withInitial(() -> null);
 
-
-
   private static final long MILLIS_PER_DAY = 86400000L;
 
   //Export for test

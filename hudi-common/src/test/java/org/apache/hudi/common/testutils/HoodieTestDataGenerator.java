@@ -353,7 +353,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       }
     }
 
-
     return null;
   }
 

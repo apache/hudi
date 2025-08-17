@@ -85,10 +85,9 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
-      val iter = baseFileReader.read(fileInfo,
+      new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
-        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]])
-      new CloseableInternalRowIterator(iter)
+        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
   }
 

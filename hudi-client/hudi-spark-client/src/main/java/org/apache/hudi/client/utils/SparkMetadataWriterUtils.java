@@ -315,7 +315,7 @@ public class SparkMetadataWriterUtils {
       if (schemaToIndexOpt.isEmpty()) {
         throw new HoodieMetadataException("Failed to find schema for column " + columnToIndex);
       }
-      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex,schemaToIndexOpt.get(), partitionRecordsFunctionOpt, indexDefinition.getVersion());
+      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, schemaToIndexOpt.get(), partitionRecordsFunctionOpt, indexDefinition.getVersion());
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
       return getExpressionIndexRecordsUsingBloomFilter(rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
     } else {
