@@ -283,7 +283,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       commitToTable(initialRecords, UPSERT.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 1, recordMergeMode,
-          initialRecords, initialRecords);
+          initialRecords, initialRecords, new String[]{PRECOMBINE_FIELD_NAME});
 
       // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
@@ -291,7 +291,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
-          allRecords, CollectionUtils.combine(initialRecords, updates));
+          allRecords, CollectionUtils.combine(initialRecords, updates), new String[]{PRECOMBINE_FIELD_NAME});
     }
   }
 
@@ -308,7 +308,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       commitToTable(initialRecords, firstCommitOperation.value(), true, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), isFirstCommitInsert,
-          isFirstCommitInsert ? 0 : 1, recordMergeMode, initialRecords, initialRecords);
+          isFirstCommitInsert ? 0 : 1, recordMergeMode, initialRecords, initialRecords, new String[]{PRECOMBINE_FIELD_NAME});
 
       HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(getStorageConf(), getBasePath());
       String latestCompleteTime = metaClient.getActiveTimeline().getLatestCompletionTime().get();
@@ -318,7 +318,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
       commitToTable(updates, UPSERT.value(), false, writeConfigs, TRIP_EXAMPLE_SCHEMA);
       validateOutputFromFileGroupReader(getStorageConf(), getBasePath(),
-          isFirstCommitInsert, isFirstCommitInsert ? 1 : 2, recordMergeMode, updates, updates);
+          isFirstCommitInsert, isFirstCommitInsert ? 1 : 2, recordMergeMode, updates, updates, new String[]{PRECOMBINE_FIELD_NAME});
       // reset instant range
       instantRangeOpt = Option.empty();
     }

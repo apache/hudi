@@ -226,6 +226,7 @@ public class AvroOrcUtils {
         } else if (value instanceof ByteBuffer) {
           final ByteBuffer byteBuffer = (ByteBuffer) value;
           binaryBytes = toBytes(byteBuffer);
+          byteBuffer.rewind();
         } else if (value instanceof byte[]) {
           binaryBytes = (byte[]) value;
         } else {
