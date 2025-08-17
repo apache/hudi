@@ -56,7 +56,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -100,8 +99,9 @@ public class TestMergeHandle extends BaseTestHandle {
 
   private static final String ORDERING_FIELD = "timestamp";
 
-  @Test
-  public void testMergeHandleRLIAndSIStatsWithUpdatesAndDeletes() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testMergeHandleRLIAndSIStatsWithUpdatesAndDeletes(boolean useFileGroupReader) throws Exception {
     // delete and recreate
     metaClient.getStorage().deleteDirectory(metaClient.getBasePath());
     Properties properties = new Properties();
@@ -135,18 +135,26 @@ public class TestMergeHandle extends BaseTestHandle {
     List<HoodieRecord> newRecords = dataGenerator.generateUniqueUpdates(instantTime, numUpdates);
     int numDeletes = generateDeleteRecords(newRecords, dataGenerator, instantTime);
     assertTrue(numDeletes > 0);
-    HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
-        new HoodieBaseFile(fileGroup.getAllBaseFiles().findFirst().get()), Option.empty());
-    HoodieMergeHelper.newInstance().runMerge(table, mergeHandle);
-    WriteStatus writeStatus = mergeHandle.writeStatus;
+    HoodieWriteMergeHandle mergeHandle;
+    if (useFileGroupReader) {
+      mergeHandle = new FileGroupReaderBasedMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId,
+          new LocalTaskContextSupplier(), Option.empty());
+    } else {
+      mergeHandle = new HoodieWriteMergeHandle(config, instantTime, table, newRecords.iterator(), partitionPath, fileId, new LocalTaskContextSupplier(),
+          new HoodieBaseFile(fileGroup.getAllBaseFiles().findFirst().get()), Option.empty());
+    }
+    mergeHandle.doMerge();
+    WriteStatus writeStatus = (WriteStatus) mergeHandle.close().get(0);
     // verify stats after merge
+    int deletesWithIgnoreIndexUpdate = 5;
+    int expectedNumDelegatesWithIgnoreIndexUpdate = useFileGroupReader ? 0 : deletesWithIgnoreIndexUpdate;
     assertEquals(100 - numDeletes, writeStatus.getStat().getNumWrites());
     assertEquals(numUpdates, writeStatus.getStat().getNumUpdateWrites());
     assertEquals(numDeletes, writeStatus.getStat().getNumDeletes());
 
     // verify record index stats
     // numUpdates + numDeletes - new record index updates
-    assertEquals(numUpdates + numDeletes, writeStatus.getIndexStats().getWrittenRecordDelegates().size());
+    assertEquals(numUpdates + numDeletes - (deletesWithIgnoreIndexUpdate - expectedNumDelegatesWithIgnoreIndexUpdate), writeStatus.getIndexStats().getWrittenRecordDelegates().size());
     int numDeletedRecordDelegates = 0;
     int numDeletedRecordDelegatesWithIgnoreIndexUpdate = 0;
     for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
@@ -162,8 +170,8 @@ public class TestMergeHandle extends BaseTestHandle {
       }
     }
     // 5 of the deletes are marked with ignoreIndexUpdate in generateDeleteRecords
-    assertEquals(5, numDeletedRecordDelegatesWithIgnoreIndexUpdate);
-    assertEquals(numDeletes, numDeletedRecordDelegates);
+    assertEquals(expectedNumDelegatesWithIgnoreIndexUpdate, numDeletedRecordDelegatesWithIgnoreIndexUpdate);
+    assertEquals(numDeletes - (deletesWithIgnoreIndexUpdate - expectedNumDelegatesWithIgnoreIndexUpdate), numDeletedRecordDelegates);
 
     // verify secondary index stats
     assertEquals(1, writeStatus.getIndexStats().getSecondaryIndexStats().size());
