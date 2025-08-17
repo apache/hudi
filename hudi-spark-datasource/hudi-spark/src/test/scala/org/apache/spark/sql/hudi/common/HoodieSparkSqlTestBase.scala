@@ -133,7 +133,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
-    HoodieSparkSqlTestBase.checkAnswer(spark, sql)(expects)
+    HoodieSparkSqlTestBase.checkAnswer(spark, sql)(expects: _*)
   }
 
   protected def checkAnswer(array: Array[Row])(expects: Seq[Any]*): Unit = {

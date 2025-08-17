@@ -143,7 +143,7 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine && !precombineFields.isEmpty) {
+            val hoodieRecord = if (shouldCombine && precombineFields != null && precombineFields.nonEmpty) {
               val orderingVal = OrderingValues.create(
                 precombineFields,
                 JFunction.toJavaFunction[String, Comparable[_]](
