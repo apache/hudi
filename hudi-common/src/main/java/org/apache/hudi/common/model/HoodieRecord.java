@@ -414,7 +414,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     kryo.writeObjectOrNull(output, ignoreIndexUpdate, Boolean.class);
     kryo.writeObjectOrNull(output, isDelete, Boolean.class);
     kryo.writeClassAndObject(output, orderingValue);
-    kryo.writeClassAndObject(output, metaData.orElse(null));
+    kryo.writeClassAndObject(output, metaData == null ? null : metaData.orElse(null));
   }
 
   /**
