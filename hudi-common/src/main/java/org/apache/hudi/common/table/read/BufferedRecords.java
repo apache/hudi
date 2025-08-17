@@ -44,7 +44,8 @@ public class BufferedRecords {
     T data = recordContext.extractDataFromRecord(record, schema, props);
     String recordKey = hoodieKey == null ? recordContext.getRecordKey(data, schema) : hoodieKey.getRecordKey();
     Integer schemaId = recordContext.encodeAvroSchema(schema);
-    return new BufferedRecord<>(recordKey, record.getOrderingValue(schema, props, orderingFields), data, schemaId, inferOperation(isDelete, record.getOperation()));
+    Comparable orderingValue = record.getOrderingValue(schema, props, orderingFields);
+    return new BufferedRecord<>(recordKey, recordContext.convertValueToEngineType(orderingValue), data, schemaId, inferOperation(isDelete, record.getOperation()));
   }
 
   public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, List<String> orderingFieldNames, boolean isDelete) {

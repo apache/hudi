@@ -33,7 +33,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
@@ -861,13 +860,8 @@ public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRoll
   private void assertRecords(List<HoodieRecord> inputRecords, List<GenericRecord> recordsRead) {
     assertEquals(recordsRead.size(), inputRecords.size());
     Map<String, GenericRecord> expectedRecords = new HashMap<>();
-    inputRecords.forEach(entry -> {
-      try {
-        expectedRecords.put(entry.getRecordKey(), (GenericRecord) ((HoodieRecordPayload) entry.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get());
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    });
+    inputRecords.forEach(entry ->
+      expectedRecords.put(entry.getRecordKey(), (GenericRecord) entry.getData()));
 
     Map<String, GenericRecord> actualRecords = new HashMap<>();
     recordsRead.forEach(entry -> actualRecords.put(String.valueOf(entry.get("_row_key")), entry));

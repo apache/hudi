@@ -93,6 +93,7 @@ import scala.Tuple2;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.SIMPLE_RECORD_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
@@ -152,7 +153,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     config = getConfigBuilder()
         .withProperties(keyGenProps)
-        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
+        .withSchema(SIMPLE_RECORD_SCHEMA.toString())
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(RawTripTestPayload.class.getName())
             .withPayloadOrderingFields("number").build())
