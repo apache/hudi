@@ -117,6 +117,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String DEFAULT_FIRST_PARTITION_PATH = "2016/03/15";
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";
   public static final String DEFAULT_THIRD_PARTITION_PATH = "2015/03/17";
+  public static final String[] OPERATIONS = {"i", "u", "d"};
 
   public static final String[] DEFAULT_PARTITION_PATHS =
       {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
@@ -164,6 +165,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   public static final String EXTRA_COL_SCHEMA1 = "{\"name\": \"extra_column1\", \"type\": [\"null\", \"string\"], \"default\": null },";
   public static final String EXTRA_COL_SCHEMA2 = "{\"name\": \"extra_column2\", \"type\": [\"null\", \"string\"], \"default\": null},";
+  public static final String EXTRA_COL_SCHEMA_FOR_AWS_DMS_PAYLOAD = "{\"name\": \"Op\", \"type\": [\"null\", \"string\"], \"default\": null},";
+  public static final String EXTRA_COL_SCHEMA_FOR_POSTGRES_PAYLOAD = "{\"name\": \"_event_lsn\", \"type\": [\"null\", \"long\"], \"default\": null},";
+  public static final String TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS =
+      TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
+          + TIP_NESTED_SCHEMA + EXTRA_COL_SCHEMA_FOR_AWS_DMS_PAYLOAD + EXTRA_COL_SCHEMA_FOR_POSTGRES_PAYLOAD + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_1 =
@@ -197,6 +203,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
 
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  public static final Schema AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
   public static final Schema NESTED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_NESTED_EXAMPLE_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
@@ -342,6 +349,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         return generatePayloadForShortTripSchema(key, commitTime);
       } else if (TRIP_NESTED_EXAMPLE_SCHEMA.equals(schemaStr)) {
         return generateNestedExampleRandomValue(key, commitTime);
+      } else if (TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS.equals(schemaStr)) {
+        return generateRandomValueWithColumnRequired(key, commitTime);
       } else if (TRIP_LOGICAL_TYPES_SCHEMA.equals(schemaStr)) {
         return generatePayloadForLogicalTypesSchema(key, commitTime, false);
       }
@@ -526,6 +535,22 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
+   * Populate "Op" column.
+   */
+  private void generateOpColumnValue(GenericRecord rec) {
+    // No delete records; otherwise, it is hard to data validation.
+    int index = rand.nextInt(2);
+    rec.put("Op", OPERATIONS[index]);
+  }
+
+  /**
+   * Populate "_event_lsn" column.
+   */
+  private void generateEventLSNValue(GenericRecord rec) {
+    rec.put("_event_lsn", rand.nextLong());
+  }
+
+  /**
    * Populate rec with values for TIP_NESTED_SCHEMA
    */
   private void generateTipNestedValues(GenericRecord rec) {
@@ -574,6 +599,30 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     generateCustomValues(rec, "customField");
     generateTripSuffixValues(rec, isDeleteRecord);
     return rec;
+  }
+
+  public RawTripTestPayload generateRandomValueWithColumnRequired(HoodieKey key,
+                                                             String instantTime) throws IOException {
+    GenericRecord rec = new GenericData.Record(AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS);
+    generateTripPrefixValues(
+        rec,
+        key.getRecordKey(),
+        key.getPartitionPath(),
+        "rider_" + instantTime,
+        "driver_" + instantTime,
+        0);
+    generateExtraSchemaValues(rec);
+    generateMapTypeValues(rec);
+    generateFareNestedValues(rec);
+    generateTipNestedValues(rec);
+    generateOpColumnValue(rec);
+    generateEventLSNValue(rec);
+    generateTripSuffixValues(rec, false);
+    return new RawTripTestPayload(
+        rec.toString(),
+        key.getRecordKey(),
+        key.getPartitionPath(),
+        TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
   }
 
   /**
@@ -923,6 +972,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
   }
 
+  public List<HoodieRecord> generateInsertsForPartitionPerSchema(String instantTime, Integer n, String partition, String schemaStr) {
+    return generateInsertsStream(instantTime,  n, false, schemaStr, false, () -> partition, () -> genPseudoRandomUUID(rand).toString()).collect(Collectors.toList());
+  }
+
   public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
     return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(rand).toString()).collect(Collectors.toList());
   }
@@ -1236,11 +1289,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @param n          Number of unique records
    * @return stream of hoodie records for delete
    */
-  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
-    return generateUniqueDeleteRecordStream(instantTime, n, TRIP_EXAMPLE_SCHEMA);
+  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, boolean updatePartition) {
+    return generateUniqueDeleteRecordStream(instantTime, n, updatePartition, TRIP_EXAMPLE_SCHEMA);
   }
 
-  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, String schemaStr) {
+  public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n, boolean updatePartition, String schemaStr) {
     final Set<KeyPartition> used = new HashSet<>();
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
     Integer numExistingKeys = numKeysBySchema.get(schemaStr);
@@ -1260,8 +1313,14 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       existingKeys.remove(numExistingKeys - 1);
       numExistingKeys--;
       used.add(kp);
+      HoodieKey key = kp.key;
+      if (updatePartition) {
+        String updatedPartitionPath = Arrays.stream(partitionPaths).filter(p -> !p.equals(kp.partitionPath))
+            .findAny().orElseThrow(() -> new HoodieIOException("No other partition path found to update"));
+        key = new HoodieKey(key.getRecordKey(), updatedPartitionPath);
+      }
       try {
-        result.add(new HoodieAvroRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false, true)));
+        result.add(new HoodieAvroRecord(key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false, true)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -1278,7 +1337,11 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
    * @return List of hoodie records for delete
    */
   public List<HoodieRecord> generateUniqueDeleteRecords(String instantTime, Integer n) {
-    return generateUniqueDeleteRecordStream(instantTime, n).collect(Collectors.toList());
+    return generateUniqueDeleteRecordStream(instantTime, n, false).collect(Collectors.toList());
+  }
+
+  public List<HoodieRecord> generateUniqueDeleteRecordsWithUpdatedPartition(String instantTime, Integer n) {
+    return generateUniqueDeleteRecordStream(instantTime, n, true).collect(Collectors.toList());
   }
 
   public boolean deleteExistingKeyIfPresent(HoodieKey key) {
@@ -1316,6 +1379,14 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return numKeysBySchema.getOrDefault(schemaStr, 0);
   }
 
+  public List<String> getExistingKeys() {
+    return getExistingKeys(TRIP_EXAMPLE_SCHEMA);
+  }
+
+  public List<String> getExistingKeys(String schemaStr) {
+    return existingKeysBySchema.get(schemaStr).values().stream().map(kp -> kp.key.getRecordKey()).collect(Collectors.toList());
+  }
+
   /**
    * Object containing the key and partition path for testing.
    */
@@ -1332,10 +1403,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
   private static long genRandomTimeMillis(Random r) {
     // Fri Feb 13 15:31:30 PST 2009
-    long anchorTs = 1234567890L;
+    long anchorTs = 1234567890000L;
     // NOTE: To provide for certainty and not generate overly random dates, we will limit
     //       dispersion to be w/in +/- 3 days from the anchor date
-    return anchorTs + r.nextLong() % 259200000L;
+    return anchorTs + r.nextInt(259200000);
   }
 
   public static UUID genPseudoRandomUUID(Random r) {

@@ -96,6 +96,7 @@ public class TestHoodieDefaultMergeHandle extends HoodieSparkClientTestHarness {
     Properties properties = new Properties();
     properties.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType.name());
     properties.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), String.valueOf(isCompressionEnabled));
+    properties.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteMergeHandle.class.getName());
 
     // Build a write config with bulkinsertparallelism set
     HoodieWriteConfig cfg = getConfigBuilder()

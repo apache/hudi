@@ -45,6 +45,7 @@ import java.util.Properties;
 public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
 
   public static final String OP_FIELD = "Op";
+  public static final String DELETE_OPERATION_VALUE = "D";
 
   public AWSDmsAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -116,6 +117,6 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   private static boolean isDMSDeleteRecord(GenericRecord record) {
-    return record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase("D");
+    return record.get(OP_FIELD) != null && record.get(OP_FIELD).toString().equalsIgnoreCase(DELETE_OPERATION_VALUE);
   }
 }

@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -46,9 +46,9 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
                                            Schema dataSchema,
                                            Schema requestedSchema,
                                            Option<InternalSchema> internalSchemaOpt,
-                                           HoodieTableConfig hoodieTableConfig,
-                                           TypedProperties properties) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
+                                           TypedProperties properties,
+                                           HoodieTableMetaClient metaClient) {
+    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, metaClient);
     if (!readerContext.getRecordContext().supportsParquetRowIndex()) {
       throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
     }

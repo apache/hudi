@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -27,7 +26,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -39,7 +37,6 @@ import org.apache.hudi.table.marker.DirectWriteMarkers;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -53,7 +50,7 @@ import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 public class TwoToOneDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
@@ -71,7 +68,7 @@ public class TwoToOneDowngradeHandler implements DowngradeHandler {
         throw new HoodieException("Converting marker files to DIRECT style failed during downgrade", e);
       }
     }
-    return Pair.of(Collections.emptyMap(), Collections.emptyList());
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 
   /**

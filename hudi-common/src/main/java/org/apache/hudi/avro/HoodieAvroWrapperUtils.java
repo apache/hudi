@@ -87,6 +87,7 @@ public class HoodieAvroWrapperUtils {
   private static final Lazy<DateWrapper.Builder> DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(DateWrapper::newBuilder);
   private static final Lazy<LocalDateWrapper.Builder> LOCAL_DATE_WRAPPER_BUILDER_STUB = Lazy.lazily(LocalDateWrapper::newBuilder);
   private static final Lazy<ArrayWrapper.Builder> ARRAY_WRAPPER_BUILDER_STUB = Lazy.lazily(ArrayWrapper::newBuilder);
+
   /**
    * Wraps a value into Avro type wrapper.
    *

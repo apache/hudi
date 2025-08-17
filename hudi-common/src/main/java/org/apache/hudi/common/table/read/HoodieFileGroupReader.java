@@ -100,7 +100,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.storage = storage;
     this.readerParameters = readerParameters;
     this.inputSplit = inputSplit;
-    readerContext.setHasLogFiles(!this.inputSplit.getLogFiles().isEmpty());
+    readerContext.setHasLogFiles(this.inputSplit.hasLogFiles());
     readerContext.getRecordContext().setPartitionPath(inputSplit.getPartitionPath());
     if (readerContext.getHasLogFiles() && inputSplit.getStart() != 0) {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
@@ -116,8 +116,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setShouldMergeUseRecordPosition(readerParameters.useRecordPosition() && !isSkipMerge && readerContext.getHasLogFiles() && inputSplit.isParquetBaseFile());
     readerContext.setHasBootstrapBaseFile(inputSplit.getBaseFileOption().flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
     readerContext.setSchemaHandler(readerContext.getRecordContext().supportsParquetRowIndex()
-        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props)
-        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig, props));
+        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient)
+        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), props, hoodieTableMetaClient);
     this.readStats = new HoodieReadStats();
@@ -404,8 +404,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withRecordIterator(Iterator<HoodieRecord> recordIterator) {
-      this.recordIterator = recordIterator;
+    public Builder<T> withRecordIterator(Iterator<? extends HoodieRecord> recordIterator) {
+      this.recordIterator = (Iterator<HoodieRecord>) recordIterator;
       this.recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
       return this;
     }

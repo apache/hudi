@@ -1000,7 +1000,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key -> "false",
       "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1"
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key -> "org.apache.hudi.io.HoodieWriteMergeHandle"
     )
 
     val df = spark.range(0, 10).toDF("keyid")

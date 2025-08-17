@@ -28,8 +28,8 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -145,7 +145,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
@@ -153,8 +153,8 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
-        properties);
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
+        properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate, testRecord7));
     inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), false));
@@ -212,7 +212,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
@@ -220,8 +220,8 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
-        properties);
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
+        properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update,
         testRecord4EarlierUpdate, testRecord7));
@@ -246,7 +246,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.CUSTOM);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     KeyBasedFileGroupRecordBuffer<IndexedRecord> fileGroupRecordBuffer = buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, new HoodieAvroRecordMerger(),
@@ -291,7 +291,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     when(tableConfig.getPayloadClass()).thenReturn(TestKeyBasedFileGroupRecordBuffer.CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.CUSTOM);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
@@ -299,8 +299,8 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
-        properties);
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
+        properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate));
     inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));
@@ -365,7 +365,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.CUSTOM);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
 
@@ -374,8 +374,8 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     readerContext.setHasLogFiles(false);
     readerContext.setHasBootstrapBaseFile(false);
     readerContext.initRecordMerger(properties);
-    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(), tableConfig,
-        properties);
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext, SCHEMA, SCHEMA, Option.empty(),
+        properties, mock(HoodieTableMetaClient.class));
     readerContext.setSchemaHandler(schemaHandler);
     List<HoodieRecord> inputRecords = convertToHoodieRecordsList(Arrays.asList(testRecord1UpdateWithSameTime, testRecord2Update, testRecord3Update, testRecord4EarlierUpdate));
     inputRecords.addAll(convertToHoodieRecordsListForDeletes(Arrays.asList(testRecord5DeleteByCustomMarker, testRecord6DeleteByCustomMarker), true));

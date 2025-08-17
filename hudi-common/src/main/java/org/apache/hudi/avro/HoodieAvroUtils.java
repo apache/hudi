@@ -1386,8 +1386,15 @@ public class HoodieAvroUtils {
     if (writerSchema.equals(readerSchema)) {
       return false;
     }
+    if (readerSchema.getLogicalType() != null) {
+      // check if logical types are equal
+      return !readerSchema.getLogicalType().equals(writerSchema.getLogicalType());
+    }
     switch (readerSchema.getType()) {
       case RECORD:
+        if (readerSchema.getFields().size() > writerSchema.getFields().size()) {
+          return true;
+        }
         for (Schema.Field field : readerSchema.getFields()) {
           Schema.Field writerField = writerSchema.getField(field.name());
           if (writerField == null || recordNeedsRewriteForExtendedAvroTypePromotion(writerField.schema(), field.schema())) {
@@ -1410,13 +1417,13 @@ public class HoodieAvroUtils {
       case ENUM:
         return needsRewriteToString(writerSchema, true);
       case STRING:
-      case BYTES:
         return needsRewriteToString(writerSchema, false);
       case DOUBLE:
-        // To maintain precision, you need to convert Float -> String -> Double
-        return writerSchema.getType().equals(Schema.Type.FLOAT);
+      case FLOAT:
+      case LONG:
+        return !(writerSchema.getType().equals(Schema.Type.INT) || writerSchema.getType().equals(Schema.Type.LONG));
       default:
-        return false;
+        return !writerSchema.getType().equals(readerSchema.getType());
     }
   }
 
@@ -1426,18 +1433,13 @@ public class HoodieAvroUtils {
    * string so some intervention is needed
    */
   private static boolean needsRewriteToString(Schema schema, boolean isEnum) {
-    switch (schema.getType()) {
-      case INT:
-      case LONG:
-      case FLOAT:
-      case DOUBLE:
-      case BYTES:
-        return true;
-      case ENUM:
-        return !isEnum;
-      default:
-        return false;
+    if (schema.getLogicalType() != null) {
+      return true;
     }
+    if (schema.getType() == Schema.Type.ENUM) {
+      return !isEnum;
+    }
+    return true;
   }
 
   /**
