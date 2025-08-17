@@ -167,7 +167,7 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
