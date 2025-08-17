@@ -278,6 +278,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return this;
   }
 
+  public HoodieRecord clearLocation() {
+    checkState();
+    this.currentLocation = null;
+    return this;
+  }
+
   @Nullable
   public HoodieRecordLocation getCurrentLocation() {
     return currentLocation;
@@ -408,6 +414,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     kryo.writeObjectOrNull(output, ignoreIndexUpdate, Boolean.class);
     kryo.writeObjectOrNull(output, isDelete, Boolean.class);
     kryo.writeClassAndObject(output, orderingValue);
+    kryo.writeClassAndObject(output, metaData.orElse(null));
   }
 
   /**
@@ -426,6 +433,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.ignoreIndexUpdate = kryo.readObjectOrNull(input, Boolean.class);
     this.isDelete = kryo.readObjectOrNull(input, Boolean.class);
     this.orderingValue = (Comparable<?>) kryo.readClassAndObject(input);
+    this.metaData = Option.ofNullable((Map<String, String>) kryo.readClassAndObject(input));
 
     // NOTE: We're always seal object after deserialization
     this.sealed = true;
