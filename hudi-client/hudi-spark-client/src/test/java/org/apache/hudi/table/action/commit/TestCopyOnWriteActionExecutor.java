@@ -433,8 +433,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
         (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
-    final List<HoodieRecord> inserts =
-        dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
+    final List<HoodieRecord> inserts = dataGen.generateInserts(instantTime, 100);
     BaseSparkCommitActionExecutor actionExecutor =
         new SparkInsertCommitActionExecutor(context, config, table,
             instantTime, context.parallelize(inserts));

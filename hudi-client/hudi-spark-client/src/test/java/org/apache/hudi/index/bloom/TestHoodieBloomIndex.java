@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -544,7 +545,7 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     // Let's tag
     HoodieBloomIndex bloomIndex = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     JavaRDD<HoodieRecord> taggedRecords = tagLocation(
-        bloomIndex, keysRDD.map(k -> new HoodieAvroRecord(k, null)), hoodieTable);
+        bloomIndex, keysRDD.map(k -> new HoodieEmptyRecord<>(k, HoodieRecord.HoodieRecordType.AVRO)), hoodieTable);
     JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocationsRDD = taggedRecords
         .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
             ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))

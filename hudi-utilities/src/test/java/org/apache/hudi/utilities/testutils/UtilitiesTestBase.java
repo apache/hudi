@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.testutils;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -485,15 +484,6 @@ public class UtilitiesTestBase {
       return props;
     }
 
-    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, Schema schema) {
-      try {
-        Option<IndexedRecord> recordOpt = ((HoodieAvroRecord) hoodieRecord).getData().getInsertValue(schema);
-        return (GenericRecord) recordOpt.get();
-      } catch (IOException e) {
-        return null;
-      }
-    }
-
     public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords) {
       return toGenericRecords(hoodieRecords, HoodieTestDataGenerator.AVRO_SCHEMA);
     }
@@ -501,13 +491,13 @@ public class UtilitiesTestBase {
     public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
       List<GenericRecord> records = new ArrayList<>();
       for (HoodieRecord hoodieRecord : hoodieRecords) {
-        records.add(toGenericRecord(hoodieRecord, schema));
+        records.add((GenericRecord) hoodieRecord.getData());
       }
       return records;
     }
 
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
-      return records.stream().map(HoodieTestDataGenerator::recordToString).filter(Option::isPresent).toArray(String[]::new);
+      return records.stream().map(HoodieTestDataGenerator::recordToString).filter(Option::isPresent).map(Option::get).toArray(String[]::new);
     }
 
     public static Tuple2<String, String>[] jsonifyRecordsByPartitions(List<HoodieRecord> records, int partitions) {

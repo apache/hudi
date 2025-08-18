@@ -893,7 +893,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
-  public List<HoodieRecord> generateSameKeyInserts(String instantTime, List<HoodieRecord> origin) throws IOException {
+  public List<HoodieRecord> generateSameKeyInserts(String instantTime, List<HoodieRecord> origin) {
     List<HoodieRecord> copy = new ArrayList<>();
     for (HoodieRecord r : origin) {
       HoodieKey key = r.getKey();
@@ -901,24 +901,6 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       copy.add(record);
     }
     return copy;
-  }
-
-  public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String instantTime, int limit) {
-    List<HoodieRecord> inserts = new ArrayList<>();
-    int currSize = getNumExistingKeys(TRIP_EXAMPLE_SCHEMA);
-    for (int i = 0; i < limit; i++) {
-      String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
-      HoodieKey key = new HoodieKey(genPseudoRandomUUID(rand).toString(), partitionPath);
-      HoodieRecord record = new HoodieAvroIndexedRecord(key, generateAvroPayload(key, instantTime));
-      inserts.add(record);
-
-      KeyPartition kp = new KeyPartition();
-      kp.key = key;
-      kp.partitionPath = partitionPath;
-      populateKeysBySchema(TRIP_EXAMPLE_SCHEMA, currSize + i, kp);
-      incrementNumExistingKeysBySchema(TRIP_EXAMPLE_SCHEMA);
-    }
-    return inserts;
   }
 
   public List<HoodieRecord> generateUpdatesWithHoodieAvroPayload(String instantTime, List<HoodieRecord> baseRecords) {
