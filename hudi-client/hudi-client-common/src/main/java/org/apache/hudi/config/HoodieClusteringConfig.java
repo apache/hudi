@@ -111,6 +111,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Filter clustering partitions that matched regex pattern");
 
+  public static final ConfigProperty<String> PLAN_STRATEGY_LAST_COMMIT = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "last.commit")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Last commit time to start clustering from, applied to commit-based clustering plan strategy");
+
   public static final ConfigProperty<String> PARTITION_SELECTED = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "partition.selected")
       .noDefaultValue()
@@ -559,11 +566,16 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withClusteringPlanLastCommit(String lastCommit) {
+      clusteringConfig.setValue(PLAN_STRATEGY_LAST_COMMIT, lastCommit);
+      return this;
+    }
+
     public Builder withClusteringPlanSmallFileLimit(long clusteringSmallFileLimit) {
       clusteringConfig.setValue(PLAN_STRATEGY_SMALL_FILE_LIMIT, String.valueOf(clusteringSmallFileLimit));
       return this;
     }
-    
+
     public Builder withClusteringSortColumns(String sortColumns) {
       clusteringConfig.setValue(PLAN_STRATEGY_SORT_COLUMNS, sortColumns);
       return this;

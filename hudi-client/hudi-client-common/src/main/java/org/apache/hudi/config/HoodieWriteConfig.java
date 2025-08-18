@@ -2000,6 +2000,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieClusteringConfig.PARTITION_REGEX_PATTERN);
   }
 
+  public String getClusteringLastCommit() {
+    return getString(HoodieClusteringConfig.PLAN_STRATEGY_LAST_COMMIT);
+  }
+
   public int getClusteringMaxNumGroups() {
     return getInt(HoodieClusteringConfig.PLAN_STRATEGY_MAX_GROUPS);
   }
