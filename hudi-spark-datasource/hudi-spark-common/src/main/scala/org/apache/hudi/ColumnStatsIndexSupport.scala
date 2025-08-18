@@ -471,6 +471,7 @@ object ColumnStatsIndexSupport {
   val decConv = new DecimalConversion()
 
   def deserialize(value: Any, dataType: DataType, valueMetadata: ValueMetadata): Any = {
+    // dataType is from the table schema. The value doesn't necessarily match the schema
     dataType match {
       // NOTE: Since we can't rely on Avro's "date", and "timestamp-micros" logical-types, we're
       //       manually encoding corresponding values as int and long w/in the Column Stats Index and
@@ -524,6 +525,10 @@ object ColumnStatsIndexSupport {
         if (valueMetadata.getValueType.equals(ValueType.V1)
           || valueMetadata.getValueType.equals(ValueType.FLOAT)) {
           value
+        } else if (valueMetadata.getValueType.equals(ValueType.LONG)) {
+          value.asInstanceOf[Long].toFloat
+        } else if (valueMetadata.getValueType.equals(ValueType.INT)) {
+          value.asInstanceOf[Int].toFloat
         } else {
           throw new UnsupportedOperationException(s"Cannot deserialize value for FloatType: unexpected type ${valueMetadata.getValueType.name()}")
         }
@@ -531,12 +536,33 @@ object ColumnStatsIndexSupport {
         if (valueMetadata.getValueType.equals(ValueType.V1)
           || valueMetadata.getValueType.equals(ValueType.DOUBLE)) {
           value
+        } else if (valueMetadata.getValueType.equals(ValueType.FLOAT)) {
+          value.asInstanceOf[Float].toString.toDouble
+        } else if (valueMetadata.getValueType.equals(ValueType.LONG)) {
+          value.asInstanceOf[Long].toDouble
+        } else if (valueMetadata.getValueType.equals(ValueType.INT)) {
+         value.asInstanceOf[Int].toDouble
         } else {
           throw new UnsupportedOperationException(s"Cannot deserialize value for DoubleType: unexpected type ${valueMetadata.getValueType.name()}")
         }
-      case LongType => value
+      case LongType =>
+        if (valueMetadata.getValueType.equals(ValueType.V1)
+          || valueMetadata.getValueType.equals(ValueType.LONG)) {
+          value
+        } else if (valueMetadata.getValueType.equals(ValueType.INT)) {
+          value.asInstanceOf[Int].toLong
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for LongType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
 
-      case IntegerType => value
+      case IntegerType =>
+        if (valueMetadata.getValueType.equals(ValueType.V1)
+          || valueMetadata.getValueType.equals(ValueType.INT)) {
+          value
+        } else {
+          throw new UnsupportedOperationException(s"Cannot deserialize value for IntegerType: unexpected type ${valueMetadata.getValueType.name()}")
+        }
+
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case ShortType => value.asInstanceOf[Int].toShort
       case ByteType => value.asInstanceOf[Int].toByte

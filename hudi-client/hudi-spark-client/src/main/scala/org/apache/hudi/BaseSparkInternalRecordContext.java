@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.expression.ArrayData;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -39,9 +40,12 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
+import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -70,15 +74,26 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   public static Object getFieldValueFromInternalRowAsJava(InternalRow row, Schema recordSchema, String fieldName) {
-    StructType structType = getCachedSchema(recordSchema);
-    Option<Schema> nestedFieldSchema = AvroSchemaUtils.findNestedFieldSchema(recordSchema, fieldName);
-    scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
-        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
-    if (cachedNestedFieldPath.isDefined() && nestedFieldSchema.isPresent()) {
-      HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-      return HoodieUnsafeRowUtils.getNestedInternalRowValueAsJava(row, nestedFieldPath, nestedFieldSchema.get());
-    } else {
+    Object value = getFieldValueFromInternalRow(row, recordSchema, fieldName);
+    return sparkTypeToJavaType(value);
+  }
+
+  public static Object sparkTypeToJavaType(Object value) {
+    if (value == null) {
       return null;
+    } else if (value instanceof UTF8String) {
+      return ((UTF8String) value).toString();
+    } else if (value instanceof Decimal) {
+      return ((Decimal) value).toJavaBigDecimal();
+    } else if (value instanceof byte[]) {
+      return ByteBuffer.wrap((byte[]) value);
+    } else if (value instanceof CalendarInterval
+        || value instanceof InternalRow
+        || value instanceof org.apache.spark.sql.catalyst.util.ArrayData
+        || value instanceof org.apache.spark.sql.catalyst.util.MapData) {
+      throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", value.getClass().getName()));
+    } else {
+      return value;
     }
   }
 

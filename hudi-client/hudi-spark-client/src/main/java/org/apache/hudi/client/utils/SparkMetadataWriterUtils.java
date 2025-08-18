@@ -20,6 +20,7 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.BaseSparkInternalRecordContext;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -78,6 +79,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.avro.HoodieAvroDeserializer;
+import org.apache.spark.sql.avro.HoodieAvroSerializer;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataType;
@@ -159,6 +161,7 @@ public class SparkMetadataWriterUtils {
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex, Schema columnSchema,
                                                                                              Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt,
                                                                                              HoodieIndexVersion indexVersion) {
+    ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnSchema, indexVersion);
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
         .select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
@@ -173,9 +176,8 @@ public class SparkMetadataWriterUtils {
             row -> {
               int baseAggregatePosition = SparkMetadataWriterUtils.getExpressionIndexColumnNames().length;
               long nullCount = row.getLong(baseAggregatePosition);
-              DataType dataType = row.schema().fields()[baseAggregatePosition + 1].dataType();
-              Comparable minValue = convertSparkToJava(row.get(baseAggregatePosition + 1), columnSchema, dataType, indexVersion);
-              Comparable maxValue = convertSparkToJava(row.get(baseAggregatePosition + 2), columnSchema, dataType, indexVersion);
+              Comparable minValue = convertSparkToJava(row.get(baseAggregatePosition + 1), indexVersion);
+              Comparable maxValue = convertSparkToJava(row.get(baseAggregatePosition + 2), indexVersion);
               long valueCount = row.getLong(baseAggregatePosition + 3);
 
               String partitionName = row.getString(0);
@@ -187,13 +189,13 @@ public class SparkMetadataWriterUtils {
               HoodieColumnRangeMetadata<Comparable> rangeMetadata = HoodieColumnRangeMetadata.create(
                   relativeFilePath,
                   columnToIndex,
-                  minValue,
-                  maxValue,
+                  (Comparable) valueMetadata.standardizeJavaTypeAndPromote(minValue),
+                  (Comparable) valueMetadata.standardizeJavaTypeAndPromote(maxValue),
                   nullCount,
                   valueCount,
                   totalFileSize,
                   totalUncompressedSize,
-                  ValueMetadata.getValueMetadata(columnSchema, indexVersion)
+                  valueMetadata
               );
               return Collections.singletonList(Pair.of(partitionName, rangeMetadata)).iterator();
             });
@@ -216,13 +218,11 @@ public class SparkMetadataWriterUtils {
         : new ExpressionIndexComputationMetadata(colStatRecords);
   }
 
-  private static Comparable convertSparkToJava(Object value, Schema columnSchema, DataType dataType, HoodieIndexVersion indexVersion) {
+  private static Comparable convertSparkToJava(Object value, HoodieIndexVersion indexVersion) {
     if (indexVersion.lowerThan(HoodieIndexVersion.V2)) {
       return (Comparable) value;
     }
-    //TODO: replace this with something faster
-    HoodieAvroDeserializer deserializer = SparkAdapterSupport$.MODULE$.sparkAdapter().createAvroDeserializer(columnSchema, dataType);
-    return (Comparable) deserializer.deserialize(value);
+    return (Comparable) BaseSparkInternalRecordContext.sparkTypeToJavaType(value);
   }
 
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingBloomFilter(

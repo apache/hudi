@@ -95,8 +95,8 @@ public enum ValueType {
   private final Class<?> internalType;
   private final HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType;
   private final BiFunction<Object, ValueMetadata, Comparable<?>> standardize;
-  private final BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toPrimitive;
   private final BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toComplex;
+  private final BiFunction<Comparable<?>, ValueMetadata, Comparable<?>> toPrimitive;
 
   ValueType(HoodieAvroWrapperUtils.PrimitiveWrapperType primitiveWrapperType, Function<Object, Object> single) {
     this(primitiveWrapperType.getClazz(),
@@ -114,8 +114,8 @@ public enum ValueType {
     this.internalType = internalType;
     this.primitiveWrapperType = primitiveWrapperType;
     this.standardize = standardize;
-    this.toPrimitive = toPrimitive;
     this.toComplex = toComplex;
+    this.toPrimitive = toPrimitive;
   }
 
   Comparable<?> standardizeJavaTypeAndPromote(Object val, ValueMetadata meta) {
