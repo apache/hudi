@@ -202,7 +202,9 @@ public class TestHoodieDefaultMergeHandle extends HoodieSparkClientTestHarness {
       // This exists in 001 and should be updated
       HoodieRecord sameAsRecord2 = dataGen.generateUpdateRecord(record2.getKey(), newCommitTime);
       updateRecords.add(sameAsRecord2);
-      JavaRDD<HoodieRecord> updateRecordsRDD = jsc.parallelize(updateRecords.stream().map(record -> new HoodieAvroRecord<>(record.getKey(), new HoodieAvroPayload(Option.of((GenericRecord) record.getData())))).collect(Collectors.toList()), 1);
+      JavaRDD<HoodieRecord> updateRecordsRDD = jsc.parallelize(updateRecords.stream()
+          .map(record -> new HoodieAvroRecord<>(record.getKey(), new HoodieAvroPayload(Option.of((GenericRecord) record.getData()))))
+          .collect(Collectors.toList()), 1);
       statusList = client.upsert(updateRecordsRDD, newCommitTime).collect();
       client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);
