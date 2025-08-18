@@ -43,6 +43,8 @@ import java.util.Objects;
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
 public class SerializableIndexedRecord implements GenericRecord, KryoSerializable, Serializable {
+  private static final long serialVersionUID = 1L;
+
   private IndexedRecord record;
   private byte[] recordBytes;
 
@@ -110,9 +112,8 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   private void readObject(ObjectInputStream ois)
       throws ClassNotFoundException, IOException {
     int length = ois.readInt();
-    byte[] bytes = new byte[length];
     this.recordBytes = new byte[length];
-    ois.read(bytes, 0, length);
+    ois.read(recordBytes, 0, length);
   }
 
   @Override

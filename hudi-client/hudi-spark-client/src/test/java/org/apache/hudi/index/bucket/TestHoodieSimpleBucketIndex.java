@@ -100,7 +100,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieSparkClientTestHarness {
     HoodieRecord<IndexedRecord> record1 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 12);
     HoodieRecord<IndexedRecord> record2 = createSimpleRecord(rowKey2, "2016-01-31T03:20:41.415Z", 100);
     HoodieRecord<IndexedRecord> record3 = createSimpleRecord(rowKey3, "2016-01-31T03:16:41.415Z", 15);
-    HoodieRecord<IndexedRecord> record4 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 32);
+    HoodieRecord<IndexedRecord> record4 = createSimpleRecord(rowKey1, "2015-01-31T03:16:41.415Z", 32);
     JavaRDD<HoodieRecord<IndexedRecord>> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
     HoodieWriteConfig config = makeConfig();
