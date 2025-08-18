@@ -26,7 +26,7 @@ import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
@@ -37,7 +37,7 @@ import org.apache.hudi.util.JFunction.scalaFunction1Noop
 
 import org.apache.avro.Schema
 import org.apache.spark.sql._
-import org.apache.spark.sql.HoodieCatalystExpressionUtils.{attributeEquals, MatchCast}
+import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, BoundReference, EqualTo, Expression, Literal, NamedExpression, PredicateHelper}
@@ -525,7 +525,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
   }
 
   private def getOperationType(parameters: Map[String, String]) = {
-    if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, "")) && updatingActions.isEmpty) {
+    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) && updatingActions.isEmpty) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL

@@ -142,12 +142,6 @@ class TestProvidesHoodieConfig {
       "segment",
       combinedConfig.getOrElse(HoodieTableConfig.ORDERING_FIELDS.key, "")
     )
-
-    // write config precombine field should be inferred from table config
-    assertEquals(
-      "segment",
-      combinedConfig.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "")
-    )
   }
 
   private def mockPartitionWriteConfigInCatalogProps(mockTable: HoodieCatalogTable,

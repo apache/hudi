@@ -22,6 +22,7 @@ package org.apache.hudi
 import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, PRECOMBINE_FIELD}
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieKeyGeneratorException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -46,8 +47,9 @@ object AutoRecordKeyGenerationUtils {
       if (!parameters.getOrElse(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString).toBoolean) {
         throw new HoodieKeyGeneratorException("Disabling " + HoodieTableConfig.POPULATE_META_FIELDS.key() + " is not supported with auto generation of record keys")
       }
-      if (hoodieConfig.contains(PRECOMBINE_FIELD.key())) {
-        log.warn("Precombine field " + hoodieConfig.getString(PRECOMBINE_FIELD.key()) + " will be ignored with auto record key generation enabled")
+      if (ConfigUtils.containsConfigProperty(hoodieConfig.getProps, PRECOMBINE_FIELD)
+        || ConfigUtils.containsConfigProperty(hoodieConfig.getProps, HoodieTableConfig.ORDERING_FIELDS)) {
+        log.warn("Ordering field " + hoodieConfig.getString(PRECOMBINE_FIELD.key()) + " will be ignored with auto record key generation enabled")
       }
     }
   }

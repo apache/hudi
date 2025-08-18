@@ -1098,8 +1098,9 @@ class HoodieSparkSqlWriterInternal {
       mergedParams(HoodieTableConfig.KEY_GENERATOR_TYPE.key) = KeyGeneratorType.fromClassName(mergedParams(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key)).name
     }
     // use preCombineField to fill in PAYLOAD_ORDERING_FIELD_PROP_KEY
-    if (mergedParams.contains(PRECOMBINE_FIELD.key())) {
-      mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, mergedParams(PRECOMBINE_FIELD.key()))
+    val orderingFieldsStr = ConfigUtils.getOrderingFieldsStrDuringWrite(mergedParams.asJava)
+    if (!StringUtils.isNullOrEmpty(orderingFieldsStr)) {
+      mergedParams.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsStr)
     }
     if (mergedParams.get(OPERATION.key()).get == INSERT_OPERATION_OPT_VAL && mergedParams.contains(DataSourceWriteOptions.INSERT_DUP_POLICY.key())
       && mergedParams.get(DataSourceWriteOptions.INSERT_DUP_POLICY.key()).get != FAIL_INSERT_DUP_POLICY) {
@@ -1133,7 +1134,7 @@ class HoodieSparkSqlWriterInternal {
         RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), null)),
         mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
         mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key(), ""),
-        optParams.getOrElse(PRECOMBINE_FIELD.key(), null),
+        ConfigUtils.getOrderingFieldsStrDuringWrite(optParams.asJava),
         tableVersion)
       mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
       mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
