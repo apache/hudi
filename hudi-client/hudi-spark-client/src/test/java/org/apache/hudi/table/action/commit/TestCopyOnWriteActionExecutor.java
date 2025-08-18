@@ -142,7 +142,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString())
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestUtils.SIMPLE_RECORD_SCHEMA.toString())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build());
   }
