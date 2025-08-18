@@ -24,7 +24,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -40,6 +39,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -80,12 +80,12 @@ class TestSimpleIndex extends HoodieCommonTestHarness {
     String rowKey2 = UUID.randomUUID().toString();
     String rowKey3 = UUID.randomUUID().toString();
     String rowKey4 = UUID.randomUUID().toString();
-    HoodieRecord record1 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 12);
-    HoodieRecord record2 = createSimpleRecord(rowKey2, "2016-01-31T03:20:41.415Z", 100);
-    HoodieRecord record3 = createSimpleRecord(rowKey3, "2016-01-26T03:16:41.415Z", 15);
-    HoodieRecord record3WithNewPartition = createSimpleRecord(rowKey3, "2016-01-26T03:16:41.415Z", 15, Option.of(partition1));
-    HoodieRecord record4 = createSimpleRecord(rowKey4, "2015-01-31T03:16:41.415Z", 32);
-    HoodieData<HoodieRecord<HoodieAvroRecord>> records = HoodieListData.eager(Arrays.asList(record1, record2, record3WithNewPartition, record4));
+    HoodieRecord<IndexedRecord> record1 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord<IndexedRecord> record2 = createSimpleRecord(rowKey2, "2016-01-31T03:20:41.415Z", 100);
+    HoodieRecord<IndexedRecord> record3 = createSimpleRecord(rowKey3, "2016-01-26T03:16:41.415Z", 15);
+    HoodieRecord<IndexedRecord> record3WithNewPartition = createSimpleRecord(rowKey3, "2016-01-26T03:16:41.415Z", 15, Option.of(partition1));
+    HoodieRecord<IndexedRecord> record4 = createSimpleRecord(rowKey4, "2015-01-31T03:16:41.415Z", 32);
+    HoodieData<HoodieRecord<IndexedRecord>> records = HoodieListData.eager(Arrays.asList(record1, record2, record3WithNewPartition, record4));
 
     HoodieWriteConfig config = makeConfig(manuallySetPartitions);
     Configuration conf = new Configuration(false);
@@ -96,7 +96,7 @@ class TestSimpleIndex extends HoodieCommonTestHarness {
     when(table.getMetaClient()).thenReturn(metaClient);
     when(table.getStorage()).thenReturn(metaClient.getStorage());
     HoodieSimpleIndex simpleIndex = new HoodieSimpleIndex(config, Option.empty());
-    HoodieData<HoodieRecord<HoodieAvroRecord>> taggedRecordRDD = simpleIndex.tagLocation(records, context, table);
+    HoodieData<HoodieRecord<IndexedRecord>> taggedRecordRDD = simpleIndex.tagLocation(records, context, table);
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(HoodieRecord::isCurrentLocationKnown));
 
     HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, conf);

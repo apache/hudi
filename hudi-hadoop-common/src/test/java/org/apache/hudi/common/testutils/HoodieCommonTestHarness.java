@@ -327,7 +327,8 @@ public class HoodieCommonTestHarness {
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
-                                                     Schema schema,
+                                                     Schema recordSchema,
+                                                     Schema writerSchema,
                                                      List<HoodieRecord> records,
                                                      int numFiles,
                                                      HoodieStorage storage,
@@ -336,18 +337,9 @@ public class HoodieCommonTestHarness {
                                                      String commitTime)
       throws IOException, InterruptedException {
     List<IndexedRecord> indexedRecords = records.stream()
-        .map(record -> {
-          try {
-            return record.toIndexedRecord(schema, props);
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        })
-        .filter(Option::isPresent)
-        .map(Option::get)
-        .map(HoodieRecord::getData)
+        .map(record -> (IndexedRecord) record.rewriteRecordWithNewSchema(recordSchema, props, writerSchema).getData())
         .collect(Collectors.toList());
-    return writeLogFiles(partitionPath, schema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
+    return writeLogFiles(partitionPath, writerSchema, indexedRecords, numFiles, storage, fileId, commitTime, "100");
   }
 
   protected static List<HoodieLogFile> writeLogFiles(StoragePath partitionPath,

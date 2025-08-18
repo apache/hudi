@@ -18,11 +18,8 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.common.util.queue.SimpleExecutor;
 import org.apache.hudi.exception.HoodieException;
@@ -34,7 +31,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -111,19 +107,12 @@ public class  TestSimpleExecutionInSpark extends HoodieSparkClientTestHarness {
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
     ArrayList<HoodieRecord> beforeRecord = new ArrayList<>();
     ArrayList<IndexedRecord> beforeIndexedRecord = new ArrayList<>();
-    ArrayList<HoodieAvroRecord> afterRecord = new ArrayList<>();
+    ArrayList<HoodieRecord> afterRecord = new ArrayList<>();
     ArrayList<IndexedRecord> afterIndexedRecord = new ArrayList<>();
 
     hoodieRecords.forEach(record -> {
-      final HoodieAvroRecord originalRecord = (HoodieAvroRecord) record;
-      beforeRecord.add(originalRecord);
-      try {
-        final Option<IndexedRecord> originalInsertValue =
-            originalRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
-        beforeIndexedRecord.add(originalInsertValue.get());
-      } catch (IOException e) {
-        // ignore exception here.
-      }
+      beforeRecord.add(record);
+      beforeIndexedRecord.add((IndexedRecord) record.getData());
     });
 
     HoodieConsumer<HoodieRecord, Integer> consumer =
@@ -131,16 +120,10 @@ public class  TestSimpleExecutionInSpark extends HoodieSparkClientTestHarness {
           private int count = 0;
 
           @Override
-          public void consume(HoodieRecord record) throws Exception {
+          public void consume(HoodieRecord record) {
             count++;
-            afterRecord.add((HoodieAvroRecord) record);
-            try {
-              IndexedRecord indexedRecord = (IndexedRecord)((HoodieAvroRecord) record)
-                  .getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
-              afterIndexedRecord.add(indexedRecord);
-            } catch (IOException e) {
-              //ignore exception here.
-            }
+            afterRecord.add(record);
+            afterIndexedRecord.add((IndexedRecord) record.getData());
           }
 
           @Override
