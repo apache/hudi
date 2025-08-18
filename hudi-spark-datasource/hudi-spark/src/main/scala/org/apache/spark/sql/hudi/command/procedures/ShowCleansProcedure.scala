@@ -34,7 +34,8 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -73,16 +74,22 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
 
     val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
     val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
+    val showArchived = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
     val metaClient = createMetaClient(jsc, basePath)
 
-    val activeTimeline = metaClient.getActiveTimeline
-    if (includePartitionMetadata) {
-      getCleansWithPartitionMetadata(activeTimeline, limit)
+    val timeline = if (showArchived) {
+      metaClient.getArchivedTimeline.mergeTimeline(metaClient.getActiveTimeline)
     } else {
-      getCleans(activeTimeline, limit)
+      metaClient.getActiveTimeline
+    }
+
+    if (includePartitionMetadata) {
+      getCleansWithPartitionMetadata(timeline, limit)
+    } else {
+      getCleans(timeline, limit)
     }
   }
 

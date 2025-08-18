@@ -165,6 +165,71 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test show procedures with showArchived parameter") {
+    withTempDir { tmp =>
+      Seq("COPY_ON_WRITE").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | ts long
+             | ) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   type = '$tableType',
+             |   preCombineField = 'ts'
+             | )
+             |""".stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+        spark.sql(s"update $tableName set price = 11 where id = 1")
+
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
+          .collect()
+
+        // showArchived=false (default - active timeline only)
+        val activeCleans = spark.sql(s"call show_cleans(table => '$tableName', showArchived => false)")
+          .collect()
+        spark.sql(s"call show_cleans(table => '$tableName', showArchived => false)").show(false)
+
+        val activePlans = spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => false)")
+          .collect()
+        spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => false)").show(false)
+
+        val activeMetadata = spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => false)")
+          .collect()
+        spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => false)").show(false)
+
+        // showArchived=true (both active + archived timelines merged)
+        val allCleans = spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)")
+          .collect()
+        spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)").show(false)
+
+        val allPlans = spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => true)")
+          .collect()
+        spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => true)").show(false)
+
+        val allMetadata = spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => true)")
+          .collect()
+        spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => true)").show(false)
+
+        assert(activeCleans.length >= 1, "Active timeline should have clean instances")
+        assert(activePlans.length >= 1, "Active timeline should have clean plans")
+
+        // showArchived=true should include at least the same data as active timeline
+        assert(allCleans.length >= activeCleans.length, "Active + Archived should have at least as many instances as active only")
+        assert(allPlans.length >= activePlans.length, "Active + Archived should have at least as many plans as active only")
+        assert(allMetadata.length >= activeMetadata.length, "Active + Archived should have at least as much metadata as active only")
+      }
+    }
+  }
+
   test("Test show_cleans procedures with limit parameter") {
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>

@@ -44,13 +44,14 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
     val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
+    val showArchived = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
 
     validateInputs(tableName, limit)
 
     Try {
       val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, tableName)
       val metaClient = createMetaClient(jsc, hoodieCatalogTable.tableLocation)
-      getCleanerPlans(metaClient, limit)
+      getCleanerPlans(metaClient, limit, showArchived)
     } match {
       case Success(result) => result
       case Failure(exception) =>
@@ -66,17 +67,21 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
     require(limit > 0, s"Limit must be positive, got: $limit")
   }
 
-  private def getCleanerPlans(metaClient: HoodieTableMetaClient, limit: Int): Seq[Row] = {
-    val activeTimeline = metaClient.getActiveTimeline
-    val sortedCleanInstants = getSortedCleanInstants(activeTimeline)
+  private def getCleanerPlans(metaClient: HoodieTableMetaClient, limit: Int, showArchived: Boolean): Seq[Row] = {
+    val timeline = if (showArchived) {
+      metaClient.getArchivedTimeline.mergeTimeline(metaClient.getActiveTimeline)
+    } else {
+      metaClient.getActiveTimeline
+    }
+    val sortedCleanInstants = getSortedCleanInstants(timeline)
 
     sortedCleanInstants.take(limit).map { cleanInstant =>
-      processCleanPlan(metaClient, activeTimeline, cleanInstant)
+      processCleanPlan(metaClient, timeline, cleanInstant)
     }
   }
 
   private def getSortedCleanInstants(timeline: org.apache.hudi.common.table.timeline.HoodieTimeline): Seq[HoodieInstant] = {
-    val cleanInstants = timeline.getCleanerTimeline.getInstants.asScala
+    val cleanInstants = timeline.getCleanerTimeline.getInstants.asScala.toSeq
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     val comparator = layout.getInstantComparator.requestedTimeOrderedComparator.reversed()
 
@@ -84,7 +89,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
   }
 
   private def processCleanPlan(metaClient: HoodieTableMetaClient,
-                               activeTimeline: org.apache.hudi.common.table.timeline.HoodieTimeline,
+                               timeline: org.apache.hudi.common.table.timeline.HoodieTimeline,
                                cleanInstant: HoodieInstant): Row = {
     Try {
       val requestedCleanInstant = metaClient.getInstantGenerator.createNewInstant(
@@ -92,7 +97,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
         cleanInstant.getAction,
         cleanInstant.requestedTime()
       )
-      val cleanerPlan = activeTimeline.readCleanerPlan(requestedCleanInstant)
+      val cleanerPlan = timeline.readCleanerPlan(requestedCleanInstant)
 
       val planStats = extractCleanPlanStats(cleanerPlan)
 
@@ -168,7 +173,8 @@ object ShowCleansPlanProcedure {
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
