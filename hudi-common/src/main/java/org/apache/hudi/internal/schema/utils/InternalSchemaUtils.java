@@ -25,15 +25,11 @@ import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.Types.Field;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -44,7 +40,6 @@ import java.util.stream.Collectors;
  * eg: column prune, filter rebuild for query engine...
  */
 public class InternalSchemaUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(InternalSchemaUtils.class);
 
   private InternalSchemaUtils() {
   }
@@ -62,16 +57,15 @@ public class InternalSchemaUtils {
     List<Integer> prunedIds = names.stream().map(name -> {
       int id = schema.findIdByName(name);
       if (id == -1) {
-        LOG.debug("Cannot find field name {} in schema {}, skipping.", name, schema);
-        return null;
+        throw new IllegalArgumentException(String.format("cannot prune col: %s which does not exist in hudi table", name));
       }
       return id;
-    }).filter(Objects::nonNull).collect(Collectors.toList());
+    }).collect(Collectors.toList());
     // find top parent field ID. eg: a.b.c, f.g.h, only collect id of a and f ignore all child field.
     List<Integer> topParentFieldIds = new ArrayList<>();
-    names.forEach(f -> {
+    names.stream().forEach(f -> {
       int id = schema.findIdByName(f.split("\\.")[0]);
-      if (!topParentFieldIds.contains(id) && id != -1) {
+      if (!topParentFieldIds.contains(id)) {
         topParentFieldIds.add(id);
       }
     });
