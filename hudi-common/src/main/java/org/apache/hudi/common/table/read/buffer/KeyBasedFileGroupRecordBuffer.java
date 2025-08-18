@@ -136,7 +136,7 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema);
-    BufferedRecord<T> logRecordInfo = records.get(recordKey);
+    BufferedRecord<T> logRecordInfo = records.remove(recordKey);
     return hasNextBaseRecord(baseRecord, logRecordInfo);
   }
 
