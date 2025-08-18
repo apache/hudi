@@ -41,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -296,7 +297,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setTableName("table")
         .initTable(this.metaClient.getStorageConf(), basePath);
 
-    java.lang.reflect.Method readIndexDefMethod = HoodieTableMetaClient.class
+    Method readIndexDefMethod = HoodieTableMetaClient.class
         .getDeclaredMethod("readIndexDefFromStorage",
             org.apache.hudi.storage.HoodieStorage.class,
             StoragePath.class,
