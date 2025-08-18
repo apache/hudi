@@ -189,6 +189,14 @@ public class HoodieCDCLogger implements Closeable {
     numOfCDCRecordsInMemory.incrementAndGet();
   }
 
+  /**
+   * Used for write failure retraction.
+   */
+  public void remove(String recordKey) {
+    cdcData.remove(recordKey);
+    numOfCDCRecordsInMemory.decrementAndGet();
+  }
+
   private void flushIfNeeded(Boolean force) {
     if (force || numOfCDCRecordsInMemory.get() * averageCDCRecordSize >= maxBlockSize) {
       try {
