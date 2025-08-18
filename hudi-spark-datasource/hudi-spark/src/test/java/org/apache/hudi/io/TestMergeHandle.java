@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -42,6 +43,10 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -49,6 +54,7 @@ import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -77,9 +83,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -189,6 +197,8 @@ public class TestMergeHandle extends BaseTestHandle {
     properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
     properties.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), ORDERING_FIELD);
+    properties.put(HoodieTableConfig.CDC_ENABLED.key(), "true");
+    properties.put(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key(), HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY.name());
     initMetaClient(getTableType(), properties);
 
     // init config and table
@@ -240,6 +250,23 @@ public class TestMergeHandle extends BaseTestHandle {
     writeStatus.getWrittenRecordDelegates().forEach(recordDelegate -> assertNotEquals(recordKeyForFailure, recordDelegate.getRecordKey()));
     writeStatus.getIndexStats().getSecondaryIndexStats().values().stream().flatMap(Collection::stream)
         .forEach(secondaryIndexStats -> assertNotEquals(recordKeyForFailure, secondaryIndexStats.getRecordKey()));
+
+    AtomicBoolean cdcRecordsFound = new AtomicBoolean(false);
+    String cdcFilePath = metaClient.getBasePath().toString() + "/" + writeStatus.getStat().getCdcStats().keySet().stream().findFirst().get();
+    Schema cdcSchema = schemaBySupplementalLoggingMode(HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, AVRO_SCHEMA);
+    int recordKeyFieldIndex = cdcSchema.getField("record_key").pos();
+    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(cdcFilePath), cdcSchema)) {
+      while (reader.hasNext()) {
+        HoodieLogBlock logBlock = reader.next();
+        if (logBlock instanceof HoodieDataBlock) {
+          cdcRecordsFound.set(true);
+          try (ClosableIterator<HoodieRecord<IndexedRecord>> itr = ((HoodieDataBlock) logBlock).getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
+            itr.forEachRemaining(record -> assertNotEquals(recordKeyForFailure, record.getData().get(recordKeyFieldIndex)));
+          }
+        }
+      }
+    }
+    assertTrue(cdcRecordsFound.get(), "No CDC records were processed, validate test setup");
   }
 
   @ParameterizedTest
