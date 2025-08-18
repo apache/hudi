@@ -133,7 +133,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
 
     FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
     InputSplit inputSplit = mock(InputSplit.class);
@@ -199,11 +199,12 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
-    PartialUpdateMode partialUpdateMode = PartialUpdateMode.NONE;
+    Option<PartialUpdateMode> partialUpdateModeOpt = Option.empty();
     TypedProperties props = new TypedProperties();
-    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty());
+    when(mockReaderContext.getPayloadClasses(any())).thenReturn(Option.empty());
+    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), props);
     return new SortedKeyBasedFileGroupRecordBuffer<>(
-        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateMode, props, Collections.emptyList(), updateProcessor);
+        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateModeOpt, props, Collections.emptyList(), updateProcessor);
   }
 
   private static <T> List<T> getActualRecordsForSortedKeyBased(SortedKeyBasedFileGroupRecordBuffer<T> fileGroupRecordBuffer) throws IOException {

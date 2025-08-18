@@ -19,7 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata
@@ -166,8 +166,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     assertEquals(metadataColStats.getValueCount, columnRangeMetadata.getValueCount)
     assertEquals(metadataColStats.getTotalSize, columnRangeMetadata.getTotalSize)
-    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMaxValue), columnRangeMetadata.getMaxValue)
-    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMinValue), columnRangeMetadata.getMinValue)
+    assertEquals(unwrapAvroValueWrapper(metadataColStats.getMaxValue), columnRangeMetadata.getMaxValue)
+    assertEquals(unwrapAvroValueWrapper(metadataColStats.getMinValue), columnRangeMetadata.getMinValue)
     assertEquals(metadataColStats.getFileName, fileName)
   }
 
@@ -224,8 +224,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     assertEquals(metadataColStats.getValueCount, columnRangeMetadata.getValueCount)
     assertEquals(metadataColStats.getTotalSize, columnRangeMetadata.getTotalSize)
-    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMaxValue), columnRangeMetadata.getMaxValue)
-    assertEquals(HoodieAvroUtils.unwrapAvroValueWrapper(metadataColStats.getMinValue), columnRangeMetadata.getMinValue)
+    assertEquals(unwrapAvroValueWrapper(metadataColStats.getMaxValue), columnRangeMetadata.getMaxValue)
+    assertEquals(unwrapAvroValueWrapper(metadataColStats.getMinValue), columnRangeMetadata.getMinValue)
     assertEquals(metadataColStats.getFileName, fileName)
   }
 

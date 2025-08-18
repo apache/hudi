@@ -403,7 +403,7 @@ public class StreamerUtil {
    * @return The correct merging behaviour: <merge_mode, payload_class, merge_strategy_id>
    */
   public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
-    return HoodieTableConfig.inferCorrectMergingBehavior(
+    return HoodieTableConfig.inferMergingConfigsForWrites(
         getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getPreCombineField(conf), HoodieTableVersion.EIGHT);
   }
 
@@ -504,7 +504,7 @@ public class StreamerUtil {
     StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     try {
       if (storage.exists(new StoragePath(metaPath, HoodieTableConfig.HOODIE_PROPERTIES_FILE))) {
-        return Option.of(new HoodieTableConfig(storage, metaPath, null, null, null));
+        return Option.of(new HoodieTableConfig(storage, metaPath));
       }
     } catch (IOException e) {
       throw new HoodieIOException("Get table config error", e);

@@ -75,6 +75,10 @@ public class InputSplit {
     return logFiles;
   }
 
+  public boolean hasLogFiles() {
+    return !logFiles.isEmpty();
+  }
+
   public String getPartitionPath() {
     return partitionPath;
   }

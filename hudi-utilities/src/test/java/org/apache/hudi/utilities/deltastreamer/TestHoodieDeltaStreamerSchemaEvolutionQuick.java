@@ -670,7 +670,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     return HoodieTableMetaClient.builder()
         .setConf(storage.getConf().newInstance())
         .setBasePath(dsConfig.targetBasePath)
-        .setPayloadClassName(dsConfig.payloadClassName)
         .build();
   }
 

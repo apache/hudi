@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.avro.model.HoodieDeleteRecordList;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
@@ -55,7 +54,8 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 
 /**
  * Delete block contains a list of keys to be deleted from scanning the blocks so far.
@@ -145,7 +145,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
         .map(record -> HoodieDeleteRecord.newBuilder(recordBuilder)
           .setRecordKey(record.getRecordKey())
           .setPartitionPath(record.getPartitionPath())
-          .setOrderingVal(HoodieAvroUtils.wrapValueIntoAvro(record.getOrderingValue()))
+          .setOrderingVal(wrapValueIntoAvro(record.getOrderingValue()))
           .build())
         .collect(Collectors.toList());
     writer.write(HoodieDeleteRecordList.newBuilder(recordListBuilder)

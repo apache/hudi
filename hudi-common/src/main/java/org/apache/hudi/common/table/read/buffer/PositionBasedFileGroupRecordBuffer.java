@@ -73,12 +73,12 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
   public PositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                             HoodieTableMetaClient hoodieTableMetaClient,
                                             RecordMergeMode recordMergeMode,
-                                            PartialUpdateMode partialUpdateMode,
+                                            Option<PartialUpdateMode> partialUpdateModeOpt,
                                             String baseFileInstantTime,
                                             TypedProperties props,
                                             List<String> orderingFieldNames,
                                             UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateMode, props, orderingFieldNames, updateProcessor);
+    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     this.baseFileInstantTime = baseFileInstantTime;
   }
 
@@ -121,10 +121,10 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           true,
           recordMerger,
           orderingFieldNames,
-          payloadClass,
           readerSchema,
+          payloadClasses,
           props,
-          partialUpdateMode);
+          partialUpdateModeOpt);
     }
 
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
@@ -203,7 +203,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           // this delete-vector could be kept in the records cache(see the check in #fallbackToKeyBasedBuffer),
           // and these keys would be deleted no matter whether there are following-up inserts/updates.
           DeleteRecord deleteRecord = deleteRecords[commitTimeBasedRecordIndex++];
-          BufferedRecord<T> record = BufferedRecords.fromDeleteRecord(deleteRecord, deleteRecord.getOrderingValue());
+          BufferedRecord<T> record = BufferedRecords.fromDeleteRecord(deleteRecord, readerContext.getRecordContext());
           records.put(recordPosition, record);
         }
         return;

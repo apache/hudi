@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.MERGE_PROPERTIES_PREFIX;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -203,8 +203,8 @@ public class TestConfigUtils {
   @Test
   void testParseValidProperties() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "Ki", "Vi");
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "Ki", "Vi");
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(1, result.size());
     assertEquals("Vi", result.get("Ki"));
   }
@@ -212,18 +212,18 @@ public class TestConfigUtils {
   @Test
   void testMissingKeyReturnsEmptyMap() {
     TypedProperties props = new TypedProperties(); // no property set
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertTrue(result.isEmpty());
   }
 
   @Test
   void testMultipleValidProperties() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "key1", "value1");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "key2", "value2");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "key3", "value3");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "key1", "value1");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "key2", "value2");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "key3", "value3");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(3, result.size());
     assertEquals("value1", result.get("key1"));
     assertEquals("value2", result.get("key2"));
@@ -233,11 +233,11 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithDifferentPrefixes() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "mergeKey", "mergeValue");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "mergeKey", "mergeValue");
     props.setProperty("other.prefix.key", "otherValue");
-    props.setProperty("hoodie.merge.custom.property.prefix", "directPrefixValue");
+    props.setProperty("hoodie.merge.custom.property", "directPrefixValue");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(1, result.size());
     assertEquals("mergeValue", result.get("mergeKey"));
   }
@@ -245,9 +245,9 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithEmptyValues() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "emptyKey", "");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "emptyKey", "");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(1, result.size());
     assertEquals("", result.get("emptyKey"));
   }
@@ -255,11 +255,11 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithSpecialCharacters() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "key.with.dots", "value.with.dots");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "key_with_underscores", "value_with_underscores");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "key-with-dashes", "value-with-dashes");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "key.with.dots", "value.with.dots");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "key_with_underscores", "value_with_underscores");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "key-with-dashes", "value-with-dashes");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(3, result.size());
     assertEquals("value.with.dots", result.get("key.with.dots"));
     assertEquals("value_with_underscores", result.get("key_with_underscores"));
@@ -269,11 +269,11 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithNumericValues() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "intKey", "123");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "doubleKey", "123.45");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "booleanKey", "true");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "intKey", "123");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "doubleKey", "123.45");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "booleanKey", "true");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(3, result.size());
     assertEquals("123", result.get("intKey"));
     assertEquals("123.45", result.get("doubleKey"));
@@ -283,9 +283,9 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithWhitespace() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "  spacedKey  ", "  spacedValue  ");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "  spacedKey  ", "  spacedValue  ");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(1, result.size());
     assertEquals("spacedValue", result.get("spacedKey")); // Values should be trimmed
   }
@@ -293,10 +293,10 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithWhitespaceInKeysAndValues() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "  keyWithSpaces  ", "  valueWithSpaces  ");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "keyWithoutSpaces", "valueWithoutSpaces");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "  keyWithSpaces  ", "  valueWithSpaces  ");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "keyWithoutSpaces", "valueWithoutSpaces");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(2, result.size());
     assertEquals("valueWithSpaces", result.get("keyWithSpaces")); // Both key and value should be trimmed
     assertEquals("valueWithoutSpaces", result.get("keyWithoutSpaces"));
@@ -305,28 +305,28 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithExactPrefixMatch() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX, "exactPrefixValue");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX, "exactPrefixValue");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(0, result.size()); // Exact prefix match should not be included as it has no suffix
   }
 
   @Test
   void testPropertiesWithPrefixFollowedByDot() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX, "valueAfterDot");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX, "valueAfterDot");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(0, result.size()); // Empty key after trimming should be filtered out
   }
 
   @Test
   void testPropertiesWithWhitespaceOnlyKeys() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "   ", "valueForWhitespaceKey");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "  \t  \n  ", "valueForTabNewlineKey");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "   ", "valueForWhitespaceKey");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "  \t  \n  ", "valueForTabNewlineKey");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(0, result.size());
   }
 
@@ -334,21 +334,21 @@ public class TestConfigUtils {
   void testPropertiesWithNullKeys() {
     TypedProperties props = new TypedProperties();
     // Note: TypedProperties doesn't allow null keys, but we test the edge case
-    props.setProperty(MERGE_PROPERTIES_PREFIX, "valueForNullKey");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX, "valueForNullKey");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(0, result.size()); // Empty key should be filtered out
   }
 
   @Test
   void testPropertiesWithMixedValidAndInvalidKeys() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "validKey", "validValue");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "   ", "invalidValue1");
-    props.setProperty(MERGE_PROPERTIES_PREFIX, "invalidValue2");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "anotherValidKey", "anotherValidValue");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "validKey", "validValue");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "   ", "invalidValue1");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX, "invalidValue2");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "anotherValidKey", "anotherValidValue");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(2, result.size()); // Only valid keys should be included
     assertEquals("validValue", result.get("validKey"));
     assertEquals("anotherValidValue", result.get("anotherValidKey"));
@@ -357,10 +357,10 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithCaseSensitivity() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "Key1", "Value1");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "key1", "value1");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "Key1", "Value1");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "key1", "value1");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(2, result.size());
     assertEquals("Value1", result.get("Key1"));
     assertEquals("value1", result.get("key1"));
@@ -369,10 +369,10 @@ public class TestConfigUtils {
   @Test
   void testPropertiesWithLeadingAndTrailingWhitespace() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "  leadingSpaceKey", "trailingSpaceValue  ");
-    props.setProperty(MERGE_PROPERTIES_PREFIX + "trailingSpaceKey  ", "  leadingSpaceValue");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "  leadingSpaceKey", "trailingSpaceValue  ");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "trailingSpaceKey  ", "  leadingSpaceValue");
 
-    Map<String, String> result = ConfigUtils.extractWithPrefix(props, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
     assertEquals(2, result.size());
     assertEquals("trailingSpaceValue", result.get("leadingSpaceKey")); // Trimmed
     assertEquals("leadingSpaceValue", result.get("trailingSpaceKey")); // Trimmed
@@ -380,7 +380,7 @@ public class TestConfigUtils {
 
   @Test
   void testNullProperties() {
-    Map<String, String> result = ConfigUtils.extractWithPrefix(null, MERGE_PROPERTIES_PREFIX);
+    Map<String, String> result = ConfigUtils.extractWithPrefix(null, RECORD_MERGE_PROPERTY_PREFIX);
     assertTrue(result.isEmpty());
   }
 }

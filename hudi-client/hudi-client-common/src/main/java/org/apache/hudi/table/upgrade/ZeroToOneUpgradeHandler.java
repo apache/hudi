@@ -20,7 +20,6 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
-import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
@@ -38,9 +37,7 @@ import org.apache.hudi.table.action.rollback.ListingBasedRollbackStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
@@ -51,7 +48,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.EQUALS;
 public class ZeroToOneUpgradeHandler implements UpgradeHandler {
 
   @Override
-  public Map<ConfigProperty, String> upgrade(
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(
       HoodieWriteConfig config, HoodieEngineContext context, String instantTime,
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     // fetch pending commit info
@@ -67,7 +64,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
       // for every pending commit, delete old markers and re-create markers in new format
       recreateMarkers(commit, table, context, config.getMarkersDeleteParallelism());
     }
-    return Collections.EMPTY_MAP;
+    return new UpgradeDowngrade.TableConfigChangeSet();
   }
 
   /**

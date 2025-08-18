@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
@@ -76,7 +75,7 @@ class TestStreamingKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecord
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
@@ -113,7 +112,7 @@ class TestStreamingKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecord
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
@@ -152,7 +151,7 @@ class TestStreamingKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecord
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.CUSTOM);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
@@ -189,7 +188,7 @@ class TestStreamingKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecord
     when(tableConfig.getPayloadClass()).thenReturn(CustomPayload.class.getName());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.CUSTOM);
-    when(tableConfig.getPartialUpdateMode()).thenReturn(PartialUpdateMode.NONE);
+    when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeStrategyId()).thenReturn(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
 
