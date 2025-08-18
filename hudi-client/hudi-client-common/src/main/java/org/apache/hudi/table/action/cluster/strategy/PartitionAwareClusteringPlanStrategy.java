@@ -67,7 +67,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     HoodieWriteConfig writeConfig = getWriteConfig();
     
     // Choose the appropriate method based on schema grouping configuration
-    if (writeConfig.isFileStitchingBinaryCopySchemaEvolutionEnabled()) {
+    if (writeConfig.isBinaryCopySchemaEvolutionEnabled()) {
       return buildClusteringGroupsForPartitionSizeOnly(partitionPath, fileSlices);
     } else {
       return buildClusteringGroupsForPartitionWithSchemaGrouping(partitionPath, fileSlices);

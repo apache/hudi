@@ -1784,7 +1784,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
   }
 
-  public boolean isFileStitchingBinaryCopySchemaEvolutionEnabled() {
+  public boolean isBinaryCopySchemaEvolutionEnabled() {
     return getBooleanOrDefault(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
   }
 

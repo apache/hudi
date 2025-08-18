@@ -65,7 +65,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
   protected long insertRecordsWritten = 0;
 
   private MessageType getWriteSchema(HoodieWriteConfig config, List<StoragePath> inputFiles, Configuration conf, HoodieTable<?, ?, ?, ?> table) {
-    if (!config.isFileStitchingBinaryCopySchemaEvolutionEnabled() && !inputFiles.isEmpty()) {
+    if (!config.isBinaryCopySchemaEvolutionEnabled() && !inputFiles.isEmpty()) {
       // When schema evolution is disabled, use the schema from the first input file
       // All files should have the same schema in this case
       try {
@@ -115,7 +115,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     HoodieTimer timer = HoodieTimer.start();
     long records = 0;
     try {
-      boolean schemaEvolutionEnabled = config.isFileStitchingBinaryCopySchemaEvolutionEnabled();
+      boolean schemaEvolutionEnabled = config.isBinaryCopySchemaEvolutionEnabled();
       LOG.info("Schema evolution enabled for binary copy: {}", schemaEvolutionEnabled);
       records = this.writer.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, schemaEvolutionEnabled);
     } catch (IOException e) {

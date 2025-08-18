@@ -243,7 +243,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
           if (!schemaEvolutionEnabled) {
             throw new HoodieException("Column masking for '" + chunk.getPath().toDotString() 
                 + "' requires schema evolution to be enabled. "
-                + "Set 'hoodie.clustering.plan.strategy.file.stitching.binary.copy.schema.evolution.enable' to true.");
+                + "Set 'hoodie.clustering.plan.strategy.binary.copy.schema.evolution.enable' to true.");
           }
         }
         // Mask column and compress it again.

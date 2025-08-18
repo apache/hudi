@@ -198,7 +198,7 @@ public class TestHoodieBinaryCopyHandleSchemaEvolution {
     
     public MessageType testGetWriteSchema(HoodieWriteConfig config, List<StoragePath> inputFiles, 
                                          Configuration conf, HoodieTable<?, ?, ?, ?> table) {
-      if (!config.isFileStitchingBinaryCopySchemaEvolutionEnabled() && !inputFiles.isEmpty()) {
+      if (!config.isBinaryCopySchemaEvolutionEnabled() && !inputFiles.isEmpty()) {
         // When schema evolution is disabled, use the schema from the first input file
         // All files should have the same schema in this case
         try {

@@ -37,7 +37,7 @@ public class TestHoodieWriteConfigFileStitching {
     HoodieWriteConfig config1 = HoodieWriteConfig.newBuilder()
         .withPath("/test/path")
         .build();
-    assertFalse(config1.isFileStitchingBinaryCopySchemaEvolutionEnabled(),
+    assertFalse(config1.isBinaryCopySchemaEvolutionEnabled(),
         "File stitching binary copy schema evolution should be disabled by default");
 
     // Test explicitly setting to false
@@ -47,7 +47,7 @@ public class TestHoodieWriteConfigFileStitching {
         .withPath("/test/path")
         .withProps(props)
         .build();
-    assertFalse(config2.isFileStitchingBinaryCopySchemaEvolutionEnabled(),
+    assertFalse(config2.isBinaryCopySchemaEvolutionEnabled(),
         "File stitching binary copy schema evolution should be disabled when explicitly set to false");
 
     // Test explicitly setting to true
@@ -56,7 +56,7 @@ public class TestHoodieWriteConfigFileStitching {
         .withPath("/test/path")
         .withProps(props)
         .build();
-    assertTrue(config3.isFileStitchingBinaryCopySchemaEvolutionEnabled(),
+    assertTrue(config3.isBinaryCopySchemaEvolutionEnabled(),
         "File stitching binary copy schema evolution should be enabled when explicitly set to true");
   }
 

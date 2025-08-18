@@ -344,7 +344,7 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
 
   public static final ConfigProperty<Boolean> FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE = ConfigProperty
-      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "file.stitching.binary.copy.schema.evolution.enable")
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "binary.copy.schema.evolution.enable")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
