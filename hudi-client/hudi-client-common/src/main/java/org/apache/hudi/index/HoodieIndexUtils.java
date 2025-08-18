@@ -51,6 +51,8 @@ import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -475,10 +477,9 @@ public class HoodieIndexUtils {
           writeSchemaWithMetaFields, config, recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldNames);
     } else {
       // prepend the hoodie meta fields as the incoming record does not have them
-      HoodieRecord incomingPrepended = incoming
-          .prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(incoming.getPartitionPath()), config.getProps());
-      BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incomingPrepended, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
+      BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incoming, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
       BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
+      existingBufferedRecord.project(existingRecordContext.projectRecord(writeSchemaWithMetaFields, writeSchema));
       BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
 
       if (mergeResult.isDelete()) {
@@ -486,10 +487,16 @@ public class HoodieIndexUtils {
         return Option.empty();
       }
       String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
-      HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
-      // the merged record needs to be converted back to the original payload
-      return Option.of(result.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
-          config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+      if (config.isFileGroupReaderBasedMergedHandle() && HoodieRecordUtils.isPayloadClassDeprecated(ConfigUtils.getPayloadClass(config.getProps()))) {
+        mergeResult.project(existingRecordContext.projectRecord(writeSchemaWithMetaFields, writeSchema));
+        return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
+      } else {
+        HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
+        HoodieRecord<R> resultWithMetaFields = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields, new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
+        // the merged record needs to be converted back to the original payload
+        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
+      }
     }
   }
 
