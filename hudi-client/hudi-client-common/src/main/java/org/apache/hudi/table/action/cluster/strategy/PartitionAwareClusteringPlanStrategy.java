@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -65,100 +64,6 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
    */
   protected Pair<Stream<HoodieClusteringGroup>, Boolean> buildClusteringGroupsForPartition(String partitionPath, List<FileSlice> fileSlices) {
     HoodieWriteConfig writeConfig = getWriteConfig();
-    
-    // Choose the appropriate method based on schema grouping configuration
-    if (writeConfig.isBinaryCopySchemaEvolutionEnabled()) {
-      return buildClusteringGroupsForPartitionSizeOnly(partitionPath, fileSlices);
-    } else {
-      return buildClusteringGroupsForPartitionWithSchemaGrouping(partitionPath, fileSlices);
-    }
-  }
-  
-  /**
-   * Create Clustering group based on files eligible for clustering in the partition with schema-aware grouping.
-   * When schema evolution is disabled, files are grouped by schema hash first, then by size.
-   * return stream of HoodieClusteringGroup and boolean partial Scheduled indicating whether all given fileSlices in the current partition have been processed.
-   */
-  protected Pair<Stream<HoodieClusteringGroup>, Boolean> buildClusteringGroupsForPartitionWithSchemaGrouping(String partitionPath, List<FileSlice> fileSlices) {
-    HoodieWriteConfig writeConfig = getWriteConfig();
-
-    List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
-    List<FileSlice> currentGroup = new ArrayList<>();
-
-    // Sort fileSlices before dividing, which makes dividing more compact
-    List<FileSlice> sortedFileSlices = new ArrayList<>(fileSlices);
-    sortedFileSlices.sort((o1, o2) -> (int)
-        ((o2.getBaseFile().isPresent() ? o2.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())
-            - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
-
-    long totalSizeSoFar = 0;
-    boolean partialScheduled = false;
-    
-    LOG.info("Schema grouping enabled for partition: {}", partitionPath);
-    Integer currentGroupSchemaHash = null; // Track schema hash for current group
-
-    for (FileSlice currentSlice : sortedFileSlices) {
-      long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
-      
-      // Get schema hash from the file for schema-based grouping
-      Integer currentFileSchemaHash = getFileSchemaHash(currentSlice);
-      
-      // Check if we need to create a new group due to schema mismatch
-      boolean schemaMismatch = currentGroupSchemaHash != null && !currentGroupSchemaHash.equals(currentFileSchemaHash);
-      
-      // check if max size is reached OR schema is different, and create new group if needed
-      if ((totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() || schemaMismatch) && !currentGroup.isEmpty()) {
-        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-        LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
-            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups
-            + (schemaMismatch ? " (schema change detected)" : ""));
-        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
-        currentGroup = new ArrayList<>();
-        totalSizeSoFar = 0;
-        currentGroupSchemaHash = null;
-
-        // if fileSliceGroups's size reach the max group, stop loop
-        if (fileSliceGroups.size() >= writeConfig.getClusteringMaxNumGroups()) {
-          LOG.info("Having generated the maximum number of groups : " + writeConfig.getClusteringMaxNumGroups());
-          partialScheduled = true;
-          break;
-        }
-      }
-
-      // Add to the current file-group
-      currentGroup.add(currentSlice);
-      // Set schema hash for the group if not set
-      if (currentGroupSchemaHash == null) {
-        currentGroupSchemaHash = currentFileSchemaHash;
-      }
-      // assume each file group size is ~= parquet.max.file.size
-      totalSizeSoFar += currentSize;
-    }
-
-    if (!currentGroup.isEmpty()) {
-      if (currentGroup.size() > 1 || writeConfig.shouldClusteringSingleGroup()) {
-        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-        LOG.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
-        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
-      }
-    }
-
-    return Pair.of(fileSliceGroups.stream().map(fileSliceGroup ->
-        HoodieClusteringGroup.newBuilder()
-            .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
-            .setNumOutputFileGroups(fileSliceGroup.getRight())
-            .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
-            .build()), partialScheduled);
-  }
-  
-  /**
-   * Create Clustering group based on files eligible for clustering in the partition using size-only grouping.
-   * This is the original behavior that only considers file sizes for grouping (no schema awareness).
-   * return stream of HoodieClusteringGroup and boolean partial Scheduled indicating whether all given fileSlices in the current partition have been processed.
-   */
-  protected Pair<Stream<HoodieClusteringGroup>, Boolean> buildClusteringGroupsForPartitionSizeOnly(String partitionPath, List<FileSlice> fileSlices) {
-    HoodieWriteConfig writeConfig = getWriteConfig();
 
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
@@ -174,8 +79,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     for (FileSlice currentSlice : sortedFileSlices) {
       long currentSize = currentSlice.getBaseFile().isPresent() ? currentSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
-
-      // check if max size is reached and create new group if needed
+      // check if max size is reached and create new group, if needed.
       if (totalSizeSoFar + currentSize > writeConfig.getClusteringMaxBytesInGroup() && !currentGroup.isEmpty()) {
         int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
         LOG.info("Adding one clustering group " + totalSizeSoFar + " max bytes: "
@@ -335,28 +239,5 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
   protected int getNumberOfOutputFileGroups(long groupSize, long targetFileSize) {
     return (int) Math.ceil(groupSize / (double) targetFileSize);
-  }
-  
-  /**
-   * Get the schema hash for a file slice to enable schema-based grouping.
-   * @param fileSlice The file slice to get schema hash from
-   * @return Hash code of the schema for efficient comparison
-   */
-  private Integer getFileSchemaHash(FileSlice fileSlice) {
-    if (fileSlice.getBaseFile().isPresent()) {
-      String filePath = fileSlice.getBaseFile().get().getPath();
-      try {
-        // Use centralized ParquetUtils method to read schema hash
-        return ParquetUtils.readSchemaHash(
-            getHoodieTable().getStorage(),
-            new org.apache.hudi.storage.StoragePath(filePath));
-      } catch (Exception e) {
-        LOG.warn("Failed to read schema hash from file: " + filePath, e);
-        // Return a default hash if we can't read the schema
-        return 0;
-      }
-    }
-    // Return default hash for files without base file
-    return 0;
   }
 }
