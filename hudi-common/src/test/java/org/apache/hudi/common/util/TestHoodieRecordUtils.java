@@ -76,7 +76,7 @@ class TestHoodieRecordUtils {
     assertEquals(Collections.singletonList("tbl"), HoodieRecordUtils.getOrderingFieldNames(RecordMergeMode.EVENT_TIME_ORDERING, props, metaClient));
 
     // Assert props value is returned for precombine field configuration when it is set with event time merge mode
-    props.setProperty("hoodie.datasource.write.precombine.field", "props");
+    props.setProperty("hoodie.table.ordering.fields", "props");
     assertEquals(Collections.singletonList("props"), HoodieRecordUtils.getOrderingFieldNames(RecordMergeMode.EVENT_TIME_ORDERING, props, metaClient));
   }
 }

@@ -135,14 +135,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       keyFields.head
     }
 
-  protected lazy val preCombineFields: List[String] = {
-    val tablePrecombineFields = tableConfig.getOrderingFields
-    if (tablePrecombineFields.isEmpty) {
+  protected lazy val orderingFields: List[String] = {
+    val tableOrderingFields = tableConfig.getOrderingFields
+    if (tableOrderingFields.isEmpty) {
       DataSourceOptionsHelper.getPreCombineFields(optParams)
         .orElse(java.util.Collections.emptyList[String])
         .asScala.toList
     } else {
-      tablePrecombineFields.asScala.toList
+      tableOrderingFields.asScala.toList
     }
   }
 
@@ -268,7 +268,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     HoodieTableState(tablePath = basePath.toString,
       latestCommitTimestamp = queryTimestamp,
       recordKeyField = recordKeyField,
-      preCombineFields = preCombineFields,
+      preCombineFields = orderingFields,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,

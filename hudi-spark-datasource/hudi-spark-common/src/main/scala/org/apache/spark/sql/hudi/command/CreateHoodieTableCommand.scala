@@ -126,6 +126,7 @@ object CreateHoodieTableCommand {
       val tableOptions = hoodieCatalogTable.catalogProperties
 
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.ORDERING_FIELDS.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PRECOMBINE_FIELD)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PARTITION_FIELDS.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.RECORDKEY_FIELDS.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)

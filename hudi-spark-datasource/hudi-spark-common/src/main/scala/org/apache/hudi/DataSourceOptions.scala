@@ -1071,7 +1071,7 @@ object DataSourceOptionsHelper {
   /**
    * Returns optional list of precombine fields from the provided parameteres.
    */
-  @deprecated("Use preCombine key in table config", "1.1.0")
+  @deprecated("Use ordering field key in table config", "1.1.0")
   def getPreCombineFields(params: Map[String, String]): Option[java.util.List[String]] = params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key) match {
     // NOTE: This is required to compensate for cases when empty string is used to stub
     //       property value to avoid it being set with the default value

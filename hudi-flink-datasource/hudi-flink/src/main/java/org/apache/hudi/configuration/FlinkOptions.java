@@ -118,7 +118,7 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Comma separated list of fields used in preCombining before actual write. When two records have the same\n"
           + "key value, we will pick the one with the largest value for the precombine field,\n"
           + "determined by Object.compareTo(..). For multiple fields if first key comparison is same, second key comparison is made and so on.\n"
-          + "Config precombine.field is now deprecated, please use precombine.fields instead.");
+          + "Config precombine.field is now deprecated, please use ordering.fields instead.");
 
   @AdvancedConfig
   public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions

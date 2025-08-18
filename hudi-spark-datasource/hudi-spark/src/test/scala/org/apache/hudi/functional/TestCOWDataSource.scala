@@ -443,7 +443,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
   @ParameterizedTest
   @CsvSource(Array("hoodie.datasource.write.recordkey.field,begin_lat", "hoodie.datasource.write.partitionpath.field,end_lon",
-    "hoodie.datasource.write.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator", "hoodie.datasource.write.precombine.field,fare"))
+    "hoodie.datasource.write.keygenerator.class,org.apache.hudi.keygen.NonpartitionedKeyGenerator", "hoodie.table.ordering.fields,fare"))
   def testAlteringRecordKeyConfig(configKey: String, configValue: String) {
     val recordType = HoodieRecordType.AVRO
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType, Map(

@@ -20,6 +20,7 @@ package org.apache.hudi.integ.testsuite.dag.nodes
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.hudi.client.WriteStatus
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config

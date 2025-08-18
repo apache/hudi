@@ -315,7 +315,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
               + "hoodie.metadata.record.index.enable = 'true', "
               + "hoodie.datasource.write.recordkey.field = 'record_key_col', "
               + "hoodie.enable.data.skipping = 'true', "
-              + "hoodie.datasource.write.precombine.field = 'ts', "
+              + "hoodie.table.ordering.fields = 'ts', "
               + "hoodie.datasource.write.payload.class = 'org.apache.hudi.common.model.OverwriteWithLatestAvroPayload'"
               + ") "
               + "partitioned by(partition_key_col) "
@@ -366,7 +366,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
               + "hoodie.metadata.record.index.enable = 'true', "
               + "hoodie.datasource.write.recordkey.field = 'record_key_col', "
               + "hoodie.enable.data.skipping = 'true', "
-              + "hoodie.datasource.write.precombine.field = 'ts'"
+              + "hoodie.table.ordering.fields = 'ts'"
               + ") "
               + "partitioned by(partition_key_col) "
               + "location '" + basePath + "'");
