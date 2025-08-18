@@ -68,6 +68,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.estimator.AverageRecordSizeEstimator;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -3675,6 +3676,19 @@ public class HoodieWriteConfig extends HoodieConfig {
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
+    }
+  }
+
+  public boolean isFileGroupReaderBasedMergedHandle() {
+    return isFileGroupReaderBasedMergedHandle(props);
+  }
+
+  public static boolean isFileGroupReaderBasedMergedHandle(TypedProperties props) {
+    try {
+      return FileGroupReaderBasedMergeHandle.class.isAssignableFrom(
+          Class.forName(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, true)));
+    } catch (ClassNotFoundException e) {
+      throw new HoodieException("Failed to find class for " + HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, e);
     }
   }
 }

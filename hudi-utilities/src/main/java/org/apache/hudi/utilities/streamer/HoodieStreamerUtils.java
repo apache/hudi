@@ -42,7 +42,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieRecordCreationException;
-import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -94,13 +93,8 @@ public class HoodieStreamerUtils {
     String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName)
         ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode, cfg.payloadClassName)
         : cfg.payloadClassName;
-    boolean requiresPayload;
-    try {
-      requiresPayload = !(isChangingRecords(cfg.operation)
-          && FileGroupReaderBasedMergeHandle.class.isAssignableFrom(Class.forName(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, true))));
-    } catch (ClassNotFoundException e) {
-      throw new HoodieException("Failed to load merge handle class", e);
-    }
+    boolean requiresPayload = !(isChangingRecords(cfg.operation) && HoodieWriteConfig.isFileGroupReaderBasedMergedHandle(props));
+
     return avroRDDOptional.map(avroRDD -> {
       SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());
       SerializableSchema processedAvroSchema = new SerializableSchema(isDropPartitionColumns(props) ? HoodieAvroUtils.removeMetadataFields(avroSchema.get()) : avroSchema.get());
