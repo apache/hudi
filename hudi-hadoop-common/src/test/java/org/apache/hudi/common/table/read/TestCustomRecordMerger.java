@@ -239,7 +239,6 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
   public static class CustomAvroMerger implements HoodieRecordMerger {
     public static final String KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY =
         "KEEP_CERTAIN_TIMESTAMP_VALUE_ONLY";
-    public static final String TIMESTAMP = "timestamp";
     private String[] orderingFields;
 
     @Override
@@ -274,18 +273,6 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
         }
       }
       return Option.empty();
-    }
-
-    @Override
-    public boolean shouldFlush(
-        HoodieRecord record,
-        Schema schema,
-        TypedProperties props
-    ) {
-      long timestamp = (long) ((HoodieAvroIndexedRecord) record)
-          .getData()
-          .get(schema.getField(TIMESTAMP).pos());
-      return timestamp % 3 == 0L;
     }
 
     @Override

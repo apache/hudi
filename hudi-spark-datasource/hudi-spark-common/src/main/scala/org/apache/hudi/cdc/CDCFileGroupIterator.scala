@@ -89,12 +89,12 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   } else {
     Option.empty.asInstanceOf[Option[String]]
   }
-  private lazy val partialUpdateMode: PartialUpdateMode = metaClient.getTableConfig.getPartialUpdateMode
+  private lazy val partialUpdateModeOpt: Option[PartialUpdateMode] = metaClient.getTableConfig.getPartialUpdateMode
   private var isPartialMergeEnabled = false
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
     readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger), orderingFieldNames,
-    payloadClass, avroSchema, props, partialUpdateMode)
+    payloadClass, avroSchema, props, partialUpdateModeOpt)
 
   private lazy val storage = metaClient.getStorage
 
@@ -513,7 +513,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
     keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,
       metaClient.getTableConfig.getPartialUpdateMode, readerProperties, metaClient.getTableConfig.getPreCombineFields,
-      UpdateProcessor.create(stats, readerContext, true, Option.empty())))
+      UpdateProcessor.create(stats, readerContext, true, Option.empty(), props)))
 
     HoodieMergedLogRecordReader.newBuilder[InternalRow]
       .withStorage(metaClient.getStorage)

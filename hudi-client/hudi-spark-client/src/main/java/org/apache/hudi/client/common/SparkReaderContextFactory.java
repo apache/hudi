@@ -61,16 +61,16 @@ import scala.collection.JavaConverters;
 /**
  * Factory that provides the {@link InternalRow} based {@link HoodieReaderContext} for reading data into the spark native format.
  */
-class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
+public class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
   private final Broadcast<SparkColumnarFileReader> baseFileReaderBroadcast;
   private final Broadcast<SerializableConfiguration> configurationBroadcast;
   private final Broadcast<HoodieTableConfig> tableConfigBroadcast;
 
-  SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient) {
+  public SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient) {
     this(hoodieSparkEngineContext, metaClient, new TableSchemaResolver(metaClient), SparkAdapterSupport$.MODULE$.sparkAdapter());
   }
 
-  SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient,
+  public SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient,
                             TableSchemaResolver resolver, SparkAdapter sparkAdapter) {
     SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sparkSession().sessionState().conf();
     JavaSparkContext jsc = hoodieSparkEngineContext.jsc();

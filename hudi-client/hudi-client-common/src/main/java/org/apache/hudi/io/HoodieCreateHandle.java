@@ -214,7 +214,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     try {
       if (isClosed()) {
         // Handle has already been closed
-        return Collections.emptyList();
+        return Collections.singletonList(writeStatus);
       }
 
       markClosed();

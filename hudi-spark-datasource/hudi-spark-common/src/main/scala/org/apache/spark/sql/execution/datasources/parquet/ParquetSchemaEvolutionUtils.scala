@@ -51,7 +51,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   // Fetch internal schema
   private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaOpt, requiredSchema)
 
-  var shouldUseInternalSchema: Boolean = querySchemaOption.isPresent
+  var shouldUseInternalSchema: Boolean = querySchemaOption.isPresent && tablePath != null
 
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 

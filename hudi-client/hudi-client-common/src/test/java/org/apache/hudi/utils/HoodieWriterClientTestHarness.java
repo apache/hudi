@@ -158,9 +158,23 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
 
   protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields,
                                                  boolean isMetadataTable) {
-    if (!populateMetaFields) {
-      configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen(populateMetaFields)))
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());
+    try {
+      if (!populateMetaFields) {
+        boolean recreateMetaClient = false;
+        if (metaClient != null && metaClient.getTableConfig().populateMetaFields()) {
+          // need to recreate the meta client on the next write since this was initialized with populate meta fields as true by default
+          recreateMetaClient = true;
+          storage.deleteDirectory(metaClient.getBasePath());
+        }
+        configBuilder.withProperties((isMetadataTable ? getPropertiesForMetadataTable() : getPropertiesForKeyGen(populateMetaFields)))
+            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build())
+            .withPopulateMetaFields(false);
+        if (recreateMetaClient) {
+          HoodieTestUtils.init(basePath, getTableType(), configBuilder.build().getProps());
+        }
+      }
+    } catch (IOException ex) {
+      throw new HoodieIOException("Failed to update table: " + metaClient.getBasePath(), ex);
     }
   }
 
@@ -550,7 +564,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     int dedupParallelism = records.getNumPartitions() + additionalParallelism;
     BaseHoodieWriteClient writeClient = getHoodieWriteClient(writeConfig);
     HoodieReaderContext readerContext = writeClient.getEngineContext()
-        .getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, writeConfig.getProps()).getContext();
+        .getReaderContextFactoryForWrite(metaClient, HoodieRecord.HoodieRecordType.AVRO, writeConfig.getProps(), true).getContext();
     List<String> orderingFieldNames = getOrderingFieldNames(
         readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
     BufferedRecordMerger<HoodieRecord> recordMerger = BufferedRecordMergerFactory.create(

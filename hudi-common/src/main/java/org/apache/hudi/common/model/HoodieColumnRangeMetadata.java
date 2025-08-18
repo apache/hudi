@@ -26,7 +26,7 @@ import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.Objects;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)

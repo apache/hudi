@@ -23,8 +23,6 @@ import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -42,7 +40,6 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -66,7 +63,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
-import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
@@ -74,9 +70,12 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final Schema readerSchema;
   protected final List<String> orderingFieldNames;
   protected final RecordMergeMode recordMergeMode;
-  protected final PartialUpdateMode partialUpdateMode;
+  protected final Option<PartialUpdateMode> partialUpdateModeOpt;
   protected final Option<HoodieRecordMerger> recordMerger;
-  protected final Option<String> payloadClass;
+  // The pair of payload classes represents the payload class for the table and the payload class for the incoming records.
+  // The two classes are only expected to be different when there is a merge-into operation that leverages the ExpressionPayload.
+  // The option will be empty if the payload merger is not used for this table.
+  protected final Option<Pair<String, String>> payloadClasses;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, BufferedRecord<T>> records;
   protected final DeleteContext deleteContext;
@@ -94,7 +93,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected FileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                   HoodieTableMetaClient hoodieTableMetaClient,
                                   RecordMergeMode recordMergeMode,
-                                  PartialUpdateMode partialUpdateMode,
+                                  Option<PartialUpdateMode> partialUpdateModeOpt,
                                   TypedProperties props,
                                   List<String> orderingFieldNames,
                                   UpdateProcessor<T> updateProcessor) {
@@ -102,13 +101,9 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     this.updateProcessor = updateProcessor;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
     this.recordMergeMode = recordMergeMode;
-    this.partialUpdateMode = partialUpdateMode;
+    this.partialUpdateModeOpt = partialUpdateModeOpt;
     this.recordMerger = readerContext.getRecordMerger();
-    if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-      this.payloadClass = Option.of(hoodieTableMetaClient.getTableConfig().getPayloadClass());
-    } else {
-      this.payloadClass = Option.empty();
-    }
+    this.payloadClasses = readerContext.getPayloadClasses(props);
     this.orderingFieldNames = orderingFieldNames;
     // Ensure that ordering field is populated for mergers and legacy payloads
     this.props = ConfigUtils.supplementOrderingFields(props, orderingFieldNames);
@@ -122,7 +117,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, payloadClass, readerSchema, props, partialUpdateMode);
+        readerContext, recordMergeMode, enablePartialMerging, recordMerger, orderingFieldNames, readerSchema, payloadClasses, props, partialUpdateModeOpt);
     this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
     this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema, readerContext.getRecordContext(), orderingFieldNames);
   }
@@ -247,7 +242,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
     // Inserts
     nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(baseRecord));
-    nextRecord.setHoodieOperation(HoodieOperation.INSERT);
     return true;
   }
 
@@ -283,18 +277,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
         .orElseGet(dataBlock::getSchema);
     return Pair.of(transformer, evolvedSchema);
-  }
-
-  static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
-    return orderingValue == null || OrderingValues.isDefault(orderingValue);
-  }
-
-  static Comparable getOrderingValue(HoodieReaderContext readerContext,
-                                     DeleteRecord deleteRecord) {
-    Comparable orderingValue = deleteRecord.getOrderingValue();
-    return isCommitTimeOrderingValue(orderingValue)
-        ? OrderingValues.getDefault()
-        : readerContext.getRecordContext().convertOrderingValueToEngineType(orderingValue);
   }
 
   private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {

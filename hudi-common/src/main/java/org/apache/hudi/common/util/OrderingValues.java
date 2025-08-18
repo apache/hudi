@@ -113,4 +113,8 @@ public class OrderingValues {
   public static List<Comparable> getValues(ArrayComparable orderingValue) {
     return orderingValue.getValues();
   }
+
+  public static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
+    return orderingValue == null || OrderingValues.isDefault(orderingValue);
+  }
 }

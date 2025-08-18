@@ -18,17 +18,20 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
@@ -62,23 +65,26 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             List<String> orderingFieldNames, HoodieTableMetaClient hoodieTableMetaClient,
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
-    PartialUpdateMode partialUpdateMode = hoodieTableMetaClient.getTableConfig().getPartialUpdateMode();
-    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback);
+    Schema recordSchema = HoodieAvroUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
+    HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
+    Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
+    UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
     FileGroupRecordBuffer<T> recordBuffer;
     if (readerParameters.sortOutputs()) {
       recordBuffer = new SortedKeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     } else {
       recordBuffer = new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateMode, props, orderingFieldNames, updateProcessor);
+          readerContext, hoodieTableMetaClient, readerContext.getMergeMode(), partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
     }
 
     RecordContext<T> recordContext = readerContext.getRecordContext();
-    Schema recordSchema = readerContext.getSchemaHandler().getTableSchema();
     Iterator<HoodieRecord> recordIterator = inputSplit.getRecordIterator();
     String[] orderingFieldsArray = orderingFieldNames.toArray(new String[0]);
+    DeleteContext deleteContext = new DeleteContext(props, recordSchema);
+    deleteContext.withReaderSchema(recordSchema);
     while (recordIterator.hasNext()) {
-      HoodieRecord hoodieRecord = recordIterator.next();
+      HoodieRecord<T> hoodieRecord = recordIterator.next();
       T data = recordContext.extractDataFromRecord(hoodieRecord, recordSchema, props);
       try {
         // we use -U operation to represent the record should be ignored during updating index.
@@ -86,12 +92,13 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
         BufferedRecord<T> bufferedRecord;
         if (data == null) {
           DeleteRecord deleteRecord = DeleteRecord.create(hoodieRecord.getKey(), hoodieRecord.getOrderingValue(recordSchema, props, orderingFieldsArray));
-          bufferedRecord = BufferedRecords.fromDeleteRecord(deleteRecord, deleteRecord.getOrderingValue(), hoodieOperation);
+          bufferedRecord = BufferedRecords.fromDeleteRecord(deleteRecord, recordContext, hoodieOperation);
         } else {
           // HoodieRecord#isDelete does not check if a record is a DELETE marked by a custom delete marker,
           // so we use recordContext#isDeleteRecord here if the data field is not null.
-          boolean isDelete = recordContext.isDeleteRecord(data, recordBuffer.getDeleteContext());
-          bufferedRecord = BufferedRecords.fromEngineRecord(data, recordSchema, recordContext, orderingFieldNames, BufferedRecords.inferOperation(isDelete, hoodieOperation));
+          boolean isDelete = recordContext.isDeleteRecord(data, deleteContext);
+          bufferedRecord = BufferedRecords.fromEngineRecord(data, hoodieRecord.getRecordKey(), recordSchema, recordContext, orderingFieldNames,
+              BufferedRecords.inferOperation(isDelete, hoodieOperation));
         }
         recordBuffer.processNextDataRecord(bufferedRecord, bufferedRecord.getRecordKey());
       } catch (IOException e) {

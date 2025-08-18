@@ -87,6 +87,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -483,10 +484,11 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     String fileId = writeStatus.getFileId();
     metaClient.getStorage().create(
         new StoragePath(Paths.get(basePath, ".hoodie/timeline", "000.commit").toString())).close();
-    final List<HoodieRecord> updates =
-        dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts);
-
     String partitionPath = writeStatus.getPartitionPath();
+    final List<HoodieRecord> updates =
+        dataGen.generateUpdatesWithHoodieAvroPayload(instantTime, inserts)
+            .stream().filter(record -> record.getPartitionPath().equals(partitionPath)).collect(Collectors.toList());
+
     long numRecordsInPartition =
         updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
     table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context,
