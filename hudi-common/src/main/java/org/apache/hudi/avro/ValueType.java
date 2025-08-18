@@ -269,6 +269,10 @@ public enum ValueType {
           return ValueType.DECIMAL;
         }
         throw new IllegalArgumentException("Unsupported logical type for Fixed: " + schema.getLogicalType());
+      case UNION:
+        return fromSchema(AvroSchemaUtils.resolveNullableSchema(schema));
+      case ARRAY:
+        return fromSchema(schema.getElementType());
       default:
         // TODO: decide if we want to throw or return NONE
         throw new IllegalArgumentException("Unsupported type: " + schema.getType());

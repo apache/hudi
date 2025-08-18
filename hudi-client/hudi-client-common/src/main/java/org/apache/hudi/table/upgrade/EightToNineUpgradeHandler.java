@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -31,18 +33,24 @@ import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
+
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
@@ -114,6 +122,18 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           metaClient.getIndexDefinitionPath(),
           indexMetadataOpt.get(),
           metaClient.getTableConfig().getTableVersion());
+      //Validate index columns
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+      try {
+        List<String> partitionsToDrop = mdtPartitionsToDrop(indexMetadataOpt, tableSchemaResolver.getTableAvroSchema());
+        if (!partitionsToDrop.isEmpty()) {
+          try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(config, context)) {
+            writeClient.dropIndex(partitionsToDrop);
+          }
+        }
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
     }
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     // Handle merge mode config.
@@ -208,5 +228,25 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
             return idxDef;
           }
         }));
+  }
+
+  /**
+   * Drop logical type indexes since we support them correctly now.
+   */
+  static List<String> mdtPartitionsToDrop(Option<HoodieIndexMetadata> indexDefOption, Schema tableSchema) {
+    Set<String> partitionsToDrop = new HashSet<>();
+    indexDefOption.ifPresent(idxDefs ->
+        idxDefs.getIndexDefinitions().forEach((indexName, idxDef) -> {
+          if (idxDef.getVersion() == null || idxDef.getVersion().lowerThan(HoodieIndexVersion.V2)) {
+            idxDef.getSourceFields().stream().filter(field -> {
+              Option<Schema> schema = AvroSchemaUtils.findNestedFieldSchema(tableSchema, field);
+              if (schema.isEmpty()) {
+                return schema.get().getLogicalType() != null || schema.get().getType() == Schema.Type.FIXED;
+              }
+              return false;
+            }).findAny().ifPresent(field -> partitionsToDrop.add(idxDef.getIndexName()));
+          }
+        }));
+    return new ArrayList<>(partitionsToDrop);
   }
 }
