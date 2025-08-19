@@ -1387,7 +1387,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     spark.sql(
       s"""
          |ALTER TABLE $tableName
-         |SET TBLPROPERTIES (hoodie.write.complex.keygen.encode.single.record.key.field.name = 'false')
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.encode.single.record.key.field.name = 'true')
          |""".stripMargin)
     spark.sql(
       s"""|INSERT INTO $tableName(ts, id, rider, driver, fare, city, state) VALUES
@@ -1425,7 +1425,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     )
     verifyQueryPredicate(hudiOpts, "rider")
 
-    // delete one of those records
     spark.sql(s"delete from $tableName where id = 'trip4'")
     checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
       Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas")
