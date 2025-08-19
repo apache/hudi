@@ -93,6 +93,8 @@ import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
+import org.apache.hudi.table.upgrade.UpgradeDowngradeStrategy;
+import org.apache.hudi.table.upgrade.UpgradeStrategy;
 import org.apache.hudi.util.CommonClientUtils;
 
 import com.codahale.metrics.Timer;
@@ -1502,10 +1504,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime instant time of interest if we have one.
    */
   protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
-    UpgradeDowngrade upgradeDowngrade =
-        new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
+    UpgradeStrategy upgradeStrategy =
+        new UpgradeStrategy(metaClient, config, context, upgradeDowngradeHelper);
 
-    if (upgradeDowngrade.needsUpgrade(config.getWriteVersion())) {
+    if (upgradeStrategy.shouldExecute(config.getWriteVersion())) {
       // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
       List<String> instantsToRollback = tableServiceClient.getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
 
@@ -1516,7 +1518,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         tableServiceClient.rollbackFailedWrites(pendingRollbacks, true, true);
       }
 
-      new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
+      new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper, upgradeStrategy)
           .run(config.getWriteVersion(), instantTime.orElse(null));
 
       metaClient.reloadTableConfig();
@@ -1525,8 +1527,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   private boolean needsUpgrade(HoodieTableMetaClient metaClient) {
-    UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
-    return upgradeDowngrade.needsUpgrade(config.getWriteVersion());
+    UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(metaClient, config, context, upgradeDowngradeHelper);
+    return upgradeStrategy.shouldExecute(config.getWriteVersion());
   }
 
   /**
