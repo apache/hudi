@@ -184,7 +184,7 @@ object ShowCleansPlanProcedure {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
