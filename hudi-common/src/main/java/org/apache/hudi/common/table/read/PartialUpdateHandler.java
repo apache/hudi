@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.toJavaDefaultValue;
-import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
@@ -58,13 +57,15 @@ public class PartialUpdateHandler<T> implements Serializable {
   /**
    * Merge records based on partial update mode.
    * Note that {@param newRecord} refers to the record with higher commit time if COMMIT_TIME_ORDERING mode is used,
-   * or higher event time if EVENT_TIME_ORDERING mode us used.
+   * or higher event time if EVENT_TIME_ORDERING mode us used. And if the merging happens, we should always return
+   * record with the target schema (incoming schema), since the incoming schema may not contain metadata fields for COW
+   * merging cases, and the metadata fields will be supplemented later in the file writer.
    */
   BufferedRecord<T> partialMerge(BufferedRecord<T> newRecord,
                                  BufferedRecord<T> oldRecord,
                                  Schema newSchema,
                                  Schema oldSchema,
-                                 boolean keepOldMetadataColumns) {
+                                 Schema targetSchema) {
     // Note that: When either newRecord or oldRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
     if (null == oldRecord
@@ -76,10 +77,10 @@ public class PartialUpdateHandler<T> implements Serializable {
     switch (partialUpdateMode) {
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(
-            newRecord, oldRecord, newSchema, oldSchema, keepOldMetadataColumns);
+            newRecord, oldRecord, newSchema, oldSchema, targetSchema);
       case FILL_UNAVAILABLE:
         return reconcileMarkerValues(
-            newRecord, oldRecord, newSchema, oldSchema);
+            newRecord, oldRecord, newSchema, oldSchema, targetSchema);
       default:
         return newRecord;
     }
@@ -90,14 +91,14 @@ public class PartialUpdateHandler<T> implements Serializable {
    * @param oldRecord              The older record determined by the merge mode.
    * @param newSchema              The schema of the newer record.
    * @param oldSchema              The schema of the older record.
-   * @param keepOldMetadataColumns Keep the metadata columns from the older record.
+   * @param targetSchema           The target schema of the merged record.
    * @return
    */
   BufferedRecord<T> reconcileDefaultValues(BufferedRecord<T> newRecord,
                                            BufferedRecord<T> oldRecord,
                                            Schema newSchema,
                                            Schema oldSchema,
-                                           boolean keepOldMetadataColumns) {
+                                           Schema targetSchema) {
     List<Schema.Field> fields = newSchema.getFields();
     Map<Integer, Object> updateValues = new HashMap<>();
     T engineRecord;
@@ -108,27 +109,30 @@ public class PartialUpdateHandler<T> implements Serializable {
       Object defaultValue = toJavaDefaultValue(field);
       Object newValue = recordContext.getValue(
           newRecord.getRecord(), newSchema, fieldName);
-      if (defaultValue == newValue
-          || (keepOldMetadataColumns && HOODIE_META_COLUMNS_NAME_TO_POS.containsKey(fieldName))) {
+      if (defaultValue == newValue) {
         updateValues.put(field.pos(), recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
       }
     }
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = recordContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
+    // if the merging happens, always return record with target schema (incoming schema),
+    // since the incoming schema may not contain metadata fields for COW merging cases,
+    // and the metadata fields will be supplemented later in the file writer.
+    engineRecord = recordContext.mergeWithEngineRecord(newSchema, updateValues, newRecord, targetSchema);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
         engineRecord,
-        newRecord.getSchemaId(),
+        targetSchema == newSchema ? newRecord.getSchemaId() : oldRecord.getSchemaId(),
         newRecord.getHoodieOperation());
   }
 
   BufferedRecord<T> reconcileMarkerValues(BufferedRecord<T> newRecord,
                                           BufferedRecord<T> oldRecord,
                                           Schema newSchema,
-                                          Schema oldSchema) {
+                                          Schema oldSchema,
+                                          Schema targetSchema) {
     List<Schema.Field> fields = newSchema.getFields();
     Map<Integer, Object> updateValues = new HashMap<>();
     T engineRecord;
@@ -147,12 +151,15 @@ public class PartialUpdateHandler<T> implements Serializable {
     if (updateValues.isEmpty()) {
       return newRecord;
     }
-    engineRecord = recordContext.mergeWithEngineRecord(newSchema, updateValues, newRecord);
+    // if the merging happens, always return record with target schema (incoming schema),
+    // since the incoming schema may not contain metadata fields for COW merging cases,
+    // and the metadata fields will be supplemented later in the file writer.
+    engineRecord = recordContext.mergeWithEngineRecord(newSchema, updateValues, newRecord, targetSchema);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
         engineRecord,
-        newRecord.getSchemaId(),
+        targetSchema == newSchema ? newRecord.getSchemaId() : oldRecord.getSchemaId(),
         newRecord.getHoodieOperation());
   }
 

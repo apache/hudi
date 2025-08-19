@@ -833,7 +833,8 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     @Override
     public InternalRow mergeWithEngineRecord(Schema schema,
                                              Map<Integer, Object> updateValues,
-                                             BufferedRecord<InternalRow> baseRecord) {
+                                             BufferedRecord<InternalRow> baseRecord,
+                                             Schema targetSchema) {
       List<Schema.Field> fields = schema.getFields();
       Object[] values = new Object[fields.size()];
       for (Schema.Field field : fields) {

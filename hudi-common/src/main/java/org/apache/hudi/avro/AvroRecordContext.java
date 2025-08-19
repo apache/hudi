@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -142,14 +143,22 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord mergeWithEngineRecord(Schema schema,
+  public IndexedRecord mergeWithEngineRecord(Schema recordSchema,
                                              Map<Integer, Object> updateValues,
-                                             BufferedRecord<IndexedRecord> baseRecord) {
+                                             BufferedRecord<IndexedRecord> baseRecord,
+                                             Schema targetSchema) {
     IndexedRecord engineRecord = baseRecord.getRecord();
-    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
-      engineRecord.put(value.getKey(), value.getValue());
+    GenericData.Record mergedRecord = new GenericData.Record(targetSchema);
+    for (Schema.Field field: targetSchema.getFields()) {
+      String fieldName = field.name();
+      int pos = recordSchema.getField(fieldName).pos();
+      if (updateValues.containsKey(pos)) {
+        mergedRecord.put(fieldName, updateValues.get(pos));
+      } else {
+        mergedRecord.put(fieldName, engineRecord.get(pos));
+      }
     }
-    return engineRecord;
+    return mergedRecord;
   }
 
   @Override

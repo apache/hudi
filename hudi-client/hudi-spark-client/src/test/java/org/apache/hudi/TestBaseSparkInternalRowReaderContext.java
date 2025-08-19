@@ -81,7 +81,7 @@ class TestBaseSparkInternalRowReaderContext {
     Map<Integer, Object> updates = new HashMap<>();
     BufferedRecord<InternalRow> record = new BufferedRecord<>(
         "record_key", 1, base, 1, null);
-    InternalRow engineRecord = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
+    InternalRow engineRecord = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record, SCHEMA);
     assertEquals(1, engineRecord.getInt(0));
     assertEquals("Alice", engineRecord.getString(1));
     assertTrue(engineRecord.getBoolean(2));
@@ -94,7 +94,7 @@ class TestBaseSparkInternalRowReaderContext {
     updates.put(1, UTF8String.fromString("Bob"));
     BufferedRecord<InternalRow> record = new BufferedRecord<>(
         "record_key", 1, base, 1, null);
-    InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
+    InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record, SCHEMA);
     assertEquals(1, result.getInt(0)); // from base
     assertEquals("Bob", result.getUTF8String(1).toString()); // updated
     assertTrue(result.getBoolean(2)); // from base
@@ -111,7 +111,7 @@ class TestBaseSparkInternalRowReaderContext {
     BufferedRecord<InternalRow> record = new BufferedRecord<>(
         "record_key", 1, base, 1, null);
 
-    InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
+    InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record, SCHEMA);
     assertEquals(42, result.getInt(0));
     assertEquals("Carol", result.getUTF8String(1).toString());
     assertFalse(result.getBoolean(2));
@@ -124,7 +124,7 @@ class TestBaseSparkInternalRowReaderContext {
     BufferedRecord<InternalRow> record = new BufferedRecord<>(
         "record_key", 1, base, 1, null);
 
-    InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record);
+    InternalRow result = readerContext.getRecordContext().mergeWithEngineRecord(SCHEMA, updates, record, SCHEMA);
     assertTrue(result.isNullAt(0));
     assertEquals("Dan", result.getUTF8String(1).toString());
     assertTrue(result.getBoolean(2));

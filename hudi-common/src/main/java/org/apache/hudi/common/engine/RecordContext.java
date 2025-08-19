@@ -140,14 +140,15 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Constructs a new Engine based record based on a given schema, base record and update values.
    *
-   * @param schema           The schema of the new record.
+   * @param recordSchema     The schema of the new record.
    * @param updateValues     The map recording field index and its corresponding update value.
    * @param baseRecord       The record based on which the engine record is built.
    * @return A new instance of engine record type {@link T}.
    */
-  public abstract T mergeWithEngineRecord(Schema schema,
+  public abstract T mergeWithEngineRecord(Schema recordSchema,
                                           Map<Integer, Object> updateValues,
-                                          BufferedRecord<T> baseRecord);
+                                          BufferedRecord<T> baseRecord,
+                                          Schema targetSchema);
 
   public JavaTypeConverter getTypeConverter() {
     return typeConverter;

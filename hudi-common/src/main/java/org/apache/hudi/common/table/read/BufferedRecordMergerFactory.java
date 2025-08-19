@@ -148,12 +148,13 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
                                                 BufferedRecord<T> existingRecord) {
       if (existingRecord != null) {
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
-            recordContext.getSchemaFromBufferRecord(newRecord),
+            newSchema,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            false);
+            newSchema);
       }
       return Option.of(newRecord);
     }
@@ -161,12 +162,13 @@ public class BufferedRecordMergerFactory {
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord,
                                      BufferedRecord<T> newerRecord) {
+      Schema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
-          recordContext.getSchemaFromBufferRecord(newerRecord),
+          newSchema,
           recordContext.getSchemaFromBufferRecord(olderRecord),
-          false);
+          newSchema);
       return newerRecord;
     }
   }
@@ -218,21 +220,23 @@ public class BufferedRecordMergerFactory {
       if (existingRecord == null) {
         return Option.of(newRecord);
       } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
-            recordContext.getSchemaFromBufferRecord(newRecord),
+            newSchema,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            false);
+            newSchema);
         return Option.of(newRecord);
       } else {
         // Use existing record as the base record since existing record has higher ordering value.
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         existingRecord = partialUpdateHandler.partialMerge(
             existingRecord,
             newRecord,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            recordContext.getSchemaFromBufferRecord(newRecord),
-            true);
+            newSchema,
+            newSchema);
         return Option.of(existingRecord);
       }
     }
@@ -245,6 +249,7 @@ public class BufferedRecordMergerFactory {
 
       Comparable newOrderingValue = newerRecord.getOrderingValue();
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
+      Schema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       if (!olderRecord.isCommitTimeOrderingDelete()
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         // Use old record as the base record since old record has higher ordering value.
@@ -252,17 +257,17 @@ public class BufferedRecordMergerFactory {
             olderRecord,
             newerRecord,
             recordContext.getSchemaFromBufferRecord(olderRecord),
-            recordContext.getSchemaFromBufferRecord(newerRecord),
-            true);
+            newSchema,
+            newSchema);
         return olderRecord;
       }
 
       newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
-          recordContext.getSchemaFromBufferRecord(newerRecord),
+          newSchema,
           recordContext.getSchemaFromBufferRecord(olderRecord),
-          false);
+          newSchema);
       return newerRecord;
     }
   }

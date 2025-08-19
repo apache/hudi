@@ -87,14 +87,22 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public ArrayWritable mergeWithEngineRecord(Schema schema,
+  public ArrayWritable mergeWithEngineRecord(Schema recordSchema,
                                              Map<Integer, Object> updateValues,
-                                             BufferedRecord<ArrayWritable> baseRecord) {
+                                             BufferedRecord<ArrayWritable> baseRecord,
+                                             Schema targetSchema) {
     Writable[] engineRecord = baseRecord.getRecord().get();
-    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
-      engineRecord[value.getKey()] = (Writable) value.getValue();
+    Writable[] mergedRecord = new Writable[targetSchema.getFields().size()];
+    int idx = 0;
+    for (Schema.Field field : targetSchema.getFields()) {
+      int pos = recordSchema.getField(field.name()).pos();
+      if (updateValues.containsKey(pos)) {
+        mergedRecord[idx++] = (Writable) updateValues.get(pos);
+      } else {
+        mergedRecord[idx++] = engineRecord[pos];
+      }
     }
-    return baseRecord.getRecord();
+    return new ArrayWritable(baseRecord.getRecord().getValueClass(), mergedRecord);
   }
 
   @Override

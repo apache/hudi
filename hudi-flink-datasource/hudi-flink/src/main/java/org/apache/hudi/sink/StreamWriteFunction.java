@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -235,9 +236,12 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   private void initMergeClass() {
     readerContext = writeClient.getEngineContext().<RowData>getReaderContextFactory(metaClient).getContext();
     orderingFieldNames = getOrderingFieldNames(readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+    // for table with lower versions, the merge mode in table config may be null, use merge mode in write config then.
+    RecordMergeMode mergeMode = metaClient.getTableConfig().getRecordMergeMode() == null
+        ? writeClient.getConfig().getRecordMergeMode() : metaClient.getTableConfig().getRecordMergeMode();
     recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
-        metaClient.getTableConfig().getRecordMergeMode(),
+        mergeMode,
         false,
         Option.ofNullable(writeClient.getConfig().getRecordMerger()),
         orderingFieldNames,

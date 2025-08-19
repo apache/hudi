@@ -129,16 +129,18 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
-  public RowData mergeWithEngineRecord(Schema schema,
+  public RowData mergeWithEngineRecord(Schema recordSchema,
                                        Map<Integer, Object> updateValues,
-                                       BufferedRecord<RowData> baseRecord) {
-    GenericRowData genericRowData = new GenericRowData(schema.getFields().size());
-    for (Schema.Field field : schema.getFields()) {
-      int pos = field.pos();
+                                       BufferedRecord<RowData> baseRecord,
+                                       Schema targetSchema) {
+    GenericRowData genericRowData = new GenericRowData(targetSchema.getFields().size());
+    int idx = 0;
+    for (Schema.Field field : targetSchema.getFields()) {
+      int pos = recordSchema.getField(field.name()).pos();
       if (updateValues.containsKey(pos)) {
-        genericRowData.setField(pos, updateValues.get(pos));
+        genericRowData.setField(idx++, updateValues.get(pos));
       } else {
-        genericRowData.setField(pos, getValue(baseRecord.getRecord(), schema, field.name()));
+        genericRowData.setField(idx++, getValue(baseRecord.getRecord(), recordSchema, field.name()));
       }
     }
     return genericRowData;
