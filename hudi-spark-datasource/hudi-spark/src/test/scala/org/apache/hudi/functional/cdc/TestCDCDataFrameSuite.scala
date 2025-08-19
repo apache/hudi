@@ -813,7 +813,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)
 
-    val metaClient = createMetaClient(spark, basePath)
+      val metaClient = createMetaClient(spark, basePath)
       val startTimeStamp = metaClient.reloadActiveTimeline().firstInstant().get.requestedTime
       val latestTimeStamp = metaClient.reloadActiveTimeline().lastInstant().get.requestedTime
 
