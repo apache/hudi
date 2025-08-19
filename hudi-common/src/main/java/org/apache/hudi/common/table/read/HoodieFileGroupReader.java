@@ -270,6 +270,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return validBlockInstants;
   }
 
+  /**
+   * Notifies a write failure with the given record key.
+   */
+  public void onWriteFailure(String recordKey) {
+    this.fileGroupUpdateCallback.ifPresent(callback -> callback.onFailure(recordKey));
+  }
+
   @Override
   public void close() throws IOException {
     if (baseFileIterator != null) {
