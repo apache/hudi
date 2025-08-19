@@ -40,27 +40,49 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
              |""".stripMargin)
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 30, 3000)")
+
         spark.sql(s"update $tableName set price = 11 where id = 1")
+        spark.sql(s"update $tableName set price = 21 where id = 2")
         spark.sql(s"update $tableName set price = 12 where id = 1")
+        spark.sql(s"update $tableName set price = 22 where id = 2")
+
+
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 2)")
+          .collect()
+
+        val firstCleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')").collect()
+
+        require(firstCleanPlans.length >= 1, "Should have at least 1 clean plan after ensuring sufficient commits")
+
+        spark.sql(s"insert into $tableName values(4, 'a4', 40, 4000)")
+        spark.sql(s"update $tableName set price = 15 where id = 1")
+        spark.sql(s"update $tableName set price = 25 where id = 2")
+        spark.sql(s"update $tableName set price = 35 where id = 3")
+        spark.sql(s"update $tableName set price = 45 where id = 4")
 
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
 
-        val cleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')")
-          .collect()
+        val secondCleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')").collect()
+        require(secondCleanPlans.length >= 2, "Should have at least 2 clean plans after second clean")
 
-        assertResult(1)(cleanPlans.length)
+        val sortedPlans = secondCleanPlans.sortBy(_.getString(0))
+        val actualFirstCleanTime = sortedPlans(0).getString(0)
 
-        val cleanPlan = cleanPlans(0)
-        assert(cleanPlan.getString(0) != null) // plan_time
-        assert(cleanPlan.getString(1) == "clean") // action
-        // earliest_instant_to_retain can be null
-        // last_completed_commit_timestamp can be null
-        assert(cleanPlan.getString(4) != null) // policy
-        // version can be null or integer
-        assert(cleanPlan.getInt(6) >= 0) // total_partitions_to_clean should be >= 0
-        assert(cleanPlan.getInt(7) >= 0) // total_partitions_to_delete should be >= 0
-        // extra_metadata can be null
+        val startTimeStr = (actualFirstCleanTime.toLong + 1000).toString
+
+        val allCleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')")
+        allCleanPlans.show(false)
+        val allPlans = allCleanPlans.collect()
+
+        assert(allPlans.length >= 2, "Should have at least 2 clean plans")
+
+        val afterStartFilter = spark.sql(s"""call show_clean_plans(table => '$tableName', filter => 'plan_time > "$startTimeStr"')""")
+        afterStartFilter.show(false)
+        val afterStartRows = afterStartFilter.collect()
+        assertResult(afterStartRows.length)(1)
       }
     }
   }

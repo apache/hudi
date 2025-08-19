@@ -45,10 +45,19 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
     val tableName = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
     val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
     val showArchived = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
+    val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
 
     validateInputs(tableName, limit)
 
-    Try {
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+
+    val rows = Try {
       val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, tableName)
       val metaClient = createMetaClient(jsc, hoodieCatalogTable.tableLocation)
       getCleanerPlans(metaClient, limit, showArchived)
@@ -57,6 +66,12 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
       case Failure(exception) =>
         logError(s"Failed to retrieve clean plan information for table '$tableName'", exception)
         throw new HoodieException(s"Error retrieving clean plans for table '$tableName': ${exception.getMessage}", exception)
+    }
+
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(rows, filter, outputType, sparkSession)
+    } else {
+      rows
     }
   }
 
@@ -81,6 +96,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
   }
 
   private def getSortedCleanInstants(timeline: org.apache.hudi.common.table.timeline.HoodieTimeline): Seq[HoodieInstant] = {
+    // Get both inflight and completed clean instants
     val cleanInstants = timeline.getCleanerTimeline.getInstants.asScala.toSeq
     val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     val comparator = layout.getInstantComparator.requestedTimeOrderedComparator.reversed()
@@ -103,6 +119,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
 
       Row(
         cleanInstant.requestedTime(),
+        cleanInstant.getState.toString,
         cleanInstant.getAction,
         planStats.earliestInstantToRetain,
         cleanerPlan.getLastCompletedCommitTimestamp,
@@ -149,6 +166,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
   private def createErrorRow(cleanInstant: HoodieInstant): Row = {
     Row(
       cleanInstant.requestedTime(),
+      cleanInstant.getState.toString,
       cleanInstant.getAction,
       null, // earliest_instant_to_retain
       null, // last_completed_commit_timestamp
@@ -174,11 +192,13 @@ object ShowCleansPlanProcedure {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false)
+    ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(3, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("plan_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("earliest_instant_to_retain", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("last_completed_commit_timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
