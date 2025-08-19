@@ -45,33 +45,19 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
     val tableName = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
     val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
     val showArchived = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
-    val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
 
     validateInputs(tableName, limit)
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
-
-    val rows = Try {
+    Try {
       val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, tableName)
       val metaClient = createMetaClient(jsc, hoodieCatalogTable.tableLocation)
       getCleanerPlans(metaClient, limit, showArchived)
     } match {
       case Success(result) => result
       case Failure(exception) =>
-        logError(s"Failed to retrieve clean plan information for table '$tableName'", exception)
-        throw new HoodieException(s"Error retrieving clean plans for table '$tableName': ${exception.getMessage}", exception)
-    }
-
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(rows, filter, outputType, sparkSession)
-    } else {
-      rows
+        val errorMsg = s"Failed to retrieve clean plan information for table '$tableName'"
+        logError(errorMsg, exception)
+        throw new HoodieException(s"$errorMsg: ${exception.getMessage}", exception)
     }
   }
 
@@ -193,7 +179,6 @@ object ShowCleansPlanProcedure {
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
