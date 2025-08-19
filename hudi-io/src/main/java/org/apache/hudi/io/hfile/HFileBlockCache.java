@@ -23,6 +23,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 import java.time.Duration;
+import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -74,7 +76,7 @@ public class HFileBlockCache {
    * @return cached or newly computed block
    * @throws Exception if the loader throws an exception
    */
-  public HFileBlock getOrCompute(BlockCacheKey key, java.util.concurrent.Callable<HFileBlock> loader) throws Exception {
+  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) throws Exception {
     // Caffeine uses Function instead of Callable, so we need to wrap the Callable
     return cache.get(key, (k) -> {
       try {
@@ -140,7 +142,7 @@ public class HFileBlockCache {
       BlockCacheKey that = (BlockCacheKey) o;
       return offset == that.offset
           && size == that.size
-          && java.util.Objects.equals(fileIdentity, that.fileIdentity);
+          && Objects.equals(fileIdentity, that.fileIdentity);
     }
 
     @Override
