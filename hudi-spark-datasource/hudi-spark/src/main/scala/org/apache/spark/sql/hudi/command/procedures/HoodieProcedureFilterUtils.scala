@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -36,22 +36,22 @@ object HoodieProcedureFilterUtils {
                     ): Seq[Row] = {
 
     if (filterExpression == null || filterExpression.trim.isEmpty) {
-      return rows
-    }
+      rows
+    } else {
+      Try {
+        val parsedExpr = sparkSession.sessionState.sqlParser.parseExpression(filterExpression)
 
-    Try {
-      val parsedExpr = sparkSession.sessionState.sqlParser.parseExpression(filterExpression)
-
-      rows.filter { row =>
-        evaluateExpressionOnRow(parsedExpr, row, schema)
+        rows.filter { row =>
+          evaluateExpressionOnRow(parsedExpr, row, schema)
+        }
+      } match {
+        case Success(filteredRows) => filteredRows
+        case Failure(exception) =>
+          throw new IllegalArgumentException(
+            s"Failed to parse or evaluate filter expression '$filterExpression': ${exception.getMessage}",
+            exception
+          )
       }
-    } match {
-      case Success(filteredRows) => filteredRows
-      case Failure(exception) =>
-        throw new IllegalArgumentException(
-          s"Failed to parse or evaluate filter expression '$filterExpression': ${exception.getMessage}",
-          exception
-        )
     }
   }
 
@@ -127,23 +127,23 @@ object HoodieProcedureFilterUtils {
                               ): Either[String, Unit] = {
 
     if (filterExpression == null || filterExpression.trim.isEmpty) {
-      return Right(())
-    }
+      Right(())
+    } else {
+      Try {
+        val parsedExpr = sparkSession.sessionState.sqlParser.parseExpression(filterExpression)
+        val columnNames = schema.fieldNames.toSet
+        val referencedColumns = extractColumnReferences(parsedExpr)
+        val invalidColumns = referencedColumns -- columnNames
 
-    Try {
-      val parsedExpr = sparkSession.sessionState.sqlParser.parseExpression(filterExpression)
-      val columnNames = schema.fieldNames.toSet
-      val referencedColumns = extractColumnReferences(parsedExpr)
-      val invalidColumns = referencedColumns -- columnNames
-
-      if (invalidColumns.nonEmpty) {
-        Left(s"Invalid column references: ${invalidColumns.mkString(", ")}. Available columns: ${columnNames.mkString(", ")}")
-      } else {
-        Right(())
+        if (invalidColumns.nonEmpty) {
+          Left(s"Invalid column references: ${invalidColumns.mkString(", ")}. Available columns: ${columnNames.mkString(", ")}")
+        } else {
+          Right(())
+        }
+      } match {
+        case Success(result) => result
+        case Failure(exception) => Left(s"Invalid filter expression: ${exception.getMessage}")
       }
-    } match {
-      case Success(_) => Right(())
-      case Failure(exception) => Left(s"Invalid filter expression: ${exception.getMessage}")
     }
   }
 
