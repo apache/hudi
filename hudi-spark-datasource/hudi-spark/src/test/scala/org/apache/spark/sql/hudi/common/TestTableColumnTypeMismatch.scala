@@ -509,7 +509,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                                      sourceSchema: Seq[(String, String)],
                                      partitionCols: Seq[String],
                                      primaryKey: String,
-                                     preCombineField: String,
+                                     orderingFields: String,
                                      tableType: String, // COW or MOR
                                      expectedErrorPattern: String
                                    )
@@ -531,7 +531,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         ),
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
-        preCombineField = "ts",
+        orderingFields = "ts",
         tableType = "cow",
         expectedErrorPattern = "Partition key data type mismatch between source table and target table. Target table uses StringType for column 'name', source table uses IntegerType for 's0.name'"
       ),
@@ -551,7 +551,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         ),
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
-        preCombineField = "ts",
+        orderingFields = "ts",
         tableType = "mor",
         expectedErrorPattern = "Primary key data type mismatch between source table and target table. Target table uses IntegerType for column 'id', source table uses LongType for 's0.id'"
       ),
@@ -571,7 +571,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         ),
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
-        preCombineField = "ts",
+        orderingFields = "ts",
         tableType = "cow",
         expectedErrorPattern = "Precombine field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
       )
@@ -609,7 +609,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             testCase.targetSchema,
             testCase.partitionCols,
             testCase.primaryKey,
-            testCase.preCombineField,
+            testCase.orderingFields,
             testCase.tableType,
             s"${tmp.getCanonicalPath}/$targetTable"
           )

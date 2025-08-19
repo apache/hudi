@@ -38,13 +38,13 @@ public class HoodieSparkBootstrapExample {
 
   public static void main(String[] args) throws Exception {
     if (args.length < 5) {
-      System.err.println("Usage: HoodieSparkBootstrapExample <recordKey> <tableName> <partitionPath> <preCombineField> <basePath>");
+      System.err.println("Usage: HoodieSparkBootstrapExample <recordKey> <tableName> <partitionPath> <orderingFields> <basePath>");
       System.exit(1);
     }
     String recordKey = args[0];
     String tableName = args[1];
     String partitionPath = args[2];
-    String preCombineField = args[3];
+    String orderingFields = args[3];
     String basePath = args[4];
 
     SparkConf sparkConf = HoodieExampleSparkUtils.defaultSparkConf("hoodie-client-example");
@@ -61,7 +61,7 @@ public class HoodieSparkBootstrapExample {
     df.write().format("hudi").option(HoodieWriteConfig.TBL_NAME.key(), tableName)
         .option(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
         .option(DataSourceWriteOptions.RECORDKEY_FIELD().key(), recordKey)
-        .option(HoodieTableConfig.ORDERING_FIELDS.key(), preCombineField)
+        .option(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFields)
         .option(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.ORC.name())
         .option(HoodieBootstrapConfig.BASE_PATH.key(), basePath)
         .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonpartitionedKeyGenerator.class.getCanonicalName())

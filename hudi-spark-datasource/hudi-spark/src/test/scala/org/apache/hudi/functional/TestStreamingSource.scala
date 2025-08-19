@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
-import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}

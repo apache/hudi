@@ -152,7 +152,7 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns the preCombine fields as comma separated string
+   * Returns the ordering fields as comma separated string
    * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
    */
   public static String getOrderingFieldsStr(Configuration conf) {

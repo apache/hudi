@@ -20,7 +20,7 @@
 package org.apache.hudi.common.table.read
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{OPERATION, ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils

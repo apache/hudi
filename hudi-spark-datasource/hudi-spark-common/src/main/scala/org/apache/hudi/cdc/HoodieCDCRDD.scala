@@ -138,7 +138,7 @@ class HoodieCDCRDD(
       keyFields.head
     }
 
-    private lazy val preCombineFields: List[String] = metaClient.getTableConfig.getOrderingFields.asScala.toList
+    private lazy val orderingFields: List[String] = metaClient.getTableConfig.getOrderingFields.asScala.toList
 
     private lazy val tableState = {
       val metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -148,7 +148,7 @@ class HoodieCDCRDD(
         basePath.toUri.toString,
         Some(split.changes.last.getInstant),
         recordKeyField,
-        preCombineFields,
+        orderingFields,
         usesVirtualKeys = !populateMetaFields,
         metaClient.getTableConfig.getPayloadClass,
         metadataConfig,

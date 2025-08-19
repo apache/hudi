@@ -20,7 +20,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, ORDERING_FIELDS, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}

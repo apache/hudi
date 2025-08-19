@@ -409,11 +409,11 @@ object DataSourceWriteOptions {
     .withDocumentation("Table name for the datasource write. Also used to register the table into meta stores.")
 
   /**
-   * Field used in preCombining before actual write. When two records have the same
-   * key value, we will pick the one with the largest value for the precombine field,
-   * determined by Object.compareTo(..)
+   * Field used in records merging comparison. When two records have the same
+   * key value, we will pick the one with the largest value for the ordering fields,
+   * determined by Object.compareTo(..).
    */
-  val PRECOMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
+  val ORDERING_FIELDS = HoodieWriteConfig.PRECOMBINE_FIELD_NAME
 
   /**
    * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
@@ -862,7 +862,7 @@ object DataSourceWriteOptions {
   /** @deprecated Use {@link TABLE_NAME} and its methods instead */
   @Deprecated
   val TABLE_NAME_OPT_KEY = TABLE_NAME.key()
-  /** @deprecated Use {@link PRECOMBINE_FIELD} and its methods instead */
+  /** @deprecated Use {@link ORDERING_FIELDS} and its methods instead */
   @Deprecated
   val PRECOMBINE_FIELD_OPT_KEY = HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key()
 
@@ -1072,7 +1072,7 @@ object DataSourceOptionsHelper {
    * Returns optional list of precombine fields from the provided parameteres.
    */
   @deprecated("Use ordering field key in table config", "1.1.0")
-  def getPreCombineFields(params: Map[String, String]): Option[java.util.List[String]] = params.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key) match {
+  def getPreCombineFields(params: Map[String, String]): Option[java.util.List[String]] = params.get(DataSourceWriteOptions.ORDERING_FIELDS.key) match {
     // NOTE: This is required to compensate for cases when empty string is used to stub
     //       property value to avoid it being set with the default value
     // TODO(HUDI-3456) cleanup

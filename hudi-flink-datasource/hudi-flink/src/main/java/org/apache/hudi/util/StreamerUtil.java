@@ -656,7 +656,7 @@ public class StreamerUtil {
   /**
    * Validate pre_combine key.
    */
-  public static void checkPreCombineKey(Configuration conf, List<String> fields) {
+  public static void checkOrderingFields(Configuration conf, List<String> fields) {
     String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
     if (!fields.contains(orderingFields)) {
       if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {

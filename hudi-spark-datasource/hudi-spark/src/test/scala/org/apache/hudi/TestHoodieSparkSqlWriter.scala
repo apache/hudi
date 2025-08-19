@@ -390,10 +390,10 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   }
 
   /**
-   * Test case for insert dataset without precombine field.
+   * Test case for insert dataset without ordering fields.
    */
   @Test
-  def testInsertDatasetWithoutPrecombineField(): Unit = {
+  def testInsertDatasetWithoutOrderingField(): Unit = {
 
     val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
@@ -989,7 +989,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   }
 
   /**
-   * Test upsert for CoW table without precombine field and combine before upsert disabled.
+   * Test upsert for CoW table without ordering fields and combine before upsert disabled.
    */
   @Test
   def testUpsertWithoutPrecombineFieldAndCombineBeforeUpsertDisabled(): Unit = {
@@ -1098,7 +1098,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
          | partitioned by (dt)
          | options (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          | )
          | location '$tablePath1'
        """.stripMargin)

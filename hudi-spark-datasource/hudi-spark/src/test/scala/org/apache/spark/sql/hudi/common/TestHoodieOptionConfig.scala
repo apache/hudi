@@ -127,7 +127,7 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
     val e3 = intercept[IllegalArgumentException] {
       HoodieOptionConfig.validateTable(spark, schema, sqlOptions3)
     }
-    assertTrue(e3.getMessage.contains("Can't find preCombineKey"))
+    assertTrue(e3.getMessage.contains("Can't find ordering fields"))
 
     // miss type parameter
     val sqlOptions4 = baseSqlOptions ++ Map(

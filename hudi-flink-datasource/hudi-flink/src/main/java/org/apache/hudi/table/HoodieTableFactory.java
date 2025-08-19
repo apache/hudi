@@ -177,7 +177,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
     }
-    StreamerUtil.checkPreCombineKey(conf, schema.getColumnNames());
+    StreamerUtil.checkOrderingFields(conf, schema.getColumnNames());
   }
 
   /**

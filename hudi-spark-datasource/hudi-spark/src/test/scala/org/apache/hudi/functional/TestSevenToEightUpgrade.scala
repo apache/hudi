@@ -19,7 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceUtils
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, KEYGENERATOR_CLASS_NAME, OPERATION, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, PRECOMBINE_FIELD, RECORD_MERGE_MODE, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, KEYGENERATOR_CLASS_NAME, OPERATION, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, ORDERING_FIELDS, RECORD_MERGE_MODE, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload, TableServiceType}

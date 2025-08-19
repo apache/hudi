@@ -18,7 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD}
 import org.apache.hudi.client.{SparkRDDWriteClient, WriteClientTestUtils}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.EngineType

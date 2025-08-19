@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit;
 public class HudiDataStreamWriter {
 
   public static DataType ROW_DATA_TYPE = DataTypes.ROW(
-      DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+      DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // ordering field
       DataTypes.FIELD("uuid", DataTypes.VARCHAR(40)),// record key
       DataTypes.FIELD("rider", DataTypes.VARCHAR(20)),
       DataTypes.FIELD("driver", DataTypes.VARCHAR(20)),
