@@ -93,7 +93,7 @@ public class HoodieStreamerUtils {
     String payloadClassName = StringUtils.isNullOrEmpty(cfg.payloadClassName)
         ? HoodieRecordPayload.getAvroPayloadForMergeMode(cfg.recordMergeMode, cfg.payloadClassName)
         : cfg.payloadClassName;
-    boolean requiresPayload = !(isChangingRecords(cfg.operation) && HoodieWriteConfig.isFileGroupReaderBasedMergedHandle(props));
+    boolean requiresPayload = !(isChangingRecords(cfg.operation) && HoodieWriteConfig.isFileGroupReaderBasedMergeHandle(props));
 
     return avroRDDOptional.map(avroRDD -> {
       SerializableSchema avroSchema = new SerializableSchema(schemaProvider.getTargetSchema());

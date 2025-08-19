@@ -129,7 +129,7 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
-          val requiresPayload = !(isChangingRecords(operation) && config.isFileGroupReaderBasedMergedHandle)
+          val requiresPayload = !(isChangingRecords(operation) && config.isFileGroupReaderBasedMergeHandle)
 
           // handle dropping partition columns
           it.map { avroRec =>
