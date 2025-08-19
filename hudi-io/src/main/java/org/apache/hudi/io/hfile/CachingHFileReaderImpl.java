@@ -21,16 +21,24 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.io.SeekableDataInputStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * HFile reader implementation with integrated caching functionality. This extends BaseHFileReaderImpl and overrides the block instantiation method to add caching capabilities.
  * <p>
  * Uses a shared static cache across all instances to maximize cache hits when multiple readers access the same file.
  */
-public class CachingHFileReaderImpl extends BaseHFileReaderImpl {
+public class CachingHFileReaderImpl extends HFileReaderImpl {
+
+  private static final Logger LOG = LoggerFactory.getLogger(CachingHFileReaderImpl.class);
 
   private static volatile HFileBlockCache GLOBAL_BLOCK_CACHE;
+  // Store first config to check against cache config
+  private static volatile HFileReaderConfig INITIAL_CONFIG;
   private static final Object CACHE_LOCK = new Object();
 
   private final String filePath;
@@ -55,19 +63,28 @@ public class CachingHFileReaderImpl extends BaseHFileReaderImpl {
    * Thread-safe singleton pattern with double-checked locking.
    */
   private static HFileBlockCache getGlobalCache(HFileReaderConfig config) {
-    HFileBlockCache result = GLOBAL_BLOCK_CACHE;
-    if (result == null) {
+    if (GLOBAL_BLOCK_CACHE == null) {
       synchronized (CACHE_LOCK) {
-        result = GLOBAL_BLOCK_CACHE;
-        if (result == null) {
-          GLOBAL_BLOCK_CACHE = result = new HFileBlockCache(
+        if (GLOBAL_BLOCK_CACHE == null) {
+          LOG.info("Initializing global HFileBlockCache with size: {}, TTL: {} minutes.",
+              config.getBlockCacheSize(), config.getCacheTtlMinutes());
+          // Store the config used for initialization
+          INITIAL_CONFIG = config;
+          GLOBAL_BLOCK_CACHE = new HFileBlockCache(
               config.getBlockCacheSize(),
               config.getCacheTtlMinutes(),
-              java.util.concurrent.TimeUnit.MINUTES);
+              TimeUnit.MINUTES);
+        } else if (!INITIAL_CONFIG.equals(config)) {
+          // Log a warning if a different config is provided after initialization
+          // Note: This requires HFileReaderConfig to have a proper .equals() method.
+          LOG.warn("HFile block cache is already initialized. The provided configuration is being ignored. "
+                  + "Existing config: [Size: {}, TTL: {} mins], Ignored config: [Size: {}, TTL: {} mins].",
+              INITIAL_CONFIG.getBlockCacheSize(), INITIAL_CONFIG.getCacheTtlMinutes(),
+              config.getBlockCacheSize(), config.getCacheTtlMinutes());
         }
       }
     }
-    return result;
+    return GLOBAL_BLOCK_CACHE;
   }
 
   @Override
@@ -78,14 +95,10 @@ public class CachingHFileReaderImpl extends BaseHFileReaderImpl {
     try {
       HFileBlock block = GLOBAL_BLOCK_CACHE.getOrCompute(cacheKey, () -> super.instantiateHFileDataBlock(blockToRead));
       return (HFileDataBlock) block;
+    } catch (IOException | RuntimeException e) {
+      throw e;
     } catch (Exception e) {
-      if (e instanceof IOException) {
-        throw (IOException) e;
-      } else if (e instanceof RuntimeException) {
-        throw (RuntimeException) e;
-      } else {
-        throw new IOException("Failed to load HFile block", e);
-      }
+      throw new IOException("Failed to load HFile block", e);
     }
   }
 

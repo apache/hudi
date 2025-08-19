@@ -22,10 +22,13 @@ package org.apache.hudi.io.hfile;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -102,6 +105,48 @@ public class TestHFileBlockCache {
     HFileReaderConfig customConfig = new HFileReaderConfig(50, 60);
     assertEquals(50, customConfig.getBlockCacheSize());
     assertEquals(60, customConfig.getCacheTtlMinutes());
+  }
+
+  @Test
+  public void testGetOrComputeWithMissAndMultipleBlocks() throws Exception {
+    HFileBlockCache cache = new HFileBlockCache(10);
+    AtomicInteger loaderExecutionCount = new AtomicInteger(0);
+
+    // 0. Define keys and blocks for the test
+    HFileBlockCache.BlockCacheKey keyToCompute = new HFileBlockCache.BlockCacheKey("file-A", 1024, 128);
+    HFileBlockCache.BlockCacheKey preExistingKey = new HFileBlockCache.BlockCacheKey("file-B", 2048, 256);
+
+    HFileContext context = HFileContext.builder().build();
+    byte[] validBlockData = createValidHFileBlockData();
+    MockHFileDataBlock blockToCompute = new MockHFileDataBlock(context, validBlockData, 0);
+    MockHFileDataBlock preExistingBlock = new MockHFileDataBlock(context, validBlockData, 0);
+
+    // 1. Add a pre-existing block to ensure the cache is not empty
+    cache.putBlock(preExistingKey, preExistingBlock);
+    assertEquals(1, cache.size());
+
+    // 2. Verify a cache miss for the key we are about to compute
+    assertNull(cache.getBlock(keyToCompute), "Key should not be in the cache initially.");
+
+    // 3. Define the loader which increments a counter on execution
+    Callable<HFileBlock> loader = () -> {
+      loaderExecutionCount.incrementAndGet();
+      return blockToCompute;
+    };
+
+    // 4. First call to getOrCompute: should execute the loader
+    HFileBlock firstResult = cache.getOrCompute(keyToCompute, loader);
+    assertEquals(1, loaderExecutionCount.get(), "Loader should be called once on first access.");
+    assertEquals(2, cache.size(), "Cache size should be 2 after computing the new block.");
+    assertSame(blockToCompute, firstResult, "The newly computed block should be returned.");
+
+    // 5. Second call: should return the cached instance without executing the loader
+    HFileBlock secondResult = cache.getOrCompute(keyToCompute, loader);
+    assertEquals(1, loaderExecutionCount.get(), "Loader should NOT be called again for a cached key.");
+    assertSame(firstResult, secondResult, "Repeated calls should return the exact same cached object instance.");
+
+    // 6. Final check: ensure the pre-existing block is still accessible
+    assertSame(preExistingBlock, cache.getBlock(preExistingKey), "Pre-existing block should remain untouched.");
   }
 
   /**
