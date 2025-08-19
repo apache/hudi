@@ -80,17 +80,24 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
     val basePath = hoodieCatalogTable.tableLocation
     val metaClient = createMetaClient(jsc, basePath)
 
-    val timeline = if (showArchived) {
-      metaClient.getArchivedTimeline.mergeTimeline(metaClient.getActiveTimeline)
+    val activeResults = if (includePartitionMetadata) {
+      getCleansWithPartitionMetadata(metaClient.getActiveTimeline, limit)
     } else {
-      metaClient.getActiveTimeline
+      getCleans(metaClient.getActiveTimeline, limit)
     }
-
-    if (includePartitionMetadata) {
-      getCleansWithPartitionMetadata(timeline, limit)
+    val finalResults = if (showArchived) {
+      val archivedResults = if (includePartitionMetadata) {
+        getCleansWithPartitionMetadata(metaClient.getArchivedTimeline, limit)
+      } else {
+        getCleans(metaClient.getArchivedTimeline, limit)
+      }
+      (activeResults ++ archivedResults)
+        .sortWith((a, b) => a.getString(0) > b.getString(0))
+        .take(limit)
     } else {
-      getCleans(timeline, limit)
+      activeResults
     }
+    finalResults
   }
 
   override def build: Procedure = new ShowCleansProcedure(includePartitionMetadata)
@@ -101,11 +108,12 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
 
     val (rows: util.ArrayList[Row], cleanInstants: util.ArrayList[HoodieInstant]) = getSortedCleans(timeline)
 
-    for (i <- 0 until cleanInstants.size) {
-      val cleanInstant = cleanInstants.get(i)
+    var rowCount = 0
+
+    cleanInstants.asScala.takeWhile(_ => rowCount < limit).foreach { cleanInstant =>
       val cleanMetadata = timeline.readCleanMetadata(cleanInstant)
 
-      for (partitionMetadataEntry <- cleanMetadata.getPartitionMetadata.entrySet.asScala) {
+      cleanMetadata.getPartitionMetadata.entrySet.asScala.takeWhile(_ => rowCount < limit).foreach { partitionMetadataEntry =>
         val partitionPath = partitionMetadataEntry.getKey
         val partitionMetadata = partitionMetadataEntry.getValue
 
@@ -123,10 +131,11 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
           cleanMetadata.getTimeTakenInMillis,
           cleanMetadata.getTotalFilesDeleted
         ))
+        rowCount += 1
       }
     }
 
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    rows.asScala.toList
   }
 
   private def getSortedCleans(timeline: HoodieTimeline): (util.ArrayList[Row], util.ArrayList[HoodieInstant]) = {
@@ -143,7 +152,7 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
                         limit: Int): Seq[Row] = {
     val (rows: util.ArrayList[Row], cleanInstants: util.ArrayList[HoodieInstant]) = getSortedCleans(timeline)
 
-    for (i <- 0 until cleanInstants.size) {
+    for (i <- 0 until Math.min(cleanInstants.size, limit)) {
       val cleanInstant = cleanInstants.get(i)
       val cleanMetadata = timeline.readCleanMetadata(cleanInstant)
 
@@ -160,7 +169,7 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
       ))
     }
 
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    rows.asScala.toList
   }
 }
 

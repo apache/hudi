@@ -69,15 +69,21 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
   }
 
   private def getCleanerPlans(metaClient: HoodieTableMetaClient, limit: Int, showArchived: Boolean): Seq[Row] = {
-    val timeline = if (showArchived) {
-      metaClient.getArchivedTimeline.mergeTimeline(metaClient.getActiveTimeline)
-    } else {
-      metaClient.getActiveTimeline
-    }
-    val sortedCleanInstants = getSortedCleanInstants(timeline)
+    val activeCleanInstants = getSortedCleanInstants(metaClient.getActiveTimeline)
+      .take(limit)
 
-    sortedCleanInstants.take(limit).map { cleanInstant =>
-      processCleanPlan(metaClient, timeline, cleanInstant)
+    val cleanInstants = if (showArchived) {
+      val archivedCleanInstants = getSortedCleanInstants(metaClient.getArchivedTimeline)
+        .take(limit)
+      (activeCleanInstants ++ archivedCleanInstants)
+        .sortWith((a, b) => a.requestedTime() > b.requestedTime())
+        .take(limit)
+    } else {
+      activeCleanInstants
+    }
+
+    cleanInstants.map { cleanInstant =>
+      processCleanPlan(metaClient, metaClient.getActiveTimeline, cleanInstant)
     }
   }
 
