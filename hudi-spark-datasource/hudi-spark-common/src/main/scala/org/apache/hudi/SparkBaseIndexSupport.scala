@@ -173,7 +173,19 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       var recordKeyQueries: List[Expression] = List.empty
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
-      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+      
+      val isComplexRecordKey = {
+        val fieldCount = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0)
+        val encodeFieldNameConfig = metaClient.getTableConfig.getProps.getProperty(
+          org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(), 
+          org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.defaultValue().toString
+        ).toBoolean
+        
+        // Consider as complex if:
+        // 1. Multiple fields (> 1), OR
+        // 2. Single field with complex keygen encoding enabled
+        (fieldCount > 1) || (fieldCount == 1 && encodeFieldNameConfig)
+      }
       recordKeyOpt.foreach { recordKeysArray =>
         // Handle composite record keys
         breakable {
