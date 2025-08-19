@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, ORDERING_FIELDS, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL, ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties

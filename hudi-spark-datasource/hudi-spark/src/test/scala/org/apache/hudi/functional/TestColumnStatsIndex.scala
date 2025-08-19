@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, ORDERING_FIELDS, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
