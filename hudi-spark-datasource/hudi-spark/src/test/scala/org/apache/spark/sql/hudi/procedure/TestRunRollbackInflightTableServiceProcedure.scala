@@ -40,7 +40,7 @@ class TestRunRollbackInflightTableServiceProcedure extends HoodieSparkProcedureT
            | options (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            | partitioned by(ts)
            | location '$basePath'
@@ -84,7 +84,7 @@ class TestRunRollbackInflightTableServiceProcedure extends HoodieSparkProcedureT
              | options (
              |  primaryKey ='id',
              |  type = 'mor',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(ts)
              | location '$basePath'

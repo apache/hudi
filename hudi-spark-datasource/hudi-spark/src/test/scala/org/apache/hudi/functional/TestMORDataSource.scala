@@ -1322,14 +1322,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @ValueSource(booleans = Array(true, false))
   def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(enableFileIndex: Boolean): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_ro_read_test_table", s"${basePath}_mor_test_table")
-    val precombineField = "col3"
+    val orderingFields = "col3"
     val recordKeyField = "key"
     val dataField = "age"
 
     val options = Map[String, String](
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
       DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
-      HoodieTableConfig.ORDERING_FIELDS.key -> precombineField,
+      HoodieTableConfig.ORDERING_FIELDS.key -> orderingFields,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
@@ -1345,7 +1345,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // fg1_dc1.parquet written to storage
     // For record key "0", the row is (0, 0, 1000)
     val firstDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 1000"))
 
     firstDf.write.format("hudi")
@@ -1358,7 +1358,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // .fg1_dc1.log (from DC2) written to storage
     // For record key "0", the row is (0, 0, 2000)
     val secondDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 2000"))
 
     secondDf.write.format("hudi")
@@ -1391,7 +1391,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // .fg1_c3.log (from DC4) is written to storage
     // For record key "0", the row is (0, 0, 3000)
     val thirdDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 3000"))
 
     thirdDf.write.format("hudi")
@@ -1420,14 +1420,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 //  @ValueSource(booleans = Array(true, false))
   def testSnapshotQueryAfterInflightDeltaCommit(enableFileIndex: Boolean, tableVersion: Int): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_snapshot_read_test_table", s"${basePath}_mor_test_table")
-    val precombineField = "col3"
+    val orderingFields = "col3"
     val recordKeyField = "key"
     val dataField = "age"
 
     val options = Map[String, String](
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
       DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
-      HoodieTableConfig.ORDERING_FIELDS.key -> precombineField,
+      HoodieTableConfig.ORDERING_FIELDS.key -> orderingFields,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
@@ -1442,7 +1442,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
 
     val firstDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 1000"))
     firstDf.write.format("hudi")
       .options(writeOpts)
@@ -1450,7 +1450,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .save(tablePath)
 
     val secondDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 2000"))
     secondDf.write.format("hudi")
       .options(writeOpts)

@@ -67,7 +67,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          | )
          |""".stripMargin)
     // insert data
@@ -94,7 +94,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts',
+         |  orderingFields = 'ts',
          |  hoodie.clean.commits.retained= '1'
          | )
          |""".stripMargin)
@@ -215,7 +215,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.clean.commits.retained= '1'
              | )
              |""".stripMargin)
@@ -259,7 +259,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          | )
          | partitioned by (dt)
          |""".stripMargin)
@@ -401,7 +401,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.clean.commits.retained= '1'
              | )
              |""".stripMargin)
@@ -478,7 +478,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by (dt)
        """.stripMargin)
@@ -533,7 +533,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(ts)
              | location '$basePath'
@@ -574,7 +574,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | options (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.index.type = 'INMEMORY'
            | )
            | partitioned by(ts)
@@ -622,7 +622,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | options (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.index.type = 'INMEMORY'
            | )
            | partitioned by(ts)
@@ -667,7 +667,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | ) partitioned by (partition_date_col)
          """.stripMargin)
         spark.sql(s"insert into $tableName values " +

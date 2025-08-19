@@ -43,7 +43,7 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
             | options (
             |  type = '$tableType',
             |  primaryKey = 'id',
-            |  preCombineField = 'ts'
+            |  orderingFields = 'ts'
             | )
        """.stripMargin)
       // Insert data

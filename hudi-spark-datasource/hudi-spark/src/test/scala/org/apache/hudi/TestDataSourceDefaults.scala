@@ -556,7 +556,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine"))
+  @MethodSource(Array("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields"))
   def testOverwriteWithLatestAvroPayloadCombineAndGetUpdateValue(key: String): Unit = {
     val props = new TypedProperties()
     OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "favoriteIntNumber")

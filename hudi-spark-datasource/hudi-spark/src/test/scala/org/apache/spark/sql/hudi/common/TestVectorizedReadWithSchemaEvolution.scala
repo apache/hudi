@@ -47,7 +47,7 @@ class TestVectorizedReadWithSchemaEvolution extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id',
-                 |  preCombineField = 'ts'
+                 |  orderingFields = 'ts'
                  | )
          """.stripMargin)
             // insert data to table

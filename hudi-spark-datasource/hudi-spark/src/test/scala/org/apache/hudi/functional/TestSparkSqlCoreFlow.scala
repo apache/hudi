@@ -224,7 +224,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
        |tblproperties (
        |  type = '$typeString',
        |  primaryKey = '_row_key',
-       |  preCombineField = 'timestamp',
+       |  orderingFields = 'timestamp',
        |  hoodie.bulkinsert.shuffle.parallelism = 4,
        |  hoodie.database.name = "databaseName",
        |  hoodie.table.keygenerator.class = '$keyGenClass',

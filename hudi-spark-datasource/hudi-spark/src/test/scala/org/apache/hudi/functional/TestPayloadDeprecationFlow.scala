@@ -57,14 +57,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
       (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
-    val precombineField = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+    val orderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
     } else {
       "ts"
     }
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "_event_lsn").
-      option(HoodieTableConfig.ORDERING_FIELDS.key(), precombineField).
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFields).
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").

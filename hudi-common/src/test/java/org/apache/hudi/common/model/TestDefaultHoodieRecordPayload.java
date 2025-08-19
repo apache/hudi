@@ -63,7 +63,7 @@ public class TestDefaultHoodieRecordPayload {
   }
 
   @ParameterizedTest
-  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
   public void testActiveRecords(String key) throws IOException {
     OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);
@@ -91,7 +91,7 @@ public class TestDefaultHoodieRecordPayload {
   }
 
   @ParameterizedTest
-  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
   public void testDeletedRecord(String key) throws IOException {
     OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);

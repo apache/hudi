@@ -46,7 +46,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
              | location '$basePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
              | )
         """.stripMargin)
@@ -75,7 +75,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
              | location '$basePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
              | )
         """.stripMargin)
@@ -151,7 +151,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
              | location '$basePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
              | )
         """.stripMargin)

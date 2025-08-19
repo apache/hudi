@@ -530,7 +530,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
          | options (
          |  primaryKey ='id',
          |  type = 'mor',
-         |  preCombineField = 'name',
+         |  orderingFields = 'name',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.index.column.stats.enable = 'true'
          | )

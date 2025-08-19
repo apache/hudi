@@ -65,7 +65,7 @@ class TestGetPartitionValuesFromPath extends HoodieSparkSqlTestBase {
            |tblproperties (
            | primaryKey = 'id',
            | type = 'mor',
-           | preCombineField = 'ts',
+           | orderingFields = 'ts',
            | hoodie.datasource.write.drop.partition.columns = 'true'
            |)
            |partitioned by (region, dt)""".stripMargin)

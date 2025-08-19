@@ -92,7 +92,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
            |location '${tmp.getCanonicalPath}/$tableName'
            |tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            |)
          """.stripMargin)
 
@@ -165,7 +165,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |location '${tmp.getCanonicalPath}/$tableName'
              |tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |)
          """.stripMargin)
 
@@ -251,7 +251,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |)
          """.stripMargin)
 
@@ -267,7 +267,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |)
          """.stripMargin)
 
@@ -352,7 +352,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                |)
          """.stripMargin)
           targetTable
@@ -592,7 +592,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
            |tblproperties (
            |  type = '$tableType',
            |  primaryKey = '$primaryKey',
-           |  preCombineField = '$preCombineField'
+           |  orderingFields = '$preCombineField'
            |)
        """.stripMargin)
     }
@@ -689,7 +689,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |tblproperties (
              |  type = 'cow',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |)
          """.stripMargin)
 
@@ -738,7 +738,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |tblproperties (
                |  type = 'cow',
                |  primaryKey = 'id',
-               |  preCombineField = 'ts',
+               |  orderingFields = 'ts',
                |  'hoodie.record.merge.mode' = '$mergeMode'
                |)
            """.stripMargin)
@@ -813,7 +813,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'c1',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                |)
            """.stripMargin)
 

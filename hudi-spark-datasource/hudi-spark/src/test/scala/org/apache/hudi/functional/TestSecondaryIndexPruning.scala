@@ -473,7 +473,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          |) USING hudi
          | OPTIONS (
          |  primaryKey = 'record_key_col',
-         |  preCombineField = 'ts',
+         |  orderingFields = 'ts',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col',
@@ -729,7 +729,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          | OPTIONS (
          |  primaryKey = 'record_key_col',
          |  type = 'mor',
-         |  preCombineField = 'ts',
+         |  orderingFields = 'ts',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col',
@@ -804,7 +804,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
          | OPTIONS (
          |  primaryKey = 'record_key_col',
          |  type = 'mor',
-         |  preCombineField = 'replicadmstimestamp',
+         |  orderingFields = 'replicadmstimestamp',
          |  hoodie.metadata.enable = 'true',
          |  hoodie.metadata.record.index.enable = 'true',
          |  hoodie.datasource.write.recordkey.field = 'record_key_col',

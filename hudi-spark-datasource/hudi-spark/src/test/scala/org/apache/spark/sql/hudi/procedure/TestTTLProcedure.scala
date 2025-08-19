@@ -66,7 +66,7 @@ class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMix
              | location '$basePath'
              | tblproperties (
              |   primaryKey = '_row_key',
-             |   preCombineField = '_row_key',
+             |   orderingFields = '_row_key',
              |   type = 'cow'
              | )
              |""".stripMargin)

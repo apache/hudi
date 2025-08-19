@@ -61,7 +61,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
          | options (
          |  type = '$tableType',
          |  primaryKey = 'id',
-         |  preCombineField = 'comb'
+         |  orderingFields = 'comb'
          | )
          | partitioned by (par)
              """.stripMargin)
@@ -285,7 +285,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
        """.stripMargin)
 
@@ -549,7 +549,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                | options (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'comb'
+               |  orderingFields = 'comb'
                | )
                | partitioned by (par)
              """.stripMargin)
@@ -605,7 +605,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                | options (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                | )
              """.stripMargin)
           spark.sql(s"show create table ${tableName}").show(false)
@@ -684,7 +684,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              """.stripMargin)
         spark.sql(s"alter table $tableName alter column name drop not null")
@@ -714,7 +714,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                | options (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                | )
              """.stripMargin)
           spark.sql(s"show create table ${tableName}").show(false)
@@ -754,7 +754,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = 'mor',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              """.stripMargin)
 
@@ -1009,7 +1009,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by (ts)
              """.stripMargin)
@@ -1053,7 +1053,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
              | )
            """.stripMargin)
@@ -1091,7 +1091,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
              | )
            """.stripMargin)
@@ -1172,7 +1172,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              |tblproperties (
              | primaryKey = 'id',
              | type = '$tableType',
-             | preCombineField = 'ts'
+             | orderingFields = 'ts'
              |)
              |partitioned by (region, dt)""".stripMargin)
 
