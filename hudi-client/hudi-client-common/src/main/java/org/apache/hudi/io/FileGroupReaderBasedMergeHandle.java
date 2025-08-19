@@ -24,9 +24,11 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -53,7 +55,6 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
-import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -69,7 +70,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
@@ -111,7 +111,27 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                          TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+    this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, getLatestBaseFile(hoodieTable, partitionPath, fileId), keyGeneratorOpt);
+  }
+
+  /**
+   * Constructor for Copy-On-Write (COW) merge path.
+   * Takes in a base path and an iterator of records to be merged with that file.
+   *
+   * @param config instance of {@link HoodieWriteConfig} to use.
+   * @param instantTime instant time of the current commit.
+   * @param hoodieTable instance of {@link HoodieTable} being updated.
+   * @param recordItr iterator of records to be merged with the file.
+   * @param partitionPath partition path of the base file.
+   * @param fileId file ID of the base file.
+   * @param taskContextSupplier instance of {@link TaskContextSupplier} to use.
+   * @param baseFile current base file that needs to be read for the records in storage.
+   * @param keyGeneratorOpt optional instance of {@link BaseKeyGenerator} to use for extracting keys from records.
+   */
+  public FileGroupReaderBasedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                         Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                         TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
     this.compactionOperation = Option.empty();
     this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
     TypedProperties properties = config.getProps();
@@ -376,17 +396,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
   private static class CDCCallback<T> implements BaseFileUpdateCallback<T> {
     private final HoodieCDCLogger cdcLogger;
-    private final HoodieReaderContext<T> readerContext;
-    // Lazy is used because the schema handler within the reader context is not initialized until the FileGroupReader is fully constructed.
-    // This allows the values to be fetched at runtime when iterating through the records.
-    private final Lazy<Schema> requestedSchema;
-    private final Lazy<Option<UnaryOperator<T>>> outputConverter;
+    private final RecordContext<T> recordContext;
 
     CDCCallback(HoodieCDCLogger cdcLogger, HoodieReaderContext<T> readerContext) {
       this.cdcLogger = cdcLogger;
-      this.readerContext = readerContext;
-      this.outputConverter = Lazy.lazily(() -> readerContext.getSchemaHandler().getOutputConverter());
-      this.requestedSchema = Lazy.lazily(() -> readerContext.getSchemaHandler().getRequestedSchema());
+      this.recordContext = readerContext.getRecordContext();
     }
 
     @Override
@@ -401,6 +415,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
     @Override
     public void onDelete(String recordKey, BufferedRecord<T> previousRecord, HoodieOperation hoodieOperation) {
+      if (previousRecord == null) {
+        return;
+      }
       cdcLogger.put(recordKey, convertOutput(previousRecord), Option.empty());
     }
 
@@ -410,8 +427,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     }
 
     private GenericRecord convertOutput(BufferedRecord<T> record) {
-      T convertedRecord = outputConverter.get().map(converter -> record == null ? null : converter.apply(record.getRecord())).orElse(record.getRecord());
-      return convertedRecord == null ? null : readerContext.getRecordContext().convertToAvroRecord(convertedRecord, requestedSchema.get());
+      if (record == null) {
+        return null;
+      }
+      T data = record.getRecord();
+      return data == null ? null : recordContext.convertToAvroRecord(data, recordContext.decodeAvroSchema(record.getSchemaId()));
     }
   }
 
