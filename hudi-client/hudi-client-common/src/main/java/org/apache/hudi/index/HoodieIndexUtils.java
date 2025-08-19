@@ -551,7 +551,7 @@ public class HoodieIndexUtils {
         false,
         readerContext.getRecordMerger(),
         orderingFieldNames,
-        isExpressionPayload ? writerSchema.get() : writerSchemaWithMetaFields.get(),
+        writerSchema.get(),
         Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
         hoodieTable.getConfig().getProps(),
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
