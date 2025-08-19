@@ -170,7 +170,7 @@ public class HoodieRecordUtils {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data, orderingVal);
       record = new HoodieAvroRecord<>(hKey, payload, hoodieOperation);
     }
-    recordLocation.ifPresent(location -> record.setCurrentLocation(recordLocation.get()));
+    recordLocation.ifPresent(record::setCurrentLocation);
     return record;
   }
 
@@ -188,7 +188,7 @@ public class HoodieRecordUtils {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data);
       record = new HoodieAvroRecord<>(hKey, payload);
     }
-    recordLocation.ifPresent(location -> record.setCurrentLocation(recordLocation.get()));
+    recordLocation.ifPresent(record::setCurrentLocation);
     return record;
   }
 

@@ -137,6 +137,13 @@ public abstract class RecordContext<T> implements Serializable {
     return constructHoodieRecord(bufferedRecord, partitionPath);
   }
 
+  /**
+   * Constructs a {@link HoodieRecord} that will be used as the record written out to storage.
+   * This allows customization of the record construction logic for each engine for any required optimizations.
+   * The implementation defaults to calling {@link #constructHoodieRecord(BufferedRecord)}.
+   * @param bufferedRecord the {@link BufferedRecord} object to transform
+   * @return a new instance of {@link HoodieRecord} that will be written out to storage
+   */
   public HoodieRecord<T> constructFinalHoodieRecord(BufferedRecord<T> bufferedRecord) {
     return constructHoodieRecord(bufferedRecord, partitionPath);
   }

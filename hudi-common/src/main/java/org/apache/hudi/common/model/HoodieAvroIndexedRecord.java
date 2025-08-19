@@ -189,7 +189,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     decodeRecord(recordSchema);
     GenericRecord newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(data, targetSchema);
     updateMetadataValuesInternal(newAvroRecord, metadataValues);
-    return new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData);
+    HoodieAvroIndexedRecord newRecord = new HoodieAvroIndexedRecord(key, newAvroRecord, operation, metaData);
+    newRecord.setNewLocation(this.newLocation);
+    newRecord.setCurrentLocation(this.currentLocation);
+    return newRecord;
   }
 
   @Override
