@@ -104,8 +104,10 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
                                                        SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    upgradeOrderingFieldConfig(tableConfig, tablePropsToAdd, tablePropsToRemove);
     // Populate missing index versions indexes
     Option<HoodieIndexMetadata> indexMetadataOpt = metaClient.getIndexMetadata();
     if (indexMetadataOpt.isPresent()) {
@@ -117,7 +119,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           indexMetadataOpt.get(),
           metaClient.getTableConfig().getTableVersion());
     }
-    Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     // Handle merge mode config.
     reconcileMergeModeConfig(tablePropsToAdd, tableConfig);
     // Handle partial update mode config.
@@ -127,6 +128,14 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     // Handle payload class configs.
     reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
+  }
+
+  private void upgradeOrderingFieldConfig(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd, Set<ConfigProperty> tablePropsToRemove) {
+    Option<String> orderingFieldsOpt = tableConfig.getOrderingFieldsStr();
+    if (orderingFieldsOpt.isPresent()) {
+      tablePropsToAdd.put(HoodieTableConfig.ORDERING_FIELDS, orderingFieldsOpt.get());
+      tablePropsToRemove.add(HoodieTableConfig.PRECOMBINE_FIELD);
+    }
   }
 
   private void reconcileMergeModeConfig(Map<ConfigProperty, String> tablePropsToAdd,

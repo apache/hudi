@@ -29,14 +29,16 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, H
 import org.apache.hudi.common.table.HoodieTableConfig.{DEBEZIUM_UNAVAILABLE_VALUE, PARTIAL_UPDATE_UNAVAILABLE_VALUE, RECORD_MERGE_PROPERTY_PREFIX}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
-
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkAnswer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+
+import java.util.{Collections, Properties}
 
 class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
 
@@ -56,12 +58,17 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
       HoodieWriteConfig.WRITE_TABLE_VERSION.key -> "8",
       HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
     )
+    hudiOpts = hudiOpts ++ Map(HoodieTableConfig.PRECOMBINE_FIELD.key() -> hudiOpts(HoodieTableConfig.ORDERING_FIELDS.key())) - HoodieTableConfig.ORDERING_FIELDS.key()
 
     // Create a table in table version 8.
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = INSERT_OVERWRITE_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
       schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS)
+    metaClient = getLatestMetaClient(true)
+    val props = new Properties()
+    props.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), hudiOpts(HoodieTableConfig.PRECOMBINE_FIELD.key()))
+    HoodieTableConfig.updateAndDeleteProps(metaClient.getStorage, metaClient.getMetaPath, props, Collections.singleton(HoodieTableConfig.ORDERING_FIELDS.key()))
     metaClient = getLatestMetaClient(true)
     // Assert table version is 8.
     checkResultForVersion8(payloadClass)
@@ -132,7 +139,7 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name()).
-      option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), DebeziumConstants.ADDED_SEQ_COL_NAME).
+      option(DataSourceWriteOptions.ORDERING_FIELDS.key(), DebeziumConstants.ADDED_SEQ_COL_NAME).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
       option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8").
@@ -200,6 +207,9 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
   def checkResultForVersion8(payloadClass: String): Unit = {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
+    // Check ordering fields
+    assertEquals("timestamp", metaClient.getTableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD.key()))
+    assertTrue(StringUtils.isNullOrEmpty(metaClient.getTableConfig.getString(HoodieTableConfig.ORDERING_FIELDS.key())))
     // The payload class should be maintained.
     assertEquals(payloadClass, metaClient.getTableConfig.getPayloadClass)
     // The partial update mode should not be present
@@ -211,8 +221,8 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
       assertEquals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
     }
     if (payloadClass.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
-      assertFalse(metaClient.getTableConfig.getPreCombineFieldsStr.isEmpty)
-      assertEquals(DebeziumConstants.ADDED_SEQ_COL_NAME, metaClient.getTableConfig.getPreCombineFieldsStr.get())
+      assertFalse(metaClient.getTableConfig.getOrderingFieldsStr.isEmpty)
+      assertEquals(DebeziumConstants.ADDED_SEQ_COL_NAME, metaClient.getTableConfig.getOrderingFieldsStr.get())
     }
   }
 
@@ -222,6 +232,10 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
     assertEquals(
       partitionFields,
       HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
+    // Check ordering fields
+    assertEquals("timestamp", metaClient.getTableConfig.getString(HoodieTableConfig.ORDERING_FIELDS.key()))
+    assertTrue(StringUtils.isNullOrEmpty(metaClient.getTableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD.key())))
+
     assertEquals(payloadClass, metaClient.getTableConfig.getLegacyPayloadClass)
     // Based on the payload and table type, the merge mode is updated accordingly.
     if (payloadClass.equals(classOf[PartialUpdateAvroPayload].getName)) {
@@ -261,7 +275,7 @@ class TestEightToNineUpgrade extends RecordLevelIndexTestBase {
       assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, metaClient.getTableConfig.getRecordMergeMode)
       assertTrue(metaClient.getTableConfig.getPartialUpdateMode.isEmpty)
       assertEquals(DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME,
-        metaClient.getTableConfig.getPreCombineFieldsStr.get())
+        metaClient.getTableConfig.getOrderingFieldsStr.get())
     } else {
       assertTrue(metaClient.getTableConfig.getPartialUpdateMode.isEmpty)
     }

@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -81,8 +82,17 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
+    downgradeOrderingFieldsConfig(metaClient.getTableConfig(), propertiesToAdd, propertiesToRemove);
     reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, metaClient);
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
+  }
+
+  private void downgradeOrderingFieldsConfig(HoodieTableConfig tableConfig, Map<ConfigProperty, String> propertiesToAdd, Set<ConfigProperty> propertiesToRemove) {
+    Option<String> orderingFieldsOpt = tableConfig.getOrderingFieldsStr();
+    if (orderingFieldsOpt.isPresent()) {
+      propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFieldsOpt.get());
+      propertiesToRemove.add(HoodieTableConfig.ORDERING_FIELDS);
+    }
   }
 
   private void reconcileMergeConfigs(Map<ConfigProperty, String> propertiesToAdd,
@@ -113,7 +123,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue());
       }
       if (legacyPayloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
-        propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELDS, DebeziumConstants.ADDED_SEQ_COL_NAME);
+        propertiesToAdd.put(HoodieTableConfig.ORDERING_FIELDS, DebeziumConstants.ADDED_SEQ_COL_NAME);
       }
     }
   }

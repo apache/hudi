@@ -276,7 +276,7 @@ object HoodieOptionConfig {
 
   private def getSqlOptionWithAlternatives(sqlOption: HoodieSQLOption[String], options: Map[String, String]): Option[String] = {
       options.get(sqlOption.sqlKeyName)
-        .orElse(sqlOption.alternatives.map(alternative => options.get(alternative)).filter(_.isDefined).head)
+        .orElse(sqlOption.alternatives.map(alternative => options.get(alternative)).filter(_.isDefined).collectFirst({case opt => opt.get}))
   }
 }
 

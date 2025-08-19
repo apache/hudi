@@ -196,12 +196,17 @@ public class HoodieTableConfig extends HoodieConfig {
    * @deprecated Use {@link #ORDERING_FIELDS} instead
    */
   @Deprecated
-  public static final String PRECOMBINE_FIELD = "hoodie.table.precombine.field";
+  public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
+      .key("hoodie.table.precombine.field")
+      .noDefaultValue()
+      .withDocumentation("Comma separated fields used in preCombining before actual write. By default, when two records have the same key value, "
+          + "the largest value for the precombine field determined by Object.compareTo(..), is picked. If there are multiple fields configured, "
+          + "comparison is made on the first field. If the first field values are same, comparison is made on the second field and so on.");
 
   public static final ConfigProperty<String> ORDERING_FIELDS = ConfigProperty
       .key("hoodie.table.ordering.fields")
       .noDefaultValue()
-      .withAlternatives(PRECOMBINE_FIELD)
+      .withAlternatives(PRECOMBINE_FIELD.key())
       .withDocumentation("Comma separated fields used in records merging comparison. By default, when two records have the same key value, "
           + "the largest value for the ordering field determined by Object.compareTo(..), is picked. If there are multiple fields configured, "
           + "comparison is made on the first field. If the first field values are same, comparison is made on the second field and so on.");
@@ -1346,7 +1351,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @deprecated Use {@link #ORDERING_FIELDS} and its methods.
    */
   @Deprecated
-  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = PRECOMBINE_FIELD;
+  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = PRECOMBINE_FIELD.key();
 
   /**
    * @deprecated Use {@link #BASE_FILE_FORMAT} and its methods.
