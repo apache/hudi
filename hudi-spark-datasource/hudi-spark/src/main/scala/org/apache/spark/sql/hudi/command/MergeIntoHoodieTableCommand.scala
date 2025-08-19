@@ -24,7 +24,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
@@ -60,6 +60,7 @@ import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 import java.util.Base64
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 /**
  * Exception thrown when field resolution fails during MERGE INTO validation
@@ -209,7 +210,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     }).filter(_.nonEmpty).map(_.get)
     resolvedCols
   }
-
 
   private def doCasting(conditions: Seq[Expression], pkTable: Boolean): Seq[(Attribute, Expression)] = {
     val targetAttrs = mergeInto.targetTable.outputSet
@@ -519,7 +519,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       // After HUDI-9257 is done, we can remove this limitation.
       && !useGlobalIndex(parameters)
       // Partial update is disabled when custom merge mode is set.
-      && !useCustomMergeMode(parameters))
+      && !useCustomMergeMode(parameters)
+      // Partial update is disabled when partialUpdateMode is set.
+      && getPartialUpdateMode(parameters).isEmpty)
   }
 
   private def getOperationType(parameters: Map[String, String]) = {
@@ -1118,6 +1120,12 @@ object MergeIntoHoodieTableCommand {
       throw new HoodieException("Merge mode cannot be null here")
     }
     mergeModeOpt.get.equals(RecordMergeMode.CUSTOM.name)
+  }
+
+  def getPartialUpdateMode(parameters: Map[String, String]): Option[PartialUpdateMode] = {
+    parameters.get(HoodieTableConfig.PARTIAL_UPDATE_MODE.key).flatMap { value =>
+      Try(PartialUpdateMode.valueOf(value)).toOption
+    }
   }
 }
 

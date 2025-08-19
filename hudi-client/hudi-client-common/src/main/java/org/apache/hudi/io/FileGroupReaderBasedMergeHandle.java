@@ -281,6 +281,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           } catch (Exception e) {
             LOG.error("Error writing record {}", record, e);
             writeStatus.markFailure(record, e, recordMetadata);
+            fileGroupReader.onWriteFailure(record.getRecordKey());
           }
         }
 
@@ -357,15 +358,17 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       // record index callback
       if (this.writeStatus.isTrackingSuccessfulWrites()) {
         writeStatus.manuallyTrackSuccess();
-        callbacks.add(new RecordLevelIndexCallback<>(writeStatus, newRecordLocation, partitionPath));
+        RecordLevelIndexCallback<T> recordLevelIndexCallback = new RecordLevelIndexCallback<>(writeStatus, newRecordLocation, partitionPath);
+        callbacks.add(recordLevelIndexCallback);
       }
       // Stream secondary index stats.
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
-        callbacks.add(new SecondaryIndexCallback<>(
+        SecondaryIndexCallback<T> secondaryIndexCallback = new SecondaryIndexCallback<>(
             partitionPath,
             readerContext,
             writeStatus,
-            secondaryIndexDefns));
+            secondaryIndexDefns);
+        callbacks.add(secondaryIndexCallback);
       }
     }
     return callbacks.isEmpty() ? Option.empty() : Option.of(CompositeCallback.of(callbacks));
@@ -401,6 +404,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       cdcLogger.put(recordKey, convertOutput(previousRecord), Option.empty());
     }
 
+    @Override
+    public void onFailure(String recordKey) {
+      cdcLogger.remove(recordKey);
+    }
+
     private GenericRecord convertOutput(BufferedRecord<T> record) {
       T convertedRecord = outputConverter.get().map(converter -> record == null ? null : converter.apply(record.getRecord())).orElse(record.getRecord());
       return convertedRecord == null ? null : readerContext.getRecordContext().convertToAvroRecord(convertedRecord, requestedSchema.get());
@@ -434,6 +442,14 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       // In this case, we do not want to delete the record metadata from the index.
       if (hoodieOperation != HoodieOperation.UPDATE_BEFORE) {
         writeStatus.addRecordDelegate(HoodieRecordDelegate.create(recordKey, partitionPath, fileRecordLocation, null));
+      }
+    }
+
+    @Override
+    public void onFailure(String recordKey) {
+      int lastIndex = writeStatus.getWrittenRecordDelegates().size() - 1;
+      if (lastIndex >= 0 && writeStatus.getWrittenRecordDelegates().get(lastIndex).getRecordKey().equals(recordKey)) {
+        writeStatus.getWrittenRecordDelegates().remove(lastIndex);
       }
     }
   }
@@ -492,6 +508,21 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           secondaryIndexDefns,
           readerContext.getRecordContext());
     }
+
+    @Override
+    public void onFailure(String recordKey) {
+      writeStatus.getIndexStats().getSecondaryIndexStats().forEach((partition, indexStats) -> {
+        List<Integer> indicesToRemove = new ArrayList<>();
+        for (int i = indexStats.size() - 1; i >= 0; i--) {
+          if (indexStats.get(i).getRecordKey().equals(recordKey)) {
+            indicesToRemove.add(i);
+          } else {
+            break;
+          }
+        }
+        indicesToRemove.forEach(index -> indexStats.remove((int) index));
+      });
+    }
   }
 
   private static class CompositeCallback<T> implements BaseFileUpdateCallback<T> {
@@ -521,6 +552,11 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
     @Override
     public void onDelete(String recordKey, BufferedRecord<T> previousRecord, HoodieOperation hoodieOperation) {
       this.callbacks.forEach(callback -> callback.onDelete(recordKey, previousRecord, hoodieOperation));
+    }
+
+    @Override
+    public void onFailure(String recordKey) {
+      this.callbacks.forEach(callback -> callback.onFailure(recordKey));
     }
   }
 }
