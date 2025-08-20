@@ -20,10 +20,12 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -39,33 +41,33 @@ public class DefaultHiveRecordMerger extends HoodieHiveRecordMerger {
   private String[] orderingFields;
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.HIVE);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.HIVE);
     if (newer instanceof HoodieHiveRecord) {
       HoodieHiveRecord newHiveRecord = (HoodieHiveRecord) newer;
       if (newHiveRecord.isDelete(newSchema, props)) {
-        return Option.empty();
+        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.HIVE), newSchema);
       }
     } else if (newer.getData() == null) {
-      return Option.empty();
+      return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.HIVE), newSchema);
     }
 
     if (older instanceof HoodieHiveRecord) {
       HoodieHiveRecord oldHiveRecord = (HoodieHiveRecord) older;
       if (oldHiveRecord.isDelete(oldSchema, props)) {
-        return Option.of(Pair.of(newer, newSchema));
+        return Pair.of(newer, newSchema);
       }
     } else if (older.getData() == null) {
-      return Option.empty();
+      return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.HIVE), newSchema);
     }
     if (orderingFields == null) {
       orderingFields = ConfigUtils.getOrderingFields(props);
     }
     if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
-      return Option.of(Pair.of(older, oldSchema));
+      return Pair.of(older, oldSchema);
     } else {
-      return Option.of(Pair.of(newer, newSchema));
+      return Pair.of(newer, newSchema);
     }
   }
 

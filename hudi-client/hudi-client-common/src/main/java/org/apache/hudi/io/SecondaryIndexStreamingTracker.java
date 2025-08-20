@@ -162,7 +162,7 @@ public class SecondaryIndexStreamingTracker {
    * @param keyGeneratorOpt           Option containing key generator
    * @param config                    Hoodie write config
    */
-  static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, Option<HoodieRecord> combinedRecordOpt, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
+  static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, HoodieRecord combinedRecordOpt, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
                                            WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
                                            List<HoodieIndexDefinition> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieWriteConfig config) {
 
@@ -185,9 +185,9 @@ public class SecondaryIndexStreamingTracker {
       boolean hasNewValue = false;
       Object newSecondaryKey = null;
 
-      if (combinedRecordOpt.isPresent() && !isDelete) {
+      if (!isDelete) {
         Schema newSchema = newSchemaSupplier.get();
-        newSecondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
+        newSecondaryKey = combinedRecordOpt.getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
         hasNewValue = true;
       }
 
@@ -212,8 +212,7 @@ public class SecondaryIndexStreamingTracker {
       if (shouldUpdate) {
         String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
             .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
-            .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
-            .get();
+            .orElseGet(combinedRecordOpt::getRecordKey);
 
         // Delete old secondary index entry if old record exists.
         if (hasOldValue) {

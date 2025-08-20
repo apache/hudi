@@ -22,7 +22,6 @@ package org.apache.hudi;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
@@ -41,17 +40,17 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return Option.of(Pair.of(newer, newSchema));
+  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    return Pair.of(newer, newSchema);
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
-    Option<Pair<HoodieRecord, Schema>> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
+  public Pair<HoodieRecord, Schema> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
+    Pair<HoodieRecord, Schema> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
     if (deleteHandlingResult != null) {
       return deleteHandlingResult;
     }
-    return Option.of(SparkRecordMergingUtils.mergePartialRecords(
-        (HoodieSparkRecord) older, oldSchema, (HoodieSparkRecord) newer, newSchema, readerSchema, props));
+    return SparkRecordMergingUtils.mergePartialRecords(
+        (HoodieSparkRecord) older, oldSchema, (HoodieSparkRecord) newer, newSchema, readerSchema, props);
   }
 }

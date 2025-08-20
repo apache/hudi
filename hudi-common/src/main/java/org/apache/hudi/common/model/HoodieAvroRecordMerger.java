@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -43,9 +44,12 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return combineAndGetUpdateValue(older, newer, oldSchema, newSchema, props)
-        .map(r -> Pair.of(new HoodieAvroIndexedRecord(r), r.getSchema()));
+  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    Option<IndexedRecord> updatedValue = combineAndGetUpdateValue(older, newer, oldSchema, newSchema, props);
+    if (updatedValue.isEmpty()) {
+      return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecordType.AVRO), newSchema);
+    }
+    return Pair.of(new HoodieAvroIndexedRecord(updatedValue.get()), updatedValue.get().getSchema());
   }
 
   @Override
@@ -55,10 +59,10 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
 
   private Option<IndexedRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema oldSchema, Schema newSchema, Properties props) throws IOException {
     Option<IndexedRecord> previousAvroData = older.toIndexedRecord(oldSchema, props).map(HoodieAvroIndexedRecord::getData);
-    if (!previousAvroData.isPresent()) {
-      return Option.empty();
+    HoodieRecordPayload payload = ((HoodieAvroRecord) newer).getData();
+    if (previousAvroData.isEmpty()) {
+      return payload.getInsertValue(newSchema, props);
     }
-
     return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), newSchema, props);
   }
 

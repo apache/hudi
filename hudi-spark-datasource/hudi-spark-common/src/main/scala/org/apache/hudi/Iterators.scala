@@ -307,29 +307,22 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
       case HoodieRecordType.SPARK =>
         val curRecord = new HoodieSparkRecord(curRow, readerSchema)
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        toScalaOption(result)
-          .flatMap { r =>
-            val data = r.getLeft.getData.asInstanceOf[InternalRow]
-            if (isDeleteOperation(data)) {
-              None
-            } else {
-              val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
-              val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-              Some(projection.apply(data))
-            }
-          }
+        if (result.getLeft.isDelete(result.getRight, payloadProps)) {
+          None
+         } else {
+          val schema = HoodieInternalRowUtils.getCachedSchema(result.getRight)
+          val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
+          Some(projection.apply(result.getLeft.getData.asInstanceOf[InternalRow]))
+         }
       case _ =>
         val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
         val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        toScalaOption(result)
-          .flatMap { r =>
-            val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
-            if (isDeleteOperation(avroRecord)) {
-              None
-            } else {
-              Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
-            }
-          }
+        if (result.getLeft.isDelete(result.getRight, payloadProps)) {
+          None
+        } else {
+          val avroRecord = result.getLeft.toIndexedRecord(result.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
+          Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
+        }
     }
   }
 }

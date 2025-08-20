@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -90,25 +89,21 @@ public class TestPartialUpdateFlinkRecordMerger {
     HoodieFlinkRecord record1 = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 0L, "NY", "A");
     HoodieFlinkRecord record2 = createRecord(new HoodieKey("1", "par1"), "001", "001_2", "file", 1L, null, "B");
     HoodieFlinkRecord expected = createRecord(new HoodieKey("1", "par1"), "001", "001_2", "file", 1L, "NY", "B");
-    Option<Pair<HoodieRecord, Schema>> mergingResult = recordMerger.merge(record1, schema, record2, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(mergingResult.get().getLeft().getData(), expected.getData());
+    Pair<HoodieRecord, Schema> mergingResult = recordMerger.merge(record1, schema, record2, schema, new TypedProperties());
+    assertEquals(mergingResult.getLeft().getData(), expected.getData());
     mergingResult = recordMerger.merge(record2, schema, record1, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(expected.getData(), mergingResult.get().getLeft().getData());
+    assertEquals(expected.getData(), mergingResult.getLeft().getData());
 
     // let record11's ordering val larger than record2, then record1 will overwrite record2 with its non-default field's value
     record1 = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 2L, "NY", "A");
     mergingResult = recordMerger.merge(record1, schema, record2, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(record1.getData(), mergingResult.get().getLeft().getData());
+    assertEquals(record1.getData(), mergingResult.getLeft().getData());
 
     // let record1's ordering val equal to record2, then record2 will be considered to newer record
     record1 = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 1L, "NY", "A");
     expected = createRecord(new HoodieKey("1", "par1"), "001", "001_2", "file", 1L, "NY", "B");
     mergingResult = recordMerger.merge(record1, schema, record2, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(expected.getData(), mergingResult.get().getLeft().getData());
+    assertEquals(expected.getData(), mergingResult.getLeft().getData());
   }
 
   @Test
@@ -118,13 +113,11 @@ public class TestPartialUpdateFlinkRecordMerger {
     HoodieFlinkRecord record1 = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 0L, "NY", "A");
     HoodieEmptyRecord deleteRecord = new HoodieEmptyRecord(new HoodieKey("1", "par1"), HoodieOperation.DELETE, 1L, HoodieRecord.HoodieRecordType.FLINK);
 
-    Option<Pair<HoodieRecord, Schema>> mergingResult = recordMerger.merge(record1, schema, deleteRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
+    Pair<HoodieRecord, Schema> mergingResult = recordMerger.merge(record1, schema, deleteRecord, schema, new TypedProperties());
+    assertTrue(mergingResult.getLeft().isDelete(schema, CollectionUtils.emptyProps()));
 
     mergingResult = recordMerger.merge(deleteRecord, schema, record1, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
+    assertTrue(mergingResult.getLeft().isDelete(schema, CollectionUtils.emptyProps()));
   }
 
   /**
@@ -156,17 +149,15 @@ public class TestPartialUpdateFlinkRecordMerger {
 
     // Merge(Merge(record1, record2), record3)
     HoodieFlinkRecord expected = createRecord(new HoodieKey("1", "par1"), "001", "001_3", "file", 2L, "NY0", "A");
-    Option<Pair<HoodieRecord, Schema>> mergingResult = recordMerger.merge(record1, schema, record2, schema, new TypedProperties());
-    mergingResult = recordMerger.merge(mergingResult.get().getLeft(), schema, record3, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(expected.getData(), mergingResult.get().getLeft().getData());
+    Pair<HoodieRecord, Schema> mergingResult = recordMerger.merge(record1, schema, record2, schema, new TypedProperties());
+    mergingResult = recordMerger.merge(mergingResult.getLeft(), schema, record3, schema, new TypedProperties());
+    assertEquals(expected.getData(), mergingResult.getLeft().getData());
 
     // Merge(record1, Merge(record2, record3))
     expected = createRecord(new HoodieKey("1", "par1"), "001", "001_3", "file", 2L, "NY1", "A");
     mergingResult = recordMerger.merge(record2, schema, record3, schema, new TypedProperties());
-    mergingResult = recordMerger.merge(mergingResult.get().getLeft(), schema, record3, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(expected.getData(), mergingResult.get().getLeft().getData());
+    mergingResult = recordMerger.merge(mergingResult.getLeft(), schema, record3, schema, new TypedProperties());
+    assertEquals(expected.getData(), mergingResult.getLeft().getData());
   }
 
   @Test
@@ -174,16 +165,14 @@ public class TestPartialUpdateFlinkRecordMerger {
     PartialUpdateFlinkRecordMerger recordMerger = new PartialUpdateFlinkRecordMerger();
     HoodieFlinkRecord record1 = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 1L, "NY0", "A");
     HoodieFlinkRecord record2 = createRecordWithoutMetaField(new HoodieKey("1", "par1"),  2L, "NY1", "A");
-    Option<Pair<HoodieRecord, Schema>> mergingResult = recordMerger.merge(record1, schema, record2, schemaWithoutMetaField, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(record2.getData(), mergingResult.get().getLeft().getData());
+    Pair<HoodieRecord, Schema> mergingResult = recordMerger.merge(record1, schema, record2, schemaWithoutMetaField, new TypedProperties());
+    assertEquals(record2.getData(), mergingResult.getLeft().getData());
 
     record1 = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 1L, "NY0", "A");
     record2 = createRecordWithoutMetaField(new HoodieKey("1", "par1"),  2L, "NY1", null);
     HoodieFlinkRecord expected = createRecordWithoutMetaField(new HoodieKey("1", "par1"),  2L, "NY1", "A");
     mergingResult = recordMerger.merge(record1, schema, record2, schemaWithoutMetaField, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(expected.getData(), mergingResult.get().getLeft().getData());
+    assertEquals(expected.getData(), mergingResult.getLeft().getData());
   }
 
   private HoodieFlinkRecord createRecord(
