@@ -95,20 +95,22 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public InternalRow mergeWithEngineRecord(Schema recordSchema,
-                                           Map<Integer, Object> updateValues,
-                                           BufferedRecord<InternalRow> baseRecord,
-                                           Schema targetSchema) {
-    List<Schema.Field> fields = targetSchema.getFields();
-    Object[] values = new Object[fields.size()];
+  public InternalRow constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+    return new GenericInternalRow(fieldValues);
+  }
 
-    int idx = 0;
+  @Override
+  public InternalRow mergeWithEngineRecord(Schema schema,
+                                           Map<Integer, Object> updateValues,
+                                           BufferedRecord<InternalRow> baseRecord) {
+    List<Schema.Field> fields = schema.getFields();
+    Object[] values = new Object[fields.size()];
     for (Schema.Field field : fields) {
-      int pos = recordSchema.getField(field.name()).pos();
+      int pos = field.pos();
       if (updateValues.containsKey(pos)) {
-        values[idx++] = updateValues.get(pos);
+        values[pos] = updateValues.get(pos);
       } else {
-        values[idx++] = getValue(baseRecord.getRecord(), recordSchema, field.name());
+        values[pos] = getValue(baseRecord.getRecord(), schema, field.name());
       }
     }
     return new GenericInternalRow(values);

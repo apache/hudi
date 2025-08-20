@@ -143,22 +143,23 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   @Override
-  public IndexedRecord mergeWithEngineRecord(Schema recordSchema,
-                                             Map<Integer, Object> updateValues,
-                                             BufferedRecord<IndexedRecord> baseRecord,
-                                             Schema targetSchema) {
-    IndexedRecord engineRecord = baseRecord.getRecord();
-    GenericData.Record mergedRecord = new GenericData.Record(targetSchema);
-    for (Schema.Field field: targetSchema.getFields()) {
-      String fieldName = field.name();
-      int pos = recordSchema.getField(fieldName).pos();
-      if (updateValues.containsKey(pos)) {
-        mergedRecord.put(fieldName, updateValues.get(pos));
-      } else {
-        mergedRecord.put(fieldName, engineRecord.get(pos));
-      }
+  public IndexedRecord constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+    GenericData.Record record = new GenericData.Record(recordSchema);
+    for (int i = 0; i < fieldValues.length; i++) {
+      record.put(i, fieldValues[i]);
     }
-    return mergedRecord;
+    return record;
+  }
+
+  @Override
+  public IndexedRecord mergeWithEngineRecord(Schema schema,
+                                             Map<Integer, Object> updateValues,
+                                             BufferedRecord<IndexedRecord> baseRecord) {
+    IndexedRecord engineRecord = baseRecord.getRecord();
+    for (Map.Entry<Integer, Object> value : updateValues.entrySet()) {
+      engineRecord.put(value.getKey(), value.getValue());
+    }
+    return engineRecord;
   }
 
   @Override

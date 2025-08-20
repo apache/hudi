@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.avro.Schema;
 
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -92,34 +91,39 @@ public class PartialUpdateHandler<T> implements Serializable {
    * @param newSchema              The schema of the newer record.
    * @param oldSchema              The schema of the older record.
    * @param targetSchema           The target schema of the merged record.
-   * @return
+   * @return merged result with partial updating by ignoring default values.
    */
   BufferedRecord<T> reconcileDefaultValues(BufferedRecord<T> newRecord,
                                            BufferedRecord<T> oldRecord,
                                            Schema newSchema,
                                            Schema oldSchema,
                                            Schema targetSchema) {
-    List<Schema.Field> fields = newSchema.getFields();
-    Map<Integer, Object> updateValues = new HashMap<>();
-    T engineRecord;
-    // The default value only from the top-level data type is validated. That means,
-    // for nested columns, we do not check the leaf level data type defaults.
-    for (Schema.Field field : fields) {
+    List<Schema.Field> fields = targetSchema.getFields();
+    Object[] fieldVals = new Object[fields.size()];
+    int idx = 0;
+    boolean updated = false;
+    // decide value for each field with default value in new record ignored.
+    for (Schema.Field field: fields) {
       String fieldName = field.name();
+      // The default value only from the top-level data type is validated. That means,
+      // for nested columns, we do not check the leaf level data type defaults.
       Object defaultValue = toJavaDefaultValue(field);
-      Object newValue = recordContext.getValue(
-          newRecord.getRecord(), newSchema, fieldName);
+      Object newValue = recordContext.getValue(newRecord.getRecord(), newSchema, fieldName);
       if (defaultValue == newValue) {
-        updateValues.put(field.pos(), recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+        fieldVals[idx++] = recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName);
+        updated = true;
+      } else {
+        fieldVals[idx++] = newValue;
       }
     }
-    if (updateValues.isEmpty()) {
+    if (!updated) {
       return newRecord;
     }
     // if the merging happens, always return record with target schema (incoming schema),
     // since the incoming schema may not contain metadata fields for COW merging cases,
     // and the metadata fields will be supplemented later in the file writer.
-    engineRecord = recordContext.mergeWithEngineRecord(newSchema, updateValues, newRecord, targetSchema);
+    T engineRecord = recordContext.constructEngineRecord(targetSchema, fieldVals);
+
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
@@ -133,28 +137,31 @@ public class PartialUpdateHandler<T> implements Serializable {
                                           Schema newSchema,
                                           Schema oldSchema,
                                           Schema targetSchema) {
-    List<Schema.Field> fields = newSchema.getFields();
-    Map<Integer, Object> updateValues = new HashMap<>();
-    T engineRecord;
+    List<Schema.Field> fields = targetSchema.getFields();
+    Object[] fieldVals = new Object[fields.size()];
     String partialUpdateCustomMarker = mergeProperties.get(PARTIAL_UPDATE_UNAVAILABLE_VALUE);
-    for (Schema.Field field : fields) {
+    int idx = 0;
+    boolean updated = false;
+    // decide value for each field with customized mark value ignored.
+    for (Schema.Field field: fields) {
       String fieldName = field.name();
       Object newValue = recordContext.getValue(newRecord.getRecord(), newSchema, fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
           && null != partialUpdateCustomMarker
           && (partialUpdateCustomMarker.equals(recordContext.getTypeConverter().castToString(newValue)))) {
-        updateValues.put(
-            field.pos(),
-            recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName));
+        fieldVals[idx++] = recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName);
+        updated = true;
+      } else {
+        fieldVals[idx++] = newValue;
       }
     }
-    if (updateValues.isEmpty()) {
+    if (!updated) {
       return newRecord;
     }
     // if the merging happens, always return record with target schema (incoming schema),
     // since the incoming schema may not contain metadata fields for COW merging cases,
     // and the metadata fields will be supplemented later in the file writer.
-    engineRecord = recordContext.mergeWithEngineRecord(newSchema, updateValues, newRecord, targetSchema);
+    T engineRecord = recordContext.constructEngineRecord(targetSchema, fieldVals);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),
         newRecord.getOrderingValue(),
