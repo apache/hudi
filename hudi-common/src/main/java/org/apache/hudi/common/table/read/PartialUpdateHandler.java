@@ -119,9 +119,9 @@ public class PartialUpdateHandler<T> implements Serializable {
     if (!updated) {
       return newRecord;
     }
-    // if the merging happens, always return record with target schema (incoming schema),
-    // since the incoming schema may not contain metadata fields for COW merging cases,
-    // and the metadata fields will be supplemented later in the file writer.
+    // If the merging happens, always return record with target schema (incoming schema).
+    // The incoming schema may not contain metadata fields for COW merging cases,
+    // then the metadata fields will be supplemented later in the file writer.
     T engineRecord = recordContext.constructEngineRecord(targetSchema, fieldVals);
 
     return new BufferedRecord<>(
@@ -158,9 +158,9 @@ public class PartialUpdateHandler<T> implements Serializable {
     if (!updated) {
       return newRecord;
     }
-    // if the merging happens, always return record with target schema (incoming schema),
-    // since the incoming schema may not contain metadata fields for COW merging cases,
-    // and the metadata fields will be supplemented later in the file writer.
+    // If the merging happens, always return record with target schema (incoming schema).
+    // The incoming schema may not contain metadata fields for COW merging cases,
+    // then the metadata fields will be supplemented later in the file writer.
     T engineRecord = recordContext.constructEngineRecord(targetSchema, fieldVals);
     return new BufferedRecord<>(
         newRecord.getRecordKey(),

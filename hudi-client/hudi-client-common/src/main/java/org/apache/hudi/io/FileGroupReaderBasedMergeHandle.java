@@ -415,6 +415,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
 
     @Override
     public void onDelete(String recordKey, BufferedRecord<T> previousRecord, HoodieOperation hoodieOperation) {
+      // delete record from log block and update no base record from base file, skip generating changelog.
       if (previousRecord == null) {
         return;
       }
