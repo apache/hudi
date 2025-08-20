@@ -31,9 +31,9 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeG
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config._
 import org.apache.hudi.exception.HoodieWriteConflictException
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
+import org.apache.hudi.index.record.HoodieRecordIndex
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.functions.lit
@@ -47,8 +47,6 @@ import org.junit.jupiter.params.provider.Arguments.arguments
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.Executors
-import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
@@ -57,6 +55,7 @@ import scala.util.Using
 
 @Tag("functional-b")
 class TestRecordLevelIndex extends RecordLevelIndexTestBase {
+
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIInitialization(tableType: HoodieTableType): Unit = {
@@ -64,6 +63,8 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertFalse(HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)))
   }
 
   @Test
