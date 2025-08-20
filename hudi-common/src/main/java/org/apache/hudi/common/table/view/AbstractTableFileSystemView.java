@@ -398,9 +398,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         pathInfoMap.put(partitionPair,
             metaClient.getStorage().listDirectEntries(absolutePartitionPath));
       } catch (IOException e) {
-        // Create the path if it does not exist already
         if (!metaClient.getStorage().exists(absolutePartitionPath)) {
-          metaClient.getStorage().createDirectory(absolutePartitionPath);
           pathInfoMap.put(partitionPair, Collections.emptyList());
         } else {
           // in case the partition path was created by another caller
@@ -471,9 +469,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       return metaClient.getStorage().listDirectEntries(partitionPath);
     } catch (IOException e) {
-      // Create the path if it does not exist already
       if (!metaClient.getStorage().exists(partitionPath)) {
-        metaClient.getStorage().createDirectory(partitionPath);
         return Collections.emptyList();
       } else {
         // in case the partition path was created by another caller
