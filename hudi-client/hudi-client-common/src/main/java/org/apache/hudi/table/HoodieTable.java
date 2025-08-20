@@ -120,7 +120,9 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
@@ -162,6 +164,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
     this.taskContextSupplier = context.getTaskContextSupplier();
+
+    // Extract necessary properties from table config to write config.
+    reconcileWriteConfigs(metaClient, config);
   }
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient, FileSystemViewManager viewManager, TaskContextSupplier supplier) {
@@ -175,6 +180,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.viewManager = viewManager;
     this.metaClient = metaClient;
     this.taskContextSupplier = supplier;
+
+    // Extract necessary properties from table config to write config.
+    reconcileWriteConfigs(metaClient, config);
   }
 
   public boolean isMetadataTable() {
@@ -810,10 +818,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException
    */
   void reconcileAgainstMarkers(HoodieEngineContext context,
-                                         String instantTs,
-                                         List<HoodieWriteStat> stats,
-                                         boolean consistencyCheckEnabled,
-                                         boolean shouldFailOnDuplicateDataFileDetection,
+                               String instantTs,
+                               List<HoodieWriteStat> stats,
+                               boolean consistencyCheckEnabled,
+                               boolean shouldFailOnDuplicateDataFileDetection,
                                WriteMarkers markers) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
@@ -1286,5 +1294,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // question: should we just return null when context is serialized as null? the mismatch reader context would throw anyway.
     return (ReaderContextFactory<T>) getContext().getReaderContextFactoryForWrite(metaClient, config.getRecordMerger().getRecordType(),
         config.getProps(), false);
+  }
+
+  private void reconcileWriteConfigs(HoodieTableMetaClient metaClient,
+                                     HoodieWriteConfig config) {
+    Map<String, String> mergeProperties = extractWithPrefix(
+        metaClient.getTableConfig().getProps(), RECORD_MERGE_PROPERTY_PREFIX);
+    if (!mergeProperties.isEmpty()) {
+      mergeProperties.forEach(config::setValue);
+    }
   }
 }

@@ -52,10 +52,13 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForPreV9Table;
 
 /**
@@ -276,10 +279,10 @@ public abstract class HoodieReaderContext<T> {
     HoodieTableVersion tableVersion = tableConfig.getTableVersion();
     // If the provided payload class differs from the table's payload class, we need to infer the correct merging behavior.
     if (isIngestion && writerPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
-      Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferMergingConfigsForWrites(null, writerPayloadClass.get(), null,
-          tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
-      recordMergeMode = triple.getLeft();
-      mergeStrategyId = triple.getRight();
+      Map<String, String> mergeProperties = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+          null, writerPayloadClass.get(), null, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
+      recordMergeMode = RecordMergeMode.valueOf(mergeProperties.get(RECORD_MERGE_MODE.key()));
+      mergeStrategyId = mergeProperties.get(RECORD_MERGE_STRATEGY_ID.key());
     } else if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
       Triple<RecordMergeMode, String, String> triple = inferMergingConfigsForPreV9Table(
           recordMergeMode, tableConfig.getPayloadClass(),
