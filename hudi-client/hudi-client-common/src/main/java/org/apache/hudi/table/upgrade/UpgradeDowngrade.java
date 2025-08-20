@@ -70,18 +70,14 @@ public class UpgradeDowngrade {
   ));
 
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
-  private final UpgradeDowngradeStrategy strategy;
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
+  private Option<UpgradeDowngradeStrategy> strategyOpt = Option.empty();
 
   /**
-   * Use fromVersion and toVersion to decide which strategy should be utilized.
-   * This requires the toVersion is set purposely in 'config'. Otherwise, we should
-   * prefer the next constructor.
-   * The main usage of this constructor is to generate the object, and
-   * call its `needsUpgradeOrDowngrade` function to tell if either upgrade or
-   * downgrade operation is needed.
+   * The upgrade/downgrade strategy is not initialized since the 'toVersion'
+   * is not given yet.
    */
   public UpgradeDowngrade(HoodieTableMetaClient metaClient,
                           HoodieWriteConfig config,
@@ -91,17 +87,11 @@ public class UpgradeDowngrade {
     this.config = config;
     this.context = context;
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
-
-    HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
-    HoodieTableVersion toVersion = config.getWriteVersion();
-    strategy = fromVersion.greaterThan(toVersion)
-        ? new DowngradeStrategy(metaClient, config, context, upgradeDowngradeHelper)
-        : new UpgradeStrategy(metaClient, config, context, upgradeDowngradeHelper);
   }
 
   /**
-   * Given either upgrade or downgrade strategy, generate the object to
-   * execute the intended operation.
+   * The upgrade or downgrade intention is clear. Therefore, the strategy is
+   * injected here.
    */
   public UpgradeDowngrade(HoodieTableMetaClient metaClient,
                           HoodieWriteConfig config,
@@ -112,11 +102,35 @@ public class UpgradeDowngrade {
     this.config = config;
     this.context = context;
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
-    this.strategy = strategy;
+    this.strategyOpt = Option.ofNullable(strategy);
   }
 
+  /**
+   * Note that there could be two different intentions when this function is called.
+   * CASE 1. Check if either upgrade or downgrade could be executed.
+   * CASE 2. Given upgrade or downgrade intention, check if it can be executed.
+   * <p>
+   * These two intentions might cause this function behaves differently.
+   * E.g., suppose 'fromVersion = 9', and 'toVersion = 6'.
+   * CASE 1: upgrade is not available but downgrade could be able to run.
+   *         therefore, this function returns true.
+   * CASE 2: only upgrade is intended, but since fromVersion > toVersion,
+   *         if autoUpgrade is false, this function return false;
+   *         if autoUpgrade is true, this function throws.
+   * <p>
+   * Tp accommodate this two intentions in the same function,
+   * for CASE 1, the upgrade or downgrade strategy is created based on the
+   *    fromVersion and toVersion when this function is called.
+   * for Case 2, the strategy is supposed to be injected before calling this function.
+   */
   public boolean needsUpgradeOrDowngrade(HoodieTableVersion toVersion) {
-    return this.strategy.shouldExecute(toVersion);
+    if (strategyOpt.isEmpty()) {
+      HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
+      strategyOpt = Option.of(fromVersion.lesserThan(toVersion)
+          ? new UpgradeStrategy(metaClient, config)
+          : new DowngradeStrategy(metaClient));
+    }
+    return strategyOpt.get().requiresMigration(toVersion);
   }
 
   /**
@@ -157,12 +171,11 @@ public class UpgradeDowngrade {
    * @param instantTime current instant time that should not be touched.
    */
   public void run(HoodieTableVersion toVersion, String instantTime) {
-    // If strategy decides not to execute, abort the upgrade/downgrade operation.
-    if (!strategy.shouldExecute(toVersion)) {
+    HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
+    // If decides not to execute, abort the upgrade/downgrade operation.
+    if (!needsUpgradeOrDowngrade(toVersion)) {
       return;
     }
-
-    HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
     // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
     boolean isUpgrade = fromVersion.lesserThan(toVersion);
     performRollbackAndCompactionIfRequired(fromVersion, toVersion, isUpgrade);
@@ -176,7 +189,7 @@ public class UpgradeDowngrade {
               .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metadataTablePath).build();
           HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
               config, HoodieFailedWritesCleaningPolicy.EAGER, metaClient.getTableConfig().getTableVersion());
-          new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper, strategy)
+          new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper, strategyOpt.get())
               .run(toVersion, instantTime);
         }
       } catch (Exception e) {
@@ -190,7 +203,6 @@ public class UpgradeDowngrade {
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
-    // TODO: replace with strategy's execution function.
     if (isUpgrade) {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
@@ -317,7 +329,7 @@ public class UpgradeDowngrade {
   /**
    * Class to hold the change set required to update or delete from table config properties.
    */
-  public static class TableConfigChangeSet {
+  static class TableConfigChangeSet {
     private final Map<ConfigProperty, String> propertiesToUpdate;
     private final Set<ConfigProperty> propertiesToDelete;
 

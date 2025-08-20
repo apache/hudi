@@ -577,8 +577,7 @@ public class SparkMain {
     HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps())
         .forTable(metaClient.getTableConfig().getTableName()).build();
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(jsc);
-    UpgradeDowngradeStrategy strategy = new UpgradeStrategy(
-        metaClient, updatedConfig, context, SparkUpgradeDowngradeHelper.getInstance());
+    UpgradeDowngradeStrategy strategy = new UpgradeStrategy(metaClient, updatedConfig);
     return upgradeOrDowngradeTable(basePath, toVersion, strategy, context, metaClient, updatedConfig);
   }
 
@@ -604,8 +603,7 @@ public class SparkMain {
     HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps())
         .forTable(metaClient.getTableConfig().getTableName()).build();
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(jsc);
-    UpgradeDowngradeStrategy strategy = new UpgradeStrategy(
-        metaClient, updatedConfig, context, SparkUpgradeDowngradeHelper.getInstance());
+    UpgradeDowngradeStrategy strategy = new UpgradeStrategy(metaClient, updatedConfig);
     return upgradeOrDowngradeTable(basePath, toVersion, strategy, context, metaClient, updatedConfig);
   }
 

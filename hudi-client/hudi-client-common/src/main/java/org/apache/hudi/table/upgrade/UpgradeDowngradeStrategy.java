@@ -22,18 +22,12 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.table.HoodieTableVersion;
 
 /**
- * Implement the upgrade or downgrade detailed logic.
+ * Interface that decides if an upgrade or downgrade is needed.
  */
 public interface UpgradeDowngradeStrategy {
   /**
-   * Check if upgrade or downgrade should be done
-   * given the target table version.
+   * Check if upgrade or downgrade should be done given the target table version.
+   * The current table version is obtained internally.
    */
-  boolean shouldExecute(HoodieTableVersion toWriteVersion);
-
-  /**
-   * Do the upgrade or downgrade operation.
-   */
-  UpgradeDowngrade.TableConfigChangeSet execute(HoodieTableVersion toVersion,
-                                                String instantTime);
+  boolean requiresMigration(HoodieTableVersion toWriteVersion);
 }

@@ -1277,8 +1277,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // Now perform an upgrade and perform a restore operation
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withWriteTableVersion(HoodieTableVersion.EIGHT.versionCode()).build();
     client = getHoodieWriteClient(newConfig);
-    UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(
-        metaClient, newConfig, client.getEngineContext(), upgradeDowngrade);
+    UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(metaClient, newConfig);
     new UpgradeDowngrade(metaClient, newConfig, client.getEngineContext(), upgradeDowngrade, upgradeStrategy)
         .run(HoodieTableVersion.EIGHT, null);
 

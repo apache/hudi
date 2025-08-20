@@ -700,39 +700,39 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     // assert no downgrade for table version 7 from table version 8
     assertThrows(
         HoodieUpgradeDowngradeException.class,
-        () -> new UpgradeStrategy(metaClient, writeConfig, context, null)
-            .shouldExecute(HoodieTableVersion.SEVEN));
+        () -> new UpgradeStrategy(metaClient, writeConfig)
+            .requiresMigration(HoodieTableVersion.SEVEN));
 
     // assert no downgrade for table version 6 from table version 8
     assertThrows(
         HoodieUpgradeDowngradeException.class,
-        () -> new UpgradeStrategy(metaClient, writeConfig, context, null)
-            .shouldExecute(HoodieTableVersion.SIX)
+        () -> new UpgradeStrategy(metaClient, writeConfig)
+            .requiresMigration(HoodieTableVersion.SIX)
     );
 
     // assert no upgrade/downgrade for table version 8 from table version 8
     assertDoesNotThrow(
-        () -> new UpgradeStrategy(metaClient, writeConfig, context, null)
-            .shouldExecute(HoodieTableVersion.EIGHT)
+        () -> new UpgradeStrategy(metaClient, writeConfig)
+            .requiresMigration(HoodieTableVersion.EIGHT)
     );
 
     // test upgrade from table version six
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
     // assert upgrade for table version 7 from table version 6
-    boolean shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig, context, null)
-        .shouldExecute(HoodieTableVersion.SEVEN);
+    boolean shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig)
+        .requiresMigration(HoodieTableVersion.SEVEN);
     assertTrue(shouldUpgrade);
 
     // assert upgrade for table version 8 from table version 6
-    shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig, context, null)
-        .shouldExecute(HoodieTableVersion.EIGHT);
+    shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig)
+        .requiresMigration(HoodieTableVersion.EIGHT);
     assertTrue(shouldUpgrade);
 
     // assert upgrade for table version 8 from table version 6 with auto upgrade set to false
     // should return false
     when(writeConfig.autoUpgrade()).thenReturn(false);
-    shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig, context, null)
-        .shouldExecute(HoodieTableVersion.EIGHT);
+    shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig)
+        .requiresMigration(HoodieTableVersion.EIGHT);
     assertFalse(shouldUpgrade);
   }
 

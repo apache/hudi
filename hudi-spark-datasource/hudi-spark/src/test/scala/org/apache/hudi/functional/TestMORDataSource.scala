@@ -1783,21 +1783,24 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @CsvSource(Array(
-    "6,8,true,UPGRADE", // Normal upgrade: table=6, write=8, autoUpgrade=true → should upgrade
-    "6,9,true,UPGRADE", // Normal upgrade: table=6, write=9, autoUpgrade=true → should upgrade
-    "6,6,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=6, autoUpgrade=false → no upgrade
-    "6,8,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=8, autoUpgrade=false → no upgrade
-    "4,8,true,EXCEPTION", // Auto-upgrade enabled: Should throw exception since table version is less than 6
     "4,8,false,EXCEPTION", // Auto-upgrade disabled: Should throw exception since table version is less than 6,
-    "8,6,true,EXCEPTION", // Auto-upgrade enabled: table=8, write=6, autoUpgrade=true → no version change
-    "8,6,false,NO_UPGRADE", // Auto-upgrade disabled: table=8, write=6, autoUpgrade=true → should throw
-    "8,9,false,NO_UPGRADE", // Auto-upgrade disabled: table=8, write=6, autoUpgrade=false → should throw
-    "9,8,false,NO_UPGRADE", // Auto-upgrade disabled: table=8, write=6, autoUpgrade=false → should throw
-    "9,8,true,EXCEPTION", // Auto-upgrade disabled: table=8, write=6, autoUpgrade=false → should throw
+    "4,8,true,EXCEPTION", // Auto-upgrade enabled: Should throw exception since table version is less than 6
+    "6,6,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=6, autoUpgrade=false → no upgrade
+    "6,6,true,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=6, autoUpgrade=true → no version change,
+    "6,8,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=8, autoUpgrade=false → no upgrade
+    "6,8,true,UPGRADE", // Normal upgrade: table=6, write=8, autoUpgrade=true → should upgrade
+    "6,9,false,NO_UPGRADE", // Normal upgrade: table=6, write=9, autoUpgrade=false → no upgrade
+    "6,9,true,UPGRADE", // Normal upgrade: table=6, write=9, autoUpgrade=true → should upgrade
+    "8,6,false,NO_UPGRADE", // Auto-upgrade disabled: table=8, write=6, autoUpgrade=false → no upgrade
+    "8,6,true,EXCEPTION", // Auto-upgrade enabled: table=8, write=6, autoUpgrade=true → should throw
+    "8,8,false,NO_UPGRADE", // Auto-upgrade disabled: Should not upgrade as auto-upgrade is disabled and same versions
+    "8,8,true,NO_UPGRADE", // Auto-upgrade enabled: Should not upgrade as auto-upgrade is enabled and same versions
+    "8,9,false,NO_UPGRADE", // Auto-upgrade disabled: table=8, write=9, autoUpgrade=false → no upgrade
     "8,9,true,UPGRADE", // Auto-upgrade disabled: table=8, write=9, autoUpgrade=true → should upgrade
+    "9,8,false,NO_UPGRADE", // Auto-upgrade disabled: table=9, write=8, autoUpgrade=false → no upgrade
+    "9,8,true,EXCEPTION", // Auto-upgrade disabled: table=9, write=8, autoUpgrade=true → should throw
     "9,9,false,NO_UPGRADE", // Auto-upgrade disabled: table=9, write=9, autoUpgrade=false → no version change
-    "9,9,true,NO_UPGRADE", // Auto-upgrade disabled: table=9, write=9, autoUpgrade=true → no version change
-    "6,6,true,NO_UPGRADE" // Auto-upgrade disabled: table=6, write=6, autoUpgrade=true → no version change
+    "9,9,true,NO_UPGRADE" // Auto-upgrade disabled: table=9, write=9, autoUpgrade=true → no version change
   ))
   def testBaseHoodieWriteClientUpgradeDecisionLogic(
     tableVersionStr: String,

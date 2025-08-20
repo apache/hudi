@@ -99,9 +99,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     }
 
     UpgradeDowngradeStrategy strategy = isUpgrade
-        ? new UpgradeStrategy(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
-        : new DowngradeStrategy(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance());
-    if (strategy.shouldExecute(toVersion)) {
+        ? new UpgradeStrategy(originalMetaClient, config)
+        : new DowngradeStrategy(originalMetaClient);
+    if (strategy.requiresMigration(toVersion)) {
       new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance(), strategy)
           .run(toVersion, null);
     }
@@ -148,8 +148,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     // For versions below SIX with autoUpgrade disabled, expect exception
     HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
         () -> {
-          UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance());
-          if (upgradeStrategy.shouldExecute(targetVersion)) {
+          UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(originalMetaClient, config);
+          if (upgradeStrategy.requiresMigration(targetVersion)) {
             new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance(), upgradeStrategy).run(targetVersion, null);
           }
         },
@@ -182,9 +182,9 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     // For versions SIX and above, the original behavior should work
     UpgradeDowngradeStrategy strategy = targetVersion.greaterThan(originalVersion)
-        ? new UpgradeStrategy(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
-        : new DowngradeStrategy(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance());
-    if (strategy.shouldExecute(targetVersion)) {
+        ? new UpgradeStrategy(originalMetaClient, config)
+        : new DowngradeStrategy(originalMetaClient);
+    if (strategy.requiresMigration(targetVersion)) {
       new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance(), strategy)
           .run(targetVersion, null);
     }
@@ -278,8 +278,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     assertEquals(HoodieTableVersion.EIGHT, config.getWriteVersion(),
         "Initial write version should be EIGHT");
 
-    boolean result = new UpgradeStrategy(metaClient, config, context(), null)
-        .shouldExecute(HoodieTableVersion.EIGHT);
+    boolean result = new UpgradeStrategy(metaClient, config).requiresMigration(HoodieTableVersion.EIGHT);
     assertFalse(result, "needsUpgrade should return false when auto-upgrade is disabled");
     assertEquals(HoodieTableVersion.SIX, config.getWriteVersion(),
         "Write version should be set to match table version when auto-upgrade is disabled");
@@ -312,8 +311,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     // Attempt downgrade to version below SIX - should throw exception
     HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
         () -> {
-          UpgradeDowngradeStrategy strategy = new DowngradeStrategy(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance());
-          if (strategy.shouldExecute(toVersion)) {
+          UpgradeDowngradeStrategy strategy = new DowngradeStrategy(originalMetaClient);
+          if (strategy.requiresMigration(toVersion)) {
             new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance(), strategy).run(toVersion, null);
           }
         },

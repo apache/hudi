@@ -1504,10 +1504,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime instant time of interest if we have one.
    */
   protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
-    UpgradeStrategy upgradeStrategy =
-        new UpgradeStrategy(metaClient, config, context, upgradeDowngradeHelper);
+    UpgradeStrategy upgradeStrategy = new UpgradeStrategy(metaClient, config);
 
-    if (upgradeStrategy.shouldExecute(config.getWriteVersion())) {
+    if (upgradeStrategy.requiresMigration(config.getWriteVersion())) {
       // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
       List<String> instantsToRollback = tableServiceClient.getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
 
@@ -1527,8 +1526,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   private boolean needsUpgrade(HoodieTableMetaClient metaClient) {
-    UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(metaClient, config, context, upgradeDowngradeHelper);
-    return upgradeStrategy.shouldExecute(config.getWriteVersion());
+    UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(metaClient, config);
+    return upgradeStrategy.requiresMigration(config.getWriteVersion());
   }
 
   /**
