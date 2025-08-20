@@ -22,7 +22,6 @@ package org.apache.hudi.client.model;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -43,7 +42,7 @@ public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(
+  public Pair<HoodieRecord, Schema> merge(
       HoodieRecord older,
       Schema oldSchema,
       HoodieRecord newer,
@@ -57,9 +56,9 @@ public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
       orderingFields = ConfigUtils.getOrderingFields(props);
     }
     if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
-      return Option.of(Pair.of(older, oldSchema));
+      return Pair.of(older, oldSchema);
     } else {
-      return Option.of(Pair.of(newer, newSchema));
+      return Pair.of(newer, newSchema);
     }
   }
 }

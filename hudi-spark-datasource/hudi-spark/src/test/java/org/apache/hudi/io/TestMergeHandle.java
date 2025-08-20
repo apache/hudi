@@ -682,20 +682,20 @@ public class TestMergeHandle extends BaseTestHandle {
     }
 
     @Override
-    public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
       GenericRecord olderData = (GenericRecord) older.getData();
       GenericRecord newerData = (GenericRecord) newer.getData();
       Long olderTimestamp = (Long) olderData.get("timestamp");
       Long newerTimestamp = (Long) newerData.get("timestamp");
       if (olderTimestamp.equals(newerTimestamp)) {
         // If the timestamps are the same, we do not update
-        return Option.of(Pair.of(older, oldSchema));
+        return Pair.of(older, oldSchema);
       } else if (olderTimestamp < newerTimestamp) {
         // Custom merger chooses record with lower ordering value
-        return Option.of(Pair.of(older, oldSchema));
+        return Pair.of(older, oldSchema);
       } else {
         // Custom merger chooses record with lower ordering value
-        return Option.of(Pair.of(newer, newSchema));
+        return Pair.of(newer, newSchema);
       }
     }
 

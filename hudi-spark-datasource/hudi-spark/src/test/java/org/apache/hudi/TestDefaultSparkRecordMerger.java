@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -103,12 +102,12 @@ class TestDefaultSparkRecordMerger {
     props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    Option<Pair<HoodieRecord, Schema>> merged =
+    Pair<HoodieRecord, Schema> merged =
         merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
 
     assertEquals(
         InternalRow.apply(newValue.toSeq()),
-        merged.get().getLeft().getData());
+        merged.getLeft().getData());
   }
 
   /**
@@ -130,12 +129,12 @@ class TestDefaultSparkRecordMerger {
     props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    Option<Pair<HoodieRecord, Schema>> r =
+    Pair<HoodieRecord, Schema> merged =
         merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
 
     assertEquals(
         InternalRow.apply(oldValue.toSeq()),
-        r.get().getLeft().getData());
+        merged.getLeft().getData());
   }
 
   /**
@@ -154,9 +153,9 @@ class TestDefaultSparkRecordMerger {
     props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    Option<Pair<HoodieRecord, Schema>> r =
+    Pair<HoodieRecord, Schema> merged =
         merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
-    assertTrue(r.isEmpty());
+    assertTrue(merged.getLeft().isDelete(avroSchema, props));
   }
 
   /**
@@ -175,11 +174,10 @@ class TestDefaultSparkRecordMerger {
     props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    Option<Pair<HoodieRecord, Schema>> r =
-        merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
+    Pair<HoodieRecord, Schema> result = merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
     assertEquals(
         InternalRow.apply(newValue.toSeq()),
-        r.get().getLeft().getData());
+        result.getLeft().getData());
   }
 
   static Row getSpecificValue(

@@ -20,10 +20,12 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -39,7 +41,7 @@ public abstract class HoodieSparkRecordMerger implements HoodieRecordMerger {
    * Basic handling of deletes that is used by many of the spark mergers
    * returns null if merger specific logic should be used
    */
-  protected Option<Pair<HoodieRecord, Schema>> handleDeletes(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) {
+  protected Pair<HoodieRecord, Schema> handleDeletes(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.SPARK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.SPARK);
 
@@ -47,12 +49,12 @@ public abstract class HoodieSparkRecordMerger implements HoodieRecordMerger {
       HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
       if (newSparkRecord.isDelete(newSchema, props)) {
         // Delete record
-        return Option.empty();
+        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.SPARK), newSchema);
       }
     } else {
       if (newer.getData() == null) {
         // Delete record
-        return Option.empty();
+        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.SPARK), newSchema);
       }
     }
 
@@ -60,12 +62,12 @@ public abstract class HoodieSparkRecordMerger implements HoodieRecordMerger {
       HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
       if (oldSparkRecord.isDelete(oldSchema, props)) {
         // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
+        return Pair.of(newer, newSchema);
       }
     } else {
       if (older.getData() == null) {
         // use natural order for delete record
-        return Option.of(Pair.of(newer, newSchema));
+        return Pair.of(newer, newSchema);
       }
     }
 

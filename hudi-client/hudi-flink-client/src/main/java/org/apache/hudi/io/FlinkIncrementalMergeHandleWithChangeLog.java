@@ -67,15 +67,16 @@ public class FlinkIncrementalMergeHandleWithChangeLog<T, I, K, O>
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema)
+  @Override
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, Schema writerSchema)
       throws IOException {
     // TODO [HUDI-5019] Remove these unnecessary newInstance invocations
-    Option<HoodieRecord> savedCombineRecordOp = combineRecordOpt.map(HoodieRecord::newInstance);
-    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecordOpt, writerSchema);
+    HoodieRecord savedCombineRecord = combineRecord.newInstance();
+    final boolean result = super.writeUpdateRecord(newRecord, oldRecord, combineRecord, writerSchema);
     if (result) {
       boolean isDelete = HoodieOperation.isDelete(newRecord.getOperation());
       Option<IndexedRecord> newAvroRecordOpt =
-          isDelete ? Option.empty() : savedCombineRecordOp.flatMap(r -> toAvroRecord(r, writerSchema, config.getProps()));
+          isDelete ? Option.empty() : toAvroRecord(savedCombineRecord, writerSchema, config.getProps());
       GenericRecord oldAvroRecord = (GenericRecord) toAvroRecord(oldRecord, writeSchemaWithMetaFields, config.getProps()).get();
       cdcLogger.put(newRecord, oldAvroRecord, newAvroRecordOpt);
     }

@@ -23,9 +23,12 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -39,7 +42,7 @@ public class HoodieAvroRecordTestMerger extends HoodieAvroRecordMerger {
   private String[] orderingFields;
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(
+  public Pair<HoodieRecord, Schema> merge(
       HoodieRecord older,
       Schema oldSchema,
       HoodieRecord newer,
@@ -55,14 +58,17 @@ public class HoodieAvroRecordTestMerger extends HoodieAvroRecordMerger {
 
     // The record with higher ordering value is returned.
     if (oldOrderingVal == null || newOrderingVal.compareTo(oldOrderingVal) > 0) {
-      return Option.of(Pair.of(newer, newSchema));
+      return Pair.of(newer, newSchema);
     } else if (newOrderingVal.compareTo(oldOrderingVal) < 0) {
-      return Option.of(Pair.of(older, oldSchema));
+      return Pair.of(older, oldSchema);
     }
 
     // When their orderings are the same, we rely on the logic of the payload.
-    return combineAndGetUpdateValue(older, newer, newSchema, props)
-        .map(r -> Pair.of(new HoodieAvroIndexedRecord(r), r.getSchema()));
+    Option<IndexedRecord> updatedValue = combineAndGetUpdateValue(older, newer, newSchema, props);
+    if (updatedValue.isEmpty()) {
+      return Pair.of(new HoodieEmptyRecord(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.AVRO), newSchema);
+    }
+    return Pair.of(new HoodieAvroIndexedRecord(updatedValue.get()), updatedValue.get().getSchema());
   }
 
   private Option<IndexedRecord> combineAndGetUpdateValue(

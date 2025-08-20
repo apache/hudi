@@ -236,19 +236,17 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     return keyToNewRecords.isEmpty();
   }
 
-  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, Option<HoodieRecord> combineRecordOpt, Schema writerSchema) throws IOException {
+  protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combineRecord, Schema writerSchema) throws IOException {
     boolean isDelete = false;
-    if (combineRecordOpt.isPresent()) {
-      if (oldRecord.getData() != combineRecordOpt.get().getData()) {
-        // the incoming record is chosen
-        isDelete = isDeleteRecord(newRecord);
-      } else {
-        // the incoming record is dropped
-        return false;
-      }
-      updatedRecordsWritten++;
+    if (oldRecord.getData() != combineRecord.getData()) {
+      // the incoming record is chosen
+      isDelete = isDeleteRecord(newRecord);
+    } else {
+      // the incoming record is dropped
+      return false;
     }
-    return writeRecord(newRecord, oldRecord, combineRecordOpt, writerSchema, config.getPayloadConfig().getProps(), isDelete);
+    updatedRecordsWritten++;
+    return writeRecord(newRecord, oldRecord, combineRecord, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
@@ -262,12 +260,12 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
       throws IOException {
-    if (writeRecord(newRecord, null, Option.of(newRecord), schema, prop, isDeleteRecord(newRecord))) {
+    if (writeRecord(newRecord, null, newRecord, schema, prop, isDeleteRecord(newRecord))) {
       insertRecordsWritten++;
     }
   }
 
-  protected boolean writeRecord(HoodieRecord<T> newRecord, Option<HoodieRecord> combineRecord, Schema schema, Properties prop) throws IOException {
+  protected boolean writeRecord(HoodieRecord<T> newRecord, HoodieRecord combineRecord, Schema schema, Properties prop) throws IOException {
     return writeRecord(newRecord, null, combineRecord, schema, prop, false);
   }
 
@@ -296,7 +294,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
    */
   private boolean writeRecord(HoodieRecord<T> newRecord,
                               @Nullable HoodieRecord<T> oldRecord,
-                              Option<HoodieRecord> combineRecord,
+                              HoodieRecord combineRecord,
                               Schema schema,
                               Properties props,
                               boolean isDelete) {
@@ -308,14 +306,14 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       return false;
     }
     try {
-      if (combineRecord.isPresent() && !combineRecord.get().isDelete(schema, config.getProps()) && !isDelete) {
+      if (!isDelete && !combineRecord.isDelete(schema, config.getProps())) {
         // Flush the merged record.
         HoodieKey hoodieKey = newRecord.getKey();
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
           SecondaryIndexStreamingTracker.trackSecondaryIndexStats(hoodieKey, combineRecord, oldRecord, false, writeStatus,
               writeSchemaWithMetaFields, this::getNewSchema, secondaryIndexDefns, keyGeneratorOpt, config);
         }
-        writeToFile(hoodieKey, combineRecord.get(), schema, props, preserveMetadata);
+        writeToFile(hoodieKey, combineRecord, schema, props, preserveMetadata);
         recordsWritten++;
       } else {
         if (isSecondaryIndexStatsStreamingWritesEnabled) {
@@ -359,10 +357,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
-        Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
-        Option<HoodieRecord> combinedRecord = mergeResult.map(Pair::getLeft);
-        if (combinedRecord.isPresent() && combinedRecord.get().shouldIgnore(combineRecordSchema, props)) {
+        Pair<HoodieRecord, Schema> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
+        Schema combineRecordSchema = mergeResult.getRight();
+        HoodieRecord combinedRecord = mergeResult.getLeft();
+        if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
         } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {

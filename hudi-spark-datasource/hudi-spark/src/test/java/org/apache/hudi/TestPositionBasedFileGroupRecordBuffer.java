@@ -266,7 +266,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
     }
 
     @Override
-    public Option<Pair<HoodieRecord, Schema>> merge(
+    public Pair<HoodieRecord, Schema> merge(
         HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props
     ) throws IOException {
       throw new IOException("Not implemented");
