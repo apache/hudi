@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
@@ -105,7 +106,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     // HoodieKey is not required so do not generate it if partitionPath is null
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
 
-    if (bufferedRecord.isDelete()) {
+    if (bufferedRecord.getRecord() == null && bufferedRecord.isDelete()) {
       return generateEmptyAvroRecord(
           hoodieKey,
           bufferedRecord.getOrderingValue(),
@@ -124,7 +125,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     if (bufferedRecord.isDelete()) {
       return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.AVRO);
     }
-    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(), bufferedRecord.getHoodieOperation());
+    return new HoodieAvroIndexedRecord(hoodieKey, bufferedRecord.getRecord(), bufferedRecord.getOrderingValue(), bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
   }
 
   @Override

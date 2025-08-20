@@ -240,12 +240,14 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     boolean isDelete = false;
     if (oldRecord.getData() != combineRecord.getData()) {
       // the incoming record is chosen
-      isDelete = isDeleteRecord(newRecord);
+      isDelete = isDeleteRecord(combineRecord);
+      if (!isDelete) {
+        updatedRecordsWritten++;
+      }
     } else {
       // the incoming record is dropped
       return false;
     }
-    updatedRecordsWritten++;
     return writeRecord(newRecord, oldRecord, combineRecord, writerSchema, config.getPayloadConfig().getProps(), isDelete);
   }
 
