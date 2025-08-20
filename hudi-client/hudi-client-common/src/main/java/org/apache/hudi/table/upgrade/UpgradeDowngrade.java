@@ -156,6 +156,11 @@ public class UpgradeDowngrade {
    * @param instantTime current instant time that should not be touched.
    */
   public void run(HoodieTableVersion toVersion, String instantTime) {
+    // If strategy decides not to execute, abort the upgrade/downgrade operation.
+    if (!strategy.shouldExecute(toVersion)) {
+      return;
+    }
+
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
     // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
     boolean isUpgrade = strategy instanceof UpgradeStrategy;
