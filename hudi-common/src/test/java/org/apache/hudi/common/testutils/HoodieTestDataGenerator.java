@@ -44,6 +44,7 @@ import org.apache.hudi.storage.StoragePath;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.avro.Conversions;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
@@ -80,7 +81,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -1375,198 +1375,112 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
-  public static class SchemaEvolutionConfigs {
-    public Schema schema = AVRO_SCHEMA;
-    public boolean nestedSupport = true;
-    public boolean mapSupport = true;
-    public boolean arraySupport = true;
-    public boolean addNewFieldSupport = true;
-    // TODO: [HUDI-9603] Flink 1.18 array values incorrect in fg reader test
-    public boolean anyArraySupport = true;
-
-    // Int
-    public boolean intToLongSupport = true;
-    public boolean intToFloatSupport = true;
-    public boolean intToDoubleSupport = true;
-    public boolean intToStringSupport = true;
-
-    // Long
-    public boolean longToFloatSupport = true;
-    public boolean longToDoubleSupport = true;
-    public boolean longToStringSupport = true;
-
-    // Float
-    public boolean floatToDoubleSupport = true;
-    public boolean floatToStringSupport = true;
-
-    // Double
-    public boolean doubleToStringSupport = true;
-
-    // String
-    public boolean stringToBytesSupport = true;
-
-    // Bytes
-    public boolean bytesToStringSupport = true;
-  }
-
-  private enum SchemaEvolutionTypePromotionCase {
-    INT_TO_INT(Schema.Type.INT, Schema.Type.INT, config -> true),
-    INT_TO_LONG(Schema.Type.INT, Schema.Type.LONG, config -> config.intToLongSupport),
-    INT_TO_FLOAT(Schema.Type.INT, Schema.Type.FLOAT, config -> config.intToFloatSupport),
-    INT_TO_DOUBLE(Schema.Type.INT, Schema.Type.DOUBLE, config -> config.intToDoubleSupport),
-    INT_TO_STRING(Schema.Type.INT, Schema.Type.STRING, config -> config.intToStringSupport),
-    LONG_TO_LONG(Schema.Type.LONG, Schema.Type.LONG, config -> true),
-    LONG_TO_FLOAT(Schema.Type.LONG, Schema.Type.FLOAT, config -> config.longToFloatSupport),
-    LONG_TO_DOUBLE(Schema.Type.LONG, Schema.Type.DOUBLE, config -> config.longToDoubleSupport),
-    LONG_TO_STRING(Schema.Type.LONG, Schema.Type.STRING, config -> config.longToStringSupport),
-    FLOAT_TO_FLOAT(Schema.Type.FLOAT, Schema.Type.FLOAT, config -> true),
-    FLOAT_TO_DOUBLE(Schema.Type.FLOAT, Schema.Type.DOUBLE, config -> config.floatToDoubleSupport),
-    FLOAT_TO_STRING(Schema.Type.FLOAT, Schema.Type.STRING, config -> config.floatToStringSupport),
-    DOUBLE_TO_DOUBLE(Schema.Type.DOUBLE, Schema.Type.DOUBLE, config -> true),
-    DOUBLE_TO_STRING(Schema.Type.DOUBLE, Schema.Type.STRING, config -> config.doubleToStringSupport),
-    STRING_TO_STRING(Schema.Type.STRING, Schema.Type.STRING, config -> true),
-    STRING_TO_BYTES(Schema.Type.STRING, Schema.Type.BYTES, config -> config.stringToBytesSupport),
-    BYTES_TO_BYTES(Schema.Type.BYTES, Schema.Type.BYTES, config -> true),
-    BYTES_TO_STRING(Schema.Type.BYTES, Schema.Type.STRING, config -> config.bytesToStringSupport);
-
-    public final Schema.Type before;
-    public final Schema.Type after;
-    public final Predicate<SchemaEvolutionConfigs> isEnabled;
-
-    SchemaEvolutionTypePromotionCase(Schema.Type before, Schema.Type after, Predicate<SchemaEvolutionConfigs> isEnabled) {
-      this.before = before;
-      this.after = after;
-      this.isEnabled = isEnabled;
-    }
-  }
-
-  public void extendSchema(SchemaEvolutionConfigs configs, boolean isBefore) {
-    List<Schema.Type> baseFields = new ArrayList<>();
-    for (SchemaEvolutionTypePromotionCase evolution : SchemaEvolutionTypePromotionCase.values()) {
-      if (evolution.isEnabled.test(configs)) {
-        baseFields.add(isBefore ? evolution.before : evolution.after);
-      }
-    }
-
-    // Add new field if we are testing adding new fields
-    if (!isBefore && configs.addNewFieldSupport) {
-      baseFields.add(Schema.Type.BOOLEAN);
-    }
-
-    this.extendedSchema = Option.of(generateExtendedSchema(configs, new ArrayList<>(baseFields)));
-  }
-
-  public void extendSchemaBeforeEvolution(SchemaEvolutionConfigs configs) {
-    extendSchema(configs, true);
-  }
-
-  public void extendSchemaAfterEvolution(SchemaEvolutionConfigs configs) {
-    extendSchema(configs, false);
-  }
-
-  public Schema getExtendedSchema() {
-    return extendedSchema.orElseThrow(IllegalArgumentException::new);
-  }
-
-  private static Schema generateExtendedSchema(SchemaEvolutionConfigs configs, List<Schema.Type> baseFields) {
-    return generateExtendedSchema(configs.schema, configs, baseFields, "customField", true);
-  }
-
-  private static Schema generateExtendedSchema(Schema baseSchema, SchemaEvolutionConfigs configs, List<Schema.Type> baseFields, String fieldPrefix, boolean toplevel) {
-    List<Schema.Field> fields =  baseSchema.getFields();
-    List<Schema.Field> finalFields = new ArrayList<>(fields.size() + baseFields.size());
-    boolean addedFields = false;
-    for (Schema.Field field : fields) {
-      if (configs.nestedSupport && field.name().equals("fare") && field.schema().getType() == Schema.Type.RECORD) {
-        finalFields.add(new Schema.Field(field.name(), generateExtendedSchema(field.schema(), configs, baseFields, "customFare", false), field.doc(), field.defaultVal()));
-      } else if (configs.anyArraySupport || !field.name().equals("tip_history")) {
-        //TODO: [HUDI-9603] remove the if condition when the issue is fixed
-        if (field.name().equals("_hoodie_is_deleted")) {
-          addedFields = true;
-          addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
-        }
-        finalFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
-      }
-    }
-    if (!addedFields) {
-      addFields(configs, finalFields, baseFields, fieldPrefix, baseSchema.getNamespace(), toplevel);
-    }
-    Schema finalSchema = Schema.createRecord(baseSchema.getName(), baseSchema.getDoc(),
-        baseSchema.getNamespace(), baseSchema.isError());
-    finalSchema.setFields(finalFields);
-    return finalSchema;
-  }
-
-  private static void addFields(SchemaEvolutionConfigs configs, List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix, String namespace, boolean toplevel) {
-    if (toplevel) {
-      if (configs.mapSupport) {
-        List<Schema.Field> mapFields = new ArrayList<>(baseFields.size());
-        addFieldsHelper(mapFields, baseFields, fieldPrefix + "Map");
-        finalFields.add(new Schema.Field(fieldPrefix + "Map", Schema.createMap(Schema.createRecord("customMapRecord", "", namespace, false, mapFields)), "", null));
-      }
-
-      if (configs.arraySupport) {
-        List<Schema.Field> arrayFields = new ArrayList<>(baseFields.size());
-        addFieldsHelper(arrayFields, baseFields, fieldPrefix + "Array");
-        finalFields.add(new Schema.Field(fieldPrefix + "Array", Schema.createArray(Schema.createRecord("customArrayRecord", "", namespace, false, arrayFields)), "", null));
-      }
-    }
-    addFieldsHelper(finalFields, baseFields, fieldPrefix);
-  }
-
-  private static void addFieldsHelper(List<Schema.Field> finalFields, List<Schema.Type> baseFields, String fieldPrefix) {
-    for (int i = 0; i < baseFields.size(); i++) {
-      if (baseFields.get(i) == Schema.Type.BOOLEAN) {
-        // boolean fields are added fields
-        finalFields.add(new Schema.Field(fieldPrefix + i, AvroSchemaUtils.createNullableSchema(Schema.Type.BOOLEAN), "", null));
-      } else {
-        finalFields.add(new Schema.Field(fieldPrefix + i, Schema.create(baseFields.get(i)), "", null));
-      }
-    }
+  public void addExtendedSchema(Schema extendedSchema) {
+    this.extendedSchema = Option.of(extendedSchema);
   }
 
   private void generateCustomValues(GenericRecord rec, String customPrefix) {
     for (Schema.Field field : rec.getSchema().getFields()) {
-      if (field.name().startsWith(customPrefix)) {
-        switch (field.schema().getType()) {
-          case INT:
-            rec.put(field.name(), rand.nextInt());
-            break;
-          case LONG:
-            rec.put(field.name(), rand.nextLong());
-            break;
-          case FLOAT:
-            rec.put(field.name(), rand.nextFloat());
-            break;
-          case DOUBLE:
-            rec.put(field.name(), rand.nextDouble());
-            break;
-          case STRING:
-            rec.put(field.name(), genPseudoRandomUUID(rand).toString());
-            break;
-          case BYTES:
-            rec.put(field.name(), ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString())));
-            break;
-          case UNION:
-            if (!AvroSchemaUtils.resolveNullableSchema(field.schema()).getType().equals(Schema.Type.BOOLEAN)) {
-              throw new IllegalStateException("Union should only be boolean");
-            }
-            rec.put(field.name(), rand.nextBoolean());
-            break;
-          case BOOLEAN:
-            rec.put(field.name(), rand.nextBoolean());
-            break;
-          case MAP:
-            rec.put(field.name(), genMap(field.schema(), field.name()));
-            break;
-          case ARRAY:
-            rec.put(field.name(), genArray(field.schema(), field.name()));
-            break;
-          default:
-            throw new UnsupportedOperationException("Unsupported type: " + field.schema().getType());
-        }
+      if (!field.name().startsWith(customPrefix)) {
+        continue;
+      }
+
+      Schema nonNullableSchema = AvroSchemaUtils.resolveNullableSchema(field.schema());
+      Schema.Type type = nonNullableSchema.getType();
+      LogicalType logicalType = nonNullableSchema.getLogicalType();
+      String fieldName = field.name();
+
+      switch (type) {
+        case INT:
+          rec.put(fieldName, generateIntValue(fieldName, logicalType));
+          break;
+        case LONG:
+          rec.put(fieldName, isEvolutionFromOrToDecimal(fieldName) ? rand.nextLong() % 1000 : rand.nextLong());
+          break;
+        case FLOAT:
+          rec.put(fieldName, isEvolutionFromOrToDecimal(fieldName) ? Float.parseFloat(formatDecimalString(rand.nextFloat())) : rand.nextFloat());
+          break;
+        case DOUBLE:
+          rec.put(fieldName, isEvolutionFromOrToDecimal(fieldName) ? Double.parseDouble(formatDecimalString(rand.nextFloat())) : rand.nextDouble());
+          break;
+        case STRING:
+          rec.put(fieldName, generateStringValue(fieldName));
+          break;
+        case BYTES:
+          rec.put(fieldName, generateBytesValue(nonNullableSchema, logicalType));
+          break;
+        case FIXED:
+          rec.put(fieldName, generateFixedDecimal(nonNullableSchema, logicalType));
+          break;
+        case BOOLEAN:
+          rec.put(fieldName, rand.nextBoolean());
+          break;
+        case MAP:
+          rec.put(fieldName, genMap(field.schema(), fieldName));
+          break;
+        case ARRAY:
+          rec.put(fieldName, genArray(field.schema(), fieldName));
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported type: " + type);
       }
     }
+  }
+
+  private boolean isEvolutionFromOrToDecimal(String fieldName) {
+    return fieldName.contains("Decimal");
+  }
+
+  private Object generateIntValue(String fieldName, LogicalType logicalType) {
+    if (logicalType != null) {
+      return generateEpochDay();
+    } else if (isEvolutionFromOrToDecimal(fieldName)) {
+      return rand.nextInt(1000);
+    } else {
+      return rand.nextInt();
+    }
+  }
+
+  private String generateStringValue(String fieldName) {
+    if (isEvolutionFromOrToDecimal(fieldName)) {
+      return formatDecimalString(rand.nextFloat());
+    } else if (fieldName.contains("Date")) {
+      return HoodieAvroUtils.toJavaDate(generateEpochDay()).toString();
+    } else {
+      return genPseudoRandomUUID(rand).toString();
+    }
+  }
+
+  private int generateEpochDay() {
+    long randomMillis = genRandomTimeMillis(rand);
+    Instant instant = Instant.ofEpochMilli(randomMillis);
+    int epochDay = (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay();
+    return makeDatesAmbiguous ? -1000000 : epochDay;
+  }
+
+  private String formatDecimalString(float value) {
+    return String.format(Locale.ENGLISH, "%.3f", value);
+  }
+
+  private ByteBuffer generateBytesValue(Schema schema, LogicalType logicalType) {
+    if (logicalType instanceof LogicalTypes.Decimal) {
+      GenericFixed fixed = generateFixedDecimal(schema, logicalType);
+      return ByteBuffer.wrap(fixed.bytes());
+    } else {
+      return ByteBuffer.wrap(getUTF8Bytes(genPseudoRandomUUID(rand).toString()));
+    }
+  }
+
+  private GenericFixed generateFixedDecimal(Schema schema, LogicalType logicalType) {
+    if (!(logicalType instanceof LogicalTypes.Decimal)) {
+      throw new IllegalArgumentException("Expected Decimal logical type for FIXED/BYTES");
+    }
+
+    LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) logicalType;
+    String formatString = String.format("%%.%df", decimalType.getScale());
+    BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, formatString, rand.nextFloat()));
+    Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
+    return decimalConversions.toFixed(bigDecimal, schema, decimalType);
   }
 
   private GenericArray<GenericRecord> genArray(Schema arraySchema, String customPrefix) {

@@ -19,10 +19,25 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.exception.HoodieAvroSchemaException;
+
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.Utf8;
 
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.createFullName;
 
 public class AvroSchemaTestUtils {
   public static Schema.Field createNestedField(String name, Schema.Type type) {
@@ -67,5 +82,86 @@ public class AvroSchemaTestUtils {
 
   public static Schema createNullableRecord(String name, Schema.Field... fields) {
     return AvroSchemaUtils.createNullableSchema(Schema.createRecord(name, null, null, false, Arrays.asList(fields)));
+  }
+
+  public static void validateRecordsHaveSameData(Object expected, Object actual) {
+    validateRecordsHaveSameData(expected, actual, new LinkedList<>());
+  }
+
+  private static void validateRecordsHaveSameData(Object expected, Object actual, Deque<String> fieldNames) {
+    if (expected instanceof GenericRecord) {
+      if (!(actual instanceof GenericRecord)) {
+        throw new HoodieAvroSchemaException("Expected record but got " + actual.getClass().getName() + " for " + createFullName(fieldNames));
+      }
+      GenericRecord expectedRecord = (GenericRecord) expected;
+      GenericRecord actualRecord = (GenericRecord) actual;
+      if (!AvroSchemaUtils.areSchemasProjectionEquivalent(expectedRecord.getSchema(), actualRecord.getSchema())) {
+        throw new HoodieAvroSchemaException("Expected record schema " + expectedRecord.getSchema() + " but got " + actualRecord.getSchema() + " for " + createFullName(fieldNames));
+      }
+      for (Schema.Field field : expectedRecord.getSchema().getFields()) {
+        fieldNames.push(field.name());
+        validateRecordsHaveSameData(expectedRecord.get(field.name()), actualRecord.get(field.name()), fieldNames);
+        fieldNames.pop();
+      }
+    } else if (expected instanceof Collection) {
+      if (!(actual instanceof Collection)) {
+        throw new HoodieAvroSchemaException("Expected collection but got " + actual.getClass().getName());
+      }
+      Collection expectedCollection = (Collection) expected;
+      Collection actualCollection = (Collection) actual;
+      if (expectedCollection.size() != actualCollection.size()) {
+        throw new HoodieAvroSchemaException("Expected collection size " + expectedCollection.size() + " but got " + actualCollection.size() + " for " + createFullName(fieldNames));
+      }
+      Iterator<?> expectedIterator = expectedCollection.iterator();
+      Iterator<?> actualIterator = actualCollection.iterator();
+      fieldNames.push("element");
+      while (expectedIterator.hasNext() && actualIterator.hasNext()) {
+        validateRecordsHaveSameData(expectedIterator.next(), actualIterator.next(), fieldNames);
+      }
+      fieldNames.pop();
+    } else if (expected instanceof Map) {
+      if (!(actual instanceof Map)) {
+        throw new HoodieAvroSchemaException("Expected map but got " + actual.getClass().getName() + " for " + createFullName(fieldNames));
+      }
+      Map expectedMap = (Map) expected;
+      Map actualMap = (Map) actual;
+      if (expectedMap.size() != actualMap.size()) {
+        throw new HoodieAvroSchemaException("Expected map size " + expectedMap.size() + " but got " + actualMap.size() + " for " + createFullName(fieldNames));
+      }
+      if (!expectedMap.keySet().equals(actualMap.keySet())) {
+        Set<String> expectedKeys = (Set<String>) expectedMap.keySet().stream().map(Object::toString).collect(Collectors.toSet());
+        Set<String> actualKeys = (Set<String>) actualMap.keySet().stream().map(Object::toString).collect(Collectors.toSet());
+        if (!expectedKeys.equals(actualKeys)) {
+          throw new HoodieAvroSchemaException("Expected map keys " + expectedMap.keySet() + " but got " + actualMap.keySet() + " for " + createFullName(fieldNames));
+        } else {
+          Map<String, Object> realExpectedMap = (Map<String, Object>) expectedMap.entrySet().stream()
+              .collect(Collectors.toMap(e -> ((Map.Entry) e).getKey().toString(), e -> ((Map.Entry) e).getValue()));
+          Map<String, Object> realActualMap = (Map<String, Object>) actualMap.entrySet().stream()
+              .collect(Collectors.toMap(e -> ((Map.Entry) e).getKey().toString(), e -> ((Map.Entry) e).getValue()));
+          fieldNames.push("value");
+          for (String key : realExpectedMap.keySet()) {
+            validateRecordsHaveSameData(realExpectedMap.get(key), realActualMap.get(key), fieldNames);
+          }
+          fieldNames.pop();
+        }
+      } else {
+        fieldNames.push("value");
+        for (Object key : expectedMap.keySet()) {
+          validateRecordsHaveSameData(expectedMap.get(key), actualMap.get(key), fieldNames);
+        }
+        fieldNames.pop();
+      }
+    } else {
+      if (!Objects.equals(expected, actual)) {
+        if (expected != null && actual != null && (expected instanceof Utf8 || actual instanceof Utf8  || expected instanceof GenericData.EnumSymbol || actual instanceof GenericData.EnumSymbol)) {
+          String expectedString = expected.toString();
+          String actualString = actual.toString();
+          if (expectedString.equals(actualString)) {
+            return;
+          }
+        }
+        throw new HoodieAvroSchemaException("For " + createFullName(fieldNames) + " Expected " + expected + " but got " + actual);
+      }
+    }
   }
 }

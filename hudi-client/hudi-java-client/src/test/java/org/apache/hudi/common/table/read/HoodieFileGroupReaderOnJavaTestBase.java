@@ -24,18 +24,34 @@ import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,8 +60,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieFileGroupReaderBase<T> {
 
@@ -113,6 +131,66 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
       } else {
         writeClient.commit(instantTime, writeClient.upsert(recordsCopy, instantTime), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
       }
+    }
+  }
+
+  @Override
+  public void commitSchemaToTable(InternalSchema schema, Map<String, String> writeConfigs, String historySchemaStr) {
+    String tableName = writeConfigs.get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
+    Schema avroSchema = AvroInternalSchemaConverter.convert(schema, getAvroRecordQualifiedName(tableName));
+
+    StorageConfiguration<?> storageConf = getStorageConf();
+    String basePath = getBasePath();
+
+    Map<String, String> finalWriteConfigs = new HashMap<>(writeConfigs);
+    finalWriteConfigs.put(HoodieCleanConfig.AUTO_CLEAN.key(), "false");
+    finalWriteConfigs.put(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(),
+        HoodieFailedWritesCleaningPolicy.NEVER.name());
+    finalWriteConfigs.put(HoodieArchivalConfig.AUTO_ARCHIVE.key(), "false");
+
+    HoodieJavaClientTestHarness.TestJavaTaskContextSupplier taskContextSupplier = new HoodieJavaClientTestHarness.TestJavaTaskContextSupplier();
+    HoodieJavaEngineContext context = new HoodieJavaEngineContext(getStorageConf(), taskContextSupplier);
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withSchema(avroSchema.toString())
+        .withEngineType(EngineType.JAVA)
+        .withProps(finalWriteConfigs)
+        .build();
+
+    try (HoodieJavaWriteClient<?> client = new HoodieJavaWriteClient<>(context, config)) {
+
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf(storageConf)
+          .setBasePath(basePath)
+          .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
+          .build();
+
+      WriteOperationType operationType = WriteOperationType.ALTER_SCHEMA;
+      String commitActionType = CommitUtils.getCommitActionType(operationType, metaClient.getTableType());
+
+      String instantTime = client.startCommit(commitActionType);
+      client.setOperationType(operationType);
+
+      HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+      TimelineLayout layout = metaClient.getTimelineLayout();
+      HoodieInstant requested = layout.getInstantGenerator()
+          .createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, instantTime);
+
+      HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+      metadata.setOperationType(operationType);
+
+      timeline.transitionRequestedToInflight(requested, Option.of(metadata));
+
+      long schemaId = Long.parseLong(instantTime);
+      InternalSchema withId = schema.setSchemaId(schemaId);
+      Map<String, String> extraMeta  = Collections.singletonMap(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(withId));
+
+      FileBasedInternalSchemaStorageManager schemaManager = new FileBasedInternalSchemaStorageManager(metaClient);
+      schemaManager.persistHistorySchemaStr(instantTime,
+          SerDeHelper.inheritSchemas(schema, historySchemaStr));
+
+      assertTrue(client.commit(instantTime, Collections.emptyList(), Option.of(extraMeta)));
     }
   }
 }
