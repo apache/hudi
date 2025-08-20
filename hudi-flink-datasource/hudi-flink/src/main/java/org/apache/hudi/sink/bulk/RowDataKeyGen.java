@@ -126,12 +126,9 @@ public class RowDataKeyGen implements Serializable {
       this.partitionPathProjection = null;
     } else {
       this.partitionPathProjection = getProjection(this.partitionPathFields, fieldNames, fieldTypes);
-      if (simpleRecordKey) {
-        // single record key with multiple partition fields
-        encodesSimpleRecordKeyWithFieldName = isComplexKeygenEncodeSingleRecordKeyFieldName;
-      }
     }
     if (simpleRecordKey) {
+      encodesSimpleRecordKeyWithFieldName = isComplexKeygenEncodeSingleRecordKeyFieldName;
       if (encodesSimpleRecordKeyWithFieldName) {
         this.simpleRecordKeyFunc = rowData -> {
           String oriKey = getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
