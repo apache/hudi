@@ -23,7 +23,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.keygen.KeyGenerator
+import org.apache.hudi.keygen.{ComplexAvroKeyGenerator, ComplexKeyGenerator, KeyGenerator}
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 
@@ -159,6 +159,21 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   }
 
   /**
+   * Checks if the given key generator class name corresponds to a complex key generator.
+   */
+  private def isComplexKeyGenerator(keyGeneratorClassName: String): Boolean = {
+    if (keyGeneratorClassName == null) {
+      false
+    } else {
+      val complexKeyGenerators = Set(
+        classOf[ComplexKeyGenerator].getCanonicalName,
+        classOf[ComplexAvroKeyGenerator].getCanonicalName
+      )
+      complexKeyGenerators.contains(keyGeneratorClassName)
+    }
+  }
+
+  /**
    * Given query filters, it filters the EqualTo and IN queries on record key columns and returns a tuple of
    * list of such queries and list of record key literals present in the query.
    * If record index is not available, it returns empty list for record filters and record keys
@@ -173,7 +188,15 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       var recordKeyQueries: List[Expression] = List.empty
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
-      val isComplexRecordKey = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0) > 1
+      val isComplexRecordKey = {
+        val keyGeneratorClassName = metaClient.getTableConfig.getKeyGeneratorClassName
+        val fieldCount = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0)
+        val isUsingComplexKeyGen = isComplexKeyGenerator(keyGeneratorClassName)
+        // Consider as complex if:
+        // 1. Multiple fields (> 1), OR
+        // 2. Using complex key generator with single field
+        fieldCount > 1 || (isUsingComplexKeyGen && fieldCount == 1)
+      }
       recordKeyOpt.foreach { recordKeysArray =>
         // Handle composite record keys
         breakable {
@@ -229,5 +252,4 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     // Convert the Hudi Option to Scala Option and return if present
     Option(recordKeysOpt.orElse(null)).filter(_.nonEmpty)
   }
-
 }

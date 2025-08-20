@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.keygen;
@@ -23,7 +24,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
@@ -39,7 +39,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
+class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
   private TypedProperties getCommonProps() {
     TypedProperties properties = new TypedProperties();
     properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
@@ -91,54 +91,52 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testNullPartitionPathFields() {
+  void testNullPartitionPathFields() {
     assertThrows(IllegalArgumentException.class, () -> new SimpleKeyGenerator(getPropertiesWithoutPartitionPathProp()));
   }
 
   @Test
-  public void testNullRecordKeyFields() {
-    GenericRecord record = getRecord();
+  void testNullRecordKeyFields() {
+    GenericRecord avroRecord = getRecord();
     Assertions.assertThrows(IndexOutOfBoundsException.class, () ->  {
       BaseKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropertiesWithoutRecordKeyProp());
-      keyGenerator.getRecordKey(record);
+      keyGenerator.getRecordKey(avroRecord);
     });
   }
 
   @Test
-  public void testWrongRecordKeyField() {
+  void testWrongRecordKeyField() {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getWrongRecordKeyFieldProps());
     assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
   }
 
   @Test
-  public void testWrongPartitionPathField() {
+  void testWrongPartitionPathField() {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getWrongPartitionPathFieldProps());
-    GenericRecord record = getRecord();
+    GenericRecord avroRecord = getRecord();
     // TODO this should throw as well
     //assertThrows(HoodieException.class, () -> {
     //  keyGenerator.getPartitionPath(record);
     //});
-    assertThrows(HoodieException.class, () -> {
-      keyGenerator.getPartitionPath(KeyGeneratorTestUtilities.getRow(record));
-    });
+    assertThrows(HoodieException.class,
+        () -> keyGenerator.getPartitionPath(KeyGeneratorTestUtilities.getRow(avroRecord)));
   }
 
   @Test
-  public void testComplexRecordKeyField() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      new SimpleKeyGenerator(getComplexRecordKeyProp());
-    });
+  void testComplexRecordKeyField() {
+    assertThrows(IllegalArgumentException.class,
+        () -> new SimpleKeyGenerator(getComplexRecordKeyProp()));
   }
 
   @Test
-  public void testHappyFlow() {
+  void testHappyFlow() {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getProps());
-    GenericRecord record = getRecord();
+    GenericRecord avroRecord = getRecord();
     HoodieKey key = keyGenerator.getKey(getRecord());
     Assertions.assertEquals("key1", key.getRecordKey());
     Assertions.assertEquals("timestamp=4357686", key.getPartitionPath());
 
-    Row row = KeyGeneratorTestUtilities.getRow(record);
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
     Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
     Assertions.assertEquals("timestamp=4357686", keyGenerator.getPartitionPath(row));
 
@@ -153,20 +151,20 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
 
   @ParameterizedTest
   @MethodSource("nestedColTestRecords")
-  public void testNestedPartitionPathField(GenericRecord nestedColRecord) {
+  void testNestedPartitionPathField(GenericRecord nestedColRecord) {
     SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropsWithNestedPartitionPathField());
-    GenericRecord record = getRecord(nestedColRecord);
+    GenericRecord avroRecord = getRecord(nestedColRecord);
     String partitionPathFieldValue = null;
     if (nestedColRecord != null) {
       partitionPathFieldValue = (String) nestedColRecord.get("prop1");
     }
     String expectedPartitionPath = "nested_col.prop1="
         + (partitionPathFieldValue != null && !partitionPathFieldValue.isEmpty() ? partitionPathFieldValue : HUDI_DEFAULT_PARTITION_PATH);
-    HoodieKey key = keyGenerator.getKey(record);
+    HoodieKey key = keyGenerator.getKey(avroRecord);
     Assertions.assertEquals("key1", key.getRecordKey());
     Assertions.assertEquals(expectedPartitionPath, key.getPartitionPath());
 
-    Row row = KeyGeneratorTestUtilities.getRow(record);
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
     Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
     Assertions.assertEquals(expectedPartitionPath, keyGenerator.getPartitionPath(row));
   }
