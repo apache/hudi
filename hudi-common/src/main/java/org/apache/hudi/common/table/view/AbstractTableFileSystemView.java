@@ -398,9 +398,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       try {
         fileStatusMap.put(partitionPair, metaClient.getFs().listStatus(absolutePartitionPath));
       } catch (IOException e) {
-        // Create the path if it does not exist already
         if (!metaClient.getFs().exists(absolutePartitionPath)) {
-          metaClient.getFs().mkdirs(absolutePartitionPath);
           fileStatusMap.put(partitionPair, new FileStatus[0]);
         } else {
           // in case the partition path was created by another caller
@@ -467,9 +465,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     try {
       return metaClient.getFs().listStatus(partitionPath);
     } catch (IOException e) {
-      // Create the path if it does not exist already
       if (!metaClient.getFs().exists(partitionPath)) {
-        metaClient.getFs().mkdirs(partitionPath);
         return new FileStatus[0];
       } else {
         // in case the partition path was created by another caller
