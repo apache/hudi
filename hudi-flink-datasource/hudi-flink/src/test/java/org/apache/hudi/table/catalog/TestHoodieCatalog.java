@@ -371,7 +371,7 @@ public class TestHoodieCatalog {
   }
 
   @Test
-  void testCreateTableWithoutPreCombineKey() {
+  void testCreateTableWithoutOrderingFields() {
     Map<String, String> options = getDefaultCatalogOption();
     options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
     catalog = new HoodieCatalog("hudi", Configuration.fromMap(options));

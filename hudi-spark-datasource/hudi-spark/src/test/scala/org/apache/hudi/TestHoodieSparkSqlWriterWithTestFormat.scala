@@ -261,7 +261,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
    * Test case for insert dataset without precombine field.
    */
   @Test
-  def testInsertDatasetWithoutPrecombineField(): Unit = {
+  def testInsertDatasetWithoutOrderingFields(): Unit = {
 
     val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")

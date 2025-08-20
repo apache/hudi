@@ -87,7 +87,7 @@ class TestProvidesHoodieConfig {
   }
 
   @Test
-  def testInferPrecombineFieldFromTableConfig(): Unit = {
+  def testInferOrderingFieldsFromTableConfig(): Unit = {
     // ProvidesHoodieConfig should be able to infer precombine field from table config
     // mock catalogTable
     val mockCatalog = mock(classOf[HoodieCatalogTable])

@@ -322,7 +322,7 @@ public class TestHoodieHiveCatalog {
   }
 
   @Test
-  void testCreateTableWithoutPreCombineKey() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
+  void testCreateTableWithoutOrderingFields() throws TableAlreadyExistException, DatabaseNotExistException, IOException, TableNotExistException {
     String db = "default";
     hoodieCatalog = HoodieCatalogTestUtils.createHiveCatalog();
     hoodieCatalog.open();

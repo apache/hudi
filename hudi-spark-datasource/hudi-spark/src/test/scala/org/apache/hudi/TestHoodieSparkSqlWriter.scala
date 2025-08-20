@@ -992,7 +992,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
    * Test upsert for CoW table without ordering fields and combine before upsert disabled.
    */
   @Test
-  def testUpsertWithoutPrecombineFieldAndCombineBeforeUpsertDisabled(): Unit = {
+  def testUpsertWithoutOrderingFieldsAndCombineBeforeUpsertDisabled(): Unit = {
     val options = Map(DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "keyid",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",

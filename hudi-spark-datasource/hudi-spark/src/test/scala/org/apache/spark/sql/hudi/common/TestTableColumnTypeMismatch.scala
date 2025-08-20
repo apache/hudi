@@ -578,7 +578,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
     )
 
     def createTable(tableName: String, schema: Seq[(String, String)], partitionCols: Seq[String],
-                    primaryKey: String, preCombineField: String, tableType: String, location: String): Unit = {
+                    primaryKey: String, orderingFields: String, tableType: String, location: String): Unit = {
       val schemaStr = schema.map { case (name, dataType) => s"$name $dataType" }.mkString(",\n  ")
       val partitionColsStr = if (partitionCols.nonEmpty) s"partitioned by (${partitionCols.mkString(", ")})" else ""
 
@@ -592,7 +592,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
            |tblproperties (
            |  type = '$tableType',
            |  primaryKey = '$primaryKey',
-           |  orderingFields = '$preCombineField'
+           |  orderingFields = '$orderingFields'
            |)
        """.stripMargin)
     }
