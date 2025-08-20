@@ -102,12 +102,10 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
     List<HoodieClusteringGroup> clusteringGroups = new ArrayList<>();
     HashMap<String, Long> partitionToSize = new HashMap<>();
     HashMap<String, List<FileSlice>> partitionToFiles = new HashMap<>();
-    int numCommits = 0;
     String lastCommit = null;
 
     for (CommitFiles commitFiles : commitFilesList) {
       lastCommit = commitFiles.getInstantTime();
-      numCommits++;
       for (String partition : commitFiles.getPartitionToFileSlices().keySet()) {
         List<FileSlice> fileSlices = commitFiles.getPartitionToFileSlices().get(partition);
         // Exclude file slices whose fileId is in replacedFileIds
@@ -123,7 +121,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
           partitionToFiles.put(partition, eligibleFileSlices);
         }
 
-        if (partitionToSize.get(partition) >= getWriteConfig().getClusteringMaxBytesInGroup() || numCommits >= commitFilesList.size()) {
+        if (partitionToSize.get(partition) >= getWriteConfig().getClusteringMaxBytesInGroup()) {
           // For each partition, create clustering groups (returns a Pair<Stream, Boolean>)
           Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partition, partitionToFiles.get(partition));
           clusteringGroups.addAll(groupPair.getLeft().collect(Collectors.toList()));
@@ -133,6 +131,14 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
       }
       if (clusteringGroups.size() >= getWriteConfig().getClusteringMaxNumGroups()) {
         break;
+      }
+    }
+
+    // For partitions that have not been processed, create clustering groups
+    for (String partition : partitionToSize.keySet()) {
+      if (partitionToSize.get(partition) > 0) {
+        Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partition, partitionToFiles.get(partition));
+        clusteringGroups.addAll(groupPair.getLeft().collect(Collectors.toList()));
       }
     }
     // Update the checkpoint to the last commit

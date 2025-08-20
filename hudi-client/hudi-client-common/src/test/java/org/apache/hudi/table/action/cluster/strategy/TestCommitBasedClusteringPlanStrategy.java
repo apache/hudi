@@ -19,11 +19,14 @@
 package org.apache.hudi.table.action.cluster.strategy;
 
 import static org.apache.hudi.table.action.cluster.strategy.CommitBasedClusteringPlanStrategy.CLUSTERING_COMMIT_CHECKPOINT_KEY;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -64,7 +67,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 /**
- * Tests for {@link CommitBasedClusteringPlanStrategy} focusing on generateClusteringPlan functionality.
+ * Tests for {@link CommitBasedClusteringPlanStrategy} focusing on
+ * generateClusteringPlan functionality.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -154,8 +158,8 @@ public class TestCommitBasedClusteringPlanStrategy {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testGenerateClusteringPlanWithSingleCommit(boolean largerCommit) throws IOException {
+  @ValueSource(booleans = { true, false })
+  void testGenerateClusteringPlanWithSingleCommitSinglePartition(boolean largerCommit) throws IOException {
     // Setup: Single commit with file slices
     when(hoodieTable.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getCommitsTimeline()).thenReturn(timeline);
@@ -247,6 +251,179 @@ public class TestCommitBasedClusteringPlanStrategy {
   }
 
   @Test
+  void testGenerateClusteringPlanWithSingleCommitMultiPartitions() throws IOException {
+    // Setup: Single commit with file slices
+    when(hoodieTable.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getCommitsTimeline()).thenReturn(timeline);
+    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(timeline.findInstantsAfter(anyString())).thenReturn(timeline);
+    when(timeline.filterCompletedInstants()).thenReturn(timeline);
+    when(metaClient.getStorage()).thenReturn(storage);
+    String fileId1 = "a9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String fileId2 = "b9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String file1path = "partition1/a9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20250809161811178.parquet";
+    String file2path = "partition2/b9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20250809161811178.parquet";
+    List<String> fileIds = new ArrayList<>();
+    fileIds.add(fileId1);
+    fileIds.add(fileId2);
+    List<String> filePaths = new ArrayList<>();
+    filePaths.add(file1path);
+    filePaths.add(file2path);
+    for (String filePath : filePaths) {
+      StoragePath path = new StoragePath(this.writeConfig.getBasePath(), filePath);
+      StoragePathInfo pathInfo = mock(StoragePathInfo.class);
+      when(storage.getPathInfo(path)).thenReturn(pathInfo);
+      when(pathInfo.getPath()).thenReturn(new StoragePath(filePath));
+      when(pathInfo.getLength()).thenReturn(100L);
+    }
+    List<String> partitions = new ArrayList<>();
+    partitions.add("partition1");
+    partitions.add("partition2");
+
+    // Create a commit instant
+    HoodieInstant commitInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+        "20231201120000", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    List<HoodieInstant> instants = new ArrayList<>();
+    instants.add(commitInstant);
+    when(timeline.getInstants()).thenReturn(instants);
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    for (int i = 0; i < filePaths.size(); i++) {
+      String filePath = filePaths.get(i);
+      HoodieWriteStat writeStat = new HoodieWriteStat();
+      writeStat.setPath(filePath);
+      writeStat.setFileId(fileIds.get(i));
+      writeStat.setPartitionPath(partitions.get(i));
+      commitMetadata.addWriteStat(partitions.get(i), writeStat);
+    }
+    try {
+      when(activeTimeline.readCommitMetadata(commitInstant)).thenReturn(commitMetadata);
+    } catch (Exception e) {
+      // Handle exception for testing
+    }
+
+    Option<HoodieClusteringPlan> result = strategy.generateClusteringPlan();
+
+    assertNotNull(result);
+    // Validate that the result is present and contains the expected clustering plan
+    assertTrue(result.isPresent());
+    HoodieClusteringPlan plan = result.get();
+    assertNotNull(plan);
+    assertEquals(2, plan.getInputGroups().size());
+    HoodieClusteringGroup inputGroup1 = plan.getInputGroups().get(0);
+    assertEquals(1, inputGroup1.getSlices().size());
+    HoodieClusteringGroup inputGroup2 = plan.getInputGroups().get(1);
+    assertEquals(1, inputGroup2.getSlices().size());
+    List<String> clusteringFiles = new ArrayList<>();
+    clusteringFiles.add(inputGroup1.getSlices().get(0).getDataFilePath());
+    clusteringFiles.add(inputGroup2.getSlices().get(0).getDataFilePath());
+    assertEquals(2, clusteringFiles.size());
+    assertThat(clusteringFiles, containsInAnyOrder(filePaths.toArray(new String[0])));
+
+    Map<String, String> extraMetadata = strategy.getExtraMetadata();
+    assertEquals(commitInstant.requestedTime(), extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
+  }
+
+  @Test
+  void testGenerateClusteringPlanWithMultiCommits() throws IOException {
+    // Setup: Multiple commits with file slices
+    when(hoodieTable.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getCommitsTimeline()).thenReturn(timeline);
+    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(timeline.findInstantsAfter(anyString())).thenReturn(timeline);
+    when(timeline.filterCompletedInstants()).thenReturn(timeline);
+    when(metaClient.getStorage()).thenReturn(storage);
+    String fileId1 = "a9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String fileId2 = "b9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String fileId3 = "c9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String fileId4 = "d9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String file1path = "p1/to/a9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20250809161811178.parquet";
+    String file2path = "p1/to/b9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20250809161811178.parquet";
+    String file3path = "p1/to/c9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20250809161811178.parquet";
+    String file4path = "p2/to/d9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20250809161811178.parquet";
+    List<String> fileIds = new ArrayList<>();
+    fileIds.add(fileId1);
+    fileIds.add(fileId2);
+    fileIds.add(fileId3);
+    fileIds.add(fileId4);
+    List<String> filePaths = new ArrayList<>();
+    filePaths.add(file1path);
+    filePaths.add(file2path);
+    filePaths.add(file3path);
+    filePaths.add(file4path);
+    for (String filePath : filePaths) {
+      StoragePath path = new StoragePath(this.writeConfig.getBasePath(), filePath);
+      StoragePathInfo pathInfo = mock(StoragePathInfo.class);
+      when(storage.getPathInfo(path)).thenReturn(pathInfo);
+      when(pathInfo.getPath()).thenReturn(new StoragePath(filePath));
+      when(pathInfo.getLength()).thenReturn(100L);
+    }
+    List<String> partitions = new ArrayList<>();
+    partitions.add("p1");
+    partitions.add("p1");
+    partitions.add("p1");
+    partitions.add("p2");
+
+    // Create two commit instants
+    HoodieInstant commitInstant1 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+        "20231201120000", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant commitInstant2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION,
+        "20231201120001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    List<HoodieInstant> instants = new ArrayList<>();
+    instants.add(commitInstant1);
+    instants.add(commitInstant2);
+    when(timeline.getInstants()).thenReturn(instants);
+
+    for (int i = 0; i < instants.size(); i++) {
+      HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+      for (int j = 0; j < 2; j++) {
+        int k = i * 2 + j;
+        String filePath = filePaths.get(k);
+        HoodieWriteStat writeStat = new HoodieWriteStat();
+        writeStat.setPath(filePath);
+        writeStat.setFileId(fileIds.get(k));
+        writeStat.setPartitionPath(partitions.get(k));
+        commitMetadata.addWriteStat(partitions.get(k), writeStat);
+      }
+      try {
+        when(activeTimeline.readCommitMetadata(instants.get(i))).thenReturn(commitMetadata);
+      } catch (Exception e) {
+        // Handle exception for testing
+      }
+    }
+
+    Option<HoodieClusteringPlan> result = strategy.generateClusteringPlan();
+
+    assertNotNull(result);
+    // Validate that the result is present and contains the expected clustering plan
+    assertTrue(result.isPresent());
+    HoodieClusteringPlan plan = result.get();
+    assertNotNull(plan);
+    assertEquals(2, plan.getInputGroups().size());
+    HoodieClusteringGroup inputGroup1 = plan.getInputGroups().get(0);
+    HoodieClusteringGroup inputGroup2 = plan.getInputGroups().get(1);
+    assertNotEquals(inputGroup1.getSlices().size(), inputGroup2.getSlices().size());
+    assertTrue(inputGroup1.getSlices().size() == 3 || inputGroup1.getSlices().size() == 1);
+    assertTrue(inputGroup2.getSlices().size() == 3 || inputGroup2.getSlices().size() == 1);
+    List<HoodieClusteringGroup> inputGroups = new ArrayList<>();
+    inputGroups.add(inputGroup1);
+    inputGroups.add(inputGroup2);
+    for (HoodieClusteringGroup inputGroup : inputGroups) {
+      if (inputGroup.getSlices().size() == 3) {
+        assertEquals(file1path, inputGroup.getSlices().get(0).getDataFilePath());
+        assertEquals(file2path, inputGroup.getSlices().get(1).getDataFilePath());
+        assertEquals(file3path, inputGroup.getSlices().get(2).getDataFilePath());
+      } else {
+        assertEquals(1, inputGroup.getSlices().size());
+        assertEquals(file4path, inputGroup.getSlices().get(0).getDataFilePath());
+      }
+    }
+
+    Map<String, String> extraMetadata = strategy.getExtraMetadata();
+    assertEquals(commitInstant2.requestedTime(), extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
+  }
+
+  @Test
   void testGenerateClusteringPlanWithReplaceCommit() {
     // Setup: Replace commit with replaced file IDs
     when(hoodieTable.getMetaClient()).thenReturn(metaClient);
@@ -288,7 +465,8 @@ public class TestCommitBasedClusteringPlanStrategy {
     HoodieClusteringConfig.Builder clusteringConfigBuilder = HoodieClusteringConfig.newBuilder()
         .withClusteringMaxBytesInGroup(MAX_BYTES_PER_GROUP)
         .withClusteringMaxNumGroups(10)
-        .withClusteringExecutionStrategyClass("org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy");
+        .withClusteringExecutionStrategyClass(
+            "org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy");
     if (withCheckpoint) {
       clusteringConfigBuilder.withClusteringPlanLastCommit("20001201120000");
     }
