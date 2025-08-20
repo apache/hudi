@@ -116,7 +116,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
     assertResult(table.properties("type"))("cow")
     assertResult(table.properties("primaryKey"))("id")
-    assertResult(table.properties("preCombineField"))("ts")
+    assertResult(table.properties("orderingFields"))("ts")
     assertResult(tableName)(table.identifier.table)
     assertResult("hudi")(table.provider.get)
     assertResult(CatalogTableType.MANAGED)(table.tableType)
@@ -1331,7 +1331,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
     assertResult(table.properties("type"))("cow")
     assertResult(table.properties("primaryKey"))("id")
-    assertResult(table.properties("preCombineField"))("ts")
+    assertResult(table.properties("orderingFields"))("ts")
   }
 
   test("Test Create Hoodie Table with existing hoodie.properties") {

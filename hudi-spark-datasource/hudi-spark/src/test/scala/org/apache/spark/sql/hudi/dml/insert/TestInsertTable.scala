@@ -2167,7 +2167,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Hudi should not record empty preCombineKey in hoodie.properties") {
+  test("Test Hudi should not record empty orderingFields in hoodie.properties") {
     withSQLConf("hoodie.datasource.write.operation" -> "insert") {
       withTempDir { tmp =>
         val tableName = generateTableName

@@ -148,7 +148,7 @@ trait ProvidesHoodieConfig extends Logging {
       case (false, false, true, _, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
       // insert overwrite partition
       case (false, true, false, _, _, true, _) => INSERT_OVERWRITE_OPERATION_OPT_VAL
-      // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
+      // disable dropDuplicate, and provide orderingFields, use the upsert operation for strict and upsert mode.
       case (false, false, false, false, false, _, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
       // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
       case (true, false, false, _, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL

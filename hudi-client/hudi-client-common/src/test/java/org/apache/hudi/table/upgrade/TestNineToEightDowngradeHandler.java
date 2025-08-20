@@ -98,6 +98,7 @@ class TestNineToEightDowngradeHandler {
     when(upgradeDowngradeHelper.getTable(any(), any())).thenReturn(table);
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
   }
 
   static Stream<Arguments> payloadClassTestCases() {
@@ -225,8 +226,8 @@ class TestNineToEightDowngradeHandler {
             propertiesToChange.propertiesToUpdate().get(RECORD_MERGE_STRATEGY_ID));
       }
       if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
-        assertTrue(propertiesToChange.propertiesToUpdate().containsKey(HoodieTableConfig.PRECOMBINE_FIELDS));
-        assertEquals(propertiesToChange.propertiesToUpdate().get(HoodieTableConfig.PRECOMBINE_FIELDS).toString(), DebeziumConstants.ADDED_SEQ_COL_NAME);
+        assertTrue(propertiesToChange.propertiesToUpdate().containsKey(HoodieTableConfig.ORDERING_FIELDS));
+        assertEquals(propertiesToChange.propertiesToUpdate().get(HoodieTableConfig.ORDERING_FIELDS), DebeziumConstants.ADDED_SEQ_COL_NAME);
       }
     }
   }

@@ -203,7 +203,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue(), // // to be fixed once we land PR #13721.
           DEBEZIUM_UNAVAILABLE_VALUE);
     } else if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
-      tablePropsToAdd.put(HoodieTableConfig.PRECOMBINE_FIELDS, FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
+      tablePropsToAdd.put(HoodieTableConfig.ORDERING_FIELDS, FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
     }
   }
 

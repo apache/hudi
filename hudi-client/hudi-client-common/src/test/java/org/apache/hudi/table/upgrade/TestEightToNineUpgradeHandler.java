@@ -122,6 +122,7 @@ class TestEightToNineUpgradeHandler {
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(metaClient.getStorage()).thenReturn(storage);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
 
     // Use a temp file for index definition path
     indexDefPath = new StoragePath(tempDir.resolve("index.json").toString());
@@ -294,8 +295,8 @@ class TestEightToNineUpgradeHandler {
         payloadClass,
         propertiesToAdd.get(LEGACY_PAYLOAD_CLASS_NAME));
     if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
-      assertTrue(propertiesToAdd.containsKey(HoodieTableConfig.PRECOMBINE_FIELDS));
-      assertEquals(propertiesToAdd.get(HoodieTableConfig.PRECOMBINE_FIELDS).toString(), FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
+      assertTrue(propertiesToAdd.containsKey(HoodieTableConfig.ORDERING_FIELDS));
+      assertEquals(propertiesToAdd.get(HoodieTableConfig.ORDERING_FIELDS), FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
     }
   }
 

@@ -279,10 +279,10 @@ object HoodieWriterUtils {
           }
         }
 
-        val datasourcePreCombineKey = params.getOrElse(ORDERING_FIELDS.key(), null)
+        val datasourceOrderingFields = params.getOrElse(ORDERING_FIELDS.key(), null)
         val tableConfigOrderingKey = tableConfig.getString(HoodieTableConfig.ORDERING_FIELDS)
-        if (null != datasourcePreCombineKey && null != tableConfigOrderingKey && datasourcePreCombineKey != tableConfigOrderingKey) {
-          diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigOrderingKey\n")
+        if (null != datasourceOrderingFields && null != tableConfigOrderingKey && datasourceOrderingFields != tableConfigOrderingKey) {
+          diffConfigs.append(s"OrderingFields:\t$datasourceOrderingFields\t$tableConfigOrderingKey\n")
         }
 
         val datasourceKeyGen = getOriginKeyGenerator(params)

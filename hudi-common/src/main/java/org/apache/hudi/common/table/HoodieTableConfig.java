@@ -1045,7 +1045,7 @@ public class HoodieTableConfig extends HoodieConfig {
       return Option.empty();
     } else {
       return Option.of(Arrays.stream(keyFieldsValue.split(","))
-          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
+          .filter(p -> !p.isEmpty()).collect(Collectors.toList()).toArray(new String[] {}));
     }
   }
 
