@@ -54,6 +54,7 @@ import java.util.Map;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -197,5 +198,70 @@ class TestFileGroupRecordBuffer {
     deleteRecord = records.get("54321");
     assertNull(deleteRecord.getRecordKey(), "The record key metadata field is missing");
     assertEquals(1, deleteRecord.getOrderingValue());
+  }
+
+  @Test
+  void testParseRecordMergePropertiesWithPrefixedProperties() {
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            Option.empty(),
+            props,
+            Collections.emptyList(),
+            updateProcessor
+        );
+
+    TypedProperties props = new TypedProperties();
+    props.put(RECORD_MERGE_PROPERTY_PREFIX + "strategy", "overwrite");
+    props.put(RECORD_MERGE_PROPERTY_PREFIX + "field", "col1");
+    props.put("unrelated.key", "value");
+    keyBasedBuffer.extractAndAppendMergeProperties(props);
+
+    assertEquals("overwrite", props.get("strategy"));
+    assertEquals("col1", props.get("field"));
+    assertEquals("value", props.get("unrelated.key"));
+  }
+
+  @Test
+  void testParseRecordMergePropertiesWithNoPrefixedProperties() {
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            Option.empty(),
+            props,
+            Collections.emptyList(),
+            updateProcessor
+        );
+    TypedProperties props = new TypedProperties();
+    props.put("normal.key", "val");
+    keyBasedBuffer.extractAndAppendMergeProperties(props);
+
+    assertEquals(1, props.size());
+    assertEquals("val", props.get("normal.key"));
+  }
+
+  @Test
+  void testParseRecordMergePropertiesWithOverwrite() {
+    KeyBasedFileGroupRecordBuffer keyBasedBuffer =
+        new KeyBasedFileGroupRecordBuffer(
+            readerContext,
+            hoodieTableMetaClient,
+            RecordMergeMode.COMMIT_TIME_ORDERING,
+            Option.empty(),
+            props,
+            Collections.emptyList(),
+            updateProcessor
+        );
+    TypedProperties props = new TypedProperties();
+    props.put("strategy", "keep");
+    props.put(RECORD_MERGE_PROPERTY_PREFIX + "strategy", "overwrite");
+    keyBasedBuffer.extractAndAppendMergeProperties(props);
+
+    assertEquals(2, props.size());
+    assertEquals("overwrite", props.get("strategy"));
   }
 }

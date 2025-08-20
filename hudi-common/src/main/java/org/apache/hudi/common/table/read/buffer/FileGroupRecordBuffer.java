@@ -63,7 +63,9 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
 
 abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
@@ -97,6 +99,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
                                   TypedProperties props,
                                   List<String> orderingFieldNames,
                                   UpdateProcessor<T> updateProcessor) {
+    extractAndAppendMergeProperties(props);
     this.readerContext = readerContext;
     this.updateProcessor = updateProcessor;
     this.readerSchema = AvroSchemaCache.intern(readerContext.getSchemaHandler().getRequiredSchema());
@@ -202,6 +205,15 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
     return Pair.of(new CloseableMappingIterator<>(
         blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
+  }
+
+  /**
+   * Append merge properties based on ad hoc logic before the flow starts.
+   * For example, extract and append RECORD_MERGE_PROPERTY_PREFIX prefixed properties.
+   */
+  void extractAndAppendMergeProperties(TypedProperties props) {
+    Map<String, String> mergeProperties = extractWithPrefix(props, RECORD_MERGE_PROPERTY_PREFIX);
+    props.putAll(mergeProperties);
   }
 
   /**
