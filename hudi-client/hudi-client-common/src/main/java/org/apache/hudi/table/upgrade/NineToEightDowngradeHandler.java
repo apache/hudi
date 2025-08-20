@@ -82,26 +82,18 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
-    reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, metaClient);
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, tableConfig);
+    reconcileOrderingFieldsConfig(propertiesToAdd, propertiesToRemove, tableConfig);
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
-  }
-
-  private void downgradeOrderingFieldsConfig(Map<ConfigProperty, String> propertiesToAdd, Set<ConfigProperty> propertiesToRemove,
-                                             Option<String> orderingFieldsOpt) {
-    if (orderingFieldsOpt.isPresent()) {
-      propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFieldsOpt.get());
-      propertiesToRemove.add(HoodieTableConfig.ORDERING_FIELDS);
-    }
   }
 
   private void reconcileMergeConfigs(Map<ConfigProperty, String> propertiesToAdd,
                                      Set<ConfigProperty> propertiesToRemove,
-                                     HoodieTableMetaClient metaClient) {
-    Option<String> orderingFieldsOpt = metaClient.getTableConfig().getOrderingFieldsStr();
+                                     HoodieTableConfig tableConfig) {
     // Update table properties.
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
     // For specified payload classes, add strategy id and custom merge mode.
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     String legacyPayloadClass = tableConfig.getLegacyPayloadClass();
     if (!StringUtils.isNullOrEmpty(legacyPayloadClass) && (PAYLOAD_CLASSES_TO_HANDLE.contains(legacyPayloadClass))) {
       propertiesToRemove.add(LEGACY_PAYLOAD_CLASS_NAME);
@@ -122,10 +114,18 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue());
       }
-      if (legacyPayloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
-        orderingFieldsOpt = Option.of(DebeziumConstants.ADDED_SEQ_COL_NAME);
-      }
     }
-    downgradeOrderingFieldsConfig(propertiesToAdd, propertiesToRemove, orderingFieldsOpt);
+  }
+
+  private void reconcileOrderingFieldsConfig(Map<ConfigProperty, String> propertiesToAdd,
+                                             Set<ConfigProperty> propertiesToRemove,
+                                             HoodieTableConfig tableConfig) {
+    Option<String> orderingFieldsOpt = MySqlDebeziumAvroPayload.class.getName().equals(tableConfig.getLegacyPayloadClass())
+        ? Option.of(DebeziumConstants.ADDED_SEQ_COL_NAME)
+        : tableConfig.getOrderingFieldsStr();
+    orderingFieldsOpt.ifPresent(orderingFields -> {
+      propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFields);
+      propertiesToRemove.add(HoodieTableConfig.ORDERING_FIELDS);
+    });
   }
 }
