@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.List;
@@ -367,7 +366,7 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    public Option<BufferedRecord<T>> deltaMergeNonDeleteRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
+    public Option<BufferedRecord<T>> deltaMergeRecords(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
       Pair<HoodieRecord, Schema> combinedRecordAndSchema = recordMerger.merge(
           recordContext.constructHoodieRecord(existingRecord),
           recordContext.getSchemaFromBufferRecord(existingRecord),
@@ -385,18 +384,15 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    public BufferedRecord<T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+    public BufferedRecord<T> mergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
       Pair<HoodieRecord, Schema> mergedRecord = recordMerger.merge(
           recordContext.constructHoodieRecord(olderRecord), recordContext.getSchemaFromBufferRecord(olderRecord),
           recordContext.constructHoodieRecord(newerRecord), recordContext.getSchemaFromBufferRecord(newerRecord), props);
-      if (!mergedRecord.getLeft().isDelete(mergedRecord.getRight(), props)) {
-        HoodieRecord hoodieRecord = mergedRecord.getLeft();
-        if (!mergedRecord.getRight().equals(readerSchema)) {
-          hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.getRight(), null, readerSchema);
-        }
-        return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
+      HoodieRecord hoodieRecord = mergedRecord.getLeft();
+      if (!mergedRecord.getRight().equals(readerSchema)) {
+        hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.getRight(), null, readerSchema);
       }
-      return BufferedRecords.createDelete(newerRecord.getRecordKey());
+      return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, hoodieRecord.isDelete(readerSchema, props));
     }
   }
 
@@ -455,7 +451,7 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    public Option<BufferedRecord<T>> deltaMergeNonDeleteRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
+    public Option<BufferedRecord<T>> deltaMergeRecords(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
       Pair<HoodieRecord, Schema> mergedRecordAndSchema = getMergedRecord(existingRecord, newRecord, false);
       HoodieRecord mergedRecord = mergedRecordAndSchema.getLeft();
       Schema mergeResultSchema = mergedRecordAndSchema.getRight();
@@ -474,7 +470,7 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    public BufferedRecord<T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+    public BufferedRecord<T> mergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
       Pair<HoodieRecord, Schema> mergedRecordAndSchema = getMergedRecord(olderRecord, newerRecord, true);
 
       HoodieRecord mergedRecord = mergedRecordAndSchema.getLeft();
@@ -483,12 +479,11 @@ public class BufferedRecordMergerFactory {
       if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
         return olderRecord;
       }
-      if (!mergedRecord.isDelete(mergeResultSchema, props)) {
-        IndexedRecord indexedRecord = (IndexedRecord) mergedRecord.getData();
-        return BufferedRecords.fromEngineRecord(
-            recordContext.convertAvroRecord(indexedRecord), mergeResultSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
+      if (!mergeResultSchema.equals(readerSchema)) {
+        mergedRecord = mergedRecord.rewriteRecordWithNewSchema(mergedRecordAndSchema.getRight(), null, readerSchema);
       }
-      return BufferedRecords.createDelete(newerRecord.getRecordKey());
+      boolean isDelete = mergedRecord.isDelete(readerSchema, props);
+      return BufferedRecords.fromHoodieRecord(mergedRecord, readerSchema, recordContext, props, orderingFieldNames, isDelete);
     }
 
     protected Pair<HoodieRecord, HoodieRecord> getDeltaMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
@@ -508,13 +503,13 @@ public class BufferedRecordMergerFactory {
 
     protected HoodieRecord constructHoodieAvroRecord(RecordContext<T> recordContext, BufferedRecord<T> bufferedRecord, String payloadClass) {
       GenericRecord record = null;
-      if (!bufferedRecord.isDelete()) {
+      if (bufferedRecord.getRecord() != null) {
         Schema recordSchema = recordContext.getSchemaFromBufferRecord(bufferedRecord);
         record = recordContext.convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
       }
       HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), null);
       return new HoodieAvroRecord<>(hoodieKey,
-          HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue()), null);
+          HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue()), null, bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
     }
 
     protected Schema getSchemaForAvroPayloadMerge(BufferedRecord<T> bufferedRecord) {
@@ -551,20 +546,10 @@ public class BufferedRecordMergerFactory {
       if (existingRecord == null) {
         return Option.of(newRecord);
       }
-      if (existingRecord.isDelete() || newRecord.isDelete()) {
-        if (shouldKeepNewerRecord(existingRecord, newRecord)) {
-          // IMPORTANT:
-          // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
-          // return Option.empty when the old payload data is empty(a delete) and ignores its ordering value directly.
-          return Option.of(newRecord);
-        } else {
-          return Option.empty();
-        }
-      }
-      return deltaMergeNonDeleteRecord(newRecord, existingRecord);
+      return deltaMergeRecords(newRecord, existingRecord);
     }
 
-    public abstract Option<BufferedRecord<T>> deltaMergeNonDeleteRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException;
+    public abstract Option<BufferedRecord<T>> deltaMergeRecords(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException;
 
     @Override
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
@@ -573,20 +558,13 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      if (olderRecord.isDelete() || newerRecord.isDelete()) {
-        if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
-          // IMPORTANT:
-          // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
-          // return Option.empty when the new payload data is empty(a delete) and ignores its ordering value directly.
-          return newerRecord;
-        } else {
-          return olderRecord;
-        }
+      if (olderRecord == null) {
+        return newerRecord;
       }
-      return mergeNonDeleteRecord(olderRecord, newerRecord);
+      return mergeRecords(olderRecord, newerRecord);
     }
 
-    public abstract BufferedRecord<T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
+    public abstract BufferedRecord<T> mergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
   }
 
   // -------------------------------------------------------------------------

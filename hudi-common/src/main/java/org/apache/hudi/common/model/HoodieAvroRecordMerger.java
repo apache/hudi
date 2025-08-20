@@ -45,11 +45,34 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
 
   @Override
   public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    Option<IndexedRecord> updatedValue = combineAndGetUpdateValue(older, newer, oldSchema, newSchema, props);
+    Option<IndexedRecord> previousAvroData = older.toIndexedRecord(oldSchema, props).map(HoodieAvroIndexedRecord::getData);
+    HoodieRecordPayload payload = ((HoodieAvroRecord) newer).getData();
+    Option<IndexedRecord> updatedValue;
+    Comparable orderingVal;
+    if (previousAvroData.isEmpty()) {
+      updatedValue = payload.getInsertValue(newSchema, props);
+      orderingVal = payload.getOrderingValue();
+    } else {
+      updatedValue = ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), newSchema, props);
+      if (updatedValue.map(value -> value == previousAvroData.get()).orElse(false)) {
+        // Ordering value is set during record creation if one is required for this payload, so ordering fields are not required here
+        return Pair.of(older, oldSchema);
+      } else {
+        orderingVal = payload.getOrderingValue();
+      }
+    }
     if (updatedValue.isEmpty()) {
+      // pass through the record that results in the delete operation. If both newer and older are deletes, we return the newer one.
+      if (newer.isDelete(newSchema, props)) {
+        return Pair.of(newer.newInstance(newer.getKey(), HoodieOperation.DELETE), newSchema);
+      } else if (older.isDelete(oldSchema, props)) {
+        // if older is delete, return it
+        return Pair.of(older.newInstance(newer.getKey(), HoodieOperation.DELETE), oldSchema);
+      }
+      // If neither of the records are a delete, return a delete record with an empty value and default ordering value.
       return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecordType.AVRO), newSchema);
     }
-    return Pair.of(new HoodieAvroIndexedRecord(updatedValue.get()), updatedValue.get().getSchema());
+    return Pair.of(new HoodieAvroIndexedRecord(newer.getKey(), updatedValue.get(), orderingVal), updatedValue.get().getSchema());
   }
 
   @Override
