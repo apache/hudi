@@ -27,7 +27,7 @@
     incremental_strategy='insert_overwrite',
     options={
         'type': 'cow',
-        'precombineKey': 'ts',
+        'orderingFields': 'ts',
     },
     unique_key='id'
    )

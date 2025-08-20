@@ -19,6 +19,7 @@
 package org.apache.hudi.integ.testsuite.dag.nodes
 
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext
@@ -68,7 +69,7 @@ class SparkUpsertNode(dagNodeConfig: Config) extends SparkInsertNode(dagNodeConf
 
     inputDF.write.format("hudi")
       .options(DataSourceWriteOptions.translateSqlOptions(context.getWriterContext.getProps.asScala.toMap))
-      .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "test_suite_source_ordering_field")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key(), "test_suite_source_ordering_field")
       .option(DataSourceWriteOptions.TABLE_NAME.key, context.getHoodieTestSuiteWriter.getCfg.targetTableName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, context.getHoodieTestSuiteWriter.getCfg.tableType)
       .option(DataSourceWriteOptions.OPERATION.key, getOperation())

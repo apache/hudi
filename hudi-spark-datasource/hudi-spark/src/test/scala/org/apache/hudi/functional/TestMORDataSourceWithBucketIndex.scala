@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieLayoutConfig, HoodieWriteConfig}
@@ -45,7 +46,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieIndexConfig.INDEX_TYPE.key -> IndexType.BUCKET.name,
     HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "8",

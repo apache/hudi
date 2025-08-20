@@ -58,7 +58,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(partition)
              | location '$basePath'
@@ -159,7 +159,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(partition)
              | location '$basePath'
@@ -243,7 +243,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(partition)
              | location '$basePath'

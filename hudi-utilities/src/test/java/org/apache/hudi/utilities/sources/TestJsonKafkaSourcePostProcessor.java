@@ -240,8 +240,8 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     });
 
     // test delete
-    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE.key(), "DATE_STRING");
-    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT.key(), "yyyy-MM-dd HH:mm:ss");
+    props.setProperty(JsonKafkaPostProcessorConfig.ORDERING_FIELDS_TYPE.key(), "DATE_STRING");
+    props.setProperty(JsonKafkaPostProcessorConfig.ORDERING_FIELDS_FORMAT.key(), "yyyy-MM-dd HH:mm:ss");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "update_time");
 
     JavaRDD<String> inputDelete = jsc().parallelize(Collections.singletonList(hudiMaxwell01Delete));
@@ -262,7 +262,7 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
         });
 
     // test preCombine field is not time
-    props.setProperty(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE.key(), "NON_TIMESTAMP");
+    props.setProperty(JsonKafkaPostProcessorConfig.ORDERING_FIELDS_TYPE.key(), "NON_TIMESTAMP");
     props.setProperty(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "id");
 
     JavaRDD<String> inputDelete2 = jsc().parallelize(Collections.singletonList(hudiMaxwell01Delete));

@@ -97,7 +97,7 @@ class TestSevenToEightUpgradeHandler {
     // Mock record merge mode configuration for merging behavior
     when(tableConfig.contains(isA(ConfigProperty.class))).thenAnswer(i -> i.getArguments()[0].equals(PAYLOAD_CLASS_NAME));
     when(tableConfig.getPayloadClass()).thenReturn(OverwriteWithLatestAvroPayload.class.getName());
-    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.empty());
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
     SevenToEightUpgradeHandler.upgradeMergeMode(tableConfig, tablePropsToAdd);
     assertTrue(tablePropsToAdd.containsKey(RECORD_MERGE_MODE));
     assertNotNull(tablePropsToAdd.get(RECORD_MERGE_MODE));
@@ -140,7 +140,7 @@ class TestSevenToEightUpgradeHandler {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
 
     when(tableConfig.getPayloadClass()).thenReturn(payloadClass);
-    when(tableConfig.getPreCombineFieldsStr()).thenReturn(Option.ofNullable(preCombineField));
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.ofNullable(preCombineField));
 
     SevenToEightUpgradeHandler.upgradeMergeMode(tableConfig, tablePropsToAdd);
 

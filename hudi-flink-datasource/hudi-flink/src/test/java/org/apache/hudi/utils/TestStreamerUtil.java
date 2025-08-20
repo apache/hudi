@@ -77,7 +77,7 @@ class TestStreamerUtil {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
 
     // Test for partitioned table.
-    conf.set(FlinkOptions.PRECOMBINE_FIELD, "ts");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "p0,p1");
     StreamerUtil.initTableIfNotExists(conf);
 
@@ -86,7 +86,7 @@ class TestStreamerUtil {
     assertTrue(metaClient1.getTableConfig().getPartitionFields().isPresent(),
         "Missing partition columns in the hoodie.properties.");
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
-    assertEquals(metaClient1.getTableConfig().getPreCombineFieldsStr().get(), "ts");
+    assertEquals(metaClient1.getTableConfig().getOrderingFieldsStr().get(), "ts");
     assertEquals(metaClient1.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
     assertEquals(HoodieTableVersion.current(), metaClient1.getTableConfig().getTableVersion());
 

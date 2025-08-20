@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -255,7 +256,6 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     long timestamp = Instant.now().toEpochMilli();
     Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, bootstrapBasePath);
     HoodieWriteConfig config = getConfigBuilder(schema.toString())
-        .withPreCombineField("timestamp")
         .withSchema(schema.toString())
         .withKeyGenerator(keyGeneratorClass)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
@@ -270,6 +270,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMaxNumDeltaCommitsBeforeCompaction(3)
             .withMetadataIndexColumnStats(false).build()) // HUDI-8774
         .build();
+    config.setValue(HoodieTableConfig.ORDERING_FIELDS, "timestamp");
 
     SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
     client.bootstrap(Option.empty());

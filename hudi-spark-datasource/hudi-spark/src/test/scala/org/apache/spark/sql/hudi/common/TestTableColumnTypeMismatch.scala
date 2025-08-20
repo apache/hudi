@@ -92,7 +92,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
            |location '${tmp.getCanonicalPath}/$tableName'
            |tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            |)
          """.stripMargin)
 
@@ -165,7 +165,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |location '${tmp.getCanonicalPath}/$tableName'
              |tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |)
          """.stripMargin)
 
@@ -251,7 +251,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |)
          """.stripMargin)
 
@@ -267,7 +267,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |)
          """.stripMargin)
 
@@ -352,7 +352,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                |)
          """.stripMargin)
           targetTable
@@ -509,7 +509,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                                      sourceSchema: Seq[(String, String)],
                                      partitionCols: Seq[String],
                                      primaryKey: String,
-                                     preCombineField: String,
+                                     orderingFields: String,
                                      tableType: String, // COW or MOR
                                      expectedErrorPattern: String
                                    )
@@ -531,7 +531,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         ),
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
-        preCombineField = "ts",
+        orderingFields = "ts",
         tableType = "cow",
         expectedErrorPattern = "Partition key data type mismatch between source table and target table. Target table uses StringType for column 'name', source table uses IntegerType for 's0.name'"
       ),
@@ -551,7 +551,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         ),
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
-        preCombineField = "ts",
+        orderingFields = "ts",
         tableType = "mor",
         expectedErrorPattern = "Primary key data type mismatch between source table and target table. Target table uses IntegerType for column 'id', source table uses LongType for 's0.id'"
       ),
@@ -571,14 +571,14 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         ),
         partitionCols = Seq("name", "price"),
         primaryKey = "id",
-        preCombineField = "ts",
+        orderingFields = "ts",
         tableType = "cow",
         expectedErrorPattern = "Precombine field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
       )
     )
 
     def createTable(tableName: String, schema: Seq[(String, String)], partitionCols: Seq[String],
-                    primaryKey: String, preCombineField: String, tableType: String, location: String): Unit = {
+                    primaryKey: String, orderingFields: String, tableType: String, location: String): Unit = {
       val schemaStr = schema.map { case (name, dataType) => s"$name $dataType" }.mkString(",\n  ")
       val partitionColsStr = if (partitionCols.nonEmpty) s"partitioned by (${partitionCols.mkString(", ")})" else ""
 
@@ -592,7 +592,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
            |tblproperties (
            |  type = '$tableType',
            |  primaryKey = '$primaryKey',
-           |  preCombineField = '$preCombineField'
+           |  orderingFields = '$orderingFields'
            |)
        """.stripMargin)
     }
@@ -609,7 +609,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             testCase.targetSchema,
             testCase.partitionCols,
             testCase.primaryKey,
-            testCase.preCombineField,
+            testCase.orderingFields,
             testCase.tableType,
             s"${tmp.getCanonicalPath}/$targetTable"
           )
@@ -689,7 +689,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
              |tblproperties (
              |  type = 'cow',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |)
          """.stripMargin)
 
@@ -738,7 +738,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |tblproperties (
                |  type = 'cow',
                |  primaryKey = 'id',
-               |  preCombineField = 'ts',
+               |  orderingFields = 'ts',
                |  'hoodie.record.merge.mode' = '$mergeMode'
                |)
            """.stripMargin)
@@ -813,7 +813,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
                |tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'c1',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                |)
            """.stripMargin)
 

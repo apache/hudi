@@ -28,7 +28,7 @@ import javax.annotation.concurrent.Immutable;
 
 import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
-import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.DATE_STRING;
+import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.DATE_STRING;
 
 /**
  * Json Kafka Post Processor Configs
@@ -62,18 +62,20 @@ public class JsonKafkaPostProcessorConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Table name regex");
 
-  public static final ConfigProperty<String> PRECOMBINE_FIELD_TYPE = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.type")
+  public static final ConfigProperty<String> ORDERING_FIELDS_TYPE = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.ordering.fields.type")
       .defaultValue(DATE_STRING.toString())
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.type")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.type",
+          STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.type")
       .markAdvanced()
-      .withDocumentation("Data type of the preCombine field. could be NON_TIMESTAMP, DATE_STRING,"
+      .withDocumentation("Data type of the ordering field. could be NON_TIMESTAMP, DATE_STRING,"
           + "UNIX_TIMESTAMP or EPOCHMILLISECONDS. DATE_STRING by default");
 
-  public static final ConfigProperty<String> PRECOMBINE_FIELD_FORMAT = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.format")
+  public static final ConfigProperty<String> ORDERING_FIELDS_FORMAT = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.ordering.fields.format")
       .defaultValue("yyyy-MM-dd HH:mm:ss")
-      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.format")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.format",
+          STREAMER_CONFIG_PREFIX + "source.json.kafka.post.processor.maxwell.precombine.field.format")
       .markAdvanced()
       .withDocumentation("When the preCombine filed is in DATE_STRING format, use should tell hoodie"
           + "what format it is. 'yyyy-MM-dd HH:mm:ss' by default");

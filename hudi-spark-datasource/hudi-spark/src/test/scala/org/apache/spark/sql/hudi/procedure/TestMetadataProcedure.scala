@@ -34,7 +34,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -70,7 +70,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -90,7 +90,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName_1'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -128,7 +128,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -170,7 +170,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'c1',
-           |  preCombineField = 'c8',
+           |  orderingFields = 'c8',
            |  hoodie.metadata.enable="true",
            |  hoodie.metadata.index.column.stats.enable="true"
            | )
@@ -287,7 +287,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.metadata.metrics.enable = 'true'
            | )
        """.stripMargin)
@@ -319,7 +319,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | partitioned by (ts)
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -350,7 +350,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | partitioned by (ts)
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -393,7 +393,7 @@ class TestMetadataProcedure extends HoodieSparkProcedureTestBase {
            | partitioned by (ts)
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
