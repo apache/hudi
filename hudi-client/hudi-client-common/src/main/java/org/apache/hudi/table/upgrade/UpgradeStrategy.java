@@ -59,14 +59,17 @@ public class UpgradeStrategy implements UpgradeDowngradeStrategy {
       LOG.warn("Table version {} is greater than write version {}. No upgrade needed",
           fromTableVersion, toWriteVersion);
       shouldUpgrade = false;
-    } else if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
-      throw new HoodieUpgradeDowngradeException(
-          String.format("Hudi 1.x release only supports table version greater than "
-                  + "version 6 or above. Please upgrade table from version %s to %s "
-                  + "using a Hudi release prior to 1.0.0",
-              fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
-    } else if (!config.autoUpgrade()) {
-      shouldUpgrade = false;
+    } else {
+      if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
+        throw new HoodieUpgradeDowngradeException(
+            String.format("Hudi 1.x release only supports table version greater than "
+                    + "version 6 or above. Please upgrade table from version %s to %s "
+                    + "using a Hudi release prior to 1.0.0",
+                fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
+      }
+      if (!config.autoUpgrade()) {
+        shouldUpgrade = false;
+      }
     }
     if (!shouldUpgrade && fromTableVersion != toWriteVersion) {
       if (!config.autoUpgrade()) {

@@ -45,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -163,7 +164,7 @@ public class UpgradeDowngrade {
 
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
     // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
-    boolean isUpgrade = strategy instanceof UpgradeStrategy;
+    boolean isUpgrade = fromVersion.lesserThan(toVersion);
     performRollbackAndCompactionIfRequired(fromVersion, toVersion, isUpgrade);
     // Change metadata table version automatically
     if (toVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {
@@ -186,9 +187,30 @@ public class UpgradeDowngrade {
     }
 
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
-    TableConfigChangeSet configChangeSet = strategy.execute(toVersion, instantTime);
-    Map<ConfigProperty, String> tablePropsToAdd = configChangeSet.propertiesToUpdate;
-    Set<ConfigProperty> tablePropsToRemove = configChangeSet.propertiesToDelete;
+    LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
+    Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
+    Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
+    // TODO: replace with strategy's execution function.
+    if (isUpgrade) {
+      // upgrade
+      while (fromVersion.versionCode() < toVersion.versionCode()) {
+        HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
+        UpgradeDowngrade.TableConfigChangeSet tableConfigChangeSet =
+            upgrade(fromVersion, nextVersion, instantTime);
+        tablePropsToAdd.putAll(tableConfigChangeSet.propertiesToUpdate());
+        tablePropsToRemove.addAll(tableConfigChangeSet.propertiesToDelete());
+        fromVersion = nextVersion;
+      }
+    } else {
+      // downgrade
+      while (fromVersion.versionCode() > toVersion.versionCode()) {
+        HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() - 1);
+        UpgradeDowngrade.TableConfigChangeSet tableConfigChangeSet = downgrade(fromVersion, prevVersion, instantTime);
+        tablePropsToAdd.putAll(tableConfigChangeSet.propertiesToUpdate());
+        tablePropsToRemove.addAll(tableConfigChangeSet.propertiesToDelete());
+        fromVersion = prevVersion;
+      }
+    }
 
     // Reload the meta client to get the latest table config (which could have been updated due to metadata table)
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
@@ -237,6 +259,58 @@ public class UpgradeDowngrade {
           throw new HoodieException("Failed to close MDT writer for table " + table.getConfig().getBasePath());
         }
       });
+    }
+  }
+
+  protected UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieTableVersion fromVersion,
+                                                          HoodieTableVersion toVersion,
+                                                          String instantTime) {
+    if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
+      return new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
+      return new OneToTwoUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.THREE) {
+      return new TwoToThreeUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.THREE && toVersion == HoodieTableVersion.FOUR) {
+      return new ThreeToFourUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.FOUR && toVersion == HoodieTableVersion.FIVE) {
+      return new FourToFiveUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.FIVE && toVersion == HoodieTableVersion.SIX) {
+      return new FiveToSixUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.SIX && toVersion == HoodieTableVersion.SEVEN) {
+      return new SixToSevenUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.SEVEN && toVersion == HoodieTableVersion.EIGHT) {
+      return new SevenToEightUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.EIGHT && toVersion == HoodieTableVersion.NINE) {
+      return new EightToNineUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else {
+      throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), true);
+    }
+  }
+
+  private UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieTableVersion fromVersion,
+                                                          HoodieTableVersion toVersion,
+                                                          String instantTime) {
+    if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.ZERO) {
+      return new OneToZeroDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {
+      return new TwoToOneDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.THREE && toVersion == HoodieTableVersion.TWO) {
+      return new ThreeToTwoDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.FOUR && toVersion == HoodieTableVersion.THREE) {
+      return new FourToThreeDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.FIVE && toVersion == HoodieTableVersion.FOUR) {
+      return new FiveToFourDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.SIX && toVersion == HoodieTableVersion.FIVE) {
+      return new SixToFiveDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.SEVEN && toVersion == HoodieTableVersion.SIX) {
+      return new SevenToSixDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.EIGHT && toVersion == HoodieTableVersion.SEVEN) {
+      return new EightToSevenDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else if (fromVersion == HoodieTableVersion.NINE && toVersion == HoodieTableVersion.EIGHT) {
+      return new NineToEightDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
+    } else {
+      throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
     }
   }
 
