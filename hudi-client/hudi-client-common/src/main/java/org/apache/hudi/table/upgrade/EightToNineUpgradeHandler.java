@@ -107,7 +107,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    upgradeOrderingFieldConfig(tableConfig, tablePropsToAdd, tablePropsToRemove);
     // Populate missing index versions indexes
     Option<HoodieIndexMetadata> indexMetadataOpt = metaClient.getIndexMetadata();
     if (indexMetadataOpt.isPresent()) {
@@ -124,14 +123,14 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     // Handle partial update mode config.
     reconcilePartialUpdateModeConfig(tablePropsToAdd, tableConfig);
     // Handle merge properties config.
-    reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig);
+    reconcileMergePropertiesConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
     // Handle payload class configs.
     reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 
-  private void upgradeOrderingFieldConfig(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd, Set<ConfigProperty> tablePropsToRemove) {
-    Option<String> orderingFieldsOpt = tableConfig.getOrderingFieldsStr();
+  private void upgradeOrderingFieldConfig(Map<ConfigProperty, String> tablePropsToAdd, Set<ConfigProperty> tablePropsToRemove,
+                                          Option<String> orderingFieldsOpt) {
     if (orderingFieldsOpt.isPresent()) {
       tablePropsToAdd.put(HoodieTableConfig.ORDERING_FIELDS, orderingFieldsOpt.get());
       tablePropsToRemove.add(HoodieTableConfig.PRECOMBINE_FIELD);
@@ -185,7 +184,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
   }
 
   private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                              HoodieTableConfig tableConfig) {
+                                              Set<ConfigProperty> tablePropsToRemove, HoodieTableConfig tableConfig) {
+    Option<String> orderingFieldsOpt = tableConfig.getOrderingFieldsStr();
     String payloadClass = tableConfig.getPayloadClass();
     String mergeStrategy = tableConfig.getRecordMergeStrategyId();
     if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
@@ -203,8 +203,9 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue(), // // to be fixed once we land PR #13721.
           DEBEZIUM_UNAVAILABLE_VALUE);
     } else if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
-      tablePropsToAdd.put(HoodieTableConfig.ORDERING_FIELDS, FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
+      orderingFieldsOpt = Option.of(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
     }
+    upgradeOrderingFieldConfig(tablePropsToAdd, tablePropsToRemove, orderingFieldsOpt);
   }
 
   /**

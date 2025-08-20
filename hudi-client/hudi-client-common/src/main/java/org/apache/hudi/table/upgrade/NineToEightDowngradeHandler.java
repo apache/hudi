@@ -82,13 +82,12 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
-    downgradeOrderingFieldsConfig(metaClient.getTableConfig(), propertiesToAdd, propertiesToRemove);
     reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, metaClient);
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
   }
 
-  private void downgradeOrderingFieldsConfig(HoodieTableConfig tableConfig, Map<ConfigProperty, String> propertiesToAdd, Set<ConfigProperty> propertiesToRemove) {
-    Option<String> orderingFieldsOpt = tableConfig.getOrderingFieldsStr();
+  private void downgradeOrderingFieldsConfig(Map<ConfigProperty, String> propertiesToAdd, Set<ConfigProperty> propertiesToRemove,
+                                             Option<String> orderingFieldsOpt) {
     if (orderingFieldsOpt.isPresent()) {
       propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFieldsOpt.get());
       propertiesToRemove.add(HoodieTableConfig.ORDERING_FIELDS);
@@ -98,6 +97,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
   private void reconcileMergeConfigs(Map<ConfigProperty, String> propertiesToAdd,
                                      Set<ConfigProperty> propertiesToRemove,
                                      HoodieTableMetaClient metaClient) {
+    Option<String> orderingFieldsOpt = metaClient.getTableConfig().getOrderingFieldsStr();
     // Update table properties.
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
     // For specified payload classes, add strategy id and custom merge mode.
@@ -123,8 +123,9 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue());
       }
       if (legacyPayloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
-        propertiesToAdd.put(HoodieTableConfig.ORDERING_FIELDS, DebeziumConstants.ADDED_SEQ_COL_NAME);
+        orderingFieldsOpt = Option.of(DebeziumConstants.ADDED_SEQ_COL_NAME);
       }
     }
+    downgradeOrderingFieldsConfig(propertiesToAdd, propertiesToRemove, orderingFieldsOpt);
   }
 }
