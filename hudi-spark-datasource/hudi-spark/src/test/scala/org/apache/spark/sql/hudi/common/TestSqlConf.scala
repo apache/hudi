@@ -58,7 +58,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
            | location '$tablePath'
            | options (
            |  primaryKey ='id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 

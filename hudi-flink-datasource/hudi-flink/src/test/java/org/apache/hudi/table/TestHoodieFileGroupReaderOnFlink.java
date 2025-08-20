@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -140,7 +141,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
   @Override
   public void commitToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
     writeConfigs.forEach((key, value) -> conf.setString(key, value));
-    conf.set(FlinkOptions.PRECOMBINE_FIELD, writeConfigs.get("hoodie.datasource.write.precombine.field"));
+    conf.set(FlinkOptions.ORDERING_FIELDS, ConfigUtils.getOrderingFieldsStrDuringWrite(writeConfigs));
     conf.set(FlinkOptions.OPERATION, operation);
     Schema localSchema = getRecordAvroSchema(schemaStr);
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, localSchema.toString());

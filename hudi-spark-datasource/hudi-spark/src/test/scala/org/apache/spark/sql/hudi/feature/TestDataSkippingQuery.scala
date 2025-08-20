@@ -143,7 +143,7 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
                |) using hudi
                | tblproperties (
                | primaryKey = 'id,name',
-               | preCombineField = 'ts',
+               | orderingFields = 'ts',
                | type = '$tableType',
                | hoodie.index.type = 'BUCKET',
                | hoodie.bucket.index.hash.field = 'id',

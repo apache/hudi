@@ -71,7 +71,7 @@ create table h1 (
 options (
   type = '${tableType}',
   primaryKey = 'id',
-  preCombineField = 'ts'
+  orderingFields = 'ts'
 )
 location '${tmpDir}/h1';
 +----------+
@@ -89,7 +89,7 @@ partitioned by (dt)
 options (
   type = '${tableType}',
   primaryKey = 'id',
-  preCombineField = 'ts'
+  orderingFields = 'ts'
 )
 location '${tmpDir}/h1_p';
 +----------+

@@ -122,6 +122,7 @@ class TestEightToNineUpgradeHandler {
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     when(metaClient.getStorage()).thenReturn(storage);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
 
     // Use a temp file for index definition path
     indexDefPath = new StoragePath(tempDir.resolve("index.json").toString());
@@ -287,15 +288,20 @@ class TestEightToNineUpgradeHandler {
   private void assertPayloadClassChange(Map<ConfigProperty, String> propertiesToAdd,
                                         Set<ConfigProperty> propertiesToRemove,
                                         String payloadClass) {
-    assertEquals(1, propertiesToRemove.size());
+    if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+      assertEquals(2, propertiesToRemove.size());
+      assertTrue(propertiesToRemove.contains(HoodieTableConfig.PRECOMBINE_FIELD));
+    } else {
+      assertEquals(1, propertiesToRemove.size());
+    }
     assertTrue(propertiesToRemove.contains(PAYLOAD_CLASS_NAME));
     assertTrue(propertiesToAdd.containsKey(LEGACY_PAYLOAD_CLASS_NAME));
     assertEquals(
         payloadClass,
         propertiesToAdd.get(LEGACY_PAYLOAD_CLASS_NAME));
     if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
-      assertTrue(propertiesToAdd.containsKey(HoodieTableConfig.PRECOMBINE_FIELDS));
-      assertEquals(propertiesToAdd.get(HoodieTableConfig.PRECOMBINE_FIELDS).toString(), FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
+      assertTrue(propertiesToAdd.containsKey(HoodieTableConfig.ORDERING_FIELDS));
+      assertEquals(propertiesToAdd.get(HoodieTableConfig.ORDERING_FIELDS), FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME);
     }
   }
 

@@ -41,7 +41,7 @@ class TestWriteTableVersionConfig extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = 'mor',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.write.table.version = $tableVersion
              | )
              | partitioned by(dt)

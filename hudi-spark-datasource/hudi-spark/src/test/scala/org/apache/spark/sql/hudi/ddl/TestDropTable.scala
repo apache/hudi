@@ -46,7 +46,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
        """.stripMargin)
         spark.sql(s"DROP TABLE $tableName")
@@ -83,7 +83,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
        """.stripMargin)
         spark.sql(s"DROP TABLE $tableName PURGE")
@@ -107,7 +107,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -118,7 +118,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
@@ -131,7 +131,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
@@ -156,7 +156,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -167,7 +167,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
@@ -180,7 +180,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
@@ -212,7 +212,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -223,7 +223,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
@@ -236,7 +236,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
@@ -262,7 +262,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            |""".stripMargin)
 
@@ -289,7 +289,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  type = 'mor'
            | )
            |""".stripMargin)
@@ -302,7 +302,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_ro"),
@@ -315,7 +315,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       alterSerdeProperties(spark.sessionState.catalog, TableIdentifier(s"${tableName}_rt"),
@@ -342,7 +342,7 @@ class TestDropTable extends HoodieSparkSqlTestBase {
                |)using hudi
                | tblproperties (
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                | )
                |""".stripMargin)
 

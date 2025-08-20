@@ -19,9 +19,9 @@
 package org.apache.hudi.utilities.sources.processor.maxwell;
 
 /**
- * Enum of preCombine field time type.
+ * Enum of ordering field time type.
  */
-public enum PreCombineFieldType {
+public enum OrderingFieldType {
   /**
    * Not a timestamp type field
    */

@@ -1060,7 +1060,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
                  | tblproperties (
                  |  type = '$tableType',
                  |  primaryKey = 'id',
-                 |  preCombineField = 'ts',
+                 |  orderingFields = 'ts',
                  |  recordMergeMode = '$mergeMode'
                  | )
                  | partitioned by(dt)
@@ -1145,7 +1145,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
 
             if (mergeMode == "EVENT_TIME_ORDERING") {
               checkException(mergeStmt)(
-                "MERGE INTO field resolution error: No matching assignment found for target table precombine field `ts`"
+                "MERGE INTO field resolution error: No matching assignment found for target table ordering field `ts`"
               )
             } else {
               // For COMMIT_TIME_ORDERING, this should execute without error
