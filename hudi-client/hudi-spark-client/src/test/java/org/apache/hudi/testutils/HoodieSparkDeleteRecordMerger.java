@@ -21,8 +21,10 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.HoodieSparkRecordMerger;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -37,8 +39,8 @@ public class HoodieSparkDeleteRecordMerger extends HoodieSparkRecordMerger {
   public static final String DELETE_MERGER_STRATEGY = "aea2e14e-19a2-4e33-bc37-f8871d55bd5b";
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return Option.empty();
+  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    return Pair.of(new HoodieEmptyRecord<>(older.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.SPARK), newSchema);
   }
 
   @Override

@@ -19,9 +19,9 @@
 
 package org.apache.hudi.merge;
 
+import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
-import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.util.AvroSchemaConverter;
 
@@ -97,9 +96,8 @@ public class TestHoodieFlinkRecordMerger {
     HoodieEmptyRecord deleteRecord = new HoodieEmptyRecord<>(key, HoodieOperation.DELETE, 2L, HoodieRecord.HoodieRecordType.FLINK);
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, deleteRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
+    Pair<HoodieRecord, Schema> mergingResult = merger.merge(oldRecord, schema, deleteRecord, schema, new TypedProperties());
+    assertTrue(mergingResult.getLeft().isDelete(schema, CollectionUtils.emptyProps()));
   }
 
   @Test
@@ -112,9 +110,8 @@ public class TestHoodieFlinkRecordMerger {
     HoodieEmptyRecord deleteRecord = new HoodieEmptyRecord<>(key, HoodieOperation.DELETE, 2L, HoodieRecord.HoodieRecordType.FLINK);
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(deleteRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertTrue(mergingResult.get().getLeft().isDelete(schema, CollectionUtils.emptyProps()));
+    Pair<HoodieRecord, Schema> mergingResult = merger.merge(deleteRecord, schema, newRecord, schema, new TypedProperties());
+    assertTrue(mergingResult.getLeft().isDelete(schema, CollectionUtils.emptyProps()));
   }
 
   @Test
@@ -128,9 +125,8 @@ public class TestHoodieFlinkRecordMerger {
     HoodieFlinkRecord newRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 2L, newRow);
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(oldRecord.getData(), mergingResult.get().getLeft().getData());
+    Pair<HoodieRecord, Schema> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
+    assertEquals(oldRecord.getData(), mergingResult.getLeft().getData());
   }
 
   @Test
@@ -144,9 +140,8 @@ public class TestHoodieFlinkRecordMerger {
     HoodieFlinkRecord newRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 2L, newRow);
 
     EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(newRecord.getData(), mergingResult.get().getLeft().getData());
+    Pair<HoodieRecord, Schema> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
+    assertEquals(newRecord.getData(), mergingResult.getLeft().getData());
   }
 
   @Test
@@ -160,9 +155,8 @@ public class TestHoodieFlinkRecordMerger {
     HoodieFlinkRecord newRecord = new HoodieFlinkRecord(key, HoodieOperation.INSERT, 1L, newRow);
 
     CommitTimeFlinkRecordMerger merger = new CommitTimeFlinkRecordMerger();
-    Option<Pair<HoodieRecord, Schema>> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
-    assertTrue(mergingResult.isPresent());
-    assertEquals(newRecord.getData(), mergingResult.get().getLeft().getData());
+    Pair<HoodieRecord, Schema> mergingResult = merger.merge(oldRecord, schema, newRecord, schema, new TypedProperties());
+    assertEquals(newRecord.getData(), mergingResult.getLeft().getData());
   }
 
   private RowData createRow(HoodieKey key, String commitTime, String seqNo, String filePath,
