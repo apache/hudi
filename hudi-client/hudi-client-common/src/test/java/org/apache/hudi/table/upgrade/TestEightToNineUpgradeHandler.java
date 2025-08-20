@@ -288,7 +288,12 @@ class TestEightToNineUpgradeHandler {
   private void assertPayloadClassChange(Map<ConfigProperty, String> propertiesToAdd,
                                         Set<ConfigProperty> propertiesToRemove,
                                         String payloadClass) {
-    assertEquals(1, propertiesToRemove.size());
+    if (payloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
+      assertEquals(2, propertiesToRemove.size());
+      assertTrue(propertiesToRemove.contains(HoodieTableConfig.PRECOMBINE_FIELD));
+    } else {
+      assertEquals(1, propertiesToRemove.size());
+    }
     assertTrue(propertiesToRemove.contains(PAYLOAD_CLASS_NAME));
     assertTrue(propertiesToAdd.containsKey(LEGACY_PAYLOAD_CLASS_NAME));
     assertEquals(

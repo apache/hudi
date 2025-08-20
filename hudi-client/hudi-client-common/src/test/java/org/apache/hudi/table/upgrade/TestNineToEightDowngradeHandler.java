@@ -64,6 +64,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
@@ -137,8 +138,8 @@ class TestNineToEightDowngradeHandler {
         // MySqlDebeziumAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
         Arguments.of(
             MySqlDebeziumAvroPayload.class.getName(),
-            2,
-            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
+            3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + ORDERING_FIELDS.key() + "," + PARTIAL_UPDATE_MODE.key() + ",",
             4,
             true,
             true,
@@ -226,8 +227,8 @@ class TestNineToEightDowngradeHandler {
             propertiesToChange.propertiesToUpdate().get(RECORD_MERGE_STRATEGY_ID));
       }
       if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
-        assertTrue(propertiesToChange.propertiesToUpdate().containsKey(HoodieTableConfig.ORDERING_FIELDS));
-        assertEquals(propertiesToChange.propertiesToUpdate().get(HoodieTableConfig.ORDERING_FIELDS), DebeziumConstants.ADDED_SEQ_COL_NAME);
+        assertTrue(propertiesToChange.propertiesToUpdate().containsKey(HoodieTableConfig.PRECOMBINE_FIELD));
+        assertEquals(propertiesToChange.propertiesToUpdate().get(HoodieTableConfig.PRECOMBINE_FIELD), DebeziumConstants.ADDED_SEQ_COL_NAME);
       }
     }
   }
