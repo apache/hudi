@@ -1383,7 +1383,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
 
     disableComplexKeygenValidation(spark, tableName)
-    // TODO(yihua): understand why test fails without this config
     spark.sql(
       s"""
          |ALTER TABLE $tableName
