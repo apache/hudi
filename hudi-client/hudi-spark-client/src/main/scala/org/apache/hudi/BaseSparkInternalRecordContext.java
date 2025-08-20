@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
-import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -84,14 +83,14 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       return new HoodieEmptyRecord<>(
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
-          OrderingValues.getDefault(),
+          bufferedRecord.getOrderingValue(),
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema),
-        false, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
+        false, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override

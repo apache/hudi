@@ -70,8 +70,9 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     isDelete = data == null;
   }
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, boolean isDelete) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, Comparable orderingValue, boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.orderingValue = orderingValue;
     this.avroSerializer = avroSerializer;
     this.schema = schema;
     this.copy = false;

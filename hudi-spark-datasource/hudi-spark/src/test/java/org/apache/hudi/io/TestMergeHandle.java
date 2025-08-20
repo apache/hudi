@@ -37,7 +37,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -83,7 +82,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -501,13 +499,14 @@ public class TestMergeHandle extends BaseTestHandle {
     recordsToDelete.add(deleteRecordSameOrderingValue);
     recordsToDelete.add(deleteRecordLowerOrderingValue);
     recordsToDelete.add(deleteRecordHigherOrderingValue);
+    // Custom merger chooses record with lower ordering value
+    if (!mergeMode.equals("CUSTOM_MERGER") && !mergeMode.equals("CUSTOM")) {
+      validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
+      validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
+      expectedDeletes += 2;
+    }
 
-    // Known Gap HUDI-9715: Currently the ordering provided by the custom mergers does not apply deletes.
-    validDeletes.put(deleteRecordSameOrderingValue.getRecordKey(), deleteRecordSameOrderingValue);
-    validDeletes.put(deleteRecordHigherOrderingValue.getRecordKey(), deleteRecordHigherOrderingValue);
-    expectedDeletes += 2;
-
-    if (mergeMode.equals(RecordMergeMode.COMMIT_TIME_ORDERING.name())) {
+    if (!mergeMode.equals(RecordMergeMode.EVENT_TIME_ORDERING.name())) {
       validDeletes.put(deleteRecordLowerOrderingValue.getRecordKey(), deleteRecordLowerOrderingValue);
       expectedDeletes += 1;
     }
@@ -671,76 +670,6 @@ public class TestMergeHandle extends BaseTestHandle {
 
     public Map<String, HoodieRecord> getValidDeletes() {
       return validDeletes;
-    }
-  }
-
-  public static class CustomMerger implements HoodieRecordMerger {
-    private static final String STRATEGY_ID = UUID.randomUUID().toString();
-
-    public static String getStrategyId() {
-      return STRATEGY_ID;
-    }
-
-    @Override
-    public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-      GenericRecord olderData = (GenericRecord) older.getData();
-      GenericRecord newerData = (GenericRecord) newer.getData();
-      Long olderTimestamp = (Long) olderData.get("timestamp");
-      Long newerTimestamp = (Long) newerData.get("timestamp");
-      if (olderTimestamp.equals(newerTimestamp)) {
-        // If the timestamps are the same, we do not update
-        return Pair.of(older, oldSchema);
-      } else if (olderTimestamp < newerTimestamp) {
-        // Custom merger chooses record with lower ordering value
-        return Pair.of(older, oldSchema);
-      } else {
-        // Custom merger chooses record with lower ordering value
-        return Pair.of(newer, newSchema);
-      }
-    }
-
-    @Override
-    public HoodieRecord.HoodieRecordType getRecordType() {
-      return HoodieRecord.HoodieRecordType.AVRO;
-    }
-
-    @Override
-    public String getMergingStrategy() {
-      return STRATEGY_ID;
-    }
-  }
-
-  public static class CustomPayload implements HoodieRecordPayload<CustomPayload> {
-    private final GenericRecord record;
-
-    public CustomPayload(GenericRecord record, Comparable orderingValue) {
-      this.record = record;
-    }
-
-    @Override
-    public CustomPayload preCombine(CustomPayload other) {
-      return this; // No-op for this test
-    }
-
-    @Override
-    public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
-      Long olderTimestamp = (Long) ((GenericRecord) currentValue).get("timestamp");
-      Long newerTimestamp = (Long) record.get("timestamp");
-      if (olderTimestamp.equals(newerTimestamp)) {
-        // If the timestamps are the same, we do not update
-        return Option.of(currentValue);
-      } else if (olderTimestamp < newerTimestamp) {
-        // Custom merger chooses record with lower ordering value
-        return Option.of(currentValue);
-      } else {
-        // Custom merger chooses record with lower ordering value
-        return Option.of(record);
-      }
-    }
-
-    @Override
-    public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-      return Option.of(record);
     }
   }
 }
