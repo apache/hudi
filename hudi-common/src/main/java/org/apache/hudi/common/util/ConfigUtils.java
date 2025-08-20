@@ -36,6 +36,7 @@ import edu.umd.cs.findbugs.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -653,11 +654,37 @@ public class ConfigUtils {
 
   public static void recoverIfNeeded(HoodieStorage storage, StoragePath cfgPath,
                                      StoragePath backupCfgPath) throws IOException {
+    boolean needCopy = false;
     if (!storage.exists(cfgPath)) {
-      // copy over from backup
-      try (InputStream in = storage.open(backupCfgPath);
-           OutputStream out = storage.create(cfgPath, false)) {
-        FileIOUtils.copy(in, out);
+      needCopy = true;
+    } else {
+      TypedProperties props = new TypedProperties();
+      try (InputStream in = storage.open(cfgPath)) {
+        props.load(in);
+        if (!props.containsKey(TABLE_CHECKSUM.key()) || !HoodieTableConfig.validateChecksum(props)) {
+          // the cfg file is invalid
+          storage.deleteFile(cfgPath);
+          needCopy = true;
+        }
+      }
+    }
+    if (needCopy && storage.exists(backupCfgPath)) {
+      byte[] bytes = FileIOUtils.readAsByteArray(storage.open(backupCfgPath));
+      // check whether existing backup file is valid or not
+      try (InputStream backupStream = new ByteArrayInputStream(bytes)) {
+        TypedProperties backupProps = new TypedProperties();
+        backupProps.load(backupStream);
+        if (!backupProps.containsKey(TABLE_CHECKSUM.key()) || !HoodieTableConfig.validateChecksum(backupProps)) {
+          // need to delete the backup as anyway reads will also fail
+          // subsequent writes will recover and update
+          storage.deleteFile(backupCfgPath);
+          LOG.warn("Invalid properties file {}: {}", backupCfgPath, backupProps);
+          throw new IOException("Corrupted backup file");
+        }
+        // copy over from backup
+        try (OutputStream out = storage.create(cfgPath, false)) {
+          out.write(bytes);
+        }
       }
     }
     // regardless, we don't need the backup anymore.
