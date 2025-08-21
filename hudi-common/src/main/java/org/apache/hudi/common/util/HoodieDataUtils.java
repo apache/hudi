@@ -100,6 +100,9 @@ public class HoodieDataUtils {
   /**
    * Executes a function with HoodieData and ensures cleanup after use
    *
+   * It calls unpersistWithDependencies which internally close all resources it depends on.
+   * For example, for spark rdd-based API implementation, it cleans up all the upstream cached rdd.
+   *
    * @param hoodieData The HoodieData to use
    * @param f          Function that processes the HoodieData
    * @param <T>        Type parameter of HoodieData
@@ -116,6 +119,9 @@ public class HoodieDataUtils {
 
   /**
    * Executes a function with HoodiePairData and ensures cleanup after use
+   *
+   * It calls unpersistWithDependencies which internally close all resources it depends on.
+   * For example, for spark rdd-based API implementation, it cleans up all the upstream cached rdd.
    *
    * @param hoodiePairData The HoodiePairData to use
    * @param f              Function that processes the HoodiePairData
@@ -155,6 +161,9 @@ public class HoodieDataUtils {
 
   /**
    * Executes a function with HoodiePairData and ensures cleanup only on exception
+   *
+   * It calls unpersistWithDependencies which internally close all resources it depends on.
+   * For example, for spark rdd-based API implementation, it cleans up all the upstream cached rdd.
    *
    * @param hoodiePairData The HoodiePairData to use
    * @param f              Function that processes the HoodiePairData
