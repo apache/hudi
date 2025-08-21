@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.source.IncrementalInputSplits;
@@ -96,6 +97,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1438,6 +1440,23 @@ public class TestInputFormat {
     expected.put("par1", "[id1,par1,id1,Danny,23,2,par1]");
     // check result from base file
     TestData.checkWrittenData(tempFile, expected, expected.size());
+  }
+
+  @Test
+  public void testCheckFileGroupMergeHandleWithLowerTableVersion() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), FileGroupReaderBasedMergeHandle.class.getName());
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), HoodieTableVersion.EIGHT.versionCode() + "");
+    options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), PartialUpdateAvroPayload.class.getName());
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+    // insert
+    List<RowData> sourceData = Arrays.asList(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), null,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
+    );
+
+    assertThrows(HoodieValidationException.class, () -> TestData.writeData(sourceData, conf),
+        "FileGroup reader based merge handle for writing path is only supported from table version: NINE");
   }
 
   // -------------------------------------------------------------------------

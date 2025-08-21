@@ -249,6 +249,10 @@ public class FlinkWriteClients {
         .withRecordMergeMode(mergingBehavior.getLeft())
         .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf, mergingBehavior.getLeft(), mergingBehavior.getMiddle()));
 
+    StreamerUtil.checkWriteMergeHandle(conf);
+    builder.withMergeHandleClassName(conf.getString(
+        HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue()));
+
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {
       builder.withLockConfig(lockConfig.get());

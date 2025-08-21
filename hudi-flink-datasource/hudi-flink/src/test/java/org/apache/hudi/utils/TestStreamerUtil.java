@@ -18,11 +18,18 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -55,6 +62,49 @@ class TestStreamerUtil {
 
   @TempDir
   File tempFile;
+
+  @Test
+  void testInferMergingBehavior() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    // default merge behavior
+    Triple<RecordMergeMode, String, String> mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
+    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
+    assertEquals(EventTimeAvroPayload.class.getName(), mergeBehavior.getMiddle());
+    assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+
+    // set commit time merge mode
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
+    mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
+    assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING, mergeBehavior.getLeft());
+    assertEquals(OverwriteWithLatestAvroPayload.class.getName(), mergeBehavior.getMiddle());
+    assertEquals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+
+    // set partial update merger.
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.RECORD_MERGER_IMPLS, PartialUpdateFlinkRecordMerger.class.getName());
+    mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
+    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
+    assertEquals(PartialUpdateAvroPayload.class.getName(), mergeBehavior.getMiddle());
+    assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+
+    // set partial update payload
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
+    mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
+    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
+    assertEquals(PartialUpdateAvroPayload.class.getName(), mergeBehavior.getMiddle());
+    assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+
+    // set partial update payload
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, PartialUpdateAvroPayload.class.getName());
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    mergeBehavior = StreamerUtil.inferMergingBehavior(conf);
+    assertEquals(RecordMergeMode.EVENT_TIME_ORDERING, mergeBehavior.getLeft());
+    assertEquals(PartialUpdateAvroPayload.class.getName(), mergeBehavior.getMiddle());
+    assertEquals(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, mergeBehavior.getRight());
+  }
 
   @Test
   void testInitTableWithSpecificVersion() throws IOException {
