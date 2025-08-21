@@ -485,17 +485,14 @@ public class BufferedRecordMergerFactory {
         return olderRecord;
       }
       boolean isDelete = mergedRecord.isDelete(readerSchema, props);
-      if (!isDelete) {
-        if (!mergeResultSchema.equals(readerSchema)) {
-          mergedRecord = mergedRecord.rewriteRecordWithNewSchema(mergedRecordAndSchema.getRight(), null, readerSchema);
-        }
-        Comparable orderingValue = mergedRecord.getOrderingValue(mergeResultSchema, props, orderingFieldNames);
-        T mergedEngineRecord = mergedRecord.toIndexedRecord(mergeResultSchema, props)
-            .map(hoodieAvroIndexedRecord -> recordContext.convertAvroRecord(hoodieAvroIndexedRecord.getData()))
-            .orElse(null);
-        return BufferedRecords.fromEngineRecord(mergedEngineRecord, readerSchema, recordContext, orderingValue, newerRecord.getRecordKey(), isDelete);
+      if (!isDelete && !mergeResultSchema.equals(readerSchema)) {
+        mergedRecord = mergedRecord.rewriteRecordWithNewSchema(mergedRecordAndSchema.getRight(), null, readerSchema);
       }
-      return BufferedRecords.createDelete(newerRecord.getRecordKey());
+      Comparable orderingValue = mergedRecord.getOrderingValue(mergeResultSchema, props, orderingFieldNames);
+      T mergedEngineRecord = mergedRecord.toIndexedRecord(mergeResultSchema, props)
+          .map(hoodieAvroIndexedRecord -> recordContext.convertAvroRecord(hoodieAvroIndexedRecord.getData()))
+          .orElse(null);
+      return BufferedRecords.fromEngineRecord(mergedEngineRecord, readerSchema, recordContext, orderingValue, newerRecord.getRecordKey(), isDelete);
     }
 
     protected Pair<HoodieRecord, HoodieRecord> getDeltaMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
