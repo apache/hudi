@@ -21,7 +21,6 @@ package org.apache.hudi.sync.datahub.config;
 
 import datahub.client.rest.RestEmitter;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.ssl.SSLContexts;
 import org.slf4j.Logger;
@@ -57,11 +56,13 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
 
   @Override
   public RestEmitter get() {
-    String serverUrl = config.getString(DATAHUB_EMITTER_SERVER);
-    ValidationUtils.checkArgument(serverUrl != null && !serverUrl.isEmpty(),
-        "DataHub server URL must be specified with " + DATAHUB_EMITTER_SERVER);
-
     try {
+      String serverUrl = config.getString(DATAHUB_EMITTER_SERVER, null);
+      if (serverUrl == null || serverUrl.isEmpty()) {
+        throw new DataHubEmitterConfigurationException(
+            "DataHub server URL must be specified with " + DATAHUB_EMITTER_SERVER);
+      }
+
       String token = config.getString(DATAHUB_EMITTER_TOKEN, null);
       String caCertPath = config.getString(DATAHUB_TLS_CA_CERT_PATH, null);
 
@@ -76,27 +77,24 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
         
         // Configure TLS if CA certificate is provided
         if (caCertPath != null && !caCertPath.isEmpty()) {
-          try {
-            LOG.info("Configuring TLS with CA certificate from: {}", caCertPath);
-            SSLContext sslContext = createSSLContext(caCertPath);
-            
-            builder.customizeHttpAsyncClient(httpClientBuilder -> httpClientBuilder.setSSLContext(sslContext));
-            LOG.info("Successfully configured TLS for DataHub connection");
-          } catch (Exception e) {
-            LOG.warn("Failed to configure TLS with CA certificate, falling back to default HTTP client configuration. "
-                + "CA certificate path: {}. Error: {}", caCertPath, e.getMessage());
-            LOG.debug("TLS configuration error details", e);
-          }
+          LOG.info("Configuring TLS with CA certificate from: {}", caCertPath);
+          SSLContext sslContext = createSSLContext(caCertPath);
+          
+          builder.customizeHttpAsyncClient(httpClientBuilder -> httpClientBuilder.setSSLContext(sslContext));
+          LOG.info("Successfully configured TLS for DataHub connection");
         }
       });
+    } catch (DataHubEmitterConfigurationException e) {
+      throw e;
     } catch (Exception e) {
       throw new DataHubEmitterConfigurationException("Failed to create TLS-enabled DataHub emitter", e);
     }
   }
 
   private SSLContext createSSLContext(String caCertPath) throws DataHubEmitterConfigurationException {
-    ValidationUtils.checkArgument(Files.exists(Paths.get(caCertPath)),
-        "CA certificate file not found: " + caCertPath);
+    if (!Files.exists(Paths.get(caCertPath))) {
+      throw new DataHubEmitterConfigurationException("CA certificate file not found: " + caCertPath);
+    }
     
     try {
       SSLContextBuilder sslContextBuilder = SSLContexts.custom();
