@@ -1168,7 +1168,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             .option(HoodieWriteConfig.TBL_NAME.key, tableName)
             .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
             .option(RECORDKEY_FIELD.key, "id")
-            .option(PRECOMBINE_FIELD.key, "ts")
+            .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
             .option(HoodieWriteConfig.BULKINSERT_PARALLELISM_VALUE.key, "1")
             // test specific settings
             .option(OPERATION.key, WriteOperationType.BULK_INSERT.value)
@@ -1492,7 +1492,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         .option(HoodieWriteConfig.TBL_NAME.key, tableName)
         .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
         .option(RECORDKEY_FIELD.key, "id")
-        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
         .option(PARTITIONPATH_FIELD.key, "day,hh")
         .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
         .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -2167,7 +2167,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test Hudi should not record empty preCombineKey in hoodie.properties") {
+  test("Test Hudi should not record empty orderingFields in hoodie.properties") {
     withSQLConf("hoodie.datasource.write.operation" -> "insert") {
       withTempDir { tmp =>
         val tableName = generateTableName

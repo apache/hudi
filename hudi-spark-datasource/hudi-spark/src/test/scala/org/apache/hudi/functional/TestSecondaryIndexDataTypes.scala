@@ -73,7 +73,7 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
            |) USING HUDI
            |OPTIONS (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  'hoodie.metadata.enable' = 'true',
            |  'hoodie.metadata.record.index.enable' = 'true',
            |  'hoodie.datasource.write.partitionpath.field' = 'partition_col'
@@ -284,7 +284,7 @@ class TestSecondaryIndexDataTypes extends HoodieSparkSqlTestBase {
            |) USING HUDI
            |OPTIONS (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  'hoodie.metadata.enable' = 'true',
            |  'hoodie.metadata.record.index.enable' = 'true',
            |  'hoodie.datasource.write.partitionpath.field' = 'partition_col'

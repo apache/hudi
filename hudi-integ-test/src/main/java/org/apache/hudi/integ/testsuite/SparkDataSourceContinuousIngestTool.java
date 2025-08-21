@@ -61,7 +61,7 @@ import java.util.Map;
  * hoodie.datasource.write.recordkey.field=VendorID
  * hoodie.datasource.write.partitionpath.field=date_col
  * hoodie.datasource.write.operation=upsert
- * hoodie.datasource.write.precombine.field=tpep_pickup_datetime
+ * hoodie.table.ordering.fields=tpep_pickup_datetime
  * hoodie.metadata.enable=false
  * hoodie.table.name=hudi_tbl
  */

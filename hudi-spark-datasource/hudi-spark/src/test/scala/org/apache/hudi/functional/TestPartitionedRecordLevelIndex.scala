@@ -27,7 +27,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecordGlobalLocation, HoodieTableType}
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.{Option => HOption}
@@ -69,7 +69,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       RECORDKEY_FIELD.key -> "_row_key",
       PARTITIONPATH_FIELD.key -> "data_partition_path",
-      PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()-> "false",
       HoodieMetadataConfig.PARTITIONED_RECORD_INDEX_ENABLE_PROP.key() -> "true",
       HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,
@@ -342,7 +342,7 @@ class TestPartitionedRecordLevelIndex extends RecordLevelIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       RECORDKEY_FIELD.key -> "_row_key",
       PARTITIONPATH_FIELD.key -> "data_partition_path",
-      PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key()-> "false",
       HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key() -> "false",
       HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key() -> streamingWriteEnabled.toString,

@@ -35,7 +35,7 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
            | using hudi
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            |""".stripMargin)
 
@@ -61,7 +61,7 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
            | using hudi
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            | partitioned by (dt)
            |""".stripMargin)
@@ -88,7 +88,7 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
            | using hudi
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
            | partitioned by (dt)
            |""".stripMargin)
@@ -120,7 +120,7 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
              | using hudi
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.hive_style_partitioning = '$hiveStyle'
              | )
              | partitioned by (dt)
@@ -151,7 +151,7 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
              | using hudi
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.hive_style_partitioning = '$hiveStyle'
              | )
              | partitioned by (year, month, day)
@@ -182,7 +182,7 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
              | using hudi
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.partitionpath.urlencode = '$urlEncode'
              | )
              | partitioned by (p_a)
@@ -212,7 +212,7 @@ class TestAlterTableAddPartition extends HoodieSparkSqlTestBase {
              | using hudi
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.partitionpath.urlencode = '$urlEncode'
              | )
              | partitioned by (p_a, p_b)

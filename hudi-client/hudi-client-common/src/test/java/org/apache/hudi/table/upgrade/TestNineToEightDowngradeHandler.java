@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -63,6 +64,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
@@ -97,6 +99,7 @@ class TestNineToEightDowngradeHandler {
     when(upgradeDowngradeHelper.getTable(any(), any())).thenReturn(table);
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
   }
 
   static Stream<Arguments> payloadClassTestCases() {
@@ -135,9 +138,9 @@ class TestNineToEightDowngradeHandler {
         // MySqlDebeziumAvroPayload - requires RECORD_MERGE_MODE and RECORD_MERGE_STRATEGY_ID
         Arguments.of(
             MySqlDebeziumAvroPayload.class.getName(),
-            2,
-            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + PARTIAL_UPDATE_MODE.key(),
             3,
+            LEGACY_PAYLOAD_CLASS_NAME.key() + "," + ORDERING_FIELDS.key() + "," + PARTIAL_UPDATE_MODE.key() + ",",
+            4,
             true,
             true,
             "MySqlDebeziumAvroPayload"
@@ -185,7 +188,7 @@ class TestNineToEightDowngradeHandler {
     );
   }
 
-  @ParameterizedTest(name = "testDowngradeFor{5}")
+  @ParameterizedTest(name = "testDowngradeFor{6}")
   @MethodSource("payloadClassTestCases")
   void testDowngradeForPayloadClass(String payloadClassName, int expectedPropertiesToRemoveSize, String expectedPropsToRemove,
                                     int expectedPropertiesToAddSize, boolean hasRecordMergeMode,
@@ -222,6 +225,10 @@ class TestNineToEightDowngradeHandler {
       if (hasRecordMergeStrategyId) {
         assertEquals(PAYLOAD_BASED_MERGE_STRATEGY_UUID,
             propertiesToChange.propertiesToUpdate().get(RECORD_MERGE_STRATEGY_ID));
+      }
+      if (payloadClassName.equals(MySqlDebeziumAvroPayload.class.getName())) {
+        assertTrue(propertiesToChange.propertiesToUpdate().containsKey(HoodieTableConfig.PRECOMBINE_FIELD));
+        assertEquals(propertiesToChange.propertiesToUpdate().get(HoodieTableConfig.PRECOMBINE_FIELD), DebeziumConstants.ADDED_SEQ_COL_NAME);
       }
     }
   }

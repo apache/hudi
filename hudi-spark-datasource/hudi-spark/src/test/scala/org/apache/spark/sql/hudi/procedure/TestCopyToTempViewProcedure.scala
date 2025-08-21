@@ -39,7 +39,7 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -76,7 +76,7 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 

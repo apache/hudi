@@ -160,8 +160,8 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -1046,7 +1046,7 @@ public class HoodieTableMetadataUtil {
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), properties, datasetMetaClient));
       HoodieReadStats readStats = new HoodieReadStats();
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getPreCombineFields(),
+          readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getOrderingFields(),
           UpdateProcessor.create(readStats, readerContext, true, Option.empty(), properties));
 
       // CRITICAL: Ensure allowInflightInstants is set to true

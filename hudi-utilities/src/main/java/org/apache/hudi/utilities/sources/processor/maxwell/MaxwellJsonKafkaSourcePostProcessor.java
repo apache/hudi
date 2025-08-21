@@ -20,9 +20,9 @@ package org.apache.hudi.utilities.sources.processor.maxwell;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.utilities.config.JsonKafkaPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSourcePostProcessException;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
@@ -37,11 +37,11 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.DATE_STRING;
-import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.EPOCHMILLISECONDS;
-import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.NON_TIMESTAMP;
-import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.UNIX_TIMESTAMP;
-import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.valueOf;
+import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.DATE_STRING;
+import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.EPOCHMILLISECONDS;
+import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.NON_TIMESTAMP;
+import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.UNIX_TIMESTAMP;
+import static org.apache.hudi.utilities.sources.processor.maxwell.OrderingFieldType.valueOf;
 
 /**
  * A {@link JsonKafkaSourcePostProcessor} help to extract fresh data from maxwell json string and tag the record as
@@ -114,34 +114,34 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
     // tag this record as delete.
     result.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
 
-    PreCombineFieldType preCombineFieldType =
+    OrderingFieldType orderingFieldsType =
         valueOf(getStringWithAltKeys(
-            this.props, JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE, true).toUpperCase(Locale.ROOT));
+            this.props, JsonKafkaPostProcessorConfig.ORDERING_FIELDS_TYPE, true).toUpperCase(Locale.ROOT));
 
     // maxwell won't update the `update_time`(delete time) field of the record which is tagged as delete. so if we
     // want to delete this record correctly, we should update its `update_time` to a time closer to where the
     // delete operation actually occurred. here we use `ts` from maxwell json string as this 'delete' time.
 
     // we can update the `update_time`(delete time) only when it is in timestamp format.
-    if (!preCombineFieldType.equals(NON_TIMESTAMP)) {
-      String preCombineField = this.props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), null);
+    if (!orderingFieldsType.equals(NON_TIMESTAMP)) {
+      String orderingFields = ConfigUtils.getOrderingFieldsStrDuringWrite(props);
 
       // ts from maxwell
       long ts = inputJson.get(TS).longValue();
 
       // convert the `update_time`(delete time) to the proper format.
-      if (preCombineFieldType.equals(DATE_STRING)) {
+      if (orderingFieldsType.equals(DATE_STRING)) {
         // DATE_STRING format
-        String timeFormat = getStringWithAltKeys(this.props, JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT, true);
-        result.put(preCombineField, DateTimeUtils.formatUnixTimestamp(ts, timeFormat));
-      } else if (preCombineFieldType.equals(EPOCHMILLISECONDS)) {
+        String timeFormat = getStringWithAltKeys(this.props, JsonKafkaPostProcessorConfig.ORDERING_FIELDS_FORMAT, true);
+        result.put(orderingFields, DateTimeUtils.formatUnixTimestamp(ts, timeFormat));
+      } else if (orderingFieldsType.equals(EPOCHMILLISECONDS)) {
         // EPOCHMILLISECONDS format
-        result.put(preCombineField, ts * 1000L);
-      } else if (preCombineFieldType.equals(UNIX_TIMESTAMP)) {
+        result.put(orderingFields, ts * 1000L);
+      } else if (orderingFieldsType.equals(UNIX_TIMESTAMP)) {
         // UNIX_TIMESTAMP format
-        result.put(preCombineField, ts);
+        result.put(orderingFields, ts);
       } else {
-        throw new HoodieSourcePostProcessException("Unsupported preCombine time format " + preCombineFieldType);
+        throw new HoodieSourcePostProcessException("Unsupported preCombine time format " + orderingFieldsType);
       }
     }
     return result.toString();

@@ -19,10 +19,10 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
-import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE, WRITE_TABLE_VERSION}
@@ -38,7 +38,7 @@ class TestStreamingSource extends StreamTest {
   import testImplicits._
   protected val commonOptions: Map[String, String] = Map(
     RECORDKEY_FIELD.key -> "id",
-    PRECOMBINE_FIELD.key -> "ts",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
     INSERT_PARALLELISM_VALUE.key -> "4",
     UPSERT_PARALLELISM_VALUE.key -> "4",
     DELETE_PARALLELISM_VALUE.key -> "4"
@@ -61,7 +61,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -112,7 +112,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -157,7 +157,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -188,7 +188,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -220,7 +220,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -262,7 +262,7 @@ class TestStreamingSource extends StreamTest {
           .setTableType(MERGE_ON_READ)
           .setTableName(getTableName(tablePath))
           .setRecordKeyFields("id")
-          .setPreCombineFields("ts")
+          .setOrderingFields("ts")
           .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
         addData(tablePath, Seq(("1", "a1", "10", "000")))
@@ -305,7 +305,7 @@ class TestStreamingSource extends StreamTest {
         .setTableName(getTableName(tablePath))
         .setTableVersion(writeTableVersion)
         .setRecordKeyFields("id")
-        .setPreCombineFields("ts")
+        .setOrderingFields("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       // Add initial data

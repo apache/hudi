@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -89,7 +90,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
             .setKeyGeneratorType(KeyGeneratorType.SIMPLE.name())
             .setRecordKeyFields(writeConfigs.get(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()))
             .setPartitionFields(writeConfigs.get(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
-            .setPreCombineFields(writeConfigs.get("hoodie.datasource.write.precombine.field"))
+            .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(writeConfigs))
             .setBaseFileFormat(writeConfigs.get(HoodieTableConfig.BASE_FILE_FORMAT.key()))
             .set(initConfigs);
         if (writeConfigs.containsKey("hoodie.datasource.write.payload.class")) {

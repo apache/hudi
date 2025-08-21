@@ -37,7 +37,7 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
              | tblproperties (
              |   primaryKey = 'id',
              |   type = 'cow',
-             |   preCombineField = 'ts'
+             |   orderingFields = 'ts'
              | )
              |""".stripMargin)
 
@@ -135,7 +135,7 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
              | tblproperties (
              |   primaryKey = 'id',
              |   type = 'cow',
-             |   preCombineField = 'ts',
+             |   orderingFields = 'ts',
              |   hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
              |   hoodie.clean.commits.retained = '2'
              | )
@@ -175,7 +175,7 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
              | tblproperties (
              |   primaryKey = 'id',
              |   type = 'cow',
-             |   preCombineField = 'ts'
+             |   orderingFields = 'ts'
              | )
              |""".stripMargin)
 
