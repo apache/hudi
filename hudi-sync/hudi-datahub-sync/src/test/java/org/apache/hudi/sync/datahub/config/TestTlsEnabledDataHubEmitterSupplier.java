@@ -28,9 +28,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 
-import static org.apache.hudi.sync.datahub.config.TlsEnabledDataHubEmitterSupplier.DATAHUB_EMITTER_SERVER;
-import static org.apache.hudi.sync.datahub.config.TlsEnabledDataHubEmitterSupplier.DATAHUB_EMITTER_TOKEN;
-import static org.apache.hudi.sync.datahub.config.TlsEnabledDataHubEmitterSupplier.DATAHUB_TLS_CA_CERT_PATH;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SERVER;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_TOKEN;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key();
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -42,8 +42,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
   @Test
   void testEmitterCreationWithBasicConfig() {
     Properties props = new Properties();
-    props.setProperty(DATAHUB_EMITTER_SERVER, "https://datahub.example.com:8080");
-    props.setProperty(DATAHUB_EMITTER_TOKEN, "test-token");
+    props.setProperty(META_SYNC_DATAHUB_EMITTER_SERVER.key(), "https://datahub.example.com:8080");
+    props.setProperty(META_SYNC_DATAHUB_EMITTER_TOKEN.key(), "test-token");
     
     TypedProperties typedProps = new TypedProperties(props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
@@ -58,8 +58,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
     Path caCertPath = createDummyCertificateFile();
     
     Properties props = new Properties();
-    props.setProperty(DATAHUB_EMITTER_SERVER, "https://datahub.example.com:8080");
-    props.setProperty(DATAHUB_TLS_CA_CERT_PATH, caCertPath.toString());
+    props.setProperty(META_SYNC_DATAHUB_EMITTER_SERVER.key(), "https://datahub.example.com:8080");
+    props.setProperty(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), caCertPath.toString());
     
     TypedProperties typedProps = new TypedProperties(props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);
@@ -83,8 +83,8 @@ class TestTlsEnabledDataHubEmitterSupplier {
   @Test
   void testEmitterCreationFailsWithInvalidCACertPath() {
     Properties props = new Properties();
-    props.setProperty(DATAHUB_EMITTER_SERVER, "https://datahub.example.com:8080");
-    props.setProperty(DATAHUB_TLS_CA_CERT_PATH, "/non/existent/path/cert.pem");
+    props.setProperty(META_SYNC_DATAHUB_EMITTER_SERVER.key(), "https://datahub.example.com:8080");
+    props.setProperty(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), "/non/existent/path/cert.pem");
     
     TypedProperties typedProps = new TypedProperties(props);
     TlsEnabledDataHubEmitterSupplier supplier = new TlsEnabledDataHubEmitterSupplier(typedProps);

@@ -43,10 +43,6 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
 
   private static final Logger LOG = LoggerFactory.getLogger(TlsEnabledDataHubEmitterSupplier.class);
   
-  // Configuration property keys
-  public static final String DATAHUB_TLS_CA_CERT_PATH = "hoodie.meta.sync.datahub.tls.ca.cert.path";
-  public static final String DATAHUB_EMITTER_SERVER = "hoodie.meta.sync.datahub.emitter.server";
-  public static final String DATAHUB_EMITTER_TOKEN = "hoodie.meta.sync.datahub.emitter.token";
 
   private final TypedProperties config;
 
@@ -57,14 +53,14 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
   @Override
   public RestEmitter get() {
     try {
-      String serverUrl = config.getString(DATAHUB_EMITTER_SERVER, null);
+      String serverUrl = config.getString(DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SERVER.key(), null);
       if (serverUrl == null || serverUrl.isEmpty()) {
         throw new DataHubEmitterConfigurationException(
-            "DataHub server URL must be specified with " + DATAHUB_EMITTER_SERVER);
+            "DataHub server URL must be specified with " + DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SERVER.key());
       }
 
-      String token = config.getString(DATAHUB_EMITTER_TOKEN, null);
-      String caCertPath = config.getString(DATAHUB_TLS_CA_CERT_PATH, null);
+      String token = config.getString(DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_TOKEN.key(), null);
+      String caCertPath = config.getString(DataHubSyncConfig.META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), null);
 
       LOG.info("Creating DataHub RestEmitter with TLS configuration for server: {}", serverUrl);
 

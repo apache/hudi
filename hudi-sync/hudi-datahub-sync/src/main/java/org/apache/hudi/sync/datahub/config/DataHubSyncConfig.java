@@ -144,6 +144,9 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--emitter-supplier-class"}, description = "Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.")
     public String emitterSupplierClass;
 
+    @Parameter(names = {"--tls-ca-cert-path"}, description = "Path to the CA certificate file for TLS verification when connecting to DataHub over HTTPS with custom CA certificates.")
+    public String tlsCaCertPath;
+
     @Parameter(names = {"--data-platform-name"}, description = "String used to represent Hudi when creating its "
         + "corresponding DataPlatform entity within Datahub")
     public String dataPlatformName;
@@ -167,6 +170,7 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SERVER.key(), emitterServer);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_TOKEN.key(), emitterToken);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), emitterSupplierClass);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), tlsCaCertPath);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), dataPlatformName);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATASET_ENV.key(), datasetEnv);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATABASE_NAME.key(), databaseName);
