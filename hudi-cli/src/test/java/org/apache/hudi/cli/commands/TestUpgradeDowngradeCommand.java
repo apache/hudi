@@ -131,20 +131,12 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
           FileCreateUtilsLegacy.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
     }
 
-    // Upgrade or downgrade to 'fromVersion'.
-    if (fromVersion.greaterThan(HoodieTableVersion.FIVE)) {
-      SparkMain.upgradeTable(jsc(), tablePath, fromVersion.name());
-    } else if (fromVersion.lesserThan(HoodieTableVersion.FIVE)) {
-      SparkMain.downgradeTable(jsc(), tablePath, fromVersion.name());
+    if (fromVersion != HoodieTableVersion.FIVE) {
+      SparkMain.upgradeOrDowngradeTable(jsc(), tablePath, fromVersion.name());
     }
     verifyTableVersion(fromVersion);
 
-    // Upgrade or downgrade to 'toVersion'.
-    if (toVersion.greaterThan(fromVersion)) {
-      SparkMain.upgradeTable(jsc(), tablePath, toVersion.name());
-    } else if (toVersion.lesserThan(fromVersion)) {
-      SparkMain.downgradeTable(jsc(), tablePath, toVersion.name());
-    }
+    SparkMain.upgradeOrDowngradeTable(jsc(), tablePath, toVersion.name());
     verifyTableVersion(toVersion);
 
     if (toVersion == HoodieTableVersion.ZERO) {

@@ -93,8 +93,6 @@ import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
-import org.apache.hudi.table.upgrade.UpgradeDowngradeStrategy;
-import org.apache.hudi.table.upgrade.UpgradeStrategy;
 import org.apache.hudi.util.CommonClientUtils;
 
 import com.codahale.metrics.Timer;
@@ -1013,7 +1011,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   @VisibleForTesting
   String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
-    if (needsUpgrade(metaClient)) {
+    if (UpgradeDowngrade.needsUpgrade(metaClient, config, config.getWriteVersion())) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
@@ -1337,7 +1335,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       ownerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType,
           metaClient.getTableType()), instantTime.get()));
     }
-    boolean requiresInitTable = needsUpgrade(metaClient) || config.isMetadataTableEnabled();
+    boolean requiresInitTable = UpgradeDowngrade.needsUpgrade(metaClient, config, config.getWriteVersion()) || config.isMetadataTableEnabled();
     if (!requiresInitTable) {
       return;
     }
@@ -1504,9 +1502,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime instant time of interest if we have one.
    */
   protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
-    UpgradeStrategy upgradeStrategy = new UpgradeStrategy(metaClient, config);
-
-    if (upgradeStrategy.requiresMigration(config.getWriteVersion())) {
+    if (UpgradeDowngrade.needsUpgrade(metaClient, config, config.getWriteVersion())) {
       // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
       List<String> instantsToRollback = tableServiceClient.getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
 
@@ -1517,17 +1513,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         tableServiceClient.rollbackFailedWrites(pendingRollbacks, true, true);
       }
 
-      new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper, upgradeStrategy)
+      new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
           .run(config.getWriteVersion(), instantTime.orElse(null));
 
       metaClient.reloadTableConfig();
       metaClient.reloadActiveTimeline();
     }
-  }
-
-  private boolean needsUpgrade(HoodieTableMetaClient metaClient) {
-    UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(metaClient, config);
-    return upgradeStrategy.requiresMigration(config.getWriteVersion());
   }
 
   /**

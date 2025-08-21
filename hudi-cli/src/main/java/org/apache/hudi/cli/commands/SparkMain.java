@@ -51,8 +51,6 @@ import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
-import org.apache.hudi.table.upgrade.UpgradeDowngradeStrategy;
-import org.apache.hudi.table.upgrade.UpgradeStrategy;
 import org.apache.hudi.utilities.HoodieCleaner;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
@@ -237,12 +235,9 @@ public class SparkMain {
               args[11], args[12], args[13], args[14], args[15], args[16], args[17], args[18], args[19], propsFilePath, configs);
           break;
         case UPGRADE:
-          cmd.assertEq(args.length);
-          returnCode = upgradeTable(jsc, args[3], args[4]);
-          break;
         case DOWNGRADE:
           cmd.assertEq(args.length);
-          returnCode = downgradeTable(jsc, args[3], args[4]);
+          returnCode = upgradeOrDowngradeTable(jsc, args[3], args[4]);
           break;
         case REPAIR_DEPRECATED_PARTITION:
           cmd.assertEq(args.length);
@@ -556,7 +551,7 @@ public class SparkMain {
   }
 
   /**
-   * Upgrade a table.
+   * Upgrade or downgrade table.
    *
    * @param jsc       instance of {@link JavaSparkContext} to use.
    * @param basePath  base path of the dataset.
@@ -564,33 +559,7 @@ public class SparkMain {
    * @return 0 if success, else -1.
    * @throws Exception
    */
-  protected static int upgradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
-    HoodieWriteConfig config = getWriteConfig(
-        basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()), false);
-    HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder()
-            .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
-            .setBasePath(config.getBasePath())
-            .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
-            .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
-    HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps())
-        .forTable(metaClient.getTableConfig().getTableName()).build();
-    HoodieSparkEngineContext context = new HoodieSparkEngineContext(jsc);
-    UpgradeDowngradeStrategy strategy = new UpgradeStrategy(metaClient, updatedConfig);
-    return upgradeOrDowngradeTable(basePath, toVersion, strategy, context, metaClient, updatedConfig);
-  }
-
-  /**
-   * Downgrade a table.
-   *
-   * @param jsc       instance of {@link JavaSparkContext} to use.
-   * @param basePath  base path of the dataset.
-   * @param toVersion version to which downgrade to be done.
-   * @return 0 if success, else -1.
-   * @throws Exception
-   */
-  protected static int downgradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
+  protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
     HoodieWriteConfig config = getWriteConfig(basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()),
         false);
     HoodieTableMetaClient metaClient =
@@ -602,24 +571,13 @@ public class SparkMain {
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps())
         .forTable(metaClient.getTableConfig().getTableName()).build();
-    HoodieSparkEngineContext context = new HoodieSparkEngineContext(jsc);
-    UpgradeDowngradeStrategy strategy = new UpgradeStrategy(metaClient, updatedConfig);
-    return upgradeOrDowngradeTable(basePath, toVersion, strategy, context, metaClient, updatedConfig);
-  }
-
-  protected static int upgradeOrDowngradeTable(String basePath,
-                                               String toVersion,
-                                               UpgradeDowngradeStrategy strategy,
-                                               HoodieSparkEngineContext context,
-                                               HoodieTableMetaClient metaClient,
-                                               HoodieWriteConfig updatedConfig) {
     try {
-      new UpgradeDowngrade(metaClient, updatedConfig, context, SparkUpgradeDowngradeHelper.getInstance(), strategy)
+      new UpgradeDowngrade(metaClient, updatedConfig, new HoodieSparkEngineContext(jsc), SparkUpgradeDowngradeHelper.getInstance())
           .run(HoodieTableVersion.valueOf(toVersion), null);
-      LOG.info("Table at \"{}\" upgraded / downgrade to version \"{}\".", basePath, toVersion);
+      LOG.info("Table at \"{}\" upgraded / downgraded to version \"{}\".", basePath, toVersion);
       return 0;
     } catch (Exception e) {
-      LOG.warn(String.format("Failed: Could not upgrade / downgrade table at \"%s\" to version \"%s\".", basePath, toVersion), e);
+      LOG.warn(String.format("Failed: Could not upgrade/downgrade table at \"%s\" to version \"%s\".", basePath, toVersion), e);
       return -1;
     }
   }

@@ -73,64 +73,72 @@ public class UpgradeDowngrade {
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
-  private Option<UpgradeDowngradeStrategy> strategyOpt = Option.empty();
 
-  /**
-   * The upgrade/downgrade strategy is not initialized since the 'toVersion'
-   * is not given yet.
-   */
-  public UpgradeDowngrade(HoodieTableMetaClient metaClient,
-                          HoodieWriteConfig config,
-                          HoodieEngineContext context,
-                          SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade(
+      HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
+      SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     this.metaClient = metaClient;
     this.config = config;
     this.context = context;
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
-  /**
-   * The upgrade or downgrade intention is clear. Therefore, the strategy is
-   * injected here.
-   */
-  public UpgradeDowngrade(HoodieTableMetaClient metaClient,
-                          HoodieWriteConfig config,
-                          HoodieEngineContext context,
-                          SupportsUpgradeDowngrade upgradeDowngradeHelper,
-                          UpgradeDowngradeStrategy strategy) {
-    this.metaClient = metaClient;
-    this.config = config;
-    this.context = context;
-    this.upgradeDowngradeHelper = upgradeDowngradeHelper;
-    this.strategyOpt = Option.ofNullable(strategy);
-  }
-
-  /**
-   * Note that there could be two different intentions when this function is called.
-   * CASE 1. Check if either upgrade or downgrade could be executed.
-   * CASE 2. Given upgrade or downgrade intention, check if it can be executed.
-   * <p>
-   * These two intentions might cause this function behaves differently.
-   * E.g., suppose 'fromVersion = 9', and 'toVersion = 6'.
-   * CASE 1: upgrade is not available but downgrade could be able to run.
-   *         therefore, this function returns true.
-   * CASE 2: only upgrade is intended, but since fromVersion > toVersion,
-   *         if autoUpgrade is false, this function return false;
-   *         if autoUpgrade is true, this function throws.
-   * <p>
-   * Tp accommodate this two intentions in the same function,
-   * for CASE 1, the upgrade or downgrade strategy is created based on the
-   *    fromVersion and toVersion when this function is called.
-   * for Case 2, the strategy is supposed to be injected before calling this function.
-   */
-  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toVersion) {
-    if (strategyOpt.isEmpty()) {
-      HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
-      strategyOpt = Option.of(fromVersion.lesserThan(toVersion)
-          ? new UpgradeStrategy(metaClient, config)
-          : new DowngradeStrategy(metaClient));
+  public static boolean needsDowngrade(HoodieTableMetaClient metaClient,
+                                       HoodieTableVersion toWriteVersion) {
+    HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+    if (toWriteVersion.lesserThan(HoodieTableVersion.SIX)) {
+      throw new HoodieUpgradeDowngradeException(
+          String.format("Hudi 1.x release only supports table version greater than "
+                  + "version 6 or above. Please downgrade table from version %s to %s "
+                  + "using a Hudi release prior to 1.0.0",
+              HoodieTableVersion.SIX.versionCode(), toWriteVersion.versionCode()));
     }
-    return strategyOpt.get().requiresMigration(toVersion);
+    return toWriteVersion.lesserThan(fromTableVersion);
+  }
+
+  public static boolean needsUpgrade(HoodieTableMetaClient metaClient,
+                                     HoodieWriteConfig config,
+                                     HoodieTableVersion toVersion) {
+    HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+    boolean shouldUpgrade = true;
+    if (fromTableVersion.greaterThanOrEquals(toVersion)) {
+      LOG.warn("Table version {} is greater than write version {}. No upgrade needed",
+          fromTableVersion, toVersion);
+      shouldUpgrade = false;
+    } else {
+      if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
+        throw new HoodieUpgradeDowngradeException(
+            String.format("Hudi 1.x release only supports table version greater than "
+                    + "version 6 or above. Please upgrade table from version %s to %s "
+                    + "using a Hudi release prior to 1.0.0",
+                fromTableVersion.versionCode(), HoodieTableVersion.SIX.versionCode()));
+      }
+      if (!config.autoUpgrade()) {
+        shouldUpgrade = false;
+      }
+    }
+    if (!shouldUpgrade && fromTableVersion != toVersion) {
+      if (!config.autoUpgrade()) {
+        LOG.warn("Table version {} does not match write version {} and skip upgrade. "
+                + "Setting hoodie.write.table.version={} to match 'hoodie.table.version'",
+            fromTableVersion, toVersion, fromTableVersion);
+        config.setWriteVersion(fromTableVersion);
+      } else {
+        throw new HoodieUpgradeDowngradeException(String.format(
+            "Table version %s is different from write version %s. Since we cannot do upgrade "
+                + "in this case, we need to make table version and write version equal.",
+            fromTableVersion, toVersion));
+      }
+    }
+    return shouldUpgrade;
+  }
+
+  public boolean needsUpgrade(HoodieTableVersion toVersion) {
+    return needsUpgrade(metaClient, config, toVersion);
+  }
+
+  public boolean needsDowngrade(HoodieTableVersion toVersion) {
+    return needsDowngrade(metaClient, toVersion);
   }
 
   /**
@@ -171,14 +179,19 @@ public class UpgradeDowngrade {
    * @param instantTime current instant time that should not be touched.
    */
   public void run(HoodieTableVersion toVersion, String instantTime) {
+    // Fetch version from property file and current version
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
+    // Determine if we are upgrading or downgrading
+    boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
+
     // If decides not to execute, abort the upgrade/downgrade operation.
-    if (!needsUpgradeOrDowngrade(toVersion)) {
+    if (!needsDowngrade(toVersion) && !needsUpgrade(toVersion)) {
       return;
     }
+
     // Perform rollback and compaction only if a specific handler requires it, before upgrade/downgrade process
-    boolean isUpgrade = fromVersion.lesserThan(toVersion);
     performRollbackAndCompactionIfRequired(fromVersion, toVersion, isUpgrade);
+
     // Change metadata table version automatically
     if (toVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {
       String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(
@@ -189,7 +202,7 @@ public class UpgradeDowngrade {
               .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metadataTablePath).build();
           HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
               config, HoodieFailedWritesCleaningPolicy.EAGER, metaClient.getTableConfig().getTableVersion());
-          new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper, strategyOpt.get())
+          new UpgradeDowngrade(mdtMetaClient, mdtWriteConfig, context, upgradeDowngradeHelper)
               .run(toVersion, instantTime);
         }
       } catch (Exception e) {
@@ -223,7 +236,6 @@ public class UpgradeDowngrade {
         fromVersion = prevVersion;
       }
     }
-
     // Reload the meta client to get the latest table config (which could have been updated due to metadata table)
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       metaClient = HoodieTableMetaClient.reload(metaClient);

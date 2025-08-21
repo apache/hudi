@@ -37,7 +37,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
-import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
 
@@ -53,6 +52,8 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREA
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
+import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsDowngrade;
+import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgrade;
 
 public class StreamerCheckpointUtils {
   private static final Logger LOG = LoggerFactory.getLogger(StreamerCheckpointUtils.class);
@@ -110,8 +111,7 @@ public class StreamerCheckpointUtils {
     if (hasCheckpointOverride && isHoodieIncSource) {
       HoodieTableVersion writeTableVersion = HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION));
       HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(streamerConfig.targetBasePath).withProps(props).build();
-      UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, null);
-      if (config.autoUpgrade() && upgradeDowngrade.needsUpgradeOrDowngrade(writeTableVersion)) {
+      if (config.autoUpgrade() && (needsUpgrade(metaClient, config, writeTableVersion) || needsDowngrade(metaClient, writeTableVersion))) {
         throw new HoodieUpgradeDowngradeException(
             String.format("When upgrade/downgrade is happening, please avoid setting --checkpoint option and --ignore-checkpoint for your delta streamers."
                 + " Detected invalid streamer configuration:\n%s", streamerConfig));

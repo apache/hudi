@@ -102,6 +102,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_S
 import static org.apache.hudi.common.util.MarkerUtils.MARKERS_FILENAME_PREFIX;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEPRECATED_DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
+import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgrade;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -700,40 +701,30 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     // assert no downgrade for table version 7 from table version 8
     assertThrows(
         HoodieUpgradeDowngradeException.class,
-        () -> new UpgradeStrategy(metaClient, writeConfig)
-            .requiresMigration(HoodieTableVersion.SEVEN));
+        () -> needsUpgrade(metaClient, writeConfig, HoodieTableVersion.SEVEN));
 
     // assert no downgrade for table version 6 from table version 8
     assertThrows(
         HoodieUpgradeDowngradeException.class,
-        () -> new UpgradeStrategy(metaClient, writeConfig)
-            .requiresMigration(HoodieTableVersion.SIX)
-    );
+        () -> needsUpgrade(metaClient, writeConfig, HoodieTableVersion.SIX));
 
     // assert no upgrade/downgrade for table version 8 from table version 8
     assertDoesNotThrow(
-        () -> new UpgradeStrategy(metaClient, writeConfig)
-            .requiresMigration(HoodieTableVersion.EIGHT)
-    );
+        () -> needsUpgrade(metaClient, writeConfig, HoodieTableVersion.EIGHT));
 
     // test upgrade from table version six
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
+
     // assert upgrade for table version 7 from table version 6
-    boolean shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig)
-        .requiresMigration(HoodieTableVersion.SEVEN);
-    assertTrue(shouldUpgrade);
+    assertTrue(needsUpgrade(metaClient, writeConfig, HoodieTableVersion.SEVEN));
 
     // assert upgrade for table version 8 from table version 6
-    shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig)
-        .requiresMigration(HoodieTableVersion.EIGHT);
-    assertTrue(shouldUpgrade);
+    assertTrue(needsUpgrade(metaClient, writeConfig, HoodieTableVersion.EIGHT));
 
     // assert upgrade for table version 8 from table version 6 with auto upgrade set to false
     // should return false
     when(writeConfig.autoUpgrade()).thenReturn(false);
-    shouldUpgrade = new UpgradeStrategy(metaClient, writeConfig)
-        .requiresMigration(HoodieTableVersion.EIGHT);
-    assertFalse(shouldUpgrade);
+    assertFalse(needsUpgrade(metaClient, writeConfig, HoodieTableVersion.EIGHT));
   }
 
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists) throws IOException {

@@ -93,8 +93,6 @@ import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
-import org.apache.hudi.table.upgrade.UpgradeDowngradeStrategy;
-import org.apache.hudi.table.upgrade.UpgradeStrategy;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
@@ -1277,8 +1275,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // Now perform an upgrade and perform a restore operation
     HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withWriteTableVersion(HoodieTableVersion.EIGHT.versionCode()).build();
     client = getHoodieWriteClient(newConfig);
-    UpgradeDowngradeStrategy upgradeStrategy = new UpgradeStrategy(metaClient, newConfig);
-    new UpgradeDowngrade(metaClient, newConfig, client.getEngineContext(), upgradeDowngrade, upgradeStrategy)
+    new UpgradeDowngrade(metaClient, newConfig, client.getEngineContext(), upgradeDowngrade)
         .run(HoodieTableVersion.EIGHT, null);
 
     client = getHoodieWriteClient(newConfig);
