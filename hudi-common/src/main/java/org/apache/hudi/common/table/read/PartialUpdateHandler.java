@@ -53,52 +53,61 @@ public class PartialUpdateHandler<T> implements Serializable {
     this.mergeProperties = parseMergeProperties(props);
   }
 
+
   /**
    * Merge records based on partial update mode.
-   * Note that {@param newRecord} refers to the record with higher commit time if COMMIT_TIME_ORDERING mode is used,
-   * or higher event time if EVENT_TIME_ORDERING mode us used. And if the merging happens, we should always return
-   * record with the target schema (incoming schema), since the incoming schema may not contain metadata fields for COW
-   * merging cases, and the metadata fields will be supplemented later in the file writer.
+   * Note that if the merging happens, we should always construct merged record with the newer schema (incoming schema).
+   * When the incoming schema does not contain metadata fields for COW merging cases, the metadata fields will be
+   * supplemented later in the file writer.
+   *
+   * @param highOrderRecord record with higher commit time or higher ordering value
+   * @param lowOrderRecord  record with lower commit time or lower ordering value
+   * @param highOrderSchema The schema of highOrderRecord
+   * @param lowOrderSchema  The schema of the older record
+   * @param newSchema       The schema of the new incoming record
+   * @return Partial merged record.
    */
-  BufferedRecord<T> partialMerge(BufferedRecord<T> newRecord,
-                                 BufferedRecord<T> oldRecord,
-                                 Schema newSchema,
-                                 Schema oldSchema,
-                                 Schema targetSchema) {
-    // Note that: When either newRecord or oldRecord is a delete record,
+  BufferedRecord<T> partialMerge(BufferedRecord<T> highOrderRecord,
+                                 BufferedRecord<T> lowOrderRecord,
+                                 Schema highOrderSchema,
+                                 Schema lowOrderSchema,
+                                 Schema newSchema) {
+    // Note that: When either highOrderRecord or lowOrderRecord is a delete record,
     //            skip partial update since delete records do not have meaningful columns.
-    if (null == oldRecord
-        || newRecord.isDelete()
-        || oldRecord.isDelete()) {
-      return newRecord;
+    if (null == lowOrderRecord
+        || highOrderRecord.isDelete()
+        || lowOrderRecord.isDelete()) {
+      return highOrderRecord;
     }
 
     switch (partialUpdateMode) {
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(
-            newRecord, oldRecord, newSchema, oldSchema, targetSchema);
+            highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
       case FILL_UNAVAILABLE:
         return reconcileMarkerValues(
-            newRecord, oldRecord, newSchema, oldSchema, targetSchema);
+            highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
       default:
-        return newRecord;
+        return highOrderRecord;
     }
   }
 
   /**
-   * @param newRecord              The newer record determined by the merge mode.
-   * @param oldRecord              The older record determined by the merge mode.
-   * @param newSchema              The schema of the newer record.
-   * @param oldSchema              The schema of the older record.
-   * @param targetSchema           The target schema of the merged record.
+   * Merge two records with partial merge strategy ignoring default values.
+   *
+   * @param highOrderRecord The record with higher ordering value
+   * @param lowOrderRecord  The record with lower ordering value
+   * @param highOrderSchema The schema of highOrderRecord
+   * @param lowOrderSchema  The schema of the older record
+   * @param newSchema       The schema of the new incoming record
    * @return merged result with partial updating by ignoring default values.
    */
-  BufferedRecord<T> reconcileDefaultValues(BufferedRecord<T> newRecord,
-                                           BufferedRecord<T> oldRecord,
-                                           Schema newSchema,
-                                           Schema oldSchema,
-                                           Schema targetSchema) {
-    List<Schema.Field> fields = targetSchema.getFields();
+  BufferedRecord<T> reconcileDefaultValues(BufferedRecord<T> highOrderRecord,
+                                           BufferedRecord<T> lowOrderRecord,
+                                           Schema highOrderSchema,
+                                           Schema lowOrderSchema,
+                                           Schema newSchema) {
+    List<Schema.Field> fields = newSchema.getFields();
     Object[] fieldVals = new Object[fields.size()];
     int idx = 0;
     boolean updated = false;
@@ -108,36 +117,43 @@ public class PartialUpdateHandler<T> implements Serializable {
       // The default value only from the top-level data type is validated. That means,
       // for nested columns, we do not check the leaf level data type defaults.
       Object defaultValue = toJavaDefaultValue(field);
-      Object newValue = recordContext.getValue(newRecord.getRecord(), newSchema, fieldName);
+      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
       if (defaultValue == newValue) {
-        fieldVals[idx++] = recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName);
+        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
         updated = true;
       } else {
         fieldVals[idx++] = newValue;
       }
     }
     if (!updated) {
-      return newRecord;
+      return highOrderRecord;
     }
-    // If the merging happens, always return record with target schema (incoming schema).
-    // The incoming schema may not contain metadata fields for COW merging cases,
-    // then the metadata fields will be supplemented later in the file writer.
-    T engineRecord = recordContext.constructEngineRecord(targetSchema, fieldVals);
+    T engineRecord = recordContext.constructEngineRecord(newSchema, fieldVals);
 
     return new BufferedRecord<>(
-        newRecord.getRecordKey(),
-        newRecord.getOrderingValue(),
+        highOrderRecord.getRecordKey(),
+        highOrderRecord.getOrderingValue(),
         engineRecord,
-        targetSchema == newSchema ? newRecord.getSchemaId() : oldRecord.getSchemaId(),
-        newRecord.getHoodieOperation());
+        newSchema == highOrderSchema ? highOrderRecord.getSchemaId() : lowOrderRecord.getSchemaId(),
+        highOrderRecord.getHoodieOperation());
   }
 
-  BufferedRecord<T> reconcileMarkerValues(BufferedRecord<T> newRecord,
-                                          BufferedRecord<T> oldRecord,
-                                          Schema newSchema,
-                                          Schema oldSchema,
-                                          Schema targetSchema) {
-    List<Schema.Field> fields = targetSchema.getFields();
+  /**
+   * Merge two records with partial merge strategy ignoring marker values.
+   *
+   * @param highOrderRecord The record with higher ordering value
+   * @param lowOrderRecord  The record with lower ordering value
+   * @param highOrderSchema The schema of highOrderRecord
+   * @param lowOrderSchema  The schema of the older record
+   * @param newSchema       The schema of the new incoming record
+   * @return merged result with partial updating by ignoring default values.
+   */
+  BufferedRecord<T> reconcileMarkerValues(BufferedRecord<T> highOrderRecord,
+                                          BufferedRecord<T> lowOrderRecord,
+                                          Schema highOrderSchema,
+                                          Schema lowOrderSchema,
+                                          Schema newSchema) {
+    List<Schema.Field> fields = newSchema.getFields();
     Object[] fieldVals = new Object[fields.size()];
     String partialUpdateCustomMarker = mergeProperties.get(PARTIAL_UPDATE_UNAVAILABLE_VALUE);
     int idx = 0;
@@ -145,29 +161,26 @@ public class PartialUpdateHandler<T> implements Serializable {
     // decide value for each field with customized mark value ignored.
     for (Schema.Field field: fields) {
       String fieldName = field.name();
-      Object newValue = recordContext.getValue(newRecord.getRecord(), newSchema, fieldName);
+      Object newValue = recordContext.getValue(highOrderRecord.getRecord(), highOrderSchema, fieldName);
       if ((isStringTyped(field) || isBytesTyped(field))
           && null != partialUpdateCustomMarker
           && (partialUpdateCustomMarker.equals(recordContext.getTypeConverter().castToString(newValue)))) {
-        fieldVals[idx++] = recordContext.getValue(oldRecord.getRecord(), oldSchema, fieldName);
+        fieldVals[idx++] = recordContext.getValue(lowOrderRecord.getRecord(), lowOrderSchema, fieldName);
         updated = true;
       } else {
         fieldVals[idx++] = newValue;
       }
     }
     if (!updated) {
-      return newRecord;
+      return highOrderRecord;
     }
-    // If the merging happens, always return record with target schema (incoming schema).
-    // The incoming schema may not contain metadata fields for COW merging cases,
-    // then the metadata fields will be supplemented later in the file writer.
-    T engineRecord = recordContext.constructEngineRecord(targetSchema, fieldVals);
+    T engineRecord = recordContext.constructEngineRecord(newSchema, fieldVals);
     return new BufferedRecord<>(
-        newRecord.getRecordKey(),
-        newRecord.getOrderingValue(),
+        highOrderRecord.getRecordKey(),
+        highOrderRecord.getOrderingValue(),
         engineRecord,
-        targetSchema == newSchema ? newRecord.getSchemaId() : oldRecord.getSchemaId(),
-        newRecord.getHoodieOperation());
+        newSchema == highOrderSchema ? highOrderRecord.getSchemaId() : lowOrderRecord.getSchemaId(),
+        highOrderRecord.getHoodieOperation());
   }
 
   static boolean isStringTyped(Schema.Field field) {

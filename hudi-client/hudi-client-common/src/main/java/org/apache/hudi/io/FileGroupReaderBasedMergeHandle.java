@@ -19,7 +19,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
@@ -56,7 +55,6 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
-import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -68,12 +66,10 @@ import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
@@ -401,16 +397,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
   private static class CDCCallback<T> implements BaseFileUpdateCallback<T> {
     private final HoodieCDCLogger cdcLogger;
     private final RecordContext<T> recordContext;
-    // Lazy is used because the schema handler within the reader context is not initialized until the FileGroupReader is fully constructed.
-    // This allows the values to be fetched at runtime when iterating through the records.
-    private final Lazy<Schema> requestedSchema;
-    private final Map<Integer, Option<UnaryOperator<T>>> converterCache;
 
     CDCCallback(HoodieCDCLogger cdcLogger, HoodieReaderContext<T> readerContext) {
       this.cdcLogger = cdcLogger;
       this.recordContext = readerContext.getRecordContext();
-      this.requestedSchema = Lazy.lazily(() -> readerContext.getSchemaHandler().getRequestedSchema());
-      this.converterCache = new HashMap<>();
     }
 
     @Override
@@ -441,17 +431,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       if (record == null || record.getRecord() == null) {
         return null;
       }
-      Option<UnaryOperator<T>> converterOpt = converterCache.computeIfAbsent(record.getSchemaId(), schemaId -> {
-        Schema recordSchema = recordContext.decodeAvroSchema(schemaId);
-        if (AvroSchemaUtils.areSchemasProjectionEquivalent(recordSchema, requestedSchema.get())) {
-          return Option.empty();
-        } else {
-          return Option.of(recordContext.projectRecord(recordSchema, requestedSchema.get()));
-        }
-      });
-      T data = record.getRecord();
-      T convertedRecord = converterOpt.map(converter -> converter.apply(data)).orElse(data);
-      return recordContext.convertToAvroRecord(convertedRecord, requestedSchema.get());
+      return recordContext.convertToAvroRecord(record.getRecord(), recordContext.getSchemaFromBufferRecord(record));
     }
   }
 
