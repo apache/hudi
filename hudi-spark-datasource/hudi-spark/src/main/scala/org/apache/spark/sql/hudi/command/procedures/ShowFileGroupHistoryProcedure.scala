@@ -92,16 +92,16 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
 
     val activeEntries = new util.ArrayList[FileGroupHistoryEntry]()
     val activeTimeline = metaClient.getActiveTimeline
-    processTimelineWithLimit(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit)
-    processCleanAndRollbackOperations(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries)
+    processTimeline(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit)
+    processCleanAndRollbackOperations(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit)
 
     val archivedEntries = new util.ArrayList[FileGroupHistoryEntry]()
     if (showArchived) {
       try {
         val archivedTimeline = metaClient.getArchivedTimeline.reload()
         archivedTimeline.loadCompletedInstantDetailsInMemory()
-        processTimelineWithLimit(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit)
-        processCleanAndRollbackOperations(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries)
+        processTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit)
+        processCleanAndRollbackOperations(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit)
       } catch {
         case e: Exception =>
           log.warn(s"Failed to process archived timeline: ${e.getMessage}")
@@ -142,13 +142,13 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     }.toSeq
   }
 
-  private def processTimelineWithLimit(
-                                        timeline: HoodieTimeline,
-                                        targetFileGroupId: String,
-                                        targetPartition: Option[String],
-                                        timelineType: String,
-                                        entries: util.ArrayList[FileGroupHistoryEntry],
-                                        limit: Int): Unit = {
+  private def processTimeline(
+                               timeline: HoodieTimeline,
+                               targetFileGroupId: String,
+                               targetPartition: Option[String],
+                               timelineType: String,
+                               entries: util.ArrayList[FileGroupHistoryEntry],
+                               limit: Int): Unit = {
 
     val commits = timeline.getCommitsTimeline
     val instants = commits.getInstants.iterator().asScala.toList
@@ -178,11 +178,8 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
                               entries: util.ArrayList[FileGroupHistoryEntry]): Unit = {
 
     if (instant.getState == HoodieInstant.State.INFLIGHT || instant.getState == HoodieInstant.State.REQUESTED) {
-      val entry = createMinimalHistoryEntry(instant, targetFileGroupId, targetPartition, timelineType)
-      if (entry.isDefined) {
-        entries.add(entry.get)
-      }
-      return
+      val entry = createInflightRequestedEntry(instant, targetFileGroupId, targetPartition, timelineType)
+      entries.add(entry)
     }
 
     val commitMetadata = readCommitMetadata(timeline, instant)
@@ -257,39 +254,6 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     )
   }
 
-  private def createMinimalHistoryEntry(
-                                         instant: HoodieInstant,
-                                         targetFileGroupId: String,
-                                         targetPartition: Option[String],
-                                         timelineType: String): Option[FileGroupHistoryEntry] = {
-
-    val shouldInclude = true // Always include INFLIGHT/REQUESTED
-
-    if (shouldInclude) {
-      Some(FileGroupHistoryEntry(
-        instantTime = instant.requestedTime,
-        completionTime = instant.getCompletionTime,
-        action = instant.getAction,
-        timelineType = timelineType,
-        state = instant.getState.toString,
-        partitionPath = targetPartition.getOrElse(s"UNKNOWN_${instant.getState}"),
-        fileGroupId = targetFileGroupId,
-        fileId = targetFileGroupId,
-        fileName = s"UNKNOWN_${instant.getState}_METADATA",
-        operationType = s"UNKNOWN_${instant.getState}",
-        numWrites = -1L, // Use -1 to differentiate it from actual 0
-        numInserts = -1L,
-        numUpdates = -1L,
-        numDeletes = -1L,
-        fileSizeBytes = -1L,
-        totalWriteBytes = -1L,
-        prevCommit = s"UNKNOWN_${instant.getState}"
-      ))
-    } else {
-      None
-    }
-  }
-
   private def determineOperationType(writeStat: HoodieWriteStat): String = {
     if (writeStat.getNumInserts > 0 && writeStat.getNumUpdateWrites == 0) "INSERT"
     else if (writeStat.getNumInserts == 0 && writeStat.getNumUpdateWrites > 0) "UPDATE"
@@ -327,37 +291,100 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
                                                  targetFileGroupId: String,
                                                  targetPartition: Option[String],
                                                  timelineType: String,
-                                                 entries: util.ArrayList[FileGroupHistoryEntry]): Unit = {
+                                                 entries: util.ArrayList[FileGroupHistoryEntry],
+                                                 limit: Int): Unit = {
+
+    var foundCount = 0
 
     val cleanInstants = timeline.getCleanerTimeline.getInstants.iterator().asScala.toList
-    val recentCleanInstants = cleanInstants.sortBy(_.requestedTime).reverse.take(5)
+      .sortBy(_.requestedTime)(Ordering[String].reverse)
 
-    for (instant <- recentCleanInstants) {
-      if (instant.getState == HoodieInstant.State.INFLIGHT || instant.getState == HoodieInstant.State.REQUESTED) {
-        val entry = createCleanRollbackHistoryEntry(instant, targetFileGroupId, targetPartition, timelineType, "clean")
+    for (instant <- cleanInstants if foundCount < limit) {
+      val entryOpt = if (instant.getState == HoodieInstant.State.COMPLETED) {
+        createCompletedCleanOrRollbackHistoryEntry(timeline, instant, targetFileGroupId, targetPartition, timelineType, "CLEAN")
+      } else {
+        Some(createInflightRequestedEntry(instant, targetFileGroupId, targetPartition, timelineType))
+      }
+
+      entryOpt.foreach { entry =>
         entries.add(entry)
-        logDebug(s"Found recent ${instant.getState} clean instant ${instant.requestedTime} - included for debugging")
+        foundCount += 1
       }
     }
 
-    val rollbackInstants = timeline.getRollbackTimeline.getInstants.iterator().asScala.toList
-    val recentRollbackInstants = rollbackInstants.sortBy(_.requestedTime).reverse.take(5)
+    foundCount = 0
 
-    for (instant <- recentRollbackInstants) {
-      if (instant.getState == HoodieInstant.State.INFLIGHT || instant.getState == HoodieInstant.State.REQUESTED) {
-        val entry = createCleanRollbackHistoryEntry(instant, targetFileGroupId, targetPartition, timelineType, "rollback")
+    val rollbackInstants = timeline.getRollbackTimeline.getInstants.iterator().asScala.toList
+      .sortBy(_.requestedTime)(Ordering[String].reverse)
+
+    for (instant <- rollbackInstants if foundCount < limit) {
+      val entryOpt = if (instant.getState == HoodieInstant.State.COMPLETED) {
+        createCompletedCleanOrRollbackHistoryEntry(timeline, instant, targetFileGroupId, targetPartition, timelineType, "ROLLBACK")
+      } else {
+        Some(createInflightRequestedEntry(instant, targetFileGroupId, targetPartition, timelineType))
+      }
+      entryOpt.foreach { entry =>
         entries.add(entry)
-        logDebug(s"Found recent ${instant.getState} rollback instant ${instant.requestedTime} - included for debugging")
+        foundCount += 1
       }
     }
   }
 
-  private def createCleanRollbackHistoryEntry(
-                                               instant: HoodieInstant,
-                                               targetFileGroupId: String,
-                                               targetPartition: Option[String],
-                                               timelineType: String,
-                                               operationType: String): FileGroupHistoryEntry = {
+  private def createCompletedCleanOrRollbackHistoryEntry(
+                                                          timeline: HoodieTimeline,
+                                                          instant: HoodieInstant,
+                                                          targetFileGroupId: String,
+                                                          targetPartition: Option[String],
+                                                          timelineType: String,
+                                                          operationType: String): Option[FileGroupHistoryEntry] = {
+    try {
+      val cleanMetadata = timeline.readCleanMetadata(instant)
+      val totalFilesDeleted = cleanMetadata.getTotalFilesDeleted
+
+      val wasThisFileGroupCleaned = targetPartition match {
+        case Some(partition) =>
+          Option(cleanMetadata.getPartitionMetadata.get(partition))
+            .exists(_.getSuccessDeleteFiles.asScala.exists(_.contains(targetFileGroupId)))
+        case None =>
+          cleanMetadata.getPartitionMetadata.asScala.values
+            .exists(_.getSuccessDeleteFiles.asScala.exists(_.contains(targetFileGroupId)))
+      }
+
+      if (wasThisFileGroupCleaned) {
+        Some(FileGroupHistoryEntry(
+          instantTime = instant.requestedTime,
+          completionTime = instant.getCompletionTime,
+          action = instant.getAction,
+          timelineType = timelineType,
+          state = instant.getState.toString,
+          partitionPath = targetPartition.getOrElse("ALL_PARTITIONS"),
+          fileGroupId = targetFileGroupId,
+          fileId = targetFileGroupId,
+          fileName = s"${operationType}_$targetFileGroupId",
+          operationType = operationType,
+          numWrites = 0L, // Clean operations don't write records
+          numInserts = 0L,
+          numUpdates = 0L,
+          numDeletes = totalFilesDeleted,
+          fileSizeBytes = 0L,
+          totalWriteBytes = 0L,
+          prevCommit = instant.requestedTime
+        ))
+      } else {
+        None
+      }
+    } catch {
+      case e: Exception =>
+        log.warn(s"Failed to read clean metadata for ${instant.requestedTime}: ${e.getMessage}")
+        Some(createInflightRequestedEntry(instant, targetFileGroupId, targetPartition, timelineType))
+    }
+  }
+
+  private def createInflightRequestedEntry(
+                                            instant: HoodieInstant,
+                                            targetFileGroupId: String,
+                                            targetPartition: Option[String],
+                                            timelineType: String): FileGroupHistoryEntry = {
 
     FileGroupHistoryEntry(
       instantTime = instant.requestedTime,
@@ -365,18 +392,18 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
       action = instant.getAction,
       timelineType = timelineType,
       state = instant.getState.toString,
-      partitionPath = targetPartition.getOrElse(s"UNVERIFIED_${instant.getState}"),
+      partitionPath = targetPartition.getOrElse("NULL"),
       fileGroupId = targetFileGroupId,
       fileId = targetFileGroupId,
-      fileName = s"UNVERIFIED_${instant.getState}_${operationType.toUpperCase}",
-      operationType = s"${operationType.toUpperCase}_${instant.getState}_UNVERIFIED",
+      fileName = "NULL",
+      operationType = "UNVERIFIED",
       numWrites = -1L, // Use -1 to differentiate it from actual 0
       numInserts = -1L,
       numUpdates = -1L,
       numDeletes = -1L,
       fileSizeBytes = -1L,
       totalWriteBytes = -1L,
-      prevCommit = s"UNVERIFIED_${instant.getState}"
+      prevCommit = "UNVERIFIED"
     )
   }
 
