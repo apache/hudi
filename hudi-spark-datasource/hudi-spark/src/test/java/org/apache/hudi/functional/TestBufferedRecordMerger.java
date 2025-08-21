@@ -655,6 +655,24 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     result = merger.finalMerge(bufferedRecord4, bufferedRecord3);
     assertEquals(bufferedRecord3, result);
     assertTrue(result.isDelete());
+
+    // Validate delta merge
+    Option<BufferedRecord<IndexedRecord>> deltaMergeResult = merger.deltaMerge(bufferedRecord1, bufferedRecord2);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord1, deltaMergeResult.get());
+    assertFalse(deltaMergeResult.get().isDelete());
+    deltaMergeResult = merger.deltaMerge(bufferedRecord2, bufferedRecord3);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord2, deltaMergeResult.get());
+    assertFalse(deltaMergeResult.get().isDelete());
+    deltaMergeResult = merger.deltaMerge(bufferedRecord3, bufferedRecord4);
+    assertTrue(deltaMergeResult.isPresent());
+    assertEquals(bufferedRecord3, deltaMergeResult.get());
+    assertTrue(deltaMergeResult.get().isDelete());
+    // flip ordering and expect empty option
+    assertTrue(merger.deltaMerge(bufferedRecord4, bufferedRecord3).isEmpty());
+    assertTrue(merger.deltaMerge(bufferedRecord3, bufferedRecord2).isEmpty());
+    assertTrue(merger.deltaMerge(bufferedRecord2, bufferedRecord1).isEmpty());
   }
 
   private static GenericRecord createCustomRecord(Schema customSchema, String id, String name, long timestamp, boolean isDelete) {

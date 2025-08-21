@@ -30,9 +30,11 @@ import java.io.IOException;
 
 public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
   private final GenericRecord record;
+  private final Comparable orderingValue;
 
   public CustomPayload(GenericRecord record, Comparable orderingValue) {
     this.record = record;
+    this.orderingValue = orderingValue;
   }
 
   @Override
@@ -68,5 +70,10 @@ public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
     return Option.of(record);
+  }
+
+  @Override
+  public Comparable getOrderingValue() {
+    return orderingValue;
   }
 }

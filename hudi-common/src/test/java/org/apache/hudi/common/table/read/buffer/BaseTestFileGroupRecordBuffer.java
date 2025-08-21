@@ -171,6 +171,9 @@ public class BaseTestFileGroupRecordBuffer {
 
     @Override
     public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+      if (payloadRecord == null) {
+        return Option.empty();
+      }
       if (currentValue.get(2).equals(payloadRecord.get(2))) {
         // If the timestamps are the same, we do not update
         return Option.of(currentValue);
@@ -184,12 +187,12 @@ public class BaseTestFileGroupRecordBuffer {
 
     @Override
     public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-      return Option.of(payloadRecord);
+      return Option.ofNullable(payloadRecord);
     }
 
     @Override
     public Option<IndexedRecord> getIndexedRecord(Schema schema, Properties properties) {
-      return Option.of(payloadRecord);
+      return Option.ofNullable(payloadRecord);
     }
 
     @Override
@@ -203,6 +206,9 @@ public class BaseTestFileGroupRecordBuffer {
 
     @Override
     public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+      if (newer.isDelete(newSchema, props)) {
+        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.AVRO), SCHEMA);
+      }
       GenericRecord olderData = (GenericRecord) older.toIndexedRecord(oldSchema, props).get().getData();
       GenericRecord newerData = (GenericRecord) newer.toIndexedRecord(newSchema, props).get().getData();
       if (olderData.get(2).equals(newerData.get(2))) {
@@ -211,7 +217,7 @@ public class BaseTestFileGroupRecordBuffer {
       }
       int result = (int) olderData.get(1) + (int) newerData.get(1);
       if (result > 2) {
-        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.AVRO), newSchema);
+        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.AVRO), SCHEMA);
       }
       HoodieKey hoodieKey = older.getKey();
       return Pair.of(new HoodieAvroIndexedRecord(createTestRecord(hoodieKey.getRecordKey(), result, (long) newerData.get(2))), SCHEMA);
