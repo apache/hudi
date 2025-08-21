@@ -95,8 +95,8 @@ public class PartialUpdateHandler<T> implements Serializable {
   /**
    * Merge two records with partial merge strategy ignoring default values.
    *
-   * @param highOrderRecord The record with higher ordering value
-   * @param lowOrderRecord  The record with lower ordering value
+   * @param highOrderRecord record with higher commit time or higher ordering value
+   * @param lowOrderRecord  record with lower commit time or lower ordering value
    * @param highOrderSchema The schema of highOrderRecord
    * @param lowOrderSchema  The schema of the older record
    * @param newSchema       The schema of the new incoming record
@@ -141,8 +141,8 @@ public class PartialUpdateHandler<T> implements Serializable {
   /**
    * Merge two records with partial merge strategy ignoring marker values.
    *
-   * @param highOrderRecord The record with higher ordering value
-   * @param lowOrderRecord  The record with lower ordering value
+   * @param highOrderRecord record with higher commit time or higher ordering value
+   * @param lowOrderRecord  record with lower commit time or lower ordering value
    * @param highOrderSchema The schema of highOrderRecord
    * @param lowOrderSchema  The schema of the older record
    * @param newSchema       The schema of the new incoming record

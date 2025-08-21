@@ -1081,7 +1081,7 @@ public class TestInputFormat {
    * With disorder deletes, we can check whether the '_hoodie_operation' is correctly set up.
    */
   @ParameterizedTest
-  @MethodSource("preCombiningAndChangelogModeParams")
+  @MethodSource("twoBooleanParams")
   void testMergeOnReadDisorderDeleteMerging(boolean preCombine, boolean changelogMode) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PRE_COMBINE.key(), preCombine + "");
@@ -1406,15 +1406,18 @@ public class TestInputFormat {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testWriteCowWithPartialUpdate(boolean useFileGroupReaderBasedMergeHandle) throws Exception {
+  @MethodSource("twoBooleanParams")
+  public void testWriteCowWithPartialUpdate(boolean useFileGroupReaderBasedMergeHandle, boolean usePayloadConf) throws Exception {
     Map<String, String> options = new HashMap<>();
     String mergeHandleClass = useFileGroupReaderBasedMergeHandle
         ? FileGroupReaderBasedMergeHandle.class.getName() : HoodieWriteMergeHandle.class.getName();
     options.put(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), mergeHandleClass);
     // new config with merge classes and merge mode
-    options.put(FlinkOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
-    options.put(FlinkOptions.RECORD_MERGER_IMPLS.key(), PartialUpdateFlinkRecordMerger.class.getName());
+    if (usePayloadConf) {
+      options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), PartialUpdateAvroPayload.class.getName());
+    } else {
+      options.put(FlinkOptions.RECORD_MERGER_IMPLS.key(), PartialUpdateFlinkRecordMerger.class.getName());
+    }
     beforeEach(HoodieTableType.COPY_ON_WRITE, options);
 
     // first insert
@@ -1442,9 +1445,9 @@ public class TestInputFormat {
   // -------------------------------------------------------------------------
 
   /**
-   * Return test params => (preCombining, changelog mode).
+   * Two boolean test parameters.
    */
-  private static Stream<Arguments> preCombiningAndChangelogModeParams() {
+  private static Stream<Arguments> twoBooleanParams() {
     Object[][] data =
         new Object[][] {
             {true, true},
