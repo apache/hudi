@@ -174,7 +174,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       HOption.of(incomingRecord)
     } else if (originalPayload.equals(classOf[DefaultHoodieRecordPayload].getName)) {
       // If is default payload, then pick based on comparison result.
-      if (needUpdatingPersistedRecord(existingRecord, incomingRecord, properties)) {
+      if (needUpdatingPersistedRecord(existingRecord, HOption.of(incomingRecord), properties)) {
         HOption.of(incomingRecord)
       } else {
         HOption.of(existingRecord)

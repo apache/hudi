@@ -175,9 +175,8 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
   public void testWithThreeLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions, useRecordPositions);
     try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions)) {
-      // The records with keys 6 and 8 are deletes with lower ordering val
       List<String> leftKeysExpected =
-          Arrays.asList("1", "3", "6", "7", "8", "9", "10");
+          Arrays.asList("1", "3", "7", "9", "10");
       List<String> leftKeysActual = new ArrayList<>();
       while (iterator.hasNext()) {
         leftKeysActual.add(iterator.next()
