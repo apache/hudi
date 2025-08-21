@@ -2791,7 +2791,7 @@ public class HoodieTableMetadataUtil {
     if (!indexDefs.containsKey(metadataPartitionPath)) {
       return Option.empty();
     }
-    return Option.of(indexDefs.get(metadataPartitionPath).getVersion());
+    return Option.ofNullable(indexDefs.get(metadataPartitionPath).getVersion());
   }
 
   public static HoodieIndexVersion existingIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {

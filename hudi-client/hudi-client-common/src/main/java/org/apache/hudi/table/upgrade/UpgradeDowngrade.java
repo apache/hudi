@@ -101,8 +101,12 @@ public class UpgradeDowngrade {
 
   public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
-    if (fromTableVersion.greaterThanOrEquals(toWriteVersion)) {
-      LOG.warn("Table version {} is greater than or equal to write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
+    if (fromTableVersion.greaterThan(toWriteVersion)) {
+      LOG.warn("Table version {} is greater than write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
+      return false;
+    }
+    if (fromTableVersion.equals(toWriteVersion)) {
+      // table version is same as write version, no upgrade needed
       return false;
     }
     if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {

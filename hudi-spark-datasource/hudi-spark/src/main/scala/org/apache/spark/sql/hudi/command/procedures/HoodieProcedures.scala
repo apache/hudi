@@ -98,6 +98,9 @@ object HoodieProcedures {
       ,(TruncateTableProcedure.NAME, TruncateTableProcedure.builder)
       ,(PartitionBucketIndexManager.NAME, PartitionBucketIndexManager.builder)
       ,(ShowFileGroupHistoryProcedure.NAME, ShowFileGroupHistoryProcedure.builder)
+      ,(ShowCleansProcedure.NAME, ShowCleansProcedure.builder)
+      ,(ShowCleansPartitionMetadataProcedure.NAME, ShowCleansPartitionMetadataProcedure.builder)
+      ,(ShowCleansPlanProcedure.NAME, ShowCleansPlanProcedure.builder)
     )
   }
 }
