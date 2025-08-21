@@ -45,7 +45,7 @@ public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) {
     Long olderTimestamp = (Long) ((GenericRecord) currentValue).get("timestamp");
-    Long newerTimestamp = (Long) record.get("timestamp");
+    Long newerTimestamp = orderingValue == null ? (Long) record.get("timestamp") : (Long) orderingValue;
     if (olderTimestamp.equals(newerTimestamp)) {
       // If the timestamps are the same, we do not update
       return handleDeleteRecord(currentValue);
@@ -60,8 +60,8 @@ public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
 
   private Option<IndexedRecord> handleDeleteRecord(IndexedRecord data) {
     // check for _hoodie_is_deleted field
-    Boolean isDeleted = (Boolean) ((GenericRecord) data).get(HoodieRecord.HOODIE_IS_DELETED_FIELD);
-    if (isDeleted != null && isDeleted) {
+    boolean isDeleted = data == null || (boolean) ((GenericRecord) data).get(HoodieRecord.HOODIE_IS_DELETED_FIELD);
+    if (isDeleted) {
       return Option.empty(); // If the record is marked as deleted, return empty
     }
     return Option.of(data);
@@ -69,7 +69,7 @@ public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return Option.of(record);
+    return Option.ofNullable(record);
   }
 
   @Override

@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -564,7 +565,14 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<DeleteRecord> deltaMerge(DeleteRecord deleteRecord, BufferedRecord<T> existingRecord) {
-      return deltaMergeDeleteRecord(deleteRecord, existingRecord);
+      BufferedRecord<T> deleteBufferedRecord = BufferedRecords.fromDeleteRecord(deleteRecord, recordContext);
+      try {
+        Option<BufferedRecord<T>> merged = deltaMerge(deleteBufferedRecord, existingRecord);
+        // If the delete record is chosen, return an option with the delete record, otherwise return empty.
+        return merged.isPresent() ? Option.of(deleteRecord) : Option.empty();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to process delete record", e);
+      }
     }
 
     @Override
