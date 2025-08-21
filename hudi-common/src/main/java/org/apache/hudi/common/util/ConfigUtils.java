@@ -82,15 +82,48 @@ public class ConfigUtils {
    */
   @Nullable
   public static String[] getOrderingFields(Properties properties) {
-    String orderField = null;
-    if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
-      orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
-    } else if (properties.containsKey(HoodieTableConfig.PRECOMBINE_FIELDS.key())) {
-      orderField = properties.getProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key());
-    } else if (properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
+    String orderField = getOrderingFieldsStr(properties);
+    return StringUtils.isNullOrEmpty(orderField) ? null : orderField.split(",");
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStr(Properties properties) {
+    String orderField = getOrderingFieldsStrDuringWrite(properties);
+    if (orderField == null && properties.containsKey(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY)) {
       orderField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
     }
-    return orderField == null ? null : orderField.split(",");
+    return orderField;
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStrDuringWrite(Properties properties) {
+    String orderField = null;
+    if (containsConfigProperty(properties, HoodieTableConfig.ORDERING_FIELDS)) {
+      orderField = getStringWithAltKeys(properties, HoodieTableConfig.ORDERING_FIELDS);
+    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+      orderField = properties.getProperty("hoodie.datasource.write.precombine.field");
+    }
+    return orderField;
+  }
+
+  /**
+   * Get ordering fields as comma separated string.
+   */
+  @Nullable
+  public static String getOrderingFieldsStrDuringWrite(Map<String, String> properties) {
+    String orderField = null;
+    if (containsConfigProperty(properties, HoodieTableConfig.ORDERING_FIELDS)) {
+      orderField = getStringWithAltKeys(properties, HoodieTableConfig.ORDERING_FIELDS);
+    } else if (properties.containsKey("hoodie.datasource.write.precombine.field")) {
+      orderField = properties.get("hoodie.datasource.write.precombine.field");
+    }
+    return orderField;
   }
 
   /**
@@ -101,8 +134,7 @@ public class ConfigUtils {
   public static TypedProperties supplementOrderingFields(TypedProperties props, List<String> orderingFields) {
     String orderingFieldsAsString = String.join(",", orderingFields);
     props.putIfAbsent(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, orderingFieldsAsString);
-    props.putIfAbsent(HoodieTableConfig.PRECOMBINE_FIELDS.key(), orderingFieldsAsString);
-    props.putIfAbsent("hoodie.datasource.write.precombine.field", orderingFieldsAsString);
+    props.putIfAbsent(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFieldsAsString);
     return props;
   }
 
@@ -278,7 +310,7 @@ public class ConfigUtils {
    * @param configProperty Config to look up.
    * @return {@code true} if exists; {@code false} otherwise.
    */
-  public static boolean containsConfigProperty(Map<String, Object> props,
+  public static boolean containsConfigProperty(Map<String, ?> props,
                                                ConfigProperty<?> configProperty) {
     return containsConfigProperty(props::containsKey, configProperty);
   }
@@ -450,8 +482,8 @@ public class ConfigUtils {
    * and there is default value defined in the {@link ConfigProperty} config and is convertible to
    * String type; {@code null} otherwise.
    */
-  public static String getStringWithAltKeys(Map<String, Object> props,
-                                            ConfigProperty<?> configProperty) {
+  public static <V> String getStringWithAltKeys(Map<String, V> props,
+                                                ConfigProperty<?> configProperty) {
     return getStringWithAltKeys(props::get, configProperty);
   }
 

@@ -39,7 +39,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -79,7 +79,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table

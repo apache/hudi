@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.client.WriteClientTestUtils
 import org.apache.hudi.common.model.HoodieFileFormat
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -46,7 +46,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 

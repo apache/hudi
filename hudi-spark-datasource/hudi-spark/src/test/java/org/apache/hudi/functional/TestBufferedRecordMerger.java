@@ -76,7 +76,7 @@ import static org.apache.hudi.BaseSparkInternalRecordContext.getFieldValueFromIn
 import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
-import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELDS;
+import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -113,7 +113,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"id"}));
     // Create reader context.
     props = new TypedProperties();
-    props.put(PRECOMBINE_FIELDS.key(), "precombine");
+    props.put(ORDERING_FIELDS.key(), "precombine");
     readerContext = new DummyInternalRowReaderContext(
         storageConfig, tableConfig, Option.empty(), Option.empty(), new DummyRecordContext(tableConfig));
   }

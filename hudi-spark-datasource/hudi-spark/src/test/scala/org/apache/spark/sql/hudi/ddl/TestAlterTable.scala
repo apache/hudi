@@ -53,7 +53,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
        """.stripMargin)
 
@@ -164,7 +164,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by (dt)
        """.stripMargin)
@@ -193,7 +193,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  `hoodie.index.type`='BUCKET',
              |  `hoodie.index.bucket.engine`='SIMPLE',
              |  `hoodie.bucket.index.num.buckets`='2',
@@ -234,7 +234,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.metadata.enable = 'false',
              |  hoodie.clean.commits.retained = '100',
              |  hoodie.clustering.inline = 'true',
@@ -321,7 +321,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = '$tableType',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
      """.stripMargin)
 
@@ -360,7 +360,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
        """.stripMargin)
 
@@ -401,7 +401,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.write.concurrency.mode='optimistic_concurrency_control',
              |  hoodie.clean.failed.writes.policy='LAZY',
              |  hoodie.write.lock.provider='org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider'
@@ -484,7 +484,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = 'cow',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.clean.trigger.strategy = 'NUM_COMMITS',
              |  hoodie.clean.commits.retained = '3'
              | )

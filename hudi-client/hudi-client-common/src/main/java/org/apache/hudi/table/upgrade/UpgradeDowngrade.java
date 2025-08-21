@@ -233,7 +233,10 @@ public class UpgradeDowngrade {
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
     }
-    // Write out the current version in hoodie.properties.updated file
+
+    for (ConfigProperty configProperty : tablePropsToRemove) {
+      metaClient.getTableConfig().clearValue(configProperty);
+    }
     for (Map.Entry<ConfigProperty, String> entry : tablePropsToAdd.entrySet()) {
       // add alternate keys.
       metaClient.getTableConfig().setValue(entry.getKey(), entry.getValue());
@@ -241,10 +244,8 @@ public class UpgradeDowngrade {
         metaClient.getTableConfig().setValue((String) alternateKey, entry.getValue());
       });
     }
-    for (ConfigProperty configProperty : tablePropsToRemove) {
-      metaClient.getTableConfig().clearValue(configProperty);
-    }
 
+    // Write out the current version in hoodie.properties.updated file
     metaClient.getTableConfig().setTableVersion(toVersion);
     // Update modified properties.
     Set<String> propertiesToRemove =

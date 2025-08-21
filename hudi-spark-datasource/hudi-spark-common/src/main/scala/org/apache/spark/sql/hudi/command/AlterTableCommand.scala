@@ -228,12 +228,12 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
 
   def checkSchemaChange(colNames: Seq[String], catalogTable: CatalogTable): Unit = {
     val primaryKeys = catalogTable.storage.properties.getOrElse("primaryKey", catalogTable.properties.getOrElse("primaryKey", "keyid")).split(",").map(_.trim)
-    val preCombineKey = Seq(catalogTable.storage.properties.getOrElse("preCombineField", catalogTable.properties.getOrElse("preCombineField", "ts"))).map(_.trim)
+    val orderingFields = Seq(catalogTable.storage.properties.getOrElse("orderingFields", catalogTable.properties.getOrElse("orderingFields", "ts"))).map(_.trim)
     val partitionKey = catalogTable.partitionColumnNames.map(_.trim)
-    val checkNames = primaryKeys ++ preCombineKey ++ partitionKey
+    val checkNames = primaryKeys ++ orderingFields ++ partitionKey
     colNames.foreach { col =>
       if (checkNames.contains(col)) {
-        throw new UnsupportedOperationException("cannot support apply changes for primaryKey/CombineKey/partitionKey")
+        throw new UnsupportedOperationException("cannot support apply changes for primaryKey/orderingFields/partitionKey")
       }
     }
   }

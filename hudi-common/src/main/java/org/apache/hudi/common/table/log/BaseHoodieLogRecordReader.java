@@ -94,8 +94,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private final String recordKeyField;
   // Partition name override
   private final Option<String> partitionNameOverrideOpt;
-  // Pre-combining field
-  protected final String preCombineFields;
+  // Ordering fields
+  protected final String orderingFields;
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
@@ -151,11 +151,11 @@ public abstract class BaseHoodieLogRecordReader<T> {
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
-    this.preCombineFields = tableConfig.getPreCombineFieldsStr().orElse(null);
+    this.orderingFields = tableConfig.getOrderingFieldsStr().orElse(null);
     // Log scanner merge log with precombine
     TypedProperties props = new TypedProperties();
-    if (this.preCombineFields != null) {
-      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineFields);
+    if (this.orderingFields != null) {
+      props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.orderingFields);
     }
     this.payloadProps = props;
     this.totalLogFiles.addAndGet(logFilePaths.size());
