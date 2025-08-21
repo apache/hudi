@@ -89,6 +89,11 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
+  public Comparable convertValueFromEngineType(Comparable value) {
+    return (Comparable) RowDataUtils.convertValueFromFlinkType(value);
+  }
+
+  @Override
   public GenericRecord convertToAvroRecord(RowData record, Schema schema) {
     return (GenericRecord) RowDataAvroQueryContexts.fromAvroSchema(schema).getRowDataToAvroConverter().convert(schema, record);
   }

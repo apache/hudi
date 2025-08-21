@@ -521,7 +521,7 @@ public class BufferedRecordMergerFactory {
       }
       HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), null);
       return new HoodieAvroRecord<>(hoodieKey,
-          HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue()), null, bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
+          HoodieRecordUtils.loadPayload(payloadClass, record, recordContext.convertOrderingValueFromEngineType(bufferedRecord.getOrderingValue())), null, bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
     }
 
     protected Schema getSchemaForAvroPayloadMerge(BufferedRecord<T> bufferedRecord) {
