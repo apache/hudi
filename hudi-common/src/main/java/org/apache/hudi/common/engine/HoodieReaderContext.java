@@ -279,10 +279,17 @@ public abstract class HoodieReaderContext<T> {
     HoodieTableVersion tableVersion = tableConfig.getTableVersion();
     // If the provided payload class differs from the table's payload class, we need to infer the correct merging behavior.
     if (isIngestion && writerPayloadClass.map(className -> !className.equals(tableConfig.getPayloadClass())).orElse(false)) {
-      Map<String, String> mergeProperties = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
-          null, writerPayloadClass.get(), null, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
-      recordMergeMode = RecordMergeMode.valueOf(mergeProperties.get(RECORD_MERGE_MODE.key()));
-      mergeStrategyId = mergeProperties.get(RECORD_MERGE_STRATEGY_ID.key());
+      if (tableVersion.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+        Map<String, String> mergeProperties = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+            null, writerPayloadClass.get(), null, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
+        recordMergeMode = RecordMergeMode.valueOf(mergeProperties.get(RECORD_MERGE_MODE.key()));
+        mergeStrategyId = mergeProperties.get(RECORD_MERGE_STRATEGY_ID.key());
+      } else {
+        Triple<RecordMergeMode, String, String> triple = HoodieTableConfig.inferMergingConfigsForWrites(
+            null, writerPayloadClass.get(), null, tableConfig.getOrderingFieldsStr().orElse(null), tableVersion);
+        recordMergeMode = triple.getLeft();
+        mergeStrategyId = triple.getRight();
+      }
     } else if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
       Triple<RecordMergeMode, String, String> triple = inferMergingConfigsForPreV9Table(
           recordMergeMode, tableConfig.getPayloadClass(),
