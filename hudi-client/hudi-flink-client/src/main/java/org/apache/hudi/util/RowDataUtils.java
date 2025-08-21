@@ -135,6 +135,23 @@ public class RowDataUtils {
     return value;
   }
 
+  public static Object convertValueFromFlinkType(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof StringData) {
+      return ((StringData) value).toString();
+    }
+    if (value instanceof DecimalData) {
+      DecimalData decimalVal = (DecimalData) value;
+      return decimalVal.toBigDecimal();
+    }
+    if (value instanceof TimestampData) {
+      return ((TimestampData) value).toTimestamp();
+    }
+    return value;
+  }
+
   /**
    * Returns the precision of the given TIMESTAMP type.
    */
