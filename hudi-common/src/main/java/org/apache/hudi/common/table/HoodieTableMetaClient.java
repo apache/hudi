@@ -271,12 +271,9 @@ public class HoodieTableMetaClient implements Serializable {
   public void deleteIndexDefinition(String indexName) {
     checkState(indexMetadataOpt.isPresent(), "Index metadata is not present");
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
+    writeIndexMetadataToStorage();
     if (indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
-      String indexMetaPath = getIndexDefinitionPath();
-      writeIndexMetadataToStorage(storage, indexMetaPath, new HoodieIndexMetadata(), getTableConfig().getTableVersion());
       indexMetadataOpt = Option.empty();
-    } else {
-      writeIndexMetadataToStorage();
     }
   }
 
