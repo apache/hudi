@@ -66,6 +66,11 @@ public class BufferedRecords {
     return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete ? HoodieOperation.DELETE : null);
   }
 
+  public static <T> BufferedRecord<T> fromEngineRecord(T record, Schema schema, RecordContext<T> recordContext, Comparable orderingValue, String recordKey, boolean isDelete) {
+    Integer schemaId = recordContext.encodeAvroSchema(schema);
+    return new BufferedRecord<>(recordKey, orderingValue, record, schemaId, isDelete ? HoodieOperation.DELETE : null);
+  }
+
   public static <T> BufferedRecord<T> fromDeleteRecord(DeleteRecord deleteRecord, RecordContext<T> recordContext) {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), recordContext.getOrderingValue(deleteRecord), null, null, HoodieOperation.DELETE);
   }
