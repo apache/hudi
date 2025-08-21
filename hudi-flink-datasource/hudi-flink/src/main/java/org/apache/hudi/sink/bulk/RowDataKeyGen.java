@@ -97,7 +97,7 @@ public class RowDataKeyGen implements Serializable {
     List<LogicalType> fieldTypes = rowType.getChildren();
 
     boolean simpleRecordKey = false;
-    boolean encodesSimpleRecordKeyWithFieldName = false;
+    boolean multiplePartitions = false;
     if (!recordKeys.isPresent()) {
       this.recordKeyFields = null;
       this.recordKeyProjection = null;
@@ -126,10 +126,11 @@ public class RowDataKeyGen implements Serializable {
       this.partitionPathProjection = null;
     } else {
       this.partitionPathProjection = getProjection(this.partitionPathFields, fieldNames, fieldTypes);
+      multiplePartitions = true;
     }
     if (simpleRecordKey) {
-      encodesSimpleRecordKeyWithFieldName = isComplexKeygenEncodeSingleRecordKeyFieldName;
-      if (encodesSimpleRecordKeyWithFieldName) {
+      if (multiplePartitions && isComplexKeygenEncodeSingleRecordKeyFieldName) {
+        // single record key with multiple partition fields
         this.simpleRecordKeyFunc = rowData -> {
           String oriKey = getRecordKey(recordKeyFieldGetter.getFieldOrNull(rowData), this.recordKeyFields[0], consistentLogicalTimestampEnabled);
           return new StringBuilder(this.recordKeyFields[0]).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(oriKey).toString();
