@@ -463,7 +463,13 @@ public class BufferedRecordMergerFactory {
       // If pre-combine does not return existing record, update it
       if (combinedRecordData.map(record -> record != existingRecord.getRecord()).orElse(true)) {
         // For pkless we need to use record key from existing record
-        return Option.of(BufferedRecords.fromHoodieRecord(mergedRecord, mergeResultSchema, recordContext, props, orderingFieldNames, mergedRecord.isDelete(mergeResultSchema, props)));
+        boolean isDelete = mergedRecord.isDelete(readerSchema, props);
+        Comparable orderingValue = mergedRecord.getOrderingValue(mergeResultSchema, props, orderingFieldNames);
+        T mergedEngineRecord = mergedRecord.toIndexedRecord(mergeResultSchema, props)
+            .map(hoodieAvroIndexedRecord -> recordContext.convertAvroRecord(hoodieAvroIndexedRecord.getData()))
+            .orElse(null);
+        return Option.of(BufferedRecords.fromEngineRecord(mergedEngineRecord, readerSchema, recordContext, orderingValue, existingRecord.getRecordKey(), isDelete));
+
       }
       return Option.empty();
     }
@@ -482,7 +488,11 @@ public class BufferedRecordMergerFactory {
         mergedRecord = mergedRecord.rewriteRecordWithNewSchema(mergedRecordAndSchema.getRight(), null, readerSchema);
       }
       boolean isDelete = mergedRecord.isDelete(readerSchema, props);
-      return BufferedRecords.fromHoodieRecord(mergedRecord, readerSchema, recordContext, props, orderingFieldNames, isDelete);
+      Comparable orderingValue = mergedRecord.getOrderingValue(mergeResultSchema, props, orderingFieldNames);
+      T mergedEngineRecord = mergedRecord.toIndexedRecord(mergeResultSchema, props)
+          .map(hoodieAvroIndexedRecord -> recordContext.convertAvroRecord(hoodieAvroIndexedRecord.getData()))
+          .orElse(null);
+      return BufferedRecords.fromEngineRecord(mergedEngineRecord, readerSchema, recordContext, orderingValue, newerRecord.getRecordKey(), isDelete);
     }
 
     protected Pair<HoodieRecord, HoodieRecord> getDeltaMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
