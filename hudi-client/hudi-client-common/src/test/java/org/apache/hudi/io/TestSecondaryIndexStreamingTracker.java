@@ -295,7 +295,7 @@ class TestSecondaryIndexStreamingTracker {
         null,
         new HoodieEmptyRecord<>(null, HoodieRecord.HoodieRecordType.AVRO),
         null,
-        false,
+        true,
         newWriteStatus,
         schema,
         () -> schema,

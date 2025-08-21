@@ -152,7 +152,7 @@ public class SecondaryIndexStreamingTracker {
    * secondary index stats.
    *
    * @param hoodieKey                 The hoodie key
-   * @param combinedRecordOpt         New record merged with the old record
+   * @param combinedRecord            New record merged with the old record
    * @param oldRecord                 The old record
    * @param isDelete                  Whether the record is a DELETE
    * @param writeStatus               The Write status
@@ -162,7 +162,7 @@ public class SecondaryIndexStreamingTracker {
    * @param keyGeneratorOpt           Option containing key generator
    * @param config                    Hoodie write config
    */
-  static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, HoodieRecord combinedRecordOpt, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
+  static <T> void trackSecondaryIndexStats(@Nullable HoodieKey hoodieKey, HoodieRecord combinedRecord, @Nullable HoodieRecord<T> oldRecord, boolean isDelete,
                                            WriteStatus writeStatus, Schema writeSchemaWithMetaFields, Supplier<Schema> newSchemaSupplier,
                                            List<HoodieIndexDefinition> secondaryIndexDefns, Option<BaseKeyGenerator> keyGeneratorOpt, HoodieWriteConfig config) {
 
@@ -187,7 +187,7 @@ public class SecondaryIndexStreamingTracker {
 
       if (!isDelete) {
         Schema newSchema = newSchemaSupplier.get();
-        newSecondaryKey = combinedRecordOpt.getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
+        newSecondaryKey = combinedRecord.getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
         hasNewValue = true;
       }
 
@@ -212,7 +212,7 @@ public class SecondaryIndexStreamingTracker {
       if (shouldUpdate) {
         String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
             .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
-            .orElseGet(combinedRecordOpt::getRecordKey);
+            .orElseGet(combinedRecord::getRecordKey);
 
         // Delete old secondary index entry if old record exists.
         if (hasOldValue) {
