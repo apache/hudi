@@ -673,6 +673,17 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     assertTrue(merger.deltaMerge(bufferedRecord4, bufferedRecord3).isEmpty());
     assertTrue(merger.deltaMerge(bufferedRecord3, bufferedRecord2).isEmpty());
     assertTrue(merger.deltaMerge(bufferedRecord2, bufferedRecord1).isEmpty());
+
+    // Validate merge with delete records
+    DeleteRecord deleteRecordWithHigherOrderValue = DeleteRecord.create("1", "anyPath", 5000L);
+    DeleteRecord deleteRecordWithLowerOrderValue = DeleteRecord.create("1", "anyPath", 1000L);
+    Option<DeleteRecord> deleteResult = merger.deltaMerge(deleteRecordWithHigherOrderValue, bufferedRecord2);
+    // delete is skipped because custom merger prefers lower ordering value
+    assertFalse(deleteResult.isPresent());
+    deleteResult = merger.deltaMerge(deleteRecordWithLowerOrderValue, bufferedRecord2);
+    // delete is applied because lower ordering value is preferred
+    assertTrue(deleteResult.isPresent());
+    assertEquals(deleteRecordWithLowerOrderValue, deleteResult.get());
   }
 
   private static GenericRecord createCustomRecord(Schema customSchema, String id, String name, long timestamp, boolean isDelete) {
