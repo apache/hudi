@@ -134,3 +134,5 @@ The list of all RFCs can be found here.
 | 96         | Introduce Unified Bucket Index                                                                                                                                                                                       | `UNDER REVIEW` |
 | 97         | Deprecate Hudi Payload Class Usage                                                                                                                                                                                   | `UNDER REVIEW` |
 | 98         | [Spark Datasource V2 Read](./rfc-98/rfc-98.md)                                                                                                                                                                       | `UNDER REVIEW` |
+| 99         | [Hudi Type System](./rfc-999/rfc-999.md)                                                                                                                                                                             | `UNDER REVIEW` |
+
