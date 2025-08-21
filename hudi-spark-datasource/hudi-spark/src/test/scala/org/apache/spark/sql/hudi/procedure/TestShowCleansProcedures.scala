@@ -17,12 +17,17 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.HoodieSparkUtils
+
 class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
   test("Test show_clean_plans procedure") {
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>
         val tableName = generateTableName
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
         spark.sql(
           s"""
              |create table $tableName (
@@ -87,6 +92,9 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>
         val tableName = generateTableName
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
         spark.sql(
           s"""
              |create table $tableName (
@@ -133,6 +141,9 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>
         val tableName = generateTableName
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
         spark.sql(
           s"""
              |create table $tableName (
@@ -188,6 +199,9 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
       Seq("COPY_ON_WRITE").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
         spark.sql(
           s"""
              |create table $tableName (
@@ -252,6 +266,9 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>
         val tableName = generateTableName
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
         spark.sql(
           s"""
              |create table $tableName (
@@ -301,6 +318,9 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
     withSQLConf("hoodie.clean.automatic" -> "false") {
       withTempDir { tmp =>
         val tableName = generateTableName
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
         spark.sql(
           s"""
              |create table $tableName (
@@ -338,6 +358,9 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
   test("Test show procedures error handling") {
 
     val nonExistentTable = "non_existent_table"
+    if (HoodieSparkUtils.isSpark3_4) {
+      spark.sql("set spark.sql.defaultColumn.enabled = false")
+    }
 
     intercept[Exception] {
       spark.sql(s"call show_cleans(table => '$nonExistentTable')").collect()
