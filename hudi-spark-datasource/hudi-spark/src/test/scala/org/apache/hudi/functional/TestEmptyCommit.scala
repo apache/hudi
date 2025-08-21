@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
@@ -34,7 +35,7 @@ class TestEmptyCommit extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 

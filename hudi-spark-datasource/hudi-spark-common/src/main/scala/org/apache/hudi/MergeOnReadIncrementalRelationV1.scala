@@ -250,7 +250,7 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
   override lazy val mandatoryFields: Seq[String] = {
     // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
     //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
-    Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++ preCombineFields
+    Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++ orderingFields
   }
 
   protected def validate(): Unit = {

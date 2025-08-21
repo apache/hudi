@@ -62,7 +62,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              | tblproperties(
              |    type = '$tableType',
              |    primaryKey = 'id',
-             |    preCombineField = 'ts',
+             |    orderingFields = 'ts',
              |    'hoodie.metadata.index.partition.stats.enable' = 'true',
              |    'hoodie.metadata.index.column.stats.enable' = 'true',
              |    'hoodie.metadata.index.column.stats.column.list' = 'name'
@@ -118,7 +118,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              | tblproperties(
              |    type = '$tableType',
              |    primaryKey = 'id',
-             |    preCombineField = 'ts',
+             |    orderingFields = 'ts',
              |    'hoodie.metadata.index.partition.stats.enable' = 'true',
              |    'hoodie.metadata.index.column.stats.enable' = 'true',
              |    'hoodie.metadata.index.column.stats.column.list' = 'name'
@@ -146,7 +146,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
-        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+        assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
         assertResult(tableName)(metaClient.getTableConfig.getTableName)
         // Validate partition_stats index exists
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
@@ -203,7 +203,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              | options(
              |    type = '$tableType',
              |    primaryKey ='uuid',
-             |    preCombineField = 'ts',
+             |    orderingFields = 'ts',
              |    hoodie.metadata.index.partition.stats.enable = 'true',
              |    hoodie.metadata.index.column.stats.enable = 'true',
              |    hoodie.metadata.index.column.stats.column.list = 'rider'
@@ -349,7 +349,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'price',
+             |  orderingFields = 'price',
              |  hoodie.metadata.index.partition.stats.enable = 'true',
              |  hoodie.metadata.index.column.stats.enable = 'true'
              |)
@@ -401,7 +401,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'price',
+             |  orderingFields = 'price',
              |  hoodie.metadata.index.partition.stats.enable = 'true',
              |  hoodie.metadata.index.column.stats.enable = 'true',
              |  hoodie.metadata.index.column.stats.column.list = 'price'
@@ -488,7 +488,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
            |tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'price',
+           |  orderingFields = 'price',
            |  hoodie.metadata.index.partition.stats.enable = 'true',
            |  hoodie.metadata.index.column.stats.enable = 'true',
            |  hoodie.metadata.index.column.stats.column.list = 'price'
@@ -563,7 +563,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
                |tblproperties (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'price',
+               |  orderingFields = 'price',
                |  hoodie.metadata.index.partition.stats.enable = 'true',
                |  hoodie.metadata.index.column.stats.enable = 'true',
                |  hoodie.metadata.index.column.stats.column.list = 'price'

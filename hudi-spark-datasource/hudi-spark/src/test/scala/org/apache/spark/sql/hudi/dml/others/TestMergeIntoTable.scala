@@ -760,7 +760,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'v'
+             |  orderingFields = 'v'
              | )
              | partitioned by(dt)
              | location '${tmp.getCanonicalPath}/$tableName1'
@@ -801,7 +801,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
          """.stripMargin
         )(
           "MERGE INTO field resolution error: " +
-            "Failed to resolve precombine field `v` w/in the source-table output")
+            "Failed to resolve ordering fields `v` w/in the source-table output")
 
         spark.sql(
           s"""
@@ -889,7 +889,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
            | when matched then delete
            |""".stripMargin)(
         "MERGE INTO field resolution error: "
-          + "Failed to resolve precombine field `v` w/in the source-table output")
+          + "Failed to resolve ordering fields `v` w/in the source-table output")
 
       //
       // 2.b) set source column name to be different with target column

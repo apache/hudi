@@ -58,7 +58,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // create commit instant
@@ -110,7 +110,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -148,7 +148,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.table.initial.version,$tableVersion,$tableVersion]
           |[hoodie.table.keygenerator.type,NON_PARTITION,null]
           |[hoodie.table.name,,]
-          |[hoodie.table.precombine.field,ts,null]
+          |[hoodie.table.ordering.fields,ts,null]
           |[hoodie.table.recordkey.fields,id,null]
           |[hoodie.table.type,COPY_ON_WRITE,COPY_ON_WRITE]
           |[hoodie.table.version,,]
@@ -198,7 +198,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       var metaClient = createMetaClient(spark, tablePath)

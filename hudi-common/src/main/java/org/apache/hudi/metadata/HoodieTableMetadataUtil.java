@@ -1046,7 +1046,7 @@ public class HoodieTableMetadataUtil {
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), properties, datasetMetaClient));
       HoodieReadStats readStats = new HoodieReadStats();
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getPreCombineFields(),
+          readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getOrderingFields(),
           UpdateProcessor.create(readStats, readerContext, true, Option.empty(), properties));
 
       // CRITICAL: Ensure allowInflightInstants is set to true

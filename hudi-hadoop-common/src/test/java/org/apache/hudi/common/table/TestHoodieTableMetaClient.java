@@ -207,7 +207,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
     props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
-    props.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "timestamp");
+    props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
 
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
@@ -221,7 +221,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     // test table name and type and precombine field also match
     assertEquals(metaClient1.getTableConfig().getTableName(), metaClient2.getTableConfig().getTableName());
     assertEquals(metaClient1.getTableConfig().getTableType(), metaClient2.getTableConfig().getTableType());
-    assertEquals(metaClient1.getTableConfig().getPreCombineFields(), metaClient2.getTableConfig().getPreCombineFields());
+    assertEquals(metaClient1.getTableConfig().getOrderingFields(), metaClient2.getTableConfig().getOrderingFields());
     // default table version should be current version
     assertEquals(HoodieTableVersion.current(), metaClient2.getTableConfig().getTableVersion());
   }

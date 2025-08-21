@@ -90,8 +90,8 @@ public abstract class AbstractRealtimeRecordReader {
       metaClient = HoodieTableMetaClient.builder()
           .setConf(HadoopFSUtils.getStorageConfWithCopy(jobConf)).setBasePath(split.getBasePath()).build();
       payloadProps.putAll(metaClient.getTableConfig().getProps(true));
-      if (metaClient.getTableConfig().getPreCombineFieldsStr().isPresent()) {
-        this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getPreCombineFieldsStr().orElse(null));
+      if (metaClient.getTableConfig().getOrderingFieldsStr().isPresent()) {
+        this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getOrderingFieldsStr().orElse(null));
       }
       this.usesCustomPayload = usesCustomPayload(metaClient);
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);

@@ -20,7 +20,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{OPERATION, ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{AWSDmsAvroPayload, DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieRecordMerger, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
@@ -57,14 +57,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
       (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1))
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
-    val precombineField = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+    val orderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
       "_event_seq"
     } else {
       "ts"
     }
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "_event_lsn").
-      option(PRECOMBINE_FIELD.key(), precombineField).
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFields).
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
@@ -269,7 +269,7 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
-          HoodieTableConfig.PRECOMBINE_FIELDS.key() -> (DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME))),
+          HoodieTableConfig.ORDERING_FIELDS.key() -> (DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME))),
       Arguments.of(
         "COPY_ON_WRITE",
         classOf[AWSDmsAvroPayload].getName,
@@ -339,7 +339,7 @@ object TestPayloadDeprecationFlow {
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[MySqlDebeziumAvroPayload].getName,
           HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
-          HoodieTableConfig.PRECOMBINE_FIELDS.key() -> (DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME))),
+          HoodieTableConfig.ORDERING_FIELDS.key() -> (DebeziumConstants.FLATTENED_FILE_COL_NAME + "," + DebeziumConstants.FLATTENED_POS_COL_NAME))),
       Arguments.of(
         "MERGE_ON_READ",
         classOf[AWSDmsAvroPayload].getName,

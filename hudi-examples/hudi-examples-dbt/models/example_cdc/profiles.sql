@@ -28,7 +28,7 @@
         options={
             'type': 'cow',
             'primaryKey': 'user_id',
-            'preCombineField': 'updated_at',
+            'orderingFields': 'updated_at',
             'hoodie.table.cdc.enabled': 'true',
             'hoodie.table.cdc.supplemental.logging.mode': 'DATA_BEFORE_AFTER'
         }

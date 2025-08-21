@@ -371,7 +371,7 @@ public class TestHoodieCatalog {
   }
 
   @Test
-  void testCreateTableWithoutPreCombineKey() {
+  void testCreateTableWithoutOrderingFields() {
     Map<String, String> options = getDefaultCatalogOption();
     options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), DefaultHoodieRecordPayload.class.getName());
     catalog = new HoodieCatalog("hudi", Configuration.fromMap(options));
@@ -383,7 +383,7 @@ public class TestHoodieCatalog {
             + "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
 
     Map<String, String> options2 = getDefaultCatalogOption();
-    options2.put(FlinkOptions.PRECOMBINE_FIELD.key(), "not_exists");
+    options2.put(FlinkOptions.ORDERING_FIELDS.key(), "not_exists");
     catalog = new HoodieCatalog("hudi", Configuration.fromMap(options2));
     catalog.open();
     ObjectPath tablePath2 = new ObjectPath(TEST_DEFAULT_DATABASE, "tb2");

@@ -76,7 +76,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     "hoodie.upsert.shuffle.parallelism" -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key() -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 
@@ -207,7 +207,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
     )
@@ -353,7 +353,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val writerOpts: Map[String, String] = commonOpts ++ Map(
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       RECORDKEY_FIELD.key -> "id",
-      PRECOMBINE_FIELD.key -> "version",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "version",
       PARTITIONPATH_FIELD.key -> "dt,hh",
       HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
     )
@@ -496,7 +496,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val writerOpts: Map[String, String] = commonOpts ++ Map(
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       RECORDKEY_FIELD.key -> "id",
-      PRECOMBINE_FIELD.key -> "version",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "version",
       PARTITIONPATH_FIELD.key -> partitionNames.mkString(","),
       HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
     )
@@ -551,7 +551,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       val writerOpts: Map[String, String] = commonOpts ++ Map(
         DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
         RECORDKEY_FIELD.key -> "id",
-        PRECOMBINE_FIELD.key -> "version",
+        HoodieTableConfig.ORDERING_FIELDS.key() -> "version",
         PARTITIONPATH_FIELD.key -> "dt,hh"
       )
 
@@ -613,7 +613,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
       RECORDKEY_FIELD.key -> "id",
       PARTITIONPATH_FIELD.key -> "region_code,dt",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "price"
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "price"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -734,7 +734,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(RECORDKEY_FIELD.key, "id")
-      .option(PRECOMBINE_FIELD.key, "id")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "id")
       .option(PARTITIONPATH_FIELD.key, partitionBy)
       .option(HoodieMetadataConfig.ENABLE.key(), useMetaFileList)
       .mode(SaveMode.Overwrite)
@@ -765,7 +765,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "id",
-      PRECOMBINE_FIELD.key -> "id",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "id",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ writeMetadataOpts
 

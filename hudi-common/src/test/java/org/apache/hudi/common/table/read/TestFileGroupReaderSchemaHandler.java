@@ -228,8 +228,8 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
 
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
-    when(hoodieTableConfig.getPreCombineFieldsStr()).thenReturn(Option.of(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING));
-    when(hoodieTableConfig.getPreCombineFields()).thenReturn(setPrecombine ? Collections.singletonList(preCombineField) : Collections.emptyList());
+    when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.of(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING));
+    when(hoodieTableConfig.getOrderingFields()).thenReturn(setPrecombine ? Collections.singletonList(preCombineField) : Collections.emptyList());
     when(hoodieTableConfig.getTableVersion()).thenReturn(tableVersion);
     if (hoodieTableConfig.getTableVersion() == HoodieTableVersion.SIX) {
       if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {

@@ -36,7 +36,7 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |   primaryKey = 'id',
            |   type = 'cow',
-           |   preCombineField = 'ts',
+           |   orderingFields = 'ts',
            |   hoodie.metadata.enable = "false"
            | )
            |""".stripMargin)

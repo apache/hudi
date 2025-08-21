@@ -61,7 +61,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
                  | TBLPROPERTIES (
                  |   type = '$tableType',
                  |   primaryKey = 'id',
-                 |   preCombineField = 'precomb',
+                 |   orderingFields = 'precomb',
                  |   hoodie.datasource.write.partitionpath.field = 'ts',
                  |   hoodie.datasource.write.hive_style_partitioning = 'false',
                  |   hoodie.file.group.reader.enabled = '$shouldUseFileGroupReader',
@@ -118,7 +118,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
            | TBLPROPERTIES (
            |   type = 'COPY_ON_WRITE',
            |   primaryKey = 'id',
-           |   preCombineField = 'precomb'
+           |   orderingFields = 'precomb'
            | )
            |""".stripMargin)
       val dataBatches =   Array(
@@ -151,7 +151,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
            | TBLPROPERTIES (
            |   type = 'COPY_ON_WRITE',
            |   primaryKey = 'id',
-           |   preCombineField = 'precomb',
+           |   orderingFields = 'precomb',
            |   hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.TimestampBasedKeyGenerator',
            |   ${timestampKeyGeneratorSettings.head}
            | )

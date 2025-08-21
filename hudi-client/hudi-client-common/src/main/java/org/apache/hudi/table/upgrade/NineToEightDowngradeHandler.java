@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -81,17 +82,18 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
-    reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, metaClient);
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, tableConfig);
+    reconcileOrderingFieldsConfig(propertiesToAdd, propertiesToRemove, tableConfig);
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
   }
 
   private void reconcileMergeConfigs(Map<ConfigProperty, String> propertiesToAdd,
                                      Set<ConfigProperty> propertiesToRemove,
-                                     HoodieTableMetaClient metaClient) {
+                                     HoodieTableConfig tableConfig) {
     // Update table properties.
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
     // For specified payload classes, add strategy id and custom merge mode.
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     String legacyPayloadClass = tableConfig.getLegacyPayloadClass();
     if (!StringUtils.isNullOrEmpty(legacyPayloadClass) && (PAYLOAD_CLASSES_TO_HANDLE.contains(legacyPayloadClass))) {
       propertiesToRemove.add(LEGACY_PAYLOAD_CLASS_NAME);
@@ -112,9 +114,18 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue());
       }
-      if (legacyPayloadClass.equals(MySqlDebeziumAvroPayload.class.getName())) {
-        propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELDS, DebeziumConstants.ADDED_SEQ_COL_NAME);
-      }
     }
+  }
+
+  private void reconcileOrderingFieldsConfig(Map<ConfigProperty, String> propertiesToAdd,
+                                             Set<ConfigProperty> propertiesToRemove,
+                                             HoodieTableConfig tableConfig) {
+    Option<String> orderingFieldsOpt = MySqlDebeziumAvroPayload.class.getName().equals(tableConfig.getLegacyPayloadClass())
+        ? Option.of(DebeziumConstants.ADDED_SEQ_COL_NAME)
+        : tableConfig.getOrderingFieldsStr();
+    orderingFieldsOpt.ifPresent(orderingFields -> {
+      propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFields);
+      propertiesToRemove.add(HoodieTableConfig.ORDERING_FIELDS);
+    });
   }
 }

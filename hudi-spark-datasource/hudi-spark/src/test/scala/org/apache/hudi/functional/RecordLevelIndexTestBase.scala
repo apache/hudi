@@ -60,7 +60,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     RECORDKEY_FIELD.key -> "uuid",
     SECONDARYKEY_COLUMN_NAME.key -> "city",
     PARTITIONPATH_FIELD.key -> "state",
-    PRECOMBINE_FIELD.key -> "ts",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
   ) ++ metadataOpts
 
