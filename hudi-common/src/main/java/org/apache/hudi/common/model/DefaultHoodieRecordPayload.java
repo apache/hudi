@@ -168,7 +168,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     Comparable persistedOrderingVal = OrderingValues.create(
         orderingFields,
         field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled));
-    Comparable incomingOrderingVal = orderingVal != null ? orderingVal : incomingRecord.map(record -> OrderingValues.create(
+    Comparable incomingOrderingVal = incomingRecord.map(record -> OrderingValues.create(
         orderingFields,
         field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, consistentLogicalTimestampEnabled)))
         .orElseGet(OrderingValues::getDefault);
