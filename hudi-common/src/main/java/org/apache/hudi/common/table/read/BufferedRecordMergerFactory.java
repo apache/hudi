@@ -459,12 +459,11 @@ public class BufferedRecordMergerFactory {
       if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
         return Option.empty();
       }
-      T combinedRecordData = recordContext.convertAvroRecord(mergedRecord.toIndexedRecord(mergeResultSchema, props).get().getData());
+      Option<T> combinedRecordData = (mergedRecord.toIndexedRecord(mergeResultSchema, props).map(indexedRecord -> recordContext.convertAvroRecord(indexedRecord.getData())));
       // If pre-combine does not return existing record, update it
-      if (combinedRecordData != existingRecord.getRecord()) {
+      if (combinedRecordData.map(record -> record != existingRecord.getRecord()).orElse(true)) {
         // For pkless we need to use record key from existing record
-        return Option.of(BufferedRecords.fromEngineRecord(combinedRecordData, mergeResultSchema, recordContext, orderingFieldNames,
-            existingRecord.getRecordKey(), mergedRecord.isDelete(mergeResultSchema, props)));
+        return Option.of(BufferedRecords.fromHoodieRecord(mergedRecord, mergeResultSchema, recordContext, props, orderingFieldNames, mergedRecord.isDelete(mergeResultSchema, props)));
       }
       return Option.empty();
     }
