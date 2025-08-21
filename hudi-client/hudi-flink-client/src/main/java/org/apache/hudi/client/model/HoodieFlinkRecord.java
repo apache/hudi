@@ -58,10 +58,6 @@ import java.util.Properties;
  * Flink Engine-specific Implementations of `HoodieRecord`, which is expected to hold {@code RowData} as payload.
  */
 public class HoodieFlinkRecord extends HoodieRecord<RowData> {
-  // There are cases where operation is set to null explicitly, then we should return null directly if `getOperation` is invoked.
-  // For example, in HoodieFileGroupReader, if the record from base file is not updated, the operation of the record will be set
-  // as `null` during iterating.
-  private boolean isOperationExplicitNull = false;
 
   public HoodieFlinkRecord(RowData rowData) {
     super(null, rowData);
@@ -69,23 +65,16 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, RowData rowData) {
     super(key, rowData, op, Option.empty());
-    this.isOperationExplicitNull = op == null;
   }
 
   public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, Comparable<?> orderingValue, RowData rowData) {
     super(key, rowData, op, Option.empty());
     this.orderingValue = orderingValue;
-    this.isOperationExplicitNull = op == null;
   }
 
   public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, Comparable<?> orderingValue, RowData rowData, boolean isDelete) {
     super(key, rowData, op, isDelete, Option.empty());
     this.orderingValue = orderingValue;
-    this.isOperationExplicitNull = op == null;
-  }
-
-  public HoodieFlinkRecord(HoodieKey key, RowData rowData) {
-    super(key, rowData);
   }
 
   @Override
@@ -101,14 +90,6 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   @Override
   public HoodieRecord<RowData> newInstance(HoodieKey key) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
-  }
-
-  @Override
-  public HoodieOperation getOperation() {
-    if (this.operation == null && !this.isOperationExplicitNull) {
-      this.operation = HoodieOperation.fromValue(data.getRowKind().toByteValue());
-    }
-    return this.operation;
   }
 
   @Override
