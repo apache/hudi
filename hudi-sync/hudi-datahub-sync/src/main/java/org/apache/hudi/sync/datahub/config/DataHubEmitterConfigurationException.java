@@ -25,8 +25,11 @@ package org.apache.hudi.sync.datahub.config;
  * including TLS configuration, server connectivity, or authentication problems.
  */
 public class DataHubEmitterConfigurationException extends RuntimeException {
+  public DataHubEmitterConfigurationException(String message) {
+    super(message);
+  }
+  
   public DataHubEmitterConfigurationException(String message, Throwable cause) {
     super(message, cause);
   }
-
 }
