@@ -128,9 +128,9 @@ class TestDataHubSyncConfig {
     
     Properties props = new Properties();
     props.setProperty(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), TlsEnabledDataHubEmitterSupplier.class.getName());
-    props.setProperty(TlsEnabledDataHubEmitterSupplier.DATAHUB_EMITTER_SERVER, testServerUrl);
-    props.setProperty(TlsEnabledDataHubEmitterSupplier.DATAHUB_EMITTER_TOKEN, testToken);
-    props.setProperty(TlsEnabledDataHubEmitterSupplier.DATAHUB_TLS_CA_CERT_PATH, caCertPath.toString());
+    props.setProperty(DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SERVER.key(), testServerUrl);
+    props.setProperty(DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_TOKEN.key(), testToken);
+    props.setProperty(DataHubSyncConfig.META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), caCertPath.toString());
     
     DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
     RestEmitter emitter = syncConfig.getRestEmitter();
@@ -143,7 +143,7 @@ class TestDataHubSyncConfig {
     
     Properties props = new Properties();
     props.setProperty(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), TlsEnabledDataHubEmitterSupplier.class.getName());
-    props.setProperty(TlsEnabledDataHubEmitterSupplier.DATAHUB_EMITTER_SERVER, testServerUrl);
+    props.setProperty(DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SERVER.key(), testServerUrl);
     
     DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
     RestEmitter emitter = syncConfig.getRestEmitter();
@@ -165,8 +165,8 @@ class TestDataHubSyncConfig {
     
     Properties props = new Properties();
     props.setProperty(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), TlsEnabledDataHubEmitterSupplier.class.getName());
-    props.setProperty(TlsEnabledDataHubEmitterSupplier.DATAHUB_EMITTER_SERVER, testServerUrl);
-    props.setProperty(TlsEnabledDataHubEmitterSupplier.DATAHUB_TLS_CA_CERT_PATH, "/nonexistent/path/cert.pem");
+    props.setProperty(DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SERVER.key(), testServerUrl);
+    props.setProperty(DataHubSyncConfig.META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), "/nonexistent/path/cert.pem");
     
     DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
     assertThrows(DataHubEmitterConfigurationException.class, syncConfig::getRestEmitter);
