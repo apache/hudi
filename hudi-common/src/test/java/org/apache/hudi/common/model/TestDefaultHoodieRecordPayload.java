@@ -78,8 +78,8 @@ public class TestDefaultHoodieRecordPayload {
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
 
-    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 0L);
-    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, 1L);
+    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1);
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, 2);
     assertEquals(payload1.preCombine(payload2, props), payload2);
     assertEquals(payload2.preCombine(payload1, props), payload2);
 
@@ -106,8 +106,8 @@ public class TestDefaultHoodieRecordPayload {
     delRecord1.put("ts", 1L);
     delRecord1.put("_hoodie_is_deleted", true);
 
-    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 0L);
-    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(delRecord1, 1L);
+    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1);
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(delRecord1, 2);
     assertFalse(payload1.isDeleted(schema, props));
     assertTrue(payload2.isDeleted(schema, props));
     assertEquals(payload1.preCombine(payload2, props), payload2);
@@ -142,9 +142,9 @@ public class TestDefaultHoodieRecordPayload {
     defaultDeleteRecord.put("ts", 2L);
     defaultDeleteRecord.put("_hoodie_is_deleted", true);
 
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 0L);
-    DefaultHoodieRecordPayload deletePayload = new DefaultHoodieRecordPayload(delRecord, 1L);
-    DefaultHoodieRecordPayload defaultDeletePayload = new DefaultHoodieRecordPayload(defaultDeleteRecord, 2L);
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1);
+    DefaultHoodieRecordPayload deletePayload = new DefaultHoodieRecordPayload(delRecord, 2);
+    DefaultHoodieRecordPayload defaultDeletePayload = new DefaultHoodieRecordPayload(defaultDeleteRecord, 2);
 
     assertFalse(payload.isDeleted(schema, props));
     assertTrue(deletePayload.isDeleted(schema, props));
@@ -168,7 +168,7 @@ public class TestDefaultHoodieRecordPayload {
     record.put("ts", 0L);
     record.put("_hoodie_is_deleted", false);
 
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1L);
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, 1);
 
     // Verify failure when DELETE_MARKER is not configured along with DELETE_KEY
     try {
@@ -179,7 +179,7 @@ public class TestDefaultHoodieRecordPayload {
     }
 
     try {
-      payload = new DefaultHoodieRecordPayload(record, 1L);
+      payload = new DefaultHoodieRecordPayload(record, 1);
       payload.combineAndGetUpdateValue(record, schema, props).get();
       fail("Should fail");
     } catch (IllegalArgumentException e) {
