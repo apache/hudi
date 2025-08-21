@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -389,10 +390,11 @@ public class BufferedRecordMergerFactory {
           recordContext.constructHoodieRecord(olderRecord), recordContext.getSchemaFromBufferRecord(olderRecord),
           recordContext.constructHoodieRecord(newerRecord), recordContext.getSchemaFromBufferRecord(newerRecord), props);
       HoodieRecord hoodieRecord = mergedRecord.getLeft();
-      if (!mergedRecord.getRight().equals(readerSchema)) {
+      boolean isDelete = hoodieRecord.isDelete(readerSchema, props);
+      if (!isDelete && !mergedRecord.getRight().equals(readerSchema)) {
         hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.getRight(), null, readerSchema);
       }
-      return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, hoodieRecord.isDelete(readerSchema, props));
+      return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, isDelete);
     }
   }
 
@@ -568,6 +570,10 @@ public class BufferedRecordMergerFactory {
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
       if (olderRecord == null) {
+        return newerRecord;
+      }
+      // handle special case for deletes that are sent to older partitions in global-index, this delete takes precedence regardless of the previous value
+      if (newerRecord.getHoodieOperation() == HoodieOperation.UPDATE_BEFORE) {
         return newerRecord;
       }
       return mergeRecords(olderRecord, newerRecord);
