@@ -1047,7 +1047,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String timelinePath;
     private String timelineHistoryPath;
     private String baseFileFormat;
-    private String preCombineFields;
+    private String orderingFields;
     private String partitionFields;
     private Boolean cdcEnabled;
     private String cdcSupplementalLoggingMode;
@@ -1169,11 +1169,11 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     /**
-     * Sets preCombine fields as a comma separated string in the table
-     * @param preCombineFieldsAsString - Comma separated preCombine fields which need to be set for the table
+     * Sets ordering fields as a comma separated string in the table
+     * @param orderingFieldsAsString - Comma separated ordering fields which need to be set for the table
      */
-    public TableBuilder setPreCombineFields(String preCombineFieldsAsString) {
-      this.preCombineFields = preCombineFieldsAsString;
+    public TableBuilder setOrderingFields(String orderingFieldsAsString) {
+      this.orderingFields = orderingFieldsAsString;
       return this;
     }
 
@@ -1376,8 +1376,8 @@ public class HoodieTableMetaClient implements Serializable {
         setBootstrapIndexEnable(hoodieConfig.getBoolean(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE));
       }
 
-      if (hoodieConfig.contains(HoodieTableConfig.PRECOMBINE_FIELDS)) {
-        setPreCombineFields(hoodieConfig.getString(HoodieTableConfig.PRECOMBINE_FIELDS));
+      if (hoodieConfig.contains(HoodieTableConfig.ORDERING_FIELDS)) {
+        setOrderingFields(hoodieConfig.getString(HoodieTableConfig.ORDERING_FIELDS));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_FIELDS)) {
         setPartitionFields(
@@ -1462,14 +1462,14 @@ public class HoodieTableMetaClient implements Serializable {
       if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
         Triple<RecordMergeMode, String, String> mergeConfigs =
             inferMergingConfigsForPreV9Table(
-                recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields,
+                recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields,
                 tableVersion);
         tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
         tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
         tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
       } else { // For table version >= 9
         Map<String, String> mergeConfigs = inferMergingConfigsForV9TableCreation(
-            recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields, tableVersion);
+            recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields, tableVersion);
         for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
           tableConfig.setValue(config.getKey(), config.getValue());
         }
@@ -1518,8 +1518,8 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_BASE_PATH, bootstrapBasePath);
       }
 
-      if (StringUtils.nonEmpty(preCombineFields)) {
-        tableConfig.setValue(HoodieTableConfig.PRECOMBINE_FIELDS, preCombineFields);
+      if (StringUtils.nonEmpty(orderingFields)) {
+        tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, orderingFields);
       }
 
       if (null != partitionFields) {

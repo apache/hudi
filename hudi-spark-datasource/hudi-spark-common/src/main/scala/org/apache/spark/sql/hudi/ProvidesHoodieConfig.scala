@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
-import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{ConfigUtils, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory
 
 import java.util.Locale
 
+import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -64,7 +65,7 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineFields = tableConfig.getPreCombineFieldsStr.orElse("")
+    val orderingFields = tableConfig.getOrderingFieldsStr.orElse("")
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
@@ -82,7 +83,7 @@ trait ProvidesHoodieConfig extends Logging {
       HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE.key -> hiveSyncConfig.getBoolean(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE).toString
     )
 
-    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, preCombineFields)
+    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, orderingFields)
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
@@ -90,7 +91,7 @@ trait ProvidesHoodieConfig extends Logging {
   def buildBucketRescaleHoodieConfig(hoodieCatalogTable: HoodieCatalogTable): Map[String, String] = {
     val sparkSession: SparkSession = hoodieCatalogTable.spark
     val tableConfig = hoodieCatalogTable.tableConfig
-    val preCombineFields = tableConfig.getPreCombineFieldsStr.orElse("")
+    val orderingFields = tableConfig.getOrderingFieldsStr.orElse("")
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
 
     val defaultOpts = Map[String, String](
@@ -103,7 +104,7 @@ trait ProvidesHoodieConfig extends Logging {
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key -> "false"
     )
 
-    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, preCombineFields)
+    val overridingOpts = buildOverridingOpts(hoodieCatalogTable, orderingFields)
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = defaultOpts, overridingOpts = overridingOpts)
   }
@@ -147,7 +148,7 @@ trait ProvidesHoodieConfig extends Logging {
       case (false, false, true, _, _, _, _) => INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
       // insert overwrite partition
       case (false, true, false, _, _, true, _) => INSERT_OVERWRITE_OPERATION_OPT_VAL
-      // disable dropDuplicate, and provide preCombineKey, use the upsert operation for strict and upsert mode.
+      // disable dropDuplicate, and provide orderingFields, use the upsert operation for strict and upsert mode.
       case (false, false, false, false, false, _, _) if combineBeforeInsert => UPSERT_OPERATION_OPT_VAL
       // if table is pk table and has enableBulkInsert use bulk insert for non-strict mode.
       case (true, false, false, _, true, _, _) => BULK_INSERT_OPERATION_OPT_VAL
@@ -190,8 +191,7 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineField = combinedOpts.getOrElse(HoodieTableConfig.PRECOMBINE_FIELDS.key,
-      combinedOpts.getOrElse(PRECOMBINE_FIELD.key, ""))
+    val orderingFieldsStr = Option.apply(ConfigUtils.getOrderingFieldsStrDuringWrite(combinedOpts.asJava)).getOrElse("")
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
@@ -215,7 +215,7 @@ trait ProvidesHoodieConfig extends Logging {
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
     val isNonStrictMode = insertMode == InsertMode.NON_STRICT
     val isPartitionedTable = hoodieCatalogTable.partitionFields.nonEmpty
-    val combineBeforeInsert = !hoodieCatalogTable.preCombineKeys.isEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
+    val combineBeforeInsert = !hoodieCatalogTable.orderingFields.isEmpty && hoodieCatalogTable.primaryKeys.nonEmpty
 
     /*
      * The sql write operation has higher precedence than the legacy insert mode.
@@ -232,7 +232,7 @@ trait ProvidesHoodieConfig extends Logging {
           isNonStrictMode, isPartitionedTable, combineBeforeInsert, insertMode, shouldAutoKeyGen)
       } else {
         deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable,
-          shouldAutoKeyGen, preCombineField, sparkSqlInsertIntoOperationSet, sparkSqlInsertIntoOperation)
+          shouldAutoKeyGen, orderingFieldsStr, sparkSqlInsertIntoOperationSet, sparkSqlInsertIntoOperation)
       }
     )
 
@@ -301,7 +301,7 @@ trait ProvidesHoodieConfig extends Logging {
       HIVE_STYLE_PARTITIONING.key -> hiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> urlEncodePartitioning,
       RECORDKEY_FIELD.key -> recordKeyConfigValue,
-      PRECOMBINE_FIELD.key -> preCombineField,
+      HoodieTableConfig.ORDERING_FIELDS.key -> orderingFieldsStr,
       PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
         keyGeneratorClassName, partitionFieldsStr, hoodieCatalogTable)
     ) ++ overwriteTableOpts ++ getDropDupsConfig(useLegacyInsertModeFlow, combinedOpts) ++ staticOverwritePartitionPathOptions
@@ -398,7 +398,6 @@ trait ProvidesHoodieConfig extends Logging {
       OPERATION.key -> DataSourceWriteOptions.DELETE_PARTITION_OPERATION_OPT_VAL,
       PARTITIONS_TO_DELETE.key -> partitionsToDrop,
       RECORDKEY_FIELD.key -> hoodieCatalogTable.primaryKeys.mkString(","),
-      PRECOMBINE_FIELD.key -> String.join(",", hoodieCatalogTable.preCombineKeys),
       PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
         tableConfig.getKeyGeneratorClassName, partitionFields, hoodieCatalogTable),
       HoodieSyncConfig.META_SYNC_ENABLED.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_ENABLED.key),
@@ -560,9 +559,9 @@ object ProvidesHoodieConfig {
     opts.filter { case (_, v) => v != null }
 
   private def buildOverridingOpts(hoodieCatalogTable: HoodieCatalogTable,
-                                  preCombineFields: String): Map[String, String] = {
+                                  orderingFields: String): Map[String, String] = {
     buildCommonOverridingOpts(hoodieCatalogTable) ++ Map(
-      PRECOMBINE_FIELD.key -> preCombineFields
+      HoodieTableConfig.ORDERING_FIELDS.key -> orderingFields
     )
   }
 

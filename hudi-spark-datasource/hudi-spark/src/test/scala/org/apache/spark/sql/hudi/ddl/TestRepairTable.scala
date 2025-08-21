@@ -19,7 +19,8 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 
@@ -45,7 +46,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
              | location '$basePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
              | )
         """.stripMargin)
@@ -74,7 +75,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
              | location '$basePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
              | )
         """.stripMargin)
@@ -85,7 +86,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
           .toDF("id", "name", "ts", "dt", "hh")
         df.write.format("hudi")
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt,hh")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
           .mode(SaveMode.Append)
@@ -111,7 +112,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
         df.write.format("hudi")
           .option(TBL_NAME.key(), tableName)
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt,hh")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
           .mode(SaveMode.Append)
@@ -150,7 +151,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
              | location '$basePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
              | )
         """.stripMargin)
@@ -162,7 +163,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
         df1.write.format("hudi")
           .option(TBL_NAME.key(), tableName)
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
           .mode(SaveMode.Append)
@@ -177,7 +178,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
         df2.write.format("hudi")
           .option(TBL_NAME.key(), tableName)
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
           .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
           .mode(SaveMode.Overwrite)

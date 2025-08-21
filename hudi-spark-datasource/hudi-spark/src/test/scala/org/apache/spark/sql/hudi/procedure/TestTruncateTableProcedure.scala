@@ -43,7 +43,7 @@ class TestTruncateTableProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
      """.stripMargin)
 

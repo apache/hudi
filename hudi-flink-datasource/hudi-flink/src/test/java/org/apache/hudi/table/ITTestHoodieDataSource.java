@@ -689,7 +689,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
-        .option(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE)
+        .option(FlinkOptions.ORDERING_FIELDS, FlinkOptions.NO_PRE_COMBINE)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -1541,7 +1541,7 @@ public class ITTestHoodieDataSource {
         .field("f3 decimal(38, 18)")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.OPERATION, operation)
-        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .option(FlinkOptions.ORDERING_FIELDS, "f1")
         .pkField("f0")
         .noPartition()
         .end();
@@ -2098,7 +2098,7 @@ public class ITTestHoodieDataSource {
         .pkField("f_int")
         .partitionField("f_par")
         .option(FlinkOptions.RECORD_KEY_FIELD, "f_int")
-        .option(FlinkOptions.PRECOMBINE_FIELD, "f_date")
+        .option(FlinkOptions.ORDERING_FIELDS, "f_date")
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -2126,7 +2126,7 @@ public class ITTestHoodieDataSource {
         .field("f2 bigint")
         .field("f3 as f0 + f2")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .option(FlinkOptions.ORDERING_FIELDS, "f1")
         .pkField("f0")
         .noPartition()
         .end();
@@ -2154,7 +2154,7 @@ public class ITTestHoodieDataSource {
         .field("f2 as f0 + f1")
         .field("f3 varchar(10)")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .option(FlinkOptions.ORDERING_FIELDS, "f1")
         .pkField("f0")
         .noPartition()
         .end();
@@ -2184,7 +2184,7 @@ public class ITTestHoodieDataSource {
         .field("f2 TIMESTAMP_LTZ(3)")
         .field("f4 TIMESTAMP_LTZ(6)")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .option(FlinkOptions.ORDERING_FIELDS, "f1")
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .pkField("f0")
         .noPartition()
@@ -2215,7 +2215,7 @@ public class ITTestHoodieDataSource {
         .field("f2 TIMESTAMP(3)")
         .field("f3 TIMESTAMP(6)")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.PRECOMBINE_FIELD, "f1")
+        .option(FlinkOptions.ORDERING_FIELDS, "f1")
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.WRITE_UTC_TIMEZONE, false)
         .option(FlinkOptions.READ_UTC_TIMEZONE, readUtcTimezone)

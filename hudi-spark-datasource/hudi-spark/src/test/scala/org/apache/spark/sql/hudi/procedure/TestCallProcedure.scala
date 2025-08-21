@@ -37,7 +37,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -71,7 +71,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -104,7 +104,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -148,7 +148,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -188,7 +188,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -226,7 +226,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -269,7 +269,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -313,7 +313,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table

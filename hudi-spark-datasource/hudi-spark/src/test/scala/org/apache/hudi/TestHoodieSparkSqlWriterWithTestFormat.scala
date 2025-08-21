@@ -261,7 +261,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
    * Test case for insert dataset without precombine field.
    */
   @Test
-  def testInsertDatasetWithoutPrecombineField(): Unit = {
+  def testInsertDatasetWithoutOrderingFields(): Unit = {
 
     val fooTableModifier = commonTableModifier.updated(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .updated(DataSourceWriteOptions.INSERT_DROP_DUPS.key, "false")
@@ -274,7 +274,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
-    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier - DataSourceWriteOptions.PRECOMBINE_FIELD.key, df)
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier - HoodieTableConfig.ORDERING_FIELDS.key, df)
 
     // collect all partition paths to issue read of parquet files
     val partitions = Seq(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH,
@@ -485,7 +485,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
       .setBaseFileFormat(fooTableParams.getOrElse(HoodieWriteConfig.BASE_FILE_FORMAT.key,
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().name))
       .setArchiveLogFolder(HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue())
-      .setPreCombineFields(fooTableParams.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, null))
+      .setOrderingFields(fooTableParams.getOrElse(HoodieTableConfig.ORDERING_FIELDS.key, null))
       .setPartitionFields(fooTableParams(DataSourceWriteOptions.PARTITIONPATH_FIELD.key))
       .setKeyGeneratorClassProp(fooTableParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key,
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.defaultValue()))
@@ -505,7 +505,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       HoodieTableConfig.TABLE_FORMAT.key -> "test-format"
     )
 
@@ -534,7 +534,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
       HoodieTableConfig.TABLE_FORMAT.key -> "test-format"
     )
@@ -567,7 +567,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
       HoodieTableConfig.TABLE_FORMAT.key -> "test-format"
     )
@@ -600,7 +600,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
       HoodieTableConfig.TABLE_FORMAT.key -> "test-format"
     )
@@ -658,7 +658,7 @@ class TestHoodieSparkSqlWriterWithTestFormat extends HoodieSparkWriterTestBase {
     val df = Seq((1, "a1", 10, 1000, "2021-10-16")).toDF("id", "name", "value", "ts", "dt")
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key -> "CONSISTENT_HASHING",
       HoodieIndexConfig.INDEX_TYPE.key -> "BUCKET",
       HoodieTableConfig.TABLE_FORMAT.key -> "test-format"

@@ -45,7 +45,7 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
            | location '$basePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -100,7 +100,7 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
            | location '$basePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -148,7 +148,7 @@ class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
            | location '$basePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table

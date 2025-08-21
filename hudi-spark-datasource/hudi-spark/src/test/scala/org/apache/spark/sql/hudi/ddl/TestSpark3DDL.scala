@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, Quicks
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -61,7 +61,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
          | options (
          |  type = '$tableType',
          |  primaryKey = 'id',
-         |  preCombineField = 'comb'
+         |  orderingFields = 'comb'
          | )
          | partitioned by (par)
              """.stripMargin)
@@ -205,7 +205,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df = spark.createDataFrame(rowRdd, structType)
         df.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())
@@ -224,7 +224,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df2 = spark.createDataFrame(rowRdd2, structType)
         df2.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())
@@ -250,7 +250,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df3 = spark.createDataFrame(rowRdd3, structType3)
         df3.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())
@@ -285,7 +285,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
        """.stripMargin)
 
@@ -358,8 +358,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           checkException(s"Alter table $tableName add columns(col_new1 int after $f)")("forbid adjust the position of ordinary columns between meta columns")
         }
         Seq("id", "comb", "par").foreach { col =>
-          checkException(s"alter table $tableName drop column $col")("cannot support apply changes for primaryKey/CombineKey/partitionKey")
-          checkException(s"alter table $tableName rename column $col to ${col + col}")("cannot support apply changes for primaryKey/CombineKey/partitionKey")
+          checkException(s"alter table $tableName drop column $col")("cannot support apply changes for primaryKey/orderingFields/partitionKey")
+          checkException(s"alter table $tableName rename column $col to ${col + col}")("cannot support apply changes for primaryKey/orderingFields/partitionKey")
         }
         // check duplicate add or rename
         // keep consistent with hive, column names insensitive
@@ -549,7 +549,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                | options (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'comb'
+               |  orderingFields = 'comb'
                | )
                | partitioned by (par)
              """.stripMargin)
@@ -605,7 +605,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                | options (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                | )
              """.stripMargin)
           spark.sql(s"show create table ${tableName}").show(false)
@@ -684,7 +684,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              """.stripMargin)
         spark.sql(s"alter table $tableName alter column name drop not null")
@@ -714,7 +714,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
                | options (
                |  type = '$tableType',
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                | )
              """.stripMargin)
           spark.sql(s"show create table ${tableName}").show(false)
@@ -754,7 +754,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = 'mor',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              """.stripMargin)
 
@@ -1009,7 +1009,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by (ts)
              """.stripMargin)
@@ -1053,7 +1053,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
              | )
            """.stripMargin)
@@ -1091,7 +1091,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
              | )
            """.stripMargin)
@@ -1172,7 +1172,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              |tblproperties (
              | primaryKey = 'id',
              | type = '$tableType',
-             | preCombineField = 'ts'
+             | orderingFields = 'ts'
              |)
              |partitioned by (region, dt)""".stripMargin)
 

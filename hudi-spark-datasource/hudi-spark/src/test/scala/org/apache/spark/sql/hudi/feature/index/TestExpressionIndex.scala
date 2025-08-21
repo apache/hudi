@@ -29,7 +29,7 @@ import org.apache.hudi.client.utils.SparkMetadataWriterUtils
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
@@ -1983,7 +1983,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         "hoodie.upsert.shuffle.parallelism" -> "4",
         HoodieWriteConfig.TBL_NAME.key -> tableName,
         RECORDKEY_FIELD.key -> "c1",
-        PRECOMBINE_FIELD.key -> "c1",
+        HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
         PARTITIONPATH_FIELD.key() -> "c8",
         "hoodie.metadata.index.column.stats.enable" -> "false"
       )
@@ -2069,7 +2069,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         HoodieWriteConfig.TBL_NAME.key -> tableName,
         TABLE_TYPE.key -> "MERGE_ON_READ",
         RECORDKEY_FIELD.key -> "c1",
-        PRECOMBINE_FIELD.key -> "c1",
+        HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
         PARTITIONPATH_FIELD.key() -> "c8",
         // setting IndexType to be INMEMORY to simulate Global Index nature
         HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.INMEMORY.name(),
@@ -2141,7 +2141,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
       HoodieWriteConfig.TBL_NAME.key -> "testGetExpressionIndexRecordsUsingBloomFilter",
       TABLE_TYPE.key -> "MERGE_ON_READ",
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
       // setting IndexType to be INMEMORY to simulate Global Index nature
       HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.INMEMORY.name()

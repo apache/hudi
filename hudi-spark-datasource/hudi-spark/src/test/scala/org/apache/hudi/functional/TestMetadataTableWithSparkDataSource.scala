@@ -23,7 +23,7 @@ import org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
@@ -62,7 +62,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
 

@@ -20,7 +20,7 @@
 package org.apache.hudi.common.table.read
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
-import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{OPERATION, ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
@@ -239,7 +239,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
+      option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").

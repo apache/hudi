@@ -56,7 +56,6 @@ object HoodieWriterUtils {
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
-    hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)
@@ -280,10 +279,10 @@ object HoodieWriterUtils {
           }
         }
 
-        val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
-        val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELDS)
-        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
-          diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
+        val datasourceOrderingFields = params.getOrElse(ORDERING_FIELDS.key(), null)
+        val tableConfigOrderingKey = tableConfig.getString(HoodieTableConfig.ORDERING_FIELDS)
+        if (null != datasourceOrderingFields && null != tableConfigOrderingKey && datasourceOrderingFields != tableConfigOrderingKey) {
+          diffConfigs.append(s"OrderingFields:\t$datasourceOrderingFields\t$tableConfigOrderingKey\n")
         }
 
         val datasourceKeyGen = getOriginKeyGenerator(params)
@@ -373,7 +372,7 @@ object HoodieWriterUtils {
   private val sparkDatasourceConfigsToTableConfigsMap = Map(
     TABLE_NAME -> HoodieTableConfig.NAME,
     TABLE_TYPE -> HoodieTableConfig.TYPE,
-    PRECOMBINE_FIELD -> HoodieTableConfig.PRECOMBINE_FIELDS,
+    ORDERING_FIELDS -> HoodieTableConfig.ORDERING_FIELDS,
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
