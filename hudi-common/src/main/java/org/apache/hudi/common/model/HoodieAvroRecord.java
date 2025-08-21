@@ -54,11 +54,11 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     super(key, data);
   }
 
-  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation hoodieOperation, boolean isDelete) {
+  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation hoodieOperation, Boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
   }
 
-  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation hoodieOperation, Comparable orderingValue, boolean isDelete) {
+  public HoodieAvroRecord(HoodieKey key, T data, HoodieOperation hoodieOperation, Comparable orderingValue, Boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
     this.orderingValue = orderingValue;
   }
