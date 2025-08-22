@@ -71,19 +71,21 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         val secondCleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')").collect()
         require(secondCleanPlans.length >= 2, "Should have at least 2 clean plans after second clean")
 
+        val sortedPlans = secondCleanPlans.sortBy(_.getString(0))
+        val actualFirstCleanTime = sortedPlans(0).getString(0)
+
+        val startTimeStr = (actualFirstCleanTime.toLong + 1000).toString
+
         val allCleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')")
         allCleanPlans.show(false)
         val allPlans = allCleanPlans.collect()
 
         assert(allPlans.length >= 2, "Should have at least 2 clean plans")
 
-        val firstPlan = allPlans.head
-        assert(firstPlan.length >= 4, "Each clean plan should have at least 4 columns (plan_time, earliest_retained_instant, last_completed_commit_time, files_deleted)")
-
-        allPlans.foreach { plan =>
-          val planTime = plan.getString(0)
-          assert(planTime.nonEmpty && planTime.toLong > 0, "Plan time should be a valid timestamp")
-        }
+        val afterStartFilter = spark.sql(s"""call show_clean_plans(table => '$tableName', filter => "plan_time > '$startTimeStr'")""")
+        afterStartFilter.show(false)
+        val afterStartRows = afterStartFilter.collect()
+        assertResult(afterStartRows.length)(1)
       }
     }
   }
@@ -372,6 +374,136 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
     intercept[Exception] {
       spark.sql(s"call show_cleans_metadata(table => '$nonExistentTable')").collect()
+    }
+  }
+
+  test("Test cleaning with some complex filters") {
+    withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | ts long
+             | ) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   type = 'cow',
+             |   preCombineField = 'ts'
+             | )
+             |""".stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+        spark.sql(s"update $tableName set price = 11 where id = 1")
+
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+
+        spark.sql(s"update $tableName set price = 12 where id = 1")
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+
+        spark.sql(s"update $tableName set price = 13 where id = 1")
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+
+        val allCleans = spark.sql(s"call show_cleans(table => '$tableName')")
+        allCleans.show(false)
+        val allCleansDf = allCleans.collect()
+        val firstCleanTime = if (allCleansDf.nonEmpty) allCleansDf.last.getAs[String]("clean_time") else "0"
+
+        val firstCleanDF = spark.sql(
+          s"""call show_cleans(table => '$tableName', filter => "clean_time = '$firstCleanTime' AND action = 'clean'")"""
+        )
+        firstCleanDF.show(false)
+        val firstClean = firstCleanDF.collect()
+
+        val laterCleansDF = spark.sql(
+          s"""call show_cleans(table => '$tableName', filter => "clean_time > '$firstCleanTime' AND action = 'clean'")"""
+        )
+        laterCleansDF.show(false)
+        val laterCleans = laterCleansDF.collect()
+
+        val numericFilterDF = spark.sql(
+          s"""call show_cleans(table => '$tableName', filter => "total_files_deleted > 0 AND LENGTH(action) > 3")"""
+        )
+        numericFilterDF.show(false)
+        val numericFilter = numericFilterDF.collect()
+
+        assert(firstClean.length == 1, "First clean filter should execute successfully")
+        assert(laterCleans.length == allCleansDf.length - 1, "Later cleans filter should execute successfully")
+        assert(numericFilter.length == allCleansDf.length, "Numeric filter should execute successfully")
+      }
+    }
+  }
+
+  test("Test filter expressions with various data types") {
+    withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | active boolean,
+             | ts long
+             | ) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   type = 'cow',
+             |   preCombineField = 'ts'
+             | )
+             |""".stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'product1', 99.99, true, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'product2', 149.99, false, 2000)")
+
+        spark.sql(s"update $tableName set price = 109.99 where id = 1")
+        spark.sql(s"update $tableName set price = 119.99 where id = 1")
+        spark.sql(s"update $tableName set price = 129.99 where id = 2")
+        spark.sql(s"update $tableName set price = 139.99 where id = 2")
+
+        spark.sql(s"insert into $tableName values(3, 'product3', 199.99, true, 3000)")
+        spark.sql(s"update $tableName set price = 149.99 where id = 1")
+
+        spark.sql(s"call run_clean(table => '$tableName', retain_commits => 2)").collect()
+
+        val allCleansDF = spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)")
+        allCleansDF.show(false)
+
+        val filterTests = Seq(
+          ("action = 'clean'", "String equality"),
+          ("action LIKE 'clean%'", "String LIKE pattern"),
+          ("UPPER(action) = 'CLEAN'", "String function with equality"),
+          ("LENGTH(clean_time) > 5", "String length function"),
+          ("total_files_deleted >= 0", "Numeric comparison"),
+          ("time_taken_in_millis BETWEEN 0 AND 999999", "Numeric BETWEEN"),
+          ("clean_time IS NOT NULL", "NULL check"),
+          ("action = 'clean' AND total_files_deleted >= 0", "AND logic"),
+          ("total_files_deleted >= 0 OR time_taken_in_millis >= 0", "OR logic"),
+          ("NOT (total_files_deleted < 0)", "NOT logic"),
+          ("action IN ('clean', 'commit', 'rollback')", "IN operator")
+        )
+
+        filterTests.foreach { case (filterExpr, description) =>
+          val filteredResult = spark.sql(
+            s"""call show_cleans(table => '$tableName',
+               |filter => "$filterExpr")""".stripMargin
+          ).collect()
+          assert(filteredResult.length > 0, s"Filter '$description' should execute successfully")
+        }
+      }
     }
   }
 }
