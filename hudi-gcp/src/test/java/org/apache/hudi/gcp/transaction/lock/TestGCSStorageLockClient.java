@@ -37,6 +37,8 @@ import com.google.cloud.storage.StorageException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
@@ -67,6 +69,7 @@ public class TestGCSStorageLockClient {
 
   private static final String OWNER_ID = "ownerId";
   private static final String LOCK_FILE_URI = "gs://bucket/lockFilePath";
+  private static final String LOCK_FILE_URI_WITH_UNDERSCORES = "gs://bucket_with_underscores/lockFilePath";
   private static final String LOCK_FILE_PATH = "lockFilePath";
   private static final String BUCKET_NAME = "bucket";
 
@@ -107,12 +110,17 @@ public class TestGCSStorageLockClient {
 
   @BeforeEach
   void setUp() {
-    lockService = new GCSStorageLockClient(OWNER_ID, LOCK_FILE_URI, new Properties(), (a) -> mockStorage, mockLogger);
+    setUp(LOCK_FILE_URI);
   }
 
-  @Test
-  void testTryCreateOrUpdateLockFile_noPreviousLock_success() {
-    StorageLockData lockData = new StorageLockData(false, 123L, "test-owner");
+  private void setUp(String lockFileUri) {
+    lockService = new GCSStorageLockClient(OWNER_ID, lockFileUri, new Properties(), (a) -> mockStorage, mockLogger);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {LOCK_FILE_URI, LOCK_FILE_URI_WITH_UNDERSCORES})
+  void testTryCreateOrUpdateLockFile_noPreviousLock_success(String lockFileUri) {
+    setUp(lockFileUri);    StorageLockData lockData = new StorageLockData(false, 123L, "test-owner");
 
     when(mockStorage.create(
         any(BlobInfo.class),
