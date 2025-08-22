@@ -22,7 +22,7 @@ import org.apache.hudi.{HoodieCDCFileIndex, SparkAdapterSupport, SparkHoodieTabl
 
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, NamedExpression, Not, Or, StartsWith}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation}
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 import org.apache.spark.sql.types.{BooleanType, StructType}
 
@@ -123,12 +123,5 @@ object FileFormatUtilsForFileGroupReader extends SparkAdapterSupport {
     } else {
       plan
     }
-  }
-
-  def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame = {
-    val logicalRelation = LogicalRelation(relation, isStreaming = true)
-    val resolvedSchema = logicalRelation.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
-    Dataset.ofRows(sqlContext.sparkSession, applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
-      relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
   }
 }

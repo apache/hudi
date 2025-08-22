@@ -47,7 +47,7 @@ class TestSparkOrcReaderFormat extends OrcFileFormat with SparkAdapterSupport {
     //reader must be created outsize of the lambda. This happens on the driver
     val reader = sparkAdapter.createOrcFileReader(supportBatch(sparkSession,
       StructType(partitionSchema.fields ++ requiredSchema.fields)),
-      sparkSession.sqlContext.conf, options, hadoopConf, dataSchema)
+      sparkSession.sessionState.conf, options, hadoopConf, dataSchema)
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 

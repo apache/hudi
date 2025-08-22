@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, PartitionStatsIndexSupport}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSparkUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
@@ -152,7 +152,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       allPartitions.flatMap(partition => {
         val df = spark.read.format("hudi").load(tablePath) // assumes its partition table, but there is only one partition.
         val exprs: Seq[String] =
-          s"'${typedLit("")}' AS file" +:
+          s"${if (HoodieSparkUtils.gteqSpark4_0) typedLit("") else "'" + typedLit("") + "'"} AS file" +:
             s"sum(1) AS valueCount" +:
             df.columns
               .filter(col => includedCols.contains(col))
@@ -199,7 +199,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       baseFiles.flatMap(file => {
         val df = spark.read.schema(sourceTableSchema).parquet(file.toString)
         val exprs: Seq[String] =
-          s"'${typedLit(file.getName)}' AS fileName" +:
+          s"${if (HoodieSparkUtils.gteqSpark4_0) typedLit(file.getName) else "'" + typedLit(file.getName) + "'"} AS fileName" +:
             s"sum(1) AS valueCount" +:
             includedCols.union(indexedCols).distinct.sorted.flatMap(col => {
           val minColName = s"`${col}_minValue`"
