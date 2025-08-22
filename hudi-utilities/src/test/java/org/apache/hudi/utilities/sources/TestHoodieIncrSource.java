@@ -699,7 +699,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       // Complete the inflight commit
       activeTimeline.reload().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, instant0.getAction(), inserts.get(0).getInstantTime()),
-          Option.of(instant0CommitData));
+          Option.of(instant0CommitData),
+          inserts.get(0).getCompletionTime()
+      );
 
       instant0 = activeTimeline.reload()
           .filter(instant -> instant.requestedTime().equals(inserts.get(0).getInstantTime())).firstInstant().get();
