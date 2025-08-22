@@ -179,7 +179,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 0, recordMergeMode,
-          initialRecords, initialRecords, new String[]{PRECOMBINE_FIELD_NAME});
+          initialRecords, initialRecords, new String[]{ORDERING_FIELD_NAME});
 
       // Two commits; reading one file group containing a base file and a log file
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
@@ -188,7 +188,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(updates, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 1, recordMergeMode,
-          allRecords, unmergedRecords, new String[]{PRECOMBINE_FIELD_NAME});
+          allRecords, unmergedRecords, new String[]{ORDERING_FIELD_NAME});
 
       // Three commits; reading one file group containing a base file and two log files
       List<HoodieRecord> updates2 = dataGen.generateUniqueUpdates("003", 100);
@@ -196,7 +196,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(updates2, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 2, recordMergeMode,
-          finalRecords, CollectionUtils.combine(unmergedRecords, updates2), new String[]{PRECOMBINE_FIELD_NAME});
+          finalRecords, CollectionUtils.combine(unmergedRecords, updates2), new String[]{ORDERING_FIELD_NAME});
     }
   }
 
@@ -263,7 +263,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 1, recordMergeMode,
-          initialRecords, initialRecords, new String[]{PRECOMBINE_FIELD_NAME});
+          initialRecords, initialRecords, new String[]{ORDERING_FIELD_NAME});
 
       // Two commits; reading one file group containing two log files
       List<HoodieRecord> updates = dataGen.generateUniqueUpdates("002", 50);
@@ -271,7 +271,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(updates, INSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), false, 2, recordMergeMode,
-          allRecords, CollectionUtils.combine(initialRecords, updates), new String[]{PRECOMBINE_FIELD_NAME});
+          allRecords, CollectionUtils.combine(initialRecords, updates), new String[]{ORDERING_FIELD_NAME});
     }
   }
 
