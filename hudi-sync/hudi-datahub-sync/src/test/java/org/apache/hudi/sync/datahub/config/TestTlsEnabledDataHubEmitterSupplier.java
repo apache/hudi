@@ -30,7 +30,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SERVER;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_TOKEN;
-import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key();
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TLS_CA_CERT_PATH;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
