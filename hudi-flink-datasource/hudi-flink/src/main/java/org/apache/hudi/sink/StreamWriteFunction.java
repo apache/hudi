@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
@@ -234,15 +233,17 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private void initMergeClass() {
     readerContext = writeClient.getEngineContext().<RowData>getReaderContextFactory(metaClient).getContext();
+    readerContext.initRecordMergerForIngestion(writeClient.getConfig().getProps());
     orderingFieldNames = getOrderingFieldNames(readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
+
     recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
-        writeClient.getConfig().getRecordMergeMode(),
+        readerContext.getMergeMode(),
         false,
-        Option.ofNullable(writeClient.getConfig().getRecordMerger()),
+        readerContext.getRecordMerger(),
         orderingFieldNames,
-        Option.ofNullable(writeClient.getConfig().getPayloadClass()),
         new Schema.Parser().parse(writeClient.getConfig().getSchema()),
+        readerContext.getPayloadClasses(writeClient.getConfig().getProps()),
         writeClient.getConfig().getProps(),
         metaClient.getTableConfig().getPartialUpdateMode());
     LOG.info("init hoodie merge with class [{}]", recordMerger.getClass().getName());
