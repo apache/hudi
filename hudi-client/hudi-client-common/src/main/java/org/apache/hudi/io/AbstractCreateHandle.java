@@ -65,21 +65,8 @@ public abstract class AbstractCreateHandle<T, I, K, O> extends HoodieWriteHandle
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
-
     this.path = makeNewPath(partitionPath);
-
-    try {
-      this.fileWriter = initializeFileWriter();
-    } catch (IOException e) {
-      throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
-    }
-    logger.info("New CreateHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
-
-  /**
-   * Initialize the file writer to be used by CreateHandle to write records to a file
-   */
-  protected abstract HoodieFileWriter initializeFileWriter() throws IOException;
 
   /**
    * Creates partition metadata and marker file for tracking the write operation.
