@@ -52,10 +52,6 @@ public class TransactionManager implements Serializable, AutoCloseable {
     this(config, new LockManager(config, storage));
   }
 
-  public TransactionManager(HoodieWriteConfig config, boolean isLockRequired, HoodieStorage storage) {
-    this(new LockManager(config, storage), isLockRequired, TimeGenerators.getTimeGenerator(config.getTimeGeneratorConfig()));
-  }
-
   protected TransactionManager(HoodieWriteConfig writeConfig, LockManager lockManager) {
     this(lockManager, writeConfig.isLockRequired(), TimeGenerators.getTimeGenerator(writeConfig.getTimeGeneratorConfig()));
   }

@@ -368,6 +368,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                                BiFunction<HoodieWriteConfig, HoodieEngineContext, HoodieTable> createTableFn) {
     HoodieTable table = createTableFn.apply(writeConfig, context);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
+    table.setTxnManager(txnManager);
     return table;
   }
 
@@ -382,6 +383,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                                    HoodieTableMetaClient, HoodieTable> createTableFn) {
     HoodieTable table = createTableFn.apply(writeConfig, context, metaClient);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
+    table.setTxnManager(txnManager);
     return table;
   }
 
