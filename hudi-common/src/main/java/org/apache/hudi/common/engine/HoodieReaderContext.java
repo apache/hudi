@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.IteratorMode;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
@@ -190,6 +191,10 @@ public abstract class HoodieReaderContext<T> {
 
   public StorageConfiguration<?> getStorageConfiguration() {
     return storageConfiguration;
+  }
+
+  public TypedProperties getMergeProps(TypedProperties props) {
+    return ConfigUtils.getMergeProps(props, this.tableConfig.getProps());
   }
 
   public Option<Predicate> getKeyFilterOpt() {
