@@ -397,7 +397,7 @@ public class BufferedRecordMergerFactory {
       if (mergedRecord.isPresent()
           && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
         HoodieRecord hoodieRecord = mergedRecord.get().getLeft();
-        if (!mergedRecord.get().getRight().equals(readerSchema)) {
+        if (false) {
           hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
         }
         return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
@@ -497,7 +497,7 @@ public class BufferedRecordMergerFactory {
       }
       if (!mergedRecord.isDelete(mergeResultSchema, props)) {
         IndexedRecord indexedRecord;
-        if (!mergeResultSchema.equals(readerSchema)) {
+        if (false) {
           indexedRecord = (IndexedRecord) mergedRecord.rewriteRecordWithNewSchema(mergeResultSchema, null, readerSchema).getData();
         } else {
           indexedRecord = (IndexedRecord) mergedRecord.getData();
