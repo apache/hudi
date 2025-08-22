@@ -21,12 +21,14 @@ import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieWriteStat}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.ClusteringUtils
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder with Logging {
@@ -183,19 +185,19 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     }
 
     val commitMetadata = readCommitMetadata(timeline, instant)
-    if (commitMetadata.isEmpty) return
+    if (commitMetadata.isDefined) {
+      val metadata = commitMetadata.get
+      val partitionsToCheck = targetPartition.map(Set(_)).getOrElse(metadata.getPartitionToWriteStats.keySet().asScala.toSet)
 
-    val metadata = commitMetadata.get
-    val partitionsToCheck = targetPartition.map(Set(_)).getOrElse(metadata.getPartitionToWriteStats.keySet().asScala.toSet)
-
-    for (partitionPath <- partitionsToCheck) {
-      val writeStatsOpt = Option(metadata.getPartitionToWriteStats.get(partitionPath))
-      if (writeStatsOpt.isDefined) {
-        val writeStats = writeStatsOpt.get.asScala
-        for (writeStat <- writeStats) {
-          if (matchesFileGroup(writeStat, targetFileGroupId, targetPartition)) {
-            val entry = createHistoryEntry(instant, writeStat, partitionPath, timelineType)
-            entries.add(entry)
+      for (partitionPath <- partitionsToCheck) {
+        val writeStatsOpt = Option(metadata.getPartitionToWriteStats.get(partitionPath))
+        if (writeStatsOpt.isDefined) {
+          val writeStats = writeStatsOpt.get.asScala
+          for (writeStat <- writeStats) {
+            if (matchesFileGroup(writeStat, targetFileGroupId, targetPartition)) {
+              val entry = createHistoryEntry(instant, writeStat, partitionPath, timelineType)
+              entries.add(entry)
+            }
           }
         }
       }

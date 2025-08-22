@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieSparkUtils
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
