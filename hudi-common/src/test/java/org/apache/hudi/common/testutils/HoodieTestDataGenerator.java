@@ -1285,10 +1285,10 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       return new RecordIdentifier(toClone.recordKey, toClone.partitionPath, orderingVal, toClone.riderValue);
     }
 
-    public static RecordIdentifier fromTripTestPayload(HoodieAvroIndexedRecord record, String[] orderingValues) {
+    public static RecordIdentifier fromTripTestPayload(HoodieAvroIndexedRecord record, String[] orderingFields) {
       String recordKey = record.getRecordKey();
       String partitionPath = record.getPartitionPath();
-      Comparable orderingValue = record.getOrderingValue(record.getData().getSchema(), CollectionUtils.emptyProps(), orderingValues);
+      Comparable orderingValue = record.getOrderingValue(record.getData().getSchema(), CollectionUtils.emptyProps(), orderingFields);
       String orderingValStr = orderingValue.toString();
       String riderValue = ((GenericRecord) record.getData()).hasField("rider") ? ((GenericRecord) record.getData()).get("rider").toString() : "";
       return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);

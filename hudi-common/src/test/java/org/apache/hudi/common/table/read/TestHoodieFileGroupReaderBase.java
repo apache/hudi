@@ -207,9 +207,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "avro");
     writeConfigs.put("hoodie.datasource.write.table.type", HoodieTableType.MERGE_ON_READ.name());
     // Use two precombine values - combination of timestamp and rider
-    String orderingValues = "timestamp,rider";
-    writeConfigs.put(HoodieTableConfig.ORDERING_FIELDS.key(), orderingValues);
-    writeConfigs.put("hoodie.payload.ordering.field", orderingValues);
+    String orderingFields = "timestamp,rider";
+    writeConfigs.put(HoodieTableConfig.ORDERING_FIELDS.key(), orderingFields);
+    writeConfigs.put("hoodie.payload.ordering.field", orderingFields);
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // Initial commit. rider column gets value of rider-002
@@ -217,7 +217,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(initialRecords, INSERT.value(), true, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 0, recordMergeMode,
-          initialRecords, initialRecords, orderingValues.split(","));
+          initialRecords, initialRecords, orderingFields.split(","));
 
       // The updates have rider values as rider-001 and the existing records have rider values as rider-002
       // timestamp is 0 for all records so will not be considered
@@ -228,7 +228,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(updates, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 1, recordMergeMode,
-          allRecords, unmergedRecords, orderingValues.split(","));
+          allRecords, unmergedRecords, orderingFields.split(","));
 
       // The updates have rider values as rider-003 and the existing records have rider values as rider-002
       // timestamp is 0 for all records so will not be considered
@@ -238,7 +238,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       commitToTable(updates2, UPSERT.value(), false, writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), true, 2, recordMergeMode,
-          finalRecords, CollectionUtils.combine(unmergedRecords, updates2), orderingValues.split(","));
+          finalRecords, CollectionUtils.combine(unmergedRecords, updates2), orderingFields.split(","));
     }
   }
 

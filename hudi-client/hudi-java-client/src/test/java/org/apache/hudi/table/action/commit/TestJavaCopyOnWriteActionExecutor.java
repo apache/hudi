@@ -436,7 +436,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     // Get some records belong to the same partition (2016/01/31)
     List<HoodieRecord> records = new ArrayList<>();
     records.add(createSimpleRecord("8eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2022-04-09T03:16:41.415Z", 1));
-    records.add(createSimpleRecord("8eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2022-04-09T03:20:41.415", 2));
+    records.add(createSimpleRecord("8eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2022-04-09T03:20:41.415Z", 2));
     records.add(createSimpleRecord("8eb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2022-04-09T03:16:41.415Z", 3));
 
     // Insert new records
