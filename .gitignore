@@ -90,3 +90,5 @@ package-lock.json
 
 # Spark Binaries used for testing
 hudi-spark-datasource/hudi-spark/src/test/resources/upgrade-downgrade-fixtures/spark-versions/
+
+CLAUDE.md
