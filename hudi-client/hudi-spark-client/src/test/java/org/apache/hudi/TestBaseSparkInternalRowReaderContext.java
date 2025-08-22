@@ -76,6 +76,15 @@ class TestBaseSparkInternalRowReaderContext {
   }
 
   @Test
+  void testConstructEngineRecordWithFieldValues() {
+    Object[] fieldVals = new Object[]{1, UTF8String.fromString("Alice"), true};
+    InternalRow row = readerContext.getRecordContext().constructEngineRecord(SCHEMA, fieldVals);
+    assertEquals(fieldVals[0], row.getInt(0));
+    assertEquals(fieldVals[1].toString(), row.getString(1));
+    assertEquals(fieldVals[2], row.getBoolean(2));
+  }
+
+  @Test
   void testConstructEngineRecordWithNoUpdate() {
     InternalRow base = new GenericInternalRow(new Object[]{1, UTF8String.fromString("Alice"), true});
     Map<Integer, Object> updates = new HashMap<>();

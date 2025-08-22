@@ -129,6 +129,11 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   }
 
   @Override
+  public RowData constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+    return GenericRowData.of(fieldValues);
+  }
+
+  @Override
   public RowData mergeWithEngineRecord(Schema schema,
                                        Map<Integer, Object> updateValues,
                                        BufferedRecord<RowData> baseRecord) {

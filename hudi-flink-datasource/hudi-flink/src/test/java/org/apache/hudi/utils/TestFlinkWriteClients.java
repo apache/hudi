@@ -26,6 +26,7 @@ import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,8 +35,10 @@ import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -107,7 +110,7 @@ public class TestFlinkWriteClients {
 
     assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
     assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getPayloadClass(), is(EventTimeAvroPayload.class.getName()));
+    assertThat(tableConfig.getPayloadClass(), is(DefaultHoodieRecordPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
@@ -152,10 +155,18 @@ public class TestFlinkWriteClients {
 
     assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
     assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getPayloadClass(), is(PartialUpdateAvroPayload.class.getName()));
+    assertThat(tableConfig.getPayloadClass(), is(DefaultHoodieRecordPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
     assertThat(mergerClasses, is(PartialUpdateFlinkRecordMerger.class.getName()));
+  }
+
+  @Test
+  void testWriteMergeHandleForPreV9Table() throws Exception {
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    StreamerUtil.initTableIfNotExists(conf);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertThat(writeConfig.getMergeHandleClassName(), is(FileGroupReaderBasedMergeHandle.class.getName()));
   }
 }

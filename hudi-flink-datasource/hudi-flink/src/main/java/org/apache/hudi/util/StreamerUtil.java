@@ -32,7 +32,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -320,16 +319,7 @@ public class StreamerUtil {
   }
 
   private static String getMergeStrategyId(Configuration conf) {
-    if (conf.contains(FlinkOptions.RECORD_MERGER_IMPLS)) {
-      return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
-    } else if (conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
-      // for the compatibility of legacy payload class configuration
-      String payloadClass = conf.get(FlinkOptions.PAYLOAD_CLASS_NAME);
-      if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
-        return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
-      }
-    }
-    return null;
+    return conf.getString(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), null);
   }
 
   private static String getPayloadClass(Configuration conf) {
@@ -368,15 +358,15 @@ public class StreamerUtil {
   public static String getMergerClasses(Configuration conf, RecordMergeMode mergeMode, String payloadClass) {
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
-        return EventTimeFlinkRecordMerger.class.getName();
-      case COMMIT_TIME_ORDERING:
-        return CommitTimeFlinkRecordMerger.class.getName();
-      default:
         if (payloadClass.contains(PartialUpdateAvroPayload.class.getSimpleName())) {
           return PartialUpdateFlinkRecordMerger.class.getName();
         } else {
-          return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
+          return EventTimeFlinkRecordMerger.class.getName();
         }
+      case COMMIT_TIME_ORDERING:
+        return CommitTimeFlinkRecordMerger.class.getName();
+      default:
+        return conf.get(FlinkOptions.RECORD_MERGER_IMPLS);
     }
   }
 
@@ -403,8 +393,14 @@ public class StreamerUtil {
    * @return The correct merging behaviour: <merge_mode, payload_class, merge_strategy_id>
    */
   public static Triple<RecordMergeMode, String, String> inferMergingBehavior(Configuration conf) {
-    return HoodieTableConfig.inferMergingConfigsForWrites(
-        getMergeMode(conf), getPayloadClass(conf), getMergeStrategyId(conf), OptionsResolver.getOrderingFieldsStr(conf), HoodieTableVersion.EIGHT);
+    String payloadClassName = getPayloadClass(conf);
+    Map<String, String> mergeConf = HoodieTableConfig.inferMergingConfigsForV9TableCreation(
+        getMergeMode(conf), payloadClassName, getMergeStrategyId(conf), OptionsResolver.getOrderingFieldsStr(conf), HoodieTableVersion.current());
+    String mergeMode = mergeConf.get(HoodieTableConfig.RECORD_MERGE_MODE.key());
+    String mergeStrategyId = mergeConf.get(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key());
+    ValidationUtils.checkArgument(mergeMode != null && mergeStrategyId != null,
+        "Both merge mode and merge strategy id should not be null");
+    return Triple.of(RecordMergeMode.valueOf(mergeMode), payloadClassName, mergeStrategyId);
   }
 
   /**

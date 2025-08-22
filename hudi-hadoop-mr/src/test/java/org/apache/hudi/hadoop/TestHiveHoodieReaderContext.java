@@ -84,6 +84,22 @@ class TestHiveHoodieReaderContext {
   }
 
   @Test
+  void testConstructEngineRecordWithFieldValues() {
+    when(tableConfig.populateMetaFields()).thenReturn(true);
+    HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
+        readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
+    Object[] fieldVals = new Writable[]{
+        new IntWritable(1),
+        new Text("Alice"),
+        new BooleanWritable(true)};
+    ArrayWritable row = avroReaderContext.getRecordContext().constructEngineRecord(SCHEMA, fieldVals);
+    Writable[] values = row.get();
+    assertEquals(fieldVals[0], values[0]);
+    assertEquals(fieldVals[1], values[1]);
+    assertEquals(fieldVals[2], values[2]);
+  }
+
+  @Test
   void testConstructEngineRecordWithNoUpdates() {
     when(tableConfig.populateMetaFields()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
