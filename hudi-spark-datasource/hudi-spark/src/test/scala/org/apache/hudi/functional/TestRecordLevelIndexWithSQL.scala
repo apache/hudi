@@ -29,6 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.record.HoodieRecordIndex
 import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.sql.{DataFrame, HoodieCatalystExpressionUtils, SaveMode}
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -38,6 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
+
 import scala.util.Using
 
 @Tag("functional")

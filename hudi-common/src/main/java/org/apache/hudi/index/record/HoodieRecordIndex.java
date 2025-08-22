@@ -20,7 +20,6 @@
 package org.apache.hudi.index.record;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
-import org.apache.hudi.common.util.ConfigUtils;
 
 import java.util.Map;
 
