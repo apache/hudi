@@ -194,6 +194,7 @@ public class StreamWriteOperatorCoordinator
     // the write client must create after the table creation
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
     this.ckpMetadata = initCkpMetadata(writeClient.getConfig(), this.conf);
+    this.writeClient.tryUpgrade(instant, this.metaClient);
     initMetadataTable(this.writeClient);
     this.tableState = TableState.create(conf);
     // start the executor
@@ -430,8 +431,6 @@ public class StreamWriteOperatorCoordinator
     }
     // starts a new instant
     startInstant();
-    // upgrade downgrade
-    this.writeClient.upgradeDowngrade(this.instant, this.metaClient);
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
