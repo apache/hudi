@@ -82,6 +82,8 @@ public class BufferedRecordMergerFactory {
       return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, orderingFieldNames, readerSchema, props);
     }
 
+    // might need to introduce a merge config for the factory in the future to get rid of this.
+    props = readerContext.getMergeProps(props);
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         if (partialUpdateModeOpt.isEmpty()) {

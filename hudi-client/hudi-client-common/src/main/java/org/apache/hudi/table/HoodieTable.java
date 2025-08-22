@@ -810,10 +810,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException
    */
   void reconcileAgainstMarkers(HoodieEngineContext context,
-                                         String instantTs,
-                                         List<HoodieWriteStat> stats,
-                                         boolean consistencyCheckEnabled,
-                                         boolean shouldFailOnDuplicateDataFileDetection,
+                               String instantTs,
+                               List<HoodieWriteStat> stats,
+                               boolean consistencyCheckEnabled,
+                               boolean shouldFailOnDuplicateDataFileDetection,
                                WriteMarkers markers) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
