@@ -30,6 +30,81 @@ import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
 
+/**
+ * Spark SQL procedure to show completed clean operations for a Hudi table.
+ *
+ * This procedure displays information about clean operations that have been executed.
+ * Clean operations remove old file versions to reclaim storage space and maintain table performance.
+ *
+ * == Parameters ==
+ * - `table`: Required. The name of the Hudi table to query
+ * - `limit`: Optional. Maximum number of clean operations to return (default: 10)
+ * - `showArchived`: Optional. Whether to include archived clean operations (default: false)
+ * - `filter`: Optional. SQL expression to filter results (default: empty string)
+ *
+ * == Output Schema ==
+ * - `clean_time`: Timestamp when the clean operation was performed
+ * - `state_transition_time`: Time when the clean transitioned to completed state
+ * - `action`: The action type (always 'clean')
+ * - `start_clean_time`: When the clean operation started
+ * - `time_taken_in_millis`: Duration of the clean operation in milliseconds
+ * - `total_files_deleted`: Total number of files deleted during the clean
+ * - `earliest_commit_to_retain`: The earliest commit that was retained
+ * - `last_completed_commit_timestamp`: The last completed commit at clean time
+ * - `version`: Version of the clean operation metadata
+ * - Additional partition-level metadata columns when using `show_cleans_metadata`
+ *
+ * == Error Handling ==
+ * - Throws `IllegalArgumentException` for invalid filter expressions
+ * - Throws `HoodieException` for table access issues
+ * - Returns empty result set if no clean plans match the criteria
+ *
+ * == Filter Support ==
+ * The `filter` parameter supports SQL expressions for filtering results.
+ *
+ * === Common Filter Examples ===
+ * {{{
+ * -- Show cleans that deleted many files
+ * CALL show_cleans(
+ *   table => 'my_table',
+ *   filter => "total_files_deleted > 100"
+ * )
+ *
+ * -- Show recent clean operations
+ * CALL show_cleans(
+ *   table => 'my_table',
+ *   filter => "clean_time > '20231201000000'"
+ * )
+ *
+ * -- Show slow clean operations
+ * CALL show_cleans(
+ *   table => 'my_table',
+ *   filter => "time_taken_in_millis > 60000"
+ * )
+ * }}}
+ *
+ * == Some Usage Examples ==
+ * {{{
+ * -- Basic usage: Show last 10 completed cleans
+ * CALL show_cleans(table => 'hudi_table_1')
+ *
+ * -- Show clean operations with partition metadata
+ * CALL show_cleans_metadata(table => 'hudi_table_1')
+ *
+ * -- Include archived clean operations
+ * CALL show_cleans(table => 'hudi_table_1', showArchived => true)
+ *
+ * -- Filter for recent efficient cleans
+ * CALL show_cleans(
+ *   table => 'hudi_table_1',
+ *   filter => "clean_time > '20231201000000' AND total_files_deleted > 0"
+ * )
+ * }}}
+ *
+ * @param includePartitionMetadata Whether to include partition-level metadata in output
+ * @see [[ShowCleansPlanProcedure]] for information about planned clean operations
+ * @see [[HoodieProcedureFilterUtils]] for detailed filter expression syntax
+ */
 class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](

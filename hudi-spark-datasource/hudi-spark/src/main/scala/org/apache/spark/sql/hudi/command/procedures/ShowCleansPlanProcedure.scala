@@ -31,6 +31,106 @@ import java.util.function.Supplier
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
+/**
+ * Spark SQL procedure to show clean plans for a Hudi table.
+ *
+ * This procedure displays information about clean operations that have been planned but not yet executed.
+ * Clean plans contain metadata about which files are scheduled for deletion during the next clean operation.
+ *
+ * == Parameters ==
+ * - `table`: Required. The name of the Hudi table to query
+ * - `limit`: Optional. Maximum number of clean plans to return (default: 10)
+ * - `showArchived`: Optional. Whether to include archived clean plans (default: false)
+ * - `filter`: Optional. SQL expression to filter results (default: empty string)
+ *
+ * == Output Schema ==
+ * - `plan_time`: Timestamp when the clean plan was created
+ * - `state`: Current state of the clean plan (REQUESTED, INFLIGHT, COMPLETED)
+ * - `action`: The action type (always 'clean')
+ * - `earliest_instant_to_retain`: The earliest commit that will be retained after cleaning
+ * - `last_completed_commit_timestamp`: The last completed commit at the time of planning
+ * - `policy`: The clean policy used (e.g., KEEP_LATEST_COMMITS, KEEP_LATEST_FILE_VERSIONS)
+ * - `version`: Version of the clean plan metadata format
+ * - `total_partitions_to_clean`: Number of partitions that have files to be cleaned
+ * - `total_partitions_to_delete`: Number of partitions that will have files deleted
+ * - `extra_metadata`: Additional metadata associated with the clean plan
+ *
+ * == Error Handling ==
+ * - Throws `IllegalArgumentException` for invalid filter expressions
+ * - Throws `HoodieException` for table access issues
+ * - Returns empty result set if no clean plans match the criteria
+ *
+ * == Filter Support ==
+ * The `filter` parameter supports SQL expressions that can be applied to any output column.
+ * The filter uses Spark SQL syntax and supports various data types and operations.
+ *
+ * === Filter Examples ===
+ * {{{
+ * -- Show clean plans created after a specific timestamp
+ * CALL show_clean_plans(
+ *   table => 'my_table',
+ *   filter => "plan_time > '20241201000000'"
+ * )
+ *
+ * -- Show clean plans that will clean many partitions
+ * CALL show_clean_plans(
+ *   table => 'my_table', 
+ *   filter => "total_partitions_to_clean > 10"
+ * )
+ *
+ * -- Show recent clean plans with complex conditions
+ * CALL show_clean_plans(
+ *   table => 'my_table',
+ *   filter => "plan_time > '20241201000000' AND total_partitions_to_delete BETWEEN 1 AND 100"
+ * )
+ *
+ * -- Show clean plans using string functions and policy filters
+ * CALL show_clean_plans(
+ *   table => 'my_table',
+ *   filter => "LENGTH(earliest_instant_to_retain) > 10 AND policy = 'KEEP_LATEST_COMMITS'"
+ * )
+ *
+ * -- Show clean plans with null checks and state filtering
+ * CALL show_clean_plans(
+ *   table => 'my_table',
+ *   filter => "last_completed_commit_timestamp IS NOT NULL AND state = 'COMPLETED'"
+ * )
+ *
+ * -- Show clean plans using IN operator for states
+ * CALL show_clean_plans(
+ *   table => 'my_table',
+ *   filter => "state IN ('REQUESTED', 'INFLIGHT') AND total_partitions_to_clean > 0"
+ * )
+ * }}}
+ *
+ * == Usage Examples ==
+ * {{{
+ * -- Basic usage: Show last 10 clean plans
+ * CALL show_clean_plans(table => 'hudi_table_2')
+ *
+ * -- Show more results with custom limit
+ * CALL show_clean_plans(table => 'hudi_table_2', limit => 50)
+ *
+ * -- Include archived clean plans
+ * CALL show_clean_plans(table => 'hudi_table_2', showArchived => true)
+ *
+ * -- Filter for recent clean plans
+ * CALL show_clean_plans(
+ *   table => 'hudi_table_2',
+ *   filter => "plan_time > '20241201000000'"
+ * )
+ *
+ * -- Show clean plans that will clean many partitions
+ * CALL show_clean_plans(
+ *   table => 'hudi_table_2',
+ *   filter => "total_partitions_to_clean > 5",
+ *   limit => 20
+ * )
+ * }}}
+ *
+ * @see [[ShowCleansProcedure]] for information about completed clean operations
+ * @see [[HoodieProcedureFilterUtils]] for detailed filter expression syntax
+ */
 class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
 
   import ShowCleansPlanProcedure._
