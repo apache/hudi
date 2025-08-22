@@ -120,7 +120,8 @@ public class TestGCSStorageLockClient {
   @ParameterizedTest
   @ValueSource(strings = {LOCK_FILE_URI, LOCK_FILE_URI_WITH_UNDERSCORES})
   void testTryCreateOrUpdateLockFile_noPreviousLock_success(String lockFileUri) {
-    setUp(lockFileUri);    StorageLockData lockData = new StorageLockData(false, 123L, "test-owner");
+    setUp(lockFileUri);
+    StorageLockData lockData = new StorageLockData(false, 123L, "test-owner");
 
     when(mockStorage.create(
         any(BlobInfo.class),
