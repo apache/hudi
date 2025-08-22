@@ -241,6 +241,32 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testUpdateRecoveryWithInvalidProps() throws IOException {
+    // 1. Actual props is invalid, populate it from backup if they are valid
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath);
+    try (OutputStream out = storage.create(backupCfgPath)) {
+      config.getProps().store(out, "");
+    }
+    storage.deleteFile(cfgPath);
+    // create the empty file
+    storage.create(cfgPath);
+    recoverIfNeeded(storage, cfgPath, backupCfgPath);
+    assertTrue(storage.exists(cfgPath));
+    assertFalse(storage.exists(backupCfgPath));
+    config = new HoodieTableConfig(storage, metaPath);
+    assertEquals(7, config.getProps().size());
+
+    // 2. Backup properties file is also invalid
+    storage.deleteFile(cfgPath);
+    // create the empty files
+    storage.create(cfgPath);
+    storage.create(backupCfgPath);
+    assertThrows(IOException.class, () -> recoverIfNeeded(storage, cfgPath, backupCfgPath));
+    assertFalse(storage.exists(backupCfgPath));
+    assertFalse(storage.exists(cfgPath));
+  }
+
+  @Test
   void testReadRetry() throws IOException {
     // When both the hoodie.properties and hoodie.properties.backup do not exist then the read fails
     storage.rename(cfgPath, new StoragePath(cfgPath.toString() + ".bak"));

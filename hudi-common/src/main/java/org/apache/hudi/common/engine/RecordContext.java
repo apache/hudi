@@ -149,6 +149,15 @@ public abstract class RecordContext<T> implements Serializable {
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
 
+  /**
+   * Construct a new Engine record with given record schema and all field values.
+   *
+   * @param recordSchema the schema of the record
+   * @param fieldValues  the values of all fields
+   * @return A new instance of Engine record.
+   */
+  public abstract T constructEngineRecord(Schema recordSchema, Object[] fieldValues);
+
   public JavaTypeConverter getTypeConverter() {
     return typeConverter;
   }
