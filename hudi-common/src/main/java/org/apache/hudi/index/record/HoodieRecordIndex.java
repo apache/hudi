@@ -20,6 +20,9 @@
 package org.apache.hudi.index.record;
 
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.util.ConfigUtils;
+
+import java.util.Map;
 
 /**
  * Interface representing a record index in Hudi which provides options and other parameters used for record index.
@@ -29,5 +32,9 @@ public interface HoodieRecordIndex {
 
   static boolean isPartitioned(HoodieIndexDefinition indexDefinition) {
     return Boolean.parseBoolean(indexDefinition.getIndexOptions().getOrDefault(IS_PARTITIONED_OPTION, Boolean.FALSE.toString()));
+  }
+
+  static boolean isPartitioned(Map<String, String> options) {
+    return Boolean.parseBoolean(options.getOrDefault(IS_PARTITIONED_OPTION, Boolean.FALSE.toString()));
   }
 }
