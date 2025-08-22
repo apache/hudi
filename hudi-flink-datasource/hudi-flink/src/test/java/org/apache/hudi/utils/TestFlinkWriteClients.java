@@ -37,7 +37,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -166,6 +166,6 @@ public class TestFlinkWriteClients {
     conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
     StreamerUtil.initTableIfNotExists(conf);
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    assertThat(writeConfig.getMergeHandleClassName(), is(HoodieWriteMergeHandle.class.getName()));
+    assertThat(writeConfig.getMergeHandleClassName(), is(FileGroupReaderBasedMergeHandle.class.getName()));
   }
 }
