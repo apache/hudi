@@ -169,7 +169,6 @@ public class FlinkWriteClients {
       Configuration conf,
       boolean enableEmbeddedTimelineService,
       boolean loadFsViewStorageConfig) {
-    StreamerUtil.checkWriteMergeHandle(conf);
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)

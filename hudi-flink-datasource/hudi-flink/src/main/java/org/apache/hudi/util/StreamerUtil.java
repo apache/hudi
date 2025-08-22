@@ -52,7 +52,6 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -60,8 +59,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
-import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
@@ -650,22 +647,6 @@ public class StreamerUtil {
     return tableType == HoodieTableType.MERGE_ON_READ
         ? !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION) // not a compaction
         : !ClusteringUtils.isCompletedClusteringInstant(instant, timeline);   // not a clustering
-  }
-
-  /**
-   * Validate merge handle for insert.
-   */
-  public static void checkWriteMergeHandle(Configuration conf) {
-    String writeMergeHandle = conf.getString(
-        HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(),
-        HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue());
-    HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(conf.get(FlinkOptions.WRITE_TABLE_VERSION));
-    if (FileGroupReaderBasedMergeHandle.class.getName().equalsIgnoreCase(writeMergeHandle) && tableVersion.lesserThan(HoodieTableVersion.NINE)) {
-      conf.setString(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteMergeHandle.class.getName());
-      LOG.warn("FileGroup reader based merge handle for writing path is only supported from table version: {}, "
-              + "overwrite the option 'hoodie.write.merge.handle.class' with '{}' instead.",
-              HoodieTableVersion.NINE, HoodieWriteMergeHandle.class.getName());
-    }
   }
 
   /**

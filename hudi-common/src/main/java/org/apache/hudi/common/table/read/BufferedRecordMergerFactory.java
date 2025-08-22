@@ -402,10 +402,7 @@ public class BufferedRecordMergerFactory {
       if (mergedRecord.isPresent()
           && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
         HoodieRecord hoodieRecord = mergedRecord.get().getLeft();
-        if (!mergedRecord.get().getRight().equals(readerSchema)) {
-          hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
-        }
-        return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
+        return BufferedRecords.fromHoodieRecord(hoodieRecord, mergedRecord.get().getRight(), recordContext, props, orderingFields, false);
       }
       return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
@@ -501,14 +498,9 @@ public class BufferedRecordMergerFactory {
         return olderRecord;
       }
       if (!mergedRecord.isDelete(mergeResultSchema, props)) {
-        IndexedRecord indexedRecord;
-        if (!mergeResultSchema.equals(readerSchema)) {
-          indexedRecord = (IndexedRecord) mergedRecord.rewriteRecordWithNewSchema(mergeResultSchema, null, readerSchema).getData();
-        } else {
-          indexedRecord = (IndexedRecord) mergedRecord.getData();
-        }
+        IndexedRecord indexedRecord = (IndexedRecord) mergedRecord.getData();
         return BufferedRecords.fromEngineRecord(
-            recordContext.convertAvroRecord(indexedRecord), readerSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
+            recordContext.convertAvroRecord(indexedRecord), mergeResultSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
       }
       return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
