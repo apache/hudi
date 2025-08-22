@@ -26,6 +26,7 @@ import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -109,7 +110,7 @@ public class TestFlinkWriteClients {
 
     assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
     assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getPayloadClass(), is(EventTimeAvroPayload.class.getName()));
+    assertThat(tableConfig.getPayloadClass(), is(DefaultHoodieRecordPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
@@ -154,7 +155,7 @@ public class TestFlinkWriteClients {
 
     assertThat(tableConfig.getRecordMergeMode(), is(RecordMergeMode.EVENT_TIME_ORDERING));
     assertThat(tableConfig.getRecordMergeStrategyId(), is(HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID));
-    assertThat(tableConfig.getPayloadClass(), is(PartialUpdateAvroPayload.class.getName()));
+    assertThat(tableConfig.getPayloadClass(), is(DefaultHoodieRecordPayload.class.getName()));
 
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
