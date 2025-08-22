@@ -152,6 +152,20 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
 
+  public TransactionManager getTxnManager() {
+    if (null == txnManager) {
+      throw new HoodieException("TransactionManager is not initialized. "
+          + "Please call setTxnManager() after instantiating HoodieTable");
+    }
+    return txnManager;
+  }
+
+  public void setTxnManager(TransactionManager txnManager) {
+    this.txnManager = txnManager;
+  }
+
+  private TransactionManager txnManager;
+
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.context = context;

@@ -195,10 +195,9 @@ public class CompactionUtil {
       String currentTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
       int timeout = conf.get(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
-        LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
-        try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {
-          table.rollbackInflightCompaction(instant, transactionManager);
-        }
+        LOG.info("Rollback the inflight compaction instant: {} for timeout({}s)", instant, timeout);
+        TransactionManager transactionManager = table.getTxnManager();
+        table.rollbackInflightCompaction(instant, transactionManager);
         table.getMetaClient().reloadActiveTimeline();
       }
     }

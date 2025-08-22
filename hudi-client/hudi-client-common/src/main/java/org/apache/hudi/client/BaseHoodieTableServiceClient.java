@@ -734,6 +734,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (!skipValidation) {
       CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
     }
+    table.setTxnManager(txnManager);
     return table;
   }
 

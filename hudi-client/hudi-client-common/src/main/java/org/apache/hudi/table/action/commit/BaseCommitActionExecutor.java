@@ -186,7 +186,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   protected void completeCommit(HoodieWriteMetadata result) {
     if (!this.txnManagerOption.isPresent()) {
-      this.txnManagerOption = Option.of(new TransactionManager(config, table.getStorage()));
+      this.txnManagerOption = Option.of(table.getTxnManager());
       initializeLastCompletedTnxAndPendingInstants();
     }
     autoCommit(result);
