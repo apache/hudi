@@ -113,7 +113,9 @@ import java.util.function.BiFunction;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.util.ConfigUtils.extractWithPrefix;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1379,6 +1381,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (WriteOperationType.isDelete(operationType)) {
       setWriteSchemaForDeletes(metaClient);
     }
+    // Copy merge properties from table config to write config.
+    reconcileWriteConfigs(metaClient, config);
 
     doInitTable(operationType, metaClient, instantTime);
     HoodieTable table = createTable(config, metaClient);
@@ -1688,5 +1692,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }
     });
+  }
+
+  void reconcileWriteConfigs(HoodieTableMetaClient metaClient,
+                             HoodieWriteConfig config) {
+    Map<String, String> mergeProperties = extractWithPrefix(
+        metaClient.getTableConfig().getProps(), RECORD_MERGE_PROPERTY_PREFIX);
+    if (!mergeProperties.isEmpty()) {
+      mergeProperties.forEach(config::setValue);
+    }
   }
 }
