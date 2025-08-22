@@ -351,55 +351,15 @@ object HoodieProcedureFilterUtils {
       // Third pass: handle type coercion for numeric comparisons
       val boundExpr = functionResolved.transformUp {
         case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
-          val left = eq.left
-          val right = eq.right
-          (left, right) match {
-            case (boundRef: org.apache.spark.sql.catalyst.expressions.BoundReference, literal: org.apache.spark.sql.catalyst.expressions.Literal)
-              if boundRef.dataType == org.apache.spark.sql.types.LongType && literal.dataType == org.apache.spark.sql.types.IntegerType =>
-              val castExpr = org.apache.spark.sql.catalyst.expressions.Cast(boundRef, org.apache.spark.sql.types.IntegerType)
-              org.apache.spark.sql.catalyst.expressions.EqualTo(castExpr, literal)
-            case _ => eq
-          }
+          applyTypeCoercion(eq.left, eq.right, org.apache.spark.sql.catalyst.expressions.EqualTo.apply, eq)
         case gt: org.apache.spark.sql.catalyst.expressions.GreaterThan =>
-          val left = gt.left
-          val right = gt.right
-          (left, right) match {
-            case (boundRef: org.apache.spark.sql.catalyst.expressions.BoundReference, literal: org.apache.spark.sql.catalyst.expressions.Literal)
-              if boundRef.dataType == org.apache.spark.sql.types.LongType && literal.dataType == org.apache.spark.sql.types.IntegerType =>
-              val castExpr = org.apache.spark.sql.catalyst.expressions.Cast(boundRef, org.apache.spark.sql.types.IntegerType)
-              org.apache.spark.sql.catalyst.expressions.GreaterThan(castExpr, literal)
-            case _ => gt
-          }
+          applyTypeCoercion(gt.left, gt.right, org.apache.spark.sql.catalyst.expressions.GreaterThan.apply, gt)
         case gte: org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual =>
-          val left = gte.left
-          val right = gte.right
-          (left, right) match {
-            case (boundRef: org.apache.spark.sql.catalyst.expressions.BoundReference, literal: org.apache.spark.sql.catalyst.expressions.Literal)
-              if boundRef.dataType == org.apache.spark.sql.types.LongType && literal.dataType == org.apache.spark.sql.types.IntegerType =>
-              val castExpr = org.apache.spark.sql.catalyst.expressions.Cast(boundRef, org.apache.spark.sql.types.IntegerType)
-              org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual(castExpr, literal)
-            case _ => gte
-          }
+          applyTypeCoercion(gte.left, gte.right, org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual.apply, gte)
         case lt: org.apache.spark.sql.catalyst.expressions.LessThan =>
-          val left = lt.left
-          val right = lt.right
-          (left, right) match {
-            case (boundRef: org.apache.spark.sql.catalyst.expressions.BoundReference, literal: org.apache.spark.sql.catalyst.expressions.Literal)
-              if boundRef.dataType == org.apache.spark.sql.types.LongType && literal.dataType == org.apache.spark.sql.types.IntegerType =>
-              val castExpr = org.apache.spark.sql.catalyst.expressions.Cast(boundRef, org.apache.spark.sql.types.IntegerType)
-              org.apache.spark.sql.catalyst.expressions.LessThan(castExpr, literal)
-            case _ => lt
-          }
+          applyTypeCoercion(lt.left, lt.right, org.apache.spark.sql.catalyst.expressions.LessThan.apply, lt)
         case lte: org.apache.spark.sql.catalyst.expressions.LessThanOrEqual =>
-          val left = lte.left
-          val right = lte.right
-          (left, right) match {
-            case (boundRef: org.apache.spark.sql.catalyst.expressions.BoundReference, literal: org.apache.spark.sql.catalyst.expressions.Literal)
-              if boundRef.dataType == org.apache.spark.sql.types.LongType && literal.dataType == org.apache.spark.sql.types.IntegerType =>
-              val castExpr = org.apache.spark.sql.catalyst.expressions.Cast(boundRef, org.apache.spark.sql.types.IntegerType)
-              org.apache.spark.sql.catalyst.expressions.LessThanOrEqual(castExpr, literal)
-            case _ => lte
-          }
+          applyTypeCoercion(lte.left, lte.right, org.apache.spark.sql.catalyst.expressions.LessThanOrEqual.apply, lte)
       }
       val result = boundExpr.eval(internalRow)
 
@@ -526,6 +486,20 @@ object HoodieProcedureFilterUtils {
       case attr: AttributeReference => Set(attr.name)
       case unresolved: UnresolvedAttribute => Set(unresolved.name)
       case _ => expression.children.flatMap(extractColumnReferences).toSet
+    }
+  }
+
+  private def applyTypeCoercion[T <: org.apache.spark.sql.catalyst.expressions.Expression](
+                                                                                            left: org.apache.spark.sql.catalyst.expressions.Expression,
+                                                                                            right: org.apache.spark.sql.catalyst.expressions.Expression,
+                                                                                            constructor: (org.apache.spark.sql.catalyst.expressions.Expression, org.apache.spark.sql.catalyst.expressions.Expression) => T,
+                                                                                            original: T): T = {
+    (left, right) match {
+      case (boundRef: org.apache.spark.sql.catalyst.expressions.BoundReference, literal: org.apache.spark.sql.catalyst.expressions.Literal)
+        if boundRef.dataType == org.apache.spark.sql.types.LongType && literal.dataType == org.apache.spark.sql.types.IntegerType =>
+        val castExpr = org.apache.spark.sql.catalyst.expressions.Cast(boundRef, org.apache.spark.sql.types.IntegerType)
+        constructor(castExpr, literal)
+      case _ => original
     }
   }
 }
