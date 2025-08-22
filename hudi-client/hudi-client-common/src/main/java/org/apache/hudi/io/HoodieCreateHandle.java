@@ -60,8 +60,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected long recordsWritten = 0;
   protected long insertRecordsWritten = 0;
   protected long recordsDeleted = 0;
-  private Map<String, HoodieRecord<T>> recordMap;
-  private boolean useWriterSchema = false;
+  protected Map<String, HoodieRecord<T>> recordMap;
+  protected boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -94,6 +94,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     this.path = makeNewPath(partitionPath);
 
     try {
+      this.fileWriter = initializeFileWriter();
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage, instantTime,
           new StoragePath(config.getBasePath()),
           FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
@@ -101,13 +102,15 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       partitionMetadata.trySave();
       createMarkerFile(partitionPath,
           FSUtils.makeBaseFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-      this.fileWriter =
-          HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), config,
-              writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
     LOG.info("New CreateHandle for partition :" + partitionPath + " with fileId " + fileId);
+  }
+
+  protected HoodieFileWriter initializeFileWriter() throws IOException {
+    return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable.getStorage(), config,
+      writeSchemaWithMetaFields, this.taskContextSupplier, config.getRecordMerger().getRecordType());
   }
 
   /**
