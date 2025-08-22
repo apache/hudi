@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -139,6 +140,15 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     } catch (IOException e) {
       throw new HoodieException("Failed to extract data from record: " + record, e);
     }
+  }
+
+  @Override
+  public IndexedRecord constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+    GenericData.Record record = new GenericData.Record(recordSchema);
+    for (int i = 0; i < fieldValues.length; i++) {
+      record.put(i, fieldValues[i]);
+    }
+    return record;
   }
 
   @Override
