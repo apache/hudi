@@ -349,12 +349,8 @@ public class TestInProcessLockProvider {
   public void testTryLockReAcquisitionBySameThread() {
     InProcessLockProvider inProcessLockProvider = new InProcessLockProvider(lockConfiguration1, storageConf);
     Assertions.assertTrue(inProcessLockProvider.tryLock());
-    assertDoesNotThrow(() -> {
-      inProcessLockProvider.tryLock(1, TimeUnit.MILLISECONDS);
-    });
-    assertDoesNotThrow(() -> {
-      inProcessLockProvider.unlock();
-    });
+    assertThrows(HoodieLockException.class, () -> inProcessLockProvider.tryLock(1, TimeUnit.MILLISECONDS));
+    assertDoesNotThrow(inProcessLockProvider::unlock);
   }
 
   @Test

@@ -38,14 +38,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * InProcess level lock. This {@link LockProvider} implementation is to
- * guard table from concurrent operations happening in the local JVM process.
+ * InProcess lock. This {@link LockProvider} implementation is intended to be used
+ * when all writers and table services are running on the same JVM.
  * A separate lock is maintained per "table basepath".
+ *
  * <p>
- * Note: This Lock provider implementation doesn't allow lock reentrancy.
- * Attempting to reacquire the lock from the same thread will throw
- * HoodieLockException. Threads other than the current lock owner, will
- * block on lock() and return false on tryLock().
+ * Note: The Lock provider abstraction is designed to work with distributed locks.
+ * To be consistent with such a model where threads can be on different machines,
+ * this implementation explicitly forbids any re-entrancy. It leaves it to the caller
+ * to avoid deadlock situations, where a thread tries to acquire the same lock, it already holds.
+ *
  */
 public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
 
@@ -68,6 +70,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   public void lock() {
     LOG.info(getLogMessage(LockState.ACQUIRING));
     if (lock.isWriteLockedByCurrentThread()) {
+      // Disallow re-entrant behavior;
       throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
     }
     lock.writeLock().lock();
@@ -83,8 +86,8 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   public boolean tryLock(long time, TimeUnit unit) {
     LOG.info(getLogMessage(LockState.ACQUIRING));
     if (lock.isWriteLockedByCurrentThread()) {
-      // allow lock to be re-entrant.
-      return true;
+      // Disallow re-entrant behavior;
+      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
     }
 
     boolean isLockAcquired;
@@ -127,6 +130,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   }
 
   private String getLogMessage(LockState state) {
-    return String.format("Base Path %s, Lock Instance %s, Thread %s, In-process lock state %s", basePath, getLock().toString(), Thread.currentThread().getName(), state.name());
+    return String.format("Base Path %s, Lock Instance %s, Thread %s, In-process lock state %s",
+        basePath, getLock(), Thread.currentThread().getName(), state.name());
   }
 }
