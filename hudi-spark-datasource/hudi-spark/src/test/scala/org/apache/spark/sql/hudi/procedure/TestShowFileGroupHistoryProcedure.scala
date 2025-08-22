@@ -68,11 +68,11 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(historyResult.length == 2, "Should show 2 history entries for file group")
 
       val headRow = historyResult.head
-      assert(headRow.length == 20, "Should have 20 columns in result")
+      assert(headRow.length == 25, "Should have 20 columns in result")
       assert(headRow.getString(2).equals("commit"), "Action should be commit here")
       assert(headRow.getString(6) == fileGroupId, "File group ID should match")
-      assert(headRow.getString(9) == "INSERT", "Operation type should be INSERT here")
-      assert(headRow.getLong(10) == 2, "Small file handling logic coming into play, should have 2 files here")
+      assert(headRow.getString(8) == "INSERT", "Operation type should be INSERT here")
+      assert(headRow.getLong(9) == 2, "Small file handling logic coming into play, should have 2 files here")
     }
   }
 
@@ -195,7 +195,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(unlimitedHistory.length >= limitedHistory.length,
         "Higher limit should return >= results")
 
-      val operationTypes = unlimitedHistory.map(_.getString(9)).distinct
+      val operationTypes = unlimitedHistory.map(_.getString(8)).distinct
       assert(operationTypes.length == 2, "Should have INSERT and UPDATE types")
 
       val hasInsertOrUpdate = operationTypes.exists(op =>
@@ -274,7 +274,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         assert(hasCommitActions, s"Should have commit actions, got: ${actionTypes.mkString(", ")}")
         assert(hasCleanActions, s"Should have clean actions, got: ${actionTypes.mkString(", ")}")
         historyAfterClean.foreach { row =>
-          val delete_action = row.getString(18)
+          val delete_action = row.getString(17)
           assert(delete_action.equals("clean"), s"Delete action should be 'clean', got: $delete_action")
         }
       }
