@@ -37,7 +37,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.source.IncrementalInputSplits;
@@ -97,7 +96,6 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1083,7 +1081,7 @@ public class TestInputFormat {
    * With disorder deletes, we can check whether the '_hoodie_operation' is correctly set up.
    */
   @ParameterizedTest
-  @MethodSource("twoBooleanParams")
+  @MethodSource("preCombiningAndChangelogModeParams")
   void testMergeOnReadDisorderDeleteMerging(boolean preCombine, boolean changelogMode) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PRE_COMBINE.key(), preCombine + "");
@@ -1408,12 +1406,11 @@ public class TestInputFormat {
   }
 
   @ParameterizedTest
-  @MethodSource("twoBooleanParams")
-  public void testWriteCowWithPartialUpdate(boolean useFileGroupReaderBasedMergeHandle, boolean usePayloadConf) throws Exception {
+  @MethodSource("partialUpdateParams")
+  public void testWriteCowWithPartialUpdate(HoodieTableVersion tableVersion, String mergeHandleClass, boolean usePayloadConf) throws Exception {
     Map<String, String> options = new HashMap<>();
-    String mergeHandleClass = useFileGroupReaderBasedMergeHandle
-        ? FileGroupReaderBasedMergeHandle.class.getName() : HoodieWriteMergeHandle.class.getName();
     options.put(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), mergeHandleClass);
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), tableVersion.versionCode() + "");
     // new config with merge classes and merge mode
     if (usePayloadConf) {
       options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), PartialUpdateAvroPayload.class.getName());
@@ -1442,31 +1439,31 @@ public class TestInputFormat {
     TestData.checkWrittenData(tempFile, expected, expected.size());
   }
 
-  @Test
-  public void testCheckFileGroupMergeHandleWithLowerTableVersion() throws Exception {
-    Map<String, String> options = new HashMap<>();
-    options.put(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), FileGroupReaderBasedMergeHandle.class.getName());
-    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), HoodieTableVersion.EIGHT.versionCode() + "");
-    options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), PartialUpdateAvroPayload.class.getName());
-    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
-    // insert
-    List<RowData> sourceData = Arrays.asList(
-        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), null,
-            TimestampData.fromEpochMillis(2), StringData.fromString("par1"))
-    );
-
-    assertThrows(HoodieValidationException.class, () -> TestData.writeData(sourceData, conf),
-        "FileGroup reader based merge handle for writing path is only supported from table version: NINE");
-  }
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
 
   /**
-   * Two boolean test parameters.
+   * Return test params => (tableVersion, writeMergeHandleClass, usePayloadConf).
    */
-  private static Stream<Arguments> twoBooleanParams() {
+  private static Stream<Arguments> partialUpdateParams() {
+    Object[][] data =
+        new Object[][] {
+            {HoodieTableVersion.NINE, FileGroupReaderBasedMergeHandle.class.getName(), true},
+            {HoodieTableVersion.NINE, FileGroupReaderBasedMergeHandle.class.getName(), false},
+            {HoodieTableVersion.NINE, HoodieWriteMergeHandle.class.getName(), true},
+            {HoodieTableVersion.NINE, HoodieWriteMergeHandle.class.getName(), false},
+            {HoodieTableVersion.EIGHT, FileGroupReaderBasedMergeHandle.class.getName(), true},
+            {HoodieTableVersion.EIGHT, FileGroupReaderBasedMergeHandle.class.getName(), false},
+            {HoodieTableVersion.EIGHT, HoodieWriteMergeHandle.class.getName(), true},
+            {HoodieTableVersion.EIGHT, HoodieWriteMergeHandle.class.getName(), false}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (preCombining, changelog mode).
+   */
+  private static Stream<Arguments> preCombiningAndChangelogModeParams() {
     Object[][] data =
         new Object[][] {
             {true, true},

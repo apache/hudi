@@ -34,8 +34,10 @@ import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -157,5 +159,13 @@ public class TestFlinkWriteClients {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     String mergerClasses = writeConfig.getString(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES);
     assertThat(mergerClasses, is(PartialUpdateFlinkRecordMerger.class.getName()));
+  }
+
+  @Test
+  void testWriteMergeHandleForPreV9Table() throws Exception {
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.EIGHT.versionCode());
+    StreamerUtil.initTableIfNotExists(conf);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertThat(writeConfig.getMergeHandleClassName(), is(HoodieWriteMergeHandle.class.getName()));
   }
 }

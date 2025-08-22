@@ -169,6 +169,7 @@ public class FlinkWriteClients {
       Configuration conf,
       boolean enableEmbeddedTimelineService,
       boolean loadFsViewStorageConfig) {
+    StreamerUtil.checkWriteMergeHandle(conf);
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.FLINK)
@@ -248,10 +249,6 @@ public class FlinkWriteClients {
     builder.withRecordMergeStrategyId(mergingBehavior.getRight())
         .withRecordMergeMode(mergingBehavior.getLeft())
         .withRecordMergeImplClasses(StreamerUtil.getMergerClasses(conf, mergingBehavior.getLeft(), mergingBehavior.getMiddle()));
-
-    StreamerUtil.checkWriteMergeHandle(conf);
-    builder.withMergeHandleClassName(conf.getString(
-        HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue()));
 
     Option<HoodieLockConfig> lockConfig = getLockConfig(conf);
     if (lockConfig.isPresent()) {

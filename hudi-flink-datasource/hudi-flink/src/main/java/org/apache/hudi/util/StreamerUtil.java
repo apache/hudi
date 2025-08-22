@@ -661,9 +661,10 @@ public class StreamerUtil {
         HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue());
     HoodieTableVersion tableVersion = HoodieTableVersion.fromVersionCode(conf.get(FlinkOptions.WRITE_TABLE_VERSION));
     if (FileGroupReaderBasedMergeHandle.class.getName().equalsIgnoreCase(writeMergeHandle) && tableVersion.lesserThan(HoodieTableVersion.NINE)) {
-      throw new HoodieValidationException("FileGroup reader based merge handle for writing path "
-          + "is only supported from table version: " + HoodieTableVersion.NINE
-          + ", please set 'hoodie.write.merge.handle.class'='" + HoodieWriteMergeHandle.class.getName() + "'.");
+      conf.setString(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteMergeHandle.class.getName());
+      LOG.warn("FileGroup reader based merge handle for writing path is only supported from table version: {}, "
+              + "overwrite the option 'hoodie.write.merge.handle.class' with '{}' instead.",
+              HoodieTableVersion.NINE, HoodieWriteMergeHandle.class.getName());
     }
   }
 
