@@ -48,12 +48,7 @@ object HoodieProcedureFilterUtils {
    * @param sparkSession     Spark session for expression parsing
    * @return Filtered rows that match the expression
    */
-  def evaluateFilter(
-                      rows: Seq[Row],
-                      filterExpression: String,
-                      schema: StructType,
-                      sparkSession: SparkSession
-                    ): Seq[Row] = {
+  def evaluateFilter(rows: Seq[Row], filterExpression: String, schema: StructType, sparkSession: SparkSession): Seq[Row] = {
 
     if (filterExpression == null || filterExpression.trim.isEmpty) {
       rows
@@ -75,11 +70,7 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  private def evaluateExpressionOnRow(
-                                       expression: Expression,
-                                       row: Row,
-                                       schema: StructType
-                                     ): Boolean = {
+  private def evaluateExpressionOnRow(expression: Expression, row: Row, schema: StructType): Boolean = {
 
     val internalRow = convertRowToInternalRow(row, schema)
 
@@ -452,11 +443,7 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  def validateFilterExpression(
-                                filterExpression: String,
-                                schema: StructType,
-                                sparkSession: SparkSession
-                              ): Either[String, Unit] = {
+  def validateFilterExpression(filterExpression: String, schema: StructType, sparkSession: SparkSession): Either[String, Unit] = {
 
     if (filterExpression == null || filterExpression.trim.isEmpty) {
       Right(())

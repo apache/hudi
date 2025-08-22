@@ -74,7 +74,7 @@ import scala.util.{Failure, Success, Try}
  *
  * -- Show clean plans that will clean many partitions
  * CALL show_clean_plans(
- *   table => 'my_table', 
+ *   table => 'my_table',
  *   filter => "total_partitions_to_clean > 10"
  * )
  *
