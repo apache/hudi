@@ -411,6 +411,15 @@ object TestPayloadDeprecationFlow {
       ),
       Arguments.of(
         "COPY_ON_WRITE",
+        classOf[PartialUpdateAvroPayload].getName,
+        Map(
+          HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
+          HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS")
+      ),
+      Arguments.of(
+        "COPY_ON_WRITE",
         classOf[PostgresDebeziumAvroPayload].getName,
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
