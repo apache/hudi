@@ -211,8 +211,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(engineContext.getTaskContextSupplier, options.asJava)
 
+    // Create metaclient on driver to avoid expensive operations on executors
+    val storageConf = new HadoopStorageConfiguration(broadcastedStorageConf.value.value)
+    val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
+      .builder().setConf(storageConf).setBasePath(tablePath).build
+
     (file: PartitionedFile) => {
-      val storageConf = new HadoopStorageConfiguration(broadcastedStorageConf.value.value)
       val iter = file.partitionValues match {
         // Snapshot or incremental queries.
         case fileSliceMapping: HoodiePartitionFileSliceMapping =>
@@ -220,8 +224,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
-              val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
-                .builder().setConf(storageConf).setBasePath(tablePath).build
               val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
@@ -259,7 +261,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
-          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, fileGroupBaseFileReader.value, storageConf, fileIndexProps, requiredSchema)
+          buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, fileGroupBaseFileReader.value, storageConf, fileIndexProps, requiredSchema, metaClient)
 
         case _ =>
           readBaseFile(file, baseFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
@@ -298,13 +300,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                      baseFileReader: SparkColumnarFileReader,
                                      storageConf: StorageConfiguration[Configuration],
                                      props: TypedProperties,
-                                     requiredSchema: StructType): Iterator[InternalRow] = {
+                                     requiredSchema: StructType,
+                                     metaClient: HoodieTableMetaClient): Iterator[InternalRow] = {
     val fileSplits = hoodiePartitionCDCFileGroupSliceMapping.getFileSplits().toArray
     val cdcFileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
     props.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, tableName)
     val cdcSchema = CDCRelation.FULL_CDC_SPARK_SCHEMA
-    val metaClient = HoodieTableMetaClient.builder
-      .setBasePath(tablePath).setConf(storageConf.newInstance()).build()
     new CDCFileGroupIterator(
       cdcFileGroupSplit,
       metaClient,
