@@ -18,9 +18,7 @@
 
 package org.apache.hudi.table.action.cluster.strategy;
 
-import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -34,7 +32,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,20 +90,4 @@ public class TestPartitionAwareClusteringPlanStrategy {
     }
   }
 
-  class TestablePartitionAwareClusteringPlanStrategy extends PartitionAwareClusteringPlanStrategy {
-
-    public TestablePartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
-      super(table, engineContext, writeConfig);
-    }
-
-    @Override
-    protected Map<String, String> getStrategyParams() {
-      return null;
-    }
-
-    // Expose protected method for testing  
-    public Pair<Stream<HoodieClusteringGroup>, Boolean> testBuildClusteringGroupsForPartition(String partitionPath, List<org.apache.hudi.common.model.FileSlice> fileSlices) {
-      return super.buildClusteringGroupsForPartition(partitionPath, fileSlices);
-    }
-  }
 }
