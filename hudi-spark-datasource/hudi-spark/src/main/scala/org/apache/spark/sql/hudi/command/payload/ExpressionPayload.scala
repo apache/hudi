@@ -304,6 +304,15 @@ class ExpressionPayload(@transient record: GenericRecord,
     }
   }
 
+  // Always recompute the ordering value from the record since the value can change due to the evaluated expression.
+  override protected def getIncomingOrderingVal(incomingRecord: HOption[IndexedRecord], orderingFields: Array[String], consistentLogicalTimestampEnabled: Boolean): Comparable[_] = {
+    if (incomingRecord.isPresent) {
+      OrderingValues.create(orderingFields, (field: String) => HoodieAvroUtils.getNestedFieldVal(incomingRecord.get().asInstanceOf[GenericRecord], field, true, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]])
+    } else {
+      OrderingValues.getDefault
+    }
+  }
+
   private def isMORTable(properties: Properties): Boolean = {
     properties.getProperty(TABLE_TYPE.key, null) == MOR_TABLE_TYPE_OPT_VAL
   }
