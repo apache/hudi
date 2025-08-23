@@ -530,7 +530,7 @@ public class HoodieIndexUtils {
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) hoodieTable.getContext()
         .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-    TypedProperties properties = readerContext.getMergeProps(config.getProps());
+    TypedProperties properties = readerContext.getMergeProps(updatedConfig.getProps());
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
     readerContext.initRecordMergerForIngestion(config.getProps());
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
@@ -570,7 +570,7 @@ public class HoodieIndexUtils {
           }
           HoodieRecord<R> existing = existingOpt.get();
           Schema writeSchema = writerSchema.get();
-          if (incoming.isDelete(writeSchema, updatedConfig.getProps())) {
+          if (incoming.isDelete(writeSchema, properties)) {
             // incoming is a delete: force tag the incoming to the old partition
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
           }
