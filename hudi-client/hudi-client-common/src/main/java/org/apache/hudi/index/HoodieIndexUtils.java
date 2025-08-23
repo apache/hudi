@@ -422,9 +422,10 @@ public class HoodieIndexUtils {
       BaseKeyGenerator keyGenerator,
       RecordContext<R> incomingRecordContext,
       RecordContext<R> existingRecordContext,
-      String[] orderingFieldNames) throws IOException {
-    BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incoming, writeSchemaWithMetaFields, incomingRecordContext, config.getProps(), orderingFieldNames);
-    BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
+      String[] orderingFieldNames,
+      TypedProperties properties) throws IOException {
+    BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incoming, writeSchemaWithMetaFields, incomingRecordContext, properties, orderingFieldNames);
+    BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, properties, orderingFieldNames);
     BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
     if (mergeResult.isDelete()) {
       //the record was deleted
@@ -439,8 +440,8 @@ public class HoodieIndexUtils {
     String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
     HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
-        new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
-    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+        new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
+    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
         config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
   }
 
@@ -471,14 +472,15 @@ public class HoodieIndexUtils {
       RecordContext<R> incomingRecordContext,
       RecordContext<R> existingRecordContext,
       String[] orderingFieldNames,
+      TypedProperties properties,
       boolean isExpressionPayload) throws IOException {
     if (isExpressionPayload) {
       return mergeIncomingWithExistingRecordWithExpressionPayload(incoming, existing, writeSchema,
-          writeSchemaWithMetaFields, config, recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldNames);
+          writeSchemaWithMetaFields, config, recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldNames, properties);
     } else {
       // prepend the hoodie meta fields as the incoming record does not have them
-      BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incoming, writeSchema, incomingRecordContext, config.getProps(), orderingFieldNames);
-      BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, config.getProps(), orderingFieldNames);
+      BufferedRecord<R> incomingBufferedRecord = BufferedRecords.fromHoodieRecord(incoming, writeSchema, incomingRecordContext, properties, orderingFieldNames);
+      BufferedRecord<R> existingBufferedRecord = BufferedRecords.fromHoodieRecord(existing, writeSchemaWithMetaFields, existingRecordContext, properties, orderingFieldNames);
       existingBufferedRecord.project(existingRecordContext.projectRecord(writeSchemaWithMetaFields, writeSchema));
       BufferedRecord<R> mergeResult = recordMerger.finalMerge(existingBufferedRecord, incomingBufferedRecord);
 
@@ -487,14 +489,14 @@ public class HoodieIndexUtils {
         return Option.empty();
       }
       String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
-      if (config.isFileGroupReaderBasedMergeHandle() && HoodieRecordUtils.isPayloadClassDeprecated(ConfigUtils.getPayloadClass(config.getProps()))) {
+      if (config.isFileGroupReaderBasedMergeHandle() && HoodieRecordUtils.isPayloadClassDeprecated(ConfigUtils.getPayloadClass(properties))) {
         return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
       } else {
         HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
         HoodieRecord<R> resultWithMetaFields = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
-            new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
+            new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
         // the merged record needs to be converted back to the original payload
-        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, config.getProps(), Option.empty(),
+        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
             config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
       }
     }
@@ -528,6 +530,7 @@ public class HoodieIndexUtils {
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) hoodieTable.getContext()
         .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+    TypedProperties properties = readerContext.getMergeProps(config.getProps());
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
     readerContext.initRecordMergerForIngestion(config.getProps());
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
@@ -573,7 +576,7 @@ public class HoodieIndexUtils {
           }
           Option<HoodieRecord<R>> mergedOpt = mergeIncomingWithExistingRecord(
               incoming, existing, writeSchema, writerSchemaWithMetaFields.get(), updatedConfig,
-              recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldsArray, isExpressionPayload);
+              recordMerger, keyGenerator, incomingRecordContext, existingRecordContext, orderingFieldsArray, properties, isExpressionPayload);
           if (!mergedOpt.isPresent()) {
             // merge resulted in delete: force tag the incoming to the old partition
             return Collections.singletonList(tagRecord(incoming.newInstance(existing.getKey()), existing.getCurrentLocation())).iterator();
