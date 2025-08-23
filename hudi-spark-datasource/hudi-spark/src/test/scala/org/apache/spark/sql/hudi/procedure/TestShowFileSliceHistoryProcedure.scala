@@ -438,14 +438,14 @@ class TestShowFileSliceHistoryProcedure extends HoodieSparkSqlTestBase {
         s"""call show_file_slice_history(
            |  table => '$tableName',
            |  file_name => '$fileName',
-           |  show_archived => false
+           |  showArchived => false
            |)""".stripMargin).collect()
 
       val historyWithArchived = spark.sql(
         s"""call show_file_slice_history(
            |  table => '$tableName',
            |  file_name => '$fileName',
-           |  show_archived => true
+           |  showArchived => true
            |)""".stripMargin).collect()
 
       assert(historyWithArchived.length >= historyWithoutArchived.length,

@@ -34,7 +34,7 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.required(1, "file_group_id", DataTypes.StringType),
     ProcedureParameter.optional(2, "partition", DataTypes.StringType),
-    ProcedureParameter.optional(3, "show_archived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(3, "showArchived", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "limit", DataTypes.IntegerType, 20),
     ProcedureParameter.optional(5, "filter", DataTypes.StringType, "")
   )
