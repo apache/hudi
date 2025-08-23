@@ -68,7 +68,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(historyResult.length == 2, "Should show 2 history entries for file group")
 
       val headRow = historyResult.head
-      assert(headRow.length == 25, "Should have 20 columns in result")
+      assert(headRow.length == 25, "Should have 25 columns in result")
       assert(headRow.getString(2).equals("commit"), "Action should be commit here")
       assert(headRow.getString(6) == fileGroupId, "File group ID should match")
       assert(headRow.getString(8) == "INSERT", "Operation type should be INSERT here")

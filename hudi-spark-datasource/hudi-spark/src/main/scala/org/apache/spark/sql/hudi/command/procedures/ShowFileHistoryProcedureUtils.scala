@@ -26,6 +26,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 object FileHistoryType extends Enumeration {
@@ -136,18 +137,15 @@ object ShowFileHistoryProcedureUtils extends Logging {
     val partitionPath = writeStat.getPartitionPath
     val partitionMatches = targetPartition.isEmpty || targetPartition.get == partitionPath
 
-    if (!partitionMatches) return false
-
-    val filePath = writeStat.getPath
-    if (filePath != null && filePath.contains(targetFileName)) {
-      return true
+    if (!partitionMatches) {
+      false
+    } else {
+      val filePath = writeStat.getPath
+      val filePathMatches = filePath != null && filePath.contains(targetFileName)
+      val fileId = writeStat.getFileId
+      val fileIdMatches = fileId != null && fileId.contains(targetFileName)
+      filePathMatches || fileIdMatches
     }
-    val fileId = writeStat.getFileId
-    if (fileId != null && fileId.contains(targetFileName)) {
-      return true
-    }
-
-    false
   }
 
   def processTimeline(

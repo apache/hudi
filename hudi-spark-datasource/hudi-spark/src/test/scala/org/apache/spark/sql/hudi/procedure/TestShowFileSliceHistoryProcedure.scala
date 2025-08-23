@@ -67,7 +67,7 @@ class TestShowFileSliceHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(historyResult.length >= 1, "Should show at least 1 history entry for file slice")
 
       val headRow = historyResult.head
-      assert(headRow.length == 25, "Should have 26 columns in result")
+      assert(headRow.length == 25, "Should have 25 columns in result")
       assert(headRow.getString(2).equals("commit"), "Action should be commit here")
       assert(headRow.getString(7).contains(fileName) || headRow.getString(7).contains(fileName.split("_")(0)),
         "File name should match or contain the queried file name")
