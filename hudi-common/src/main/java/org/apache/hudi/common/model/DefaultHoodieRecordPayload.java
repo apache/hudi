@@ -168,10 +168,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     Comparable persistedOrderingVal = OrderingValues.create(
         orderingFields,
         field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled));
-    Comparable incomingOrderingVal = orderingVal != null ? orderingVal : incomingRecord.map(record -> OrderingValues.create(
-        orderingFields,
-        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, consistentLogicalTimestampEnabled)))
-        .orElseGet(OrderingValues::getDefault);
+    Comparable incomingOrderingVal = getIncomingOrderingVal(incomingRecord, orderingFields, consistentLogicalTimestampEnabled);
     // If the incoming record is a delete record without an ordering value, it is processed as "commit time" ordering.
     if (incomingRecord.isEmpty() && incomingOrderingVal == OrderingValues.getDefault()) {
       return true;
@@ -179,4 +176,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
   }
 
+  protected Comparable getIncomingOrderingVal(Option<IndexedRecord> incomingRecord, String[] orderingFields, boolean consistentLogicalTimestampEnabled) {
+    return orderingVal != null ? orderingVal : incomingRecord.map(record -> OrderingValues.create(
+            orderingFields,
+        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, consistentLogicalTimestampEnabled)))
+        .orElseGet(OrderingValues::getDefault);
+  }
 }
