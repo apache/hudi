@@ -35,7 +35,8 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     ProcedureParameter.required(1, "file_group_id", DataTypes.StringType),
     ProcedureParameter.optional(2, "partition", DataTypes.StringType),
     ProcedureParameter.optional(3, "show_archived", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(4, "limit", DataTypes.IntegerType, 20)
+    ProcedureParameter.optional(4, "limit", DataTypes.IntegerType, 20),
+    ProcedureParameter.optional(5, "filter", DataTypes.StringType, "")
   )
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -50,13 +51,26 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     val partition = getArgValueOrDefault(args, PARAMETERS(2)).asInstanceOf[Option[String]]
     val showArchived = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
     val limit = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Int]
+    val filter = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
+
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
 
     val basePath = getBasePath(Option(tableName), Option.empty)
     val metaClient = createMetaClient(jsc, basePath)
 
     val fileGroupHistory = collectFileGroupHistory(metaClient, fileGroupId, partition, showArchived, limit)
 
-    fileGroupHistory
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(fileGroupHistory, filter, outputType, sparkSession)
+    } else {
+      fileGroupHistory
+    }
   }
 
   private def collectFileGroupHistory(

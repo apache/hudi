@@ -455,4 +455,159 @@ class TestShowFileSliceHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(timelineTypes.contains("ACTIVE"), "Should have ACTIVE timeline entries")
     }
   }
+
+  test("Test show_file_slice_history - with operation type filter") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tableLocation = tmp.getCanonicalPath
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | ts long
+           |) using hudi
+           | location '$tableLocation'
+           | tblproperties (
+           | primaryKey = 'id',
+           | type = 'cow',
+           | preCombineField = 'ts'
+           |)
+           |""".stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"update $tableName set price = 15 where id = 1")
+      spark.sql(s"update $tableName set price = 20 where id = 1")
+
+      val fileInfo = spark.sql(s"select _hoodie_file_name from $tableName where id = 1 limit 1").collect()
+      val fileName = fileInfo.head.getString(0)
+
+      val updateOnlyHistoryDf = spark.sql(
+        s"""call show_file_slice_history(
+           |  table => '$tableName',
+           |  file_name => '$fileName',
+           |  filter => "operation_type = 'UPDATE'"
+           |)""".stripMargin)
+      updateOnlyHistoryDf.show(false)
+      val updateOnlyHistory = updateOnlyHistoryDf.collect()
+
+      assert(updateOnlyHistory.length == 1, "Should find at least 1 UPDATE operation")
+      updateOnlyHistory.foreach { row =>
+        assert(row.getString(8) == "UPDATE", s"All entries should be UPDATE operations, got: ${row.getString(8)}")
+      }
+
+      val activeTimelineHistoryDf = spark.sql(
+        s"""call show_file_slice_history(
+           |  table => '$tableName',
+           |  file_name => '$fileName',
+           |  filter => "timeline_type = 'ACTIVE'"
+           |)""".stripMargin)
+      activeTimelineHistoryDf.show(false)
+      val activeTimelineHistory = activeTimelineHistoryDf.collect()
+
+      assert(activeTimelineHistory.length == 1, "Should find at least 2 ACTIVE timeline entries")
+      activeTimelineHistory.foreach { row =>
+        assert(row.getString(3) == "ACTIVE", s"All entries should be ACTIVE timeline, got: ${row.getString(3)}")
+      }
+
+      val allHistory = spark.sql(
+        s"""call show_file_slice_history(
+           |  table => '$tableName',
+           |  file_name => '$fileName'
+           |)""".stripMargin).collect()
+
+      assert(allHistory.length >= updateOnlyHistory.length, "Unfiltered results should have >= filtered results")
+      assert(allHistory.length >= activeTimelineHistory.length, "Unfiltered results should have >= filtered results")
+    }
+  }
+
+  test("Test show_file_slice_history - with file name pattern and numeric filters") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tableLocation = tmp.getCanonicalPath
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | ts long
+           |) using hudi
+           | location '$tableLocation'
+           | tblproperties (
+           | primaryKey = 'id',
+           | type = 'cow',
+           | preCombineField = 'ts'
+           |)
+           |""".stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+      spark.sql(s"update $tableName set price = 15 where id = 1")
+      spark.sql(s"update $tableName set price = 25 where id = 2")
+
+      val fileInfo = spark.sql(s"select _hoodie_file_name from $tableName where id = 1 limit 1").collect()
+      val fileName = fileInfo.head.getString(0)
+
+      val fileNameFilterHistory = spark.sql(
+        s"""call show_file_slice_history(
+           |  table => '$tableName',
+           |  file_name => '$fileName',
+           |  filter => "file_name LIKE '%.parquet'"
+           |)""".stripMargin).collect()
+
+      assert(fileNameFilterHistory.length == 1, "Should find entries with .parquet extension")
+      fileNameFilterHistory.foreach { row =>
+        val actualFileName = row.getString(7)
+        assert(actualFileName != null && actualFileName.endsWith(".parquet"),
+          s"File name should end with .parquet, got: $actualFileName")
+      }
+
+      val updatesFilterHistory = spark.sql(
+        s"""call show_file_slice_history(
+           |  table => '$tableName',
+           |  file_name => '$fileName',
+           |  filter => "num_updates > 0"
+           |)""".stripMargin).collect()
+
+      assert(updatesFilterHistory.length == 1, "Should find entries with updates > 0")
+      updatesFilterHistory.foreach { row =>
+        assert(row.getLong(11) > 0, s"All entries should have num_updates > 0, got: ${row.getLong(11)}")
+      }
+
+      val complexFilterHistory = spark.sql(
+        s"""call show_file_slice_history(
+           |  table => '$tableName',
+           |  file_name => '$fileName',
+           |  filter => "action = 'commit' AND state = 'COMPLETED' AND num_writes > 0"
+           |)""".stripMargin).collect()
+
+      assert(complexFilterHistory.length == 1, "Should find entries matching complex filter")
+      complexFilterHistory.foreach { row =>
+        assert(row.getString(2) == "commit", s"Action should be commit, got: ${row.getString(2)}")
+        assert(row.getString(4) == "COMPLETED", s"State should be COMPLETED, got: ${row.getString(4)}")
+        assert(row.getLong(9) > 0, s"num_writes should be > 0, got: ${row.getLong(9)}")
+      }
+
+      val sizeFilterHistory = spark.sql(
+        s"""call show_file_slice_history(
+           |  table => '$tableName',
+           |  file_name => '$fileName',
+           |  filter => "file_size_bytes > 1000 AND total_write_bytes > 1000"
+           |)""".stripMargin).collect()
+
+      assert(sizeFilterHistory.length == 1, "Should find entries with file size > 1000 bytes")
+      sizeFilterHistory.foreach { row =>
+        assert(row.getLong(13) > 1000, s"file_size_bytes should be > 1000, got: ${row.getLong(13)}")
+        assert(row.getLong(14) > 1000, s"total_write_bytes should be > 1000, got: ${row.getLong(14)}")
+      }
+    }
+  }
 }

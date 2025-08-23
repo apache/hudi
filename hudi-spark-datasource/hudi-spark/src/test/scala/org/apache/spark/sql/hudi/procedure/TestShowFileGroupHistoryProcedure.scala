@@ -349,4 +349,143 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(emptyResult.length == 0, "Should handle empty file group ID gracefully")
     }
   }
+
+  test("Test show_file_group_history - with action filter") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tableLocation = tmp.getCanonicalPath
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | ts long
+           |) using hudi
+           | location '$tableLocation'
+           | tblproperties (
+           | primaryKey = 'id',
+           | type = 'cow',
+           | preCombineField = 'ts'
+           |)
+           |""".stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"update $tableName set price = 15 where id = 1")
+      spark.sql(s"update $tableName set price = 20 where id = 1")
+
+      val fileInfo = spark.sql(s"select _hoodie_file_name from $tableName where id = 1 limit 1").collect()
+      val fileName = fileInfo.head.getString(0)
+      val fileGroupId = fileName.split("_")(0)
+
+      val commitOnlyHistory = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  file_group_id => '$fileGroupId',
+           |  filter => "action = 'commit'"
+           |)""".stripMargin).collect()
+
+      assert(commitOnlyHistory.length >= 2, "Should find at least 2 commit entries")
+      commitOnlyHistory.foreach { row =>
+        assert(row.getString(2) == "commit", s"All entries should be commit actions, got: ${row.getString(2)}")
+      }
+
+      val insertOnlyHistory = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  file_group_id => '$fileGroupId',
+           |  filter => "operation_type = 'INSERT'"
+           |)""".stripMargin).collect()
+
+      assert(insertOnlyHistory.length == 1, "Should find exactly 1 INSERT operation")
+      insertOnlyHistory.foreach { row =>
+        assert(row.getString(8) == "INSERT", s"All entries should be INSERT operations, got: ${row.getString(8)}")
+      }
+
+      val allHistory = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  file_group_id => '$fileGroupId'
+           |)""".stripMargin).collect()
+
+      assert(allHistory.length >= commitOnlyHistory.length, "Unfiltered results should have >= filtered results")
+      assert(allHistory.length >= insertOnlyHistory.length, "Unfiltered results should have >= filtered results")
+    }
+  }
+
+  test("Test show_file_group_history - with numeric and complex filters") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tableLocation = tmp.getCanonicalPath
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | ts long
+           |) using hudi
+           | location '$tableLocation'
+           | tblproperties (
+           | primaryKey = 'id',
+           | type = 'cow',
+           | preCombineField = 'ts'
+           |)
+           |""".stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+      spark.sql(s"update $tableName set price = 15 where id = 1")
+      spark.sql(s"update $tableName set price = 25 where id = 2")
+
+      val fileInfo = spark.sql(s"select _hoodie_file_name from $tableName where id = 1 limit 1").collect()
+      val fileName = fileInfo.head.getString(0)
+      val fileGroupId = fileName.split("_")(0)
+
+      val writesFilterHistory = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  file_group_id => '$fileGroupId',
+           |  filter => "num_writes > 0"
+           |)""".stripMargin).collect()
+
+      assert(writesFilterHistory.length >= 1, "Should find entries with writes > 0")
+      writesFilterHistory.foreach { row =>
+        assert(row.getLong(9) > 0, s"All entries should have num_writes > 0, got: ${row.getLong(9)}")
+      }
+
+      val complexFilterHistory = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  file_group_id => '$fileGroupId',
+           |  filter => "action = 'commit' AND num_writes > 0 AND state = 'COMPLETED'"
+           |)""".stripMargin).collect()
+
+      assert(complexFilterHistory.length >= 1, "Should find entries matching complex filter")
+      complexFilterHistory.foreach { row =>
+        assert(row.getString(2) == "commit", s"Action should be commit, got: ${row.getString(2)}")
+        assert(row.getLong(9) > 0, s"num_writes should be > 0, got: ${row.getLong(9)}")
+        assert(row.getString(4) == "COMPLETED", s"State should be COMPLETED, got: ${row.getString(4)}")
+      }
+
+      val fileSizeFilterHistory = spark.sql(
+        s"""call show_file_group_history(
+           |  table => '$tableName',
+           |  file_group_id => '$fileGroupId',
+           |  filter => "file_size_bytes > 0 AND total_write_bytes > 0"
+           |)""".stripMargin).collect()
+
+      assert(fileSizeFilterHistory.length >= 1, "Should find entries with file size > 0")
+      fileSizeFilterHistory.foreach { row =>
+        assert(row.getLong(13) > 0, s"file_size_bytes should be > 0, got: ${row.getLong(13)}")
+        assert(row.getLong(14) > 0, s"total_write_bytes should be > 0, got: ${row.getLong(14)}")
+      }
+    }
+  }
 }
