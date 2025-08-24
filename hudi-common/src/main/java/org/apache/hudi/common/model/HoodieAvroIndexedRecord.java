@@ -115,6 +115,17 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     this(key, data, null, metaData,  null);
   }
 
+  private HoodieAvroIndexedRecord(
+      HoodieKey key,
+      SerializableIndexedRecord data,
+      HoodieOperation operation,
+      Option<Map<String, String>> metaData,
+      Comparable orderingValue) {
+    super(key, data, operation, metaData);
+    this.binaryRecord = (SerializableIndexedRecord) this.data;
+    this.orderingValue = orderingValue;
+  }
+
   HoodieAvroIndexedRecord(HoodieAvroIndexedRecord record) {
     super(record.getKey(), record.binaryRecord, record.getOperation(), record.getMetadata());
     this.currentLocation = record.getCurrentLocation();
