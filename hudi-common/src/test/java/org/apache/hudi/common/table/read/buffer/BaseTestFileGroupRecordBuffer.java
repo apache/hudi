@@ -80,7 +80,7 @@ public class BaseTestFileGroupRecordBuffer {
   }
 
   protected static List<HoodieRecord> convertToHoodieRecordsList(List<IndexedRecord> indexedRecords) {
-    return indexedRecords.stream().map(rec -> new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec, null)).collect(Collectors.toList());
+    return indexedRecords.stream().map(rec -> new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec)).collect(Collectors.toList());
   }
 
   protected static List<HoodieRecord> convertToHoodieRecordsListForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
