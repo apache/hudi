@@ -1847,6 +1847,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
   }
 
+  public boolean isBinaryCopySchemaEvolutionEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
+  }
+
   public int getInlineClusterMaxCommits() {
     return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS);
   }
