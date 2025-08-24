@@ -89,7 +89,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
 
   @Override
   public HoodieRecord<RowData> newInstance(HoodieKey key) {
-    throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+    return new HoodieFlinkRecord(key, operation, orderingValue, data);
   }
 
   @Override
