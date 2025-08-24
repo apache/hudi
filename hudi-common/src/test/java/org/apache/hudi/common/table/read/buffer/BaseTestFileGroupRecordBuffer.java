@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 
@@ -158,6 +159,11 @@ public class BaseTestFileGroupRecordBuffer {
       this.payloadRecord = record;
     }
 
+    public CustomPayload(Option<GenericRecord> record) {
+      super(record.orElse(null), OrderingValues.getDefault());
+      this.payloadRecord = record.orElse(null);
+    }
+
     @Override
     public TestKeyBasedFileGroupRecordBuffer.CustomPayload preCombine(TestKeyBasedFileGroupRecordBuffer.CustomPayload oldValue) {
       return this;
@@ -197,8 +203,8 @@ public class BaseTestFileGroupRecordBuffer {
 
     @Override
     public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-      GenericRecord olderData = (GenericRecord) older.getData();
-      GenericRecord newerData = (GenericRecord) newer.getData();
+      GenericRecord olderData = (GenericRecord) older.toIndexedRecord(oldSchema, props).get().getData();
+      GenericRecord newerData = (GenericRecord) newer.toIndexedRecord(newSchema, props).get().getData();
       if (olderData.get(2).equals(newerData.get(2))) {
         // If the timestamps are the same, we do not update
         return Option.of(Pair.of(older, oldSchema));

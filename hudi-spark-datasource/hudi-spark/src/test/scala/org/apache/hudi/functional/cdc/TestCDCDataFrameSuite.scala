@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplement
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 
@@ -813,7 +813,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)
 
-    val metaClient = createMetaClient(spark, basePath)
+      val metaClient = createMetaClient(spark, basePath)
       val startTimeStamp = metaClient.reloadActiveTimeline().firstInstant().get.requestedTime
       val latestTimeStamp = metaClient.reloadActiveTimeline().lastInstant().get.requestedTime
 

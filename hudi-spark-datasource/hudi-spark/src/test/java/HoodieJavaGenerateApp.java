@@ -44,7 +44,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;

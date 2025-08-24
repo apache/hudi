@@ -65,6 +65,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
     RecordContext<T> recordContext = readerContext.getRecordContext();
+    TypedProperties mergedProperties = readerContext.getMergeProps(props);
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
@@ -74,7 +75,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       //       an instance of [[InternalRow]] pointing into shared, mutable buffer
       return Pair.of(key, record.copy());
     }).reduceByKey(
-        (previous, next) -> reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema.get(), recordContext),
+        (previous, next) -> reduceRecords(mergedProperties, recordMerger, orderingFieldNames, previous, next, schema.get(), recordContext),
         parallelism).map(Pair::getRight);
   }
 }

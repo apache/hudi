@@ -75,8 +75,9 @@ public class JavaWriteHelper<T,R> extends BaseWriteHelper<T, List<HoodieRecord<T
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
     final Schema schema = new Schema.Parser().parse(schemaStr);
+    TypedProperties mergedProperties = readerContext.getMergeProps(props);
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((previous, next) ->
-        reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext())
+        reduceRecords(mergedProperties, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext())
     ).orElse(null)).filter(Objects::nonNull).collect(Collectors.toList());
   }
 }

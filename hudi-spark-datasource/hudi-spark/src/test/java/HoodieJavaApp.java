@@ -47,7 +47,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_ENABLED;

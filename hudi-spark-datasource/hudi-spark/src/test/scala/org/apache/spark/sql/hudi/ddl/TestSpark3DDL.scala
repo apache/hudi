@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
@@ -36,7 +36,6 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.streaming.OutputMode.Append
 import org.apache.spark.sql.types.{DoubleType, FloatType, IntegerType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -828,7 +827,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         val dataGen = new HoodieTestDataGenerator
         val schema = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA
-        val records1 = RawTripTestPayload.recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 1000, schema)).asScala.toList
+        val records1 = HoodieTestDataGenerator.recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 1000, schema)).asScala.toList
         val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
         // drop tip_history.element.amount, city_to_state, distance_in_meters, drivers
         val orgStringDf = inputDF1.drop("city_to_state", "distance_in_meters", "drivers")
@@ -858,7 +857,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             .load(tablePath)
         oldView.show(5, false)
 
-        val records2 = RawTripTestPayload.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
+        val records2 = HoodieTestDataGenerator.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
         val inputD2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
         val updatedStringDf = inputD2.drop("fare").drop("height")
         val checkRowKey = inputD2.select("_row_key").collectAsList().asScala.map(_.getString(0)).head

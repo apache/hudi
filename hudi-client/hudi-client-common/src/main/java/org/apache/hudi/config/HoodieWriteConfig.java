@@ -3681,4 +3681,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       }
     }
   }
+
+  public boolean isFileGroupReaderBasedMergeHandle() {
+    return isFileGroupReaderBasedMergeHandle(props);
+  }
+
+  public static boolean isFileGroupReaderBasedMergeHandle(TypedProperties props) {
+    return ReflectionUtils.isSubClass(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, true), FileGroupReaderBasedMergeHandle.class);
+  }
 }

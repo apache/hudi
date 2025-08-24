@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -142,6 +143,17 @@ public class TestMergeHandle extends BaseTestHandle {
     int numUpdates = 10;
     List<HoodieRecord> newRecords = dataGenerator.generateUniqueUpdates(instantTime, numUpdates);
     int numDeletes = generateDeleteRecords(newRecords, dataGenerator, instantTime);
+    if (!useFileGroupReader) {
+      // legacy merge handle expects HoodieAvroPayload
+      newRecords = newRecords.stream()
+          .map(avroIndexedRecord -> {
+            HoodieRecord hoodieRecord = new HoodieAvroRecord<>(avroIndexedRecord.getKey(), new DefaultHoodieRecordPayload(Option.of((GenericRecord) avroIndexedRecord.getData())),
+                avroIndexedRecord.getOperation(), avroIndexedRecord.isDelete(AVRO_SCHEMA, CollectionUtils.emptyProps()));
+            hoodieRecord.setIgnoreIndexUpdate(avroIndexedRecord.getIgnoreIndexUpdate());
+            return hoodieRecord;
+          })
+          .collect(Collectors.toList());
+    }
     assertTrue(numDeletes > 0);
     HoodieWriteMergeHandle mergeHandle;
     if (useFileGroupReader) {
@@ -501,8 +513,8 @@ public class TestMergeHandle extends BaseTestHandle {
     }
 
     // Generate records to update
-    GenericRecord genericRecord1 = getGenRecord(newRecords.get(0), config);
-    GenericRecord genericRecord2 = getGenRecord(newRecords.get(1), config);
+    GenericRecord genericRecord1 = (GenericRecord) newRecords.get(0).getData();
+    GenericRecord genericRecord2 = (GenericRecord) newRecords.get(1).getData();
     genericRecord1.put(ORDERING_FIELD, 20L);
     genericRecord2.put(ORDERING_FIELD, 2L);
     recordsToUpdate.add(genericRecord1);
@@ -565,13 +577,9 @@ public class TestMergeHandle extends BaseTestHandle {
   private List<HoodieRecord> overrideOrderingValue(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
 
     List<GenericRecord> genericRecords = hoodieRecords.stream().map(insertRecord -> {
-      try {
-        GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) insertRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
-        genericRecord.put(ORDERING_FIELD, orderingValue);
-        return genericRecord;
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to deser ", e);
-      }
+      GenericRecord genericRecord = (GenericRecord) insertRecord.getData();
+      genericRecord.put(ORDERING_FIELD, orderingValue);
+      return genericRecord;
     }).collect(Collectors.toList());
 
     return getHoodieRecords(payloadClass, genericRecords, partitionPath);
@@ -579,24 +587,12 @@ public class TestMergeHandle extends BaseTestHandle {
 
   private List<HoodieRecord> generateDeletes(List<HoodieRecord> hoodieRecords, HoodieWriteConfig config, String payloadClass, String partitionPath, long orderingValue) {
     List<GenericRecord> genericRecords = hoodieRecords.stream().map(deleteRecord -> {
-      try {
-        GenericRecord genericRecord = (GenericRecord) ((HoodieRecordPayload) deleteRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
-        genericRecord.put(ORDERING_FIELD, orderingValue);
-        genericRecord.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
-        return genericRecord;
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to deser ", e);
-      }
+      GenericRecord genericRecord = (GenericRecord) deleteRecord.getData();
+      genericRecord.put(ORDERING_FIELD, orderingValue);
+      genericRecord.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
+      return genericRecord;
     }).collect(Collectors.toList());
     return getHoodieRecords(payloadClass, genericRecords, partitionPath);
-  }
-
-  private GenericRecord getGenRecord(HoodieRecord hoodieRecord, HoodieWriteConfig config) {
-    try {
-      return (GenericRecord) ((HoodieRecordPayload) hoodieRecord.getData()).getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA, config.getProps()).get();
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to deser record ", e);
-    }
   }
 
   private List<HoodieRecord> getHoodieRecords(String payloadClass, List<GenericRecord> genericRecords, String partitionPath) {
