@@ -51,7 +51,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {

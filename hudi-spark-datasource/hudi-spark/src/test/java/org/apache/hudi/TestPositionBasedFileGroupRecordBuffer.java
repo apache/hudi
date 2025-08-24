@@ -41,7 +41,6 @@ import org.apache.hudi.common.table.read.ParquetRowIndexBasedSchemaHandler;
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -163,7 +162,7 @@ public class TestPositionBasedFileGroupRecordBuffer extends SparkClientFunctiona
   }
 
   private void commitToTable(List<HoodieRecord> recordList, String operation, Map<String, String> options) {
-    List<String> recs = RawTripTestPayload.recordsToStrings(recordList);
+    List<String> recs = HoodieTestDataGenerator.recordsToStrings(recordList);
     Dataset<Row> inputDF = spark().read().json(jsc().parallelize(recs, 2));
 
     inputDF.write().format("hudi")

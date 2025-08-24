@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils

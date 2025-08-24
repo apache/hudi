@@ -18,7 +18,6 @@
 
 package org.apache.hudi.bootstrap;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
@@ -30,10 +29,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SparkKeyGeneratorInterface;
@@ -47,7 +46,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 
-import java.io.IOException;
 import java.util.List;
 
 public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBootstrapDataProvider<JavaRDD<HoodieRecord>> {
@@ -83,12 +81,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
             gr, orderingFieldsStr, false, props.getBoolean(
                 KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                 Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
-        try {
-          return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-              ConfigUtils.getPayloadClass(props), scala.Option.apply(null));
-        } catch (IOException ioe) {
-          throw new HoodieIOException(ioe.getMessage(), ioe);
-        }
+        return HoodieRecordUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr), ConfigUtils.getPayloadClass(props), false);
       });
     } else if (recordType == HoodieRecordType.SPARK) {
       SparkKeyGeneratorInterface sparkKeyGenerator = (SparkKeyGeneratorInterface) keyGenerator;

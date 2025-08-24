@@ -102,9 +102,9 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.hadoop.fs.FileUtil.copy;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordToString;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.apache.hudi.common.util.StringUtils.toStringWithThreshold;
 import static org.apache.hudi.common.util.TestStringUtils.generateRandomString;

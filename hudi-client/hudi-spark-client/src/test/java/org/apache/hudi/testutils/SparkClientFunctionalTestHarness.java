@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -426,14 +425,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   protected Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema) {
     List<GenericRecord> avroRecords = records.stream()
-        .map(r -> {
-          HoodieRecordPayload payload = (HoodieRecordPayload) r.getData();
-          try {
-            return (GenericRecord) payload.getInsertValue(schema).get();
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to extract Avro payload", e);
-          }
-        })
+        .map(r -> (GenericRecord) r.getData())
         .collect(Collectors.toList());
     JavaRDD<GenericRecord> jrdd = jsc.parallelize(avroRecords, 2);
     return AvroConversionUtils.createDataFrame(jrdd.rdd(), schema.toString(), spark);
