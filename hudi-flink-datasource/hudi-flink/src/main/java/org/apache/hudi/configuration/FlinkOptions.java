@@ -624,6 +624,27 @@ public class FlinkOptions extends HoodieConfig {
           + "it flushes the max size data bucket to avoid OOM, default 1GB");
 
   @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_BUFFER_SORT_ENABLED = ConfigOptions
+      .key("write.partial.sort.enabled")
+      .booleanType()
+      .defaultValue(false) // default no sort
+      .withDescription("Whether to enable partial buffer sort within append write function.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_SORT_KEYS = ConfigOptions
+      .key("write.partial.sort.keys")
+      .stringType()
+      .noDefaultValue() // default no sort key
+      .withDescription("Sort keys concatenated by comma for partial buffer sort in append write function.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Long> WRITE_BUFFER_SIZE = ConfigOptions
+      .key("write.partial.buffer.size")
+      .longType()
+      .defaultValue(1000L) // 1000 records
+      .withDescription("Buffer size of each partition key for partial sort in append write function.");
+
+  @AdvancedConfig
   public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
       .key("write.rate.limit")
       .longType()
