@@ -168,7 +168,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
 public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return Option.ofNullable(
         readCommits
-            .getOrDefault(instant.getTimestamp(), Collections.emptyMap())
+            .getOrDefault(instant.requestedTime(), Collections.emptyMap())
             .getOrDefault(instant.getAction(), Collections.emptyMap())
             .get(instant.getState()));
   }
@@ -290,7 +290,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
         if (actionData != null) {
           this.readCommits.computeIfAbsent(instantTime, k -> new HashMap<>()).computeIfAbsent(action, a -> new HashMap<>());
           if (action.equals(HoodieTimeline.COMPACTION_ACTION)) {
-            readCommits.get(instantTime).get(action).put(hoodieInstant.getState(), HoodieAvroUtils.indexedRecordToBytes((IndexedRecord) actionData));
+            readCommits.get(instantTime).get(action).put(hoodieInstant.getState(), HoodieAvroUtils.avroToBytes((IndexedRecord) actionData));
           } else {
             readCommits.get(instantTime).get(action).put(hoodieInstant.getState(), actionData.toString().getBytes(StandardCharsets.UTF_8));
           }
