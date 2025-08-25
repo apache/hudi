@@ -213,6 +213,12 @@ public class RollbackHelper implements Serializable {
             isDeleted = true;
           }
         }
+        if (!isDeleted) {
+          if (metaClient.getStorage().exists(fullDeletePath)) {
+            throw new HoodieIOException("Failing to delete file during rollback execution failed : " + fullDeletePath);
+          }
+          isDeleted = true;
+        }
         return HoodieRollbackStat.newBuilder()
             .withPartitionPath(partitionPath)
             .withDeletedFileResult(fullDeletePath.toString(), isDeleted)
