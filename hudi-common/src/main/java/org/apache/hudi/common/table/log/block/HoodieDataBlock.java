@@ -374,13 +374,13 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     String schemaStr = getLogBlockHeader().get(HeaderMetadataType.SCHEMA);
     SCHEMA_MAP.computeIfAbsent(schemaStr,
         (schemaString) -> {
-            try {
+          try {
             return new Schema.Parser().parse(schemaStr);
-            } catch (AvroTypeException e) {
-              // Archived commits from earlier hudi versions fail the schema check
-              // So we retry in this one specific instance.
-              return new Schema.Parser().setValidateDefaults(false).parse(schemaStr);
-            }
+          } catch (AvroTypeException e) {
+            // Archived commits from earlier hudi versions fail the schema check
+            // So we retry in this one specific instance.
+            return new Schema.Parser().setValidateDefaults(false).parse(schemaStr);
+          }
         });
     return SCHEMA_MAP.get(schemaStr);
   }
