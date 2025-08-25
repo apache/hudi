@@ -66,7 +66,6 @@ import org.apache.hudi.testutils.SparkRDDValidationUtils;
 
 import jodd.io.FileUtil;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -553,7 +552,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
 
     // validate that all 3 partitions are returned
-    assertEquals(mdtPartitions, validator.validatePartitions(engineContext, basePath, metaClient));
+    assertEquals(mdtPartitions, validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient));
   }
 
   @ParameterizedTest

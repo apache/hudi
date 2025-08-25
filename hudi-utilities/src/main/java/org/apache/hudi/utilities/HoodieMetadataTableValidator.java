@@ -784,8 +784,8 @@ public class HoodieMetadataTableValidator implements Serializable {
         // check for all additional partitions from FS is they are empty ones.
         List<String> emptyPartitions = additionalFromFS.stream().filter(partition -> {
           try {
-            Path partitionPath = new Path(basePath, partition);
-            return Arrays.stream(metaClient.getFs().listStatus(partitionPath))
+            StoragePath partitionPath = new StoragePath(basePath, partition);
+            return metaClient.getStorage().listFiles(partitionPath).stream()
                 .noneMatch(fileStatus -> fileStatus.isFile() && !fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
           } catch (IOException ex) {
             throw new HoodieIOException("Error listing partition " + partition, ex);
