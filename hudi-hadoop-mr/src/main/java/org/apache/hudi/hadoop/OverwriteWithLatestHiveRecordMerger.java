@@ -21,7 +21,6 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -38,7 +37,7 @@ public class OverwriteWithLatestHiveRecordMerger extends HoodieHiveRecordMerger 
   }
 
   @Override
-  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return Option.of(Pair.of(newer, newSchema));
+  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    return Pair.of(newer, newSchema);
   }
 }

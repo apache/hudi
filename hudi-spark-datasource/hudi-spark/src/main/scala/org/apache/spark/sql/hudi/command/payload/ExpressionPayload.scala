@@ -174,7 +174,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       HOption.of(incomingRecord)
     } else if (originalPayload.equals(classOf[DefaultHoodieRecordPayload].getName)) {
       // If is default payload, then pick based on comparison result.
-      if (needUpdatingPersistedRecord(existingRecord, incomingRecord, properties)) {
+      if (needUpdatingPersistedRecord(existingRecord, HOption.of(incomingRecord), properties)) {
         HOption.of(incomingRecord)
       } else {
         HOption.of(existingRecord)
@@ -301,6 +301,15 @@ class ExpressionPayload(@transient record: GenericRecord,
       // For COW table, only the not-matched record will step into the getInsertValue method, So just call
       // the processNotMatchedRecord() here.
       processNotMatchedRecord(incomingRecord, properties)
+    }
+  }
+
+  // Always recompute the ordering value from the record since the value can change due to the evaluated expression.
+  override protected def getIncomingOrderingVal(incomingRecord: HOption[IndexedRecord], orderingFields: Array[String], consistentLogicalTimestampEnabled: Boolean): Comparable[_] = {
+    if (incomingRecord.isPresent) {
+      OrderingValues.create(orderingFields, (field: String) => HoodieAvroUtils.getNestedFieldVal(incomingRecord.get().asInstanceOf[GenericRecord], field, true, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]])
+    } else {
+      OrderingValues.getDefault
     }
   }
 

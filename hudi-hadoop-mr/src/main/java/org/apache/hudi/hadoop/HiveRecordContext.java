@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
@@ -78,12 +77,12 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
       return new HoodieEmptyRecord<>(
           key,
           bufferedRecord.getHoodieOperation(),
-          OrderingValues.getDefault(),
+          bufferedRecord.getOrderingValue(),
           HoodieRecord.HoodieRecordType.HIVE);
     }
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema, getHiveAvroSerializer(schema), bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
+    return new HoodieHiveRecord(key, writable, schema, getHiveAvroSerializer(schema), bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override
@@ -122,6 +121,25 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
       return new DoubleWritable((double) value);
     } else if (value instanceof Boolean) {
       return new BooleanWritable((boolean) value);
+    }
+    return value;
+  }
+
+  public Comparable convertValueFromEngineType(Comparable value) {
+    if (value == null) {
+      return null;
+    } else if (value instanceof Text) {
+      return value.toString();
+    } else if (value instanceof IntWritable) {
+      return ((IntWritable) value).get();
+    } else if (value instanceof LongWritable) {
+      return ((LongWritable) value).get();
+    } else if (value instanceof FloatWritable) {
+      return ((FloatWritable) value).get();
+    } else if (value instanceof DoubleWritable) {
+      return ((DoubleWritable) value).get();
+    } else if (value instanceof BooleanWritable) {
+      return ((BooleanWritable) value).get();
     }
     return value;
   }

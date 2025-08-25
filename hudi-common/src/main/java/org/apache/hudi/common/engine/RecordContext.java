@@ -220,6 +220,10 @@ public abstract class RecordContext<T> implements Serializable {
     return value;
   }
 
+  public Comparable convertValueFromEngineType(Comparable value) {
+    return value;
+  }
+
   /**
    * Converts the ordering value to the specific engine type.
    */
@@ -227,6 +231,12 @@ public abstract class RecordContext<T> implements Serializable {
     return value instanceof ArrayComparable
         ? ((ArrayComparable) value).apply(this::convertValueToEngineType)
         : convertValueToEngineType(value);
+  }
+
+  public final Comparable convertOrderingValueFromEngineType(Comparable value) {
+    return value instanceof ArrayComparable
+        ? ((ArrayComparable) value).apply(this::convertValueFromEngineType)
+        : convertValueFromEngineType(value);
   }
 
   /**

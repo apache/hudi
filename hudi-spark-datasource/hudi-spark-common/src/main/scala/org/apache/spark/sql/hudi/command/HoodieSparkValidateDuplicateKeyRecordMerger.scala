@@ -33,7 +33,7 @@ import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMe
  */
 class HoodieSparkValidateDuplicateKeyRecordMerger extends HoodieSparkRecordMerger with OperationModeAwareness {
 
-  override def merge(older: HoodieRecord[_], oldSchema: Schema, newer: HoodieRecord[_], newSchema: Schema, props: TypedProperties): HOption[collection.Pair[HoodieRecord[_], Schema]] = {
+  override def merge(older: HoodieRecord[_], oldSchema: Schema, newer: HoodieRecord[_], newSchema: Schema, props: TypedProperties): collection.Pair[HoodieRecord[_], Schema] = {
     val key = older.getRecordKey(oldSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)
     throw new HoodieDuplicateKeyException(key)
   }

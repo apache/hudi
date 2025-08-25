@@ -80,7 +80,7 @@ public class BaseTestFileGroupRecordBuffer {
   }
 
   protected static List<HoodieRecord> convertToHoodieRecordsList(List<IndexedRecord> indexedRecords) {
-    return indexedRecords.stream().map(rec -> new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec, null)).collect(Collectors.toList());
+    return indexedRecords.stream().map(rec -> new HoodieAvroIndexedRecord(new HoodieKey(rec.get(0).toString(), ""), rec)).collect(Collectors.toList());
   }
 
   protected static List<HoodieRecord> convertToHoodieRecordsListForDeletes(List<IndexedRecord> indexedRecords, boolean defaultOrderingValue) {
@@ -171,6 +171,9 @@ public class BaseTestFileGroupRecordBuffer {
 
     @Override
     public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+      if (payloadRecord == null) {
+        return Option.empty();
+      }
       if (currentValue.get(2).equals(payloadRecord.get(2))) {
         // If the timestamps are the same, we do not update
         return Option.of(currentValue);
@@ -184,12 +187,12 @@ public class BaseTestFileGroupRecordBuffer {
 
     @Override
     public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-      return Option.of(payloadRecord);
+      return Option.ofNullable(payloadRecord);
     }
 
     @Override
     public Option<IndexedRecord> getIndexedRecord(Schema schema, Properties properties) {
-      return Option.of(payloadRecord);
+      return Option.ofNullable(payloadRecord);
     }
 
     @Override
@@ -202,19 +205,22 @@ public class BaseTestFileGroupRecordBuffer {
     private final String strategy = UUID.randomUUID().toString();
 
     @Override
-    public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+      if (newer.isDelete(newSchema, props)) {
+        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.AVRO), SCHEMA);
+      }
       GenericRecord olderData = (GenericRecord) older.toIndexedRecord(oldSchema, props).get().getData();
       GenericRecord newerData = (GenericRecord) newer.toIndexedRecord(newSchema, props).get().getData();
       if (olderData.get(2).equals(newerData.get(2))) {
         // If the timestamps are the same, we do not update
-        return Option.of(Pair.of(older, oldSchema));
+        return Pair.of(older, oldSchema);
       }
       int result = (int) olderData.get(1) + (int) newerData.get(1);
       if (result > 2) {
-        return Option.empty();
+        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.AVRO), SCHEMA);
       }
       HoodieKey hoodieKey = older.getKey();
-      return Option.of(Pair.of(new HoodieAvroIndexedRecord(createTestRecord(hoodieKey.getRecordKey(), result, (long) newerData.get(2))), SCHEMA));
+      return Pair.of(new HoodieAvroIndexedRecord(createTestRecord(hoodieKey.getRecordKey(), result, (long) newerData.get(2))), SCHEMA);
     }
 
     @Override

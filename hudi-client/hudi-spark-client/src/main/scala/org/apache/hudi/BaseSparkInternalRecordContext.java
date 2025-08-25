@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
-import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -84,14 +83,14 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       return new HoodieEmptyRecord<>(
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
-          OrderingValues.getDefault(),
+          bufferedRecord.getOrderingValue(),
           HoodieRecord.HoodieRecordType.SPARK);
     }
 
     Schema schema = getSchemaFromBufferRecord(bufferedRecord);
     InternalRow row = bufferedRecord.getRecord();
     return new HoodieSparkRecord(hoodieKey, row, HoodieInternalRowUtils.getCachedSchema(schema),
-        false, bufferedRecord.getHoodieOperation(), bufferedRecord.isDelete());
+        false, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override
@@ -123,6 +122,14 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
       // To foster value comparison, if the value is of String type, e.g., from
       // the delete record, we convert it to UTF8String type.
       return UTF8String.fromString((String) value);
+    }
+    return value;
+  }
+
+  @Override
+  public Comparable convertValueFromEngineType(Comparable value) {
+    if (value instanceof UTF8String) {
+      return ((UTF8String) value).toString();
     }
     return value;
   }

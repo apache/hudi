@@ -23,6 +23,8 @@ import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -31,6 +33,7 @@ import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -172,9 +175,8 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
   public void testWithThreeLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions, useRecordPositions);
     try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions)) {
-      // The records with keys 6 and 8 are deletes with lower ordering val
       List<String> leftKeysExpected =
-          Arrays.asList("1", "3", "6", "7", "8", "9", "10");
+          Arrays.asList("1", "3", "7", "9", "10");
       List<String> leftKeysActual = new ArrayList<>();
       while (iterator.hasNext()) {
         leftKeysActual.add(iterator.next()
@@ -242,7 +244,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     private String[] orderingFields;
 
     @Override
-    public Option<Pair<HoodieRecord, Schema>> merge(
+    public Pair<HoodieRecord, Schema> merge(
         HoodieRecord older,
         Schema oldSchema,
         HoodieRecord newer,
@@ -255,24 +257,24 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
       if (newer.getOrderingValue(newSchema, props, orderingFields).compareTo(
           older.getOrderingValue(oldSchema, props, orderingFields)) >= 0) {
         if (newer.isDelete(newSchema, props)) {
-          return Option.empty();
+          return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), AVRO), newSchema);
         }
         int id = Integer.parseInt(((HoodieAvroIndexedRecord) newer)
             .getData().get(newSchema.getField(ROW_KEY).pos()).toString());
         if (id % 2 == 1L) {
-          return Option.of(Pair.of(newer, newSchema));
+          return Pair.of(newer, newSchema);
         }
       } else {
         if (older.isDelete(oldSchema, props)) {
-          return Option.empty();
+          return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), AVRO), newSchema);
         }
         int id = Integer.parseInt(((HoodieAvroIndexedRecord) older)
             .getData().get(oldSchema.getField(ROW_KEY).pos()).toString());
         if (id % 2 == 1L) {
-          return Option.of(Pair.of(older, oldSchema));
+          return Pair.of(older, oldSchema);
         }
       }
-      return Option.empty();
+      return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), AVRO), newSchema);
     }
 
     @Override

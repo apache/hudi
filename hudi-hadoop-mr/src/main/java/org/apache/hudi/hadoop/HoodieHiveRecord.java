@@ -70,8 +70,9 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
     isDelete = data == null;
   }
 
-  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, boolean isDelete) {
+  public HoodieHiveRecord(HoodieKey key, ArrayWritable data, Schema schema, HiveAvroSerializer avroSerializer, HoodieOperation hoodieOperation, Comparable orderingValue, boolean isDelete) {
     super(key, data, hoodieOperation, isDelete, Option.empty());
+    this.orderingValue = orderingValue;
     this.avroSerializer = avroSerializer;
     this.schema = schema;
     this.copy = false;
@@ -188,6 +189,9 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   @Override
   public boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
     if (null == data) {
+      return true;
+    }
+    if (HoodieOperation.isDelete(getOperation())) {
       return true;
     }
     if (recordSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) == null) {

@@ -63,8 +63,15 @@ public interface HoodieRecordMerger extends Serializable {
    * It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C
    * of the single record, both orders of operations applications have to yield the same result)
    * This method takes only full records for merging.
+   *
+   * @param older     Older record in terms of commit time ordering.
+   * @param oldSchema The schema of the older record.
+   * @param newer     Newer record in terms of commit time ordering.
+   * @param newSchema The schema of the newer record.
+   * @param props     The additional properties for the merging operation.
+   * @return The merged record and schema. The record is expected to be non-null. If the record represents a deletion, the operation must be set as {@link HoodieOperation#DELETE}.
    */
-  Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException;
+  Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException;
 
   /**
    * Merges records which can contain partial updates, i.e., only subset of fields and values are
@@ -118,10 +125,10 @@ public interface HoodieRecordMerger extends Serializable {
    * @param readerSchema Reader schema containing all the fields to read. This is used to maintain
    *                     the ordering of the fields of the merged record.
    * @param props        Configuration in {@link TypedProperties}.
-   * @return The merged record and schema.
+   * @return The merged record and schema. The record is expected to be non-null. If the record represents a deletion, the operation must be set as {@link HoodieOperation#DELETE}.
    * @throws IOException upon merging error.
    */
-  default Option<Pair<HoodieRecord, Schema>> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
+  default Pair<HoodieRecord, Schema> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
     throw new UnsupportedOperationException("Partial merging logic is not implemented by " + this.getClass().getName());
   }
 
@@ -136,6 +143,7 @@ public interface HoodieRecordMerger extends Serializable {
    *
    * <p> This interface is experimental and might be evolved in the future.
    **/
+  @Deprecated
   default boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
     return true;
   }

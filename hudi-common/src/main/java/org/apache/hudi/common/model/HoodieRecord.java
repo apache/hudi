@@ -178,7 +178,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.metaData = metaData;
   }
 
-  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, boolean isDelete, Option<Map<String, String>> metaData) {
+  public HoodieRecord(HoodieKey key, T data, HoodieOperation operation, Boolean isDelete, Option<Map<String, String>> metaData) {
     this.key = key;
     this.data = data;
     this.currentLocation = null;
