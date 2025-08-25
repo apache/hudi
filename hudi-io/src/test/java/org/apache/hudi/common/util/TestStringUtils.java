@@ -49,7 +49,7 @@ public class TestStringUtils {
 
   private static final String[] STRINGS = {"This", "is", "a", "test"};
 
-  private static final String CHARACTERS_FOR_RANDOM_GEN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_/";
+  private static final String CHARACTERS_FOR_RANDOM_GEN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_/:";
   private static final Random RANDOM = new SecureRandom();
 
   private static String toHexString(byte[] bytes) {
