@@ -152,6 +152,20 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
 
+  public TransactionManager getTxnManager() {
+    if (null == txnManager) {
+      throw new HoodieException("TransactionManager is not initialized. "
+          + "Please call setTxnManager() after instantiating HoodieTable");
+    }
+    return txnManager;
+  }
+
+  public void setTxnManager(TransactionManager txnManager) {
+    this.txnManager = txnManager;
+  }
+
+  private TransactionManager txnManager;
+
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.context = context;
@@ -633,6 +647,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public abstract HoodieSavepointMetadata savepoint(HoodieEngineContext context,
                                                     String instantToSavepoint,
+                                                    String completionTime,
                                                     String user,
                                                     String comment);
 
@@ -717,13 +732,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     // If a rollback has not scheduled, schedule it.
     String instantTime;
     if (rollbackInfo.isEmpty()) {
-      transactionManager.beginStateChange(Option.empty(), Option.empty());
-      try {
-        instantTime = getMetaClient().createNewInstantTime(false);
-        scheduleRollback(context, instantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
-      } finally {
-        transactionManager.endStateChange(Option.empty());
-      }
+      instantTime = transactionManager.executeStateChangeWithInstant(newInstantTime -> {
+        scheduleRollback(context, newInstantTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+        return newInstantTime;
+      });
     } else {
       instantTime = rollbackInfo.get().getRollbackInstant().requestedTime();
     }
@@ -741,18 +753,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc,
                                             TransactionManager transactionManager) {
-    transactionManager.beginStateChange(Option.empty(), Option.empty());
-    final String commitTime;
-    try {
-      commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
-              -> entry.getRollbackInstant().requestedTime())
-          .orElseGet(() -> getMetaClient().createNewInstantTime(false));
-      scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
-          false);
-    } finally {
-      transactionManager.endStateChange(Option.empty());
-    }
-    rollback(context, commitTime, inflightInstant, true, false);
+    Option<String> existingCommitTime = getPendingRollbackInstantFunc.apply(inflightInstant.requestedTime()).map(entry
+        -> entry.getRollbackInstant().requestedTime());
+    final String rollbackInstantTime = transactionManager.executeStateChangeWithInstant(existingCommitTime, commitTime -> {
+      scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(), false);
+      return commitTime;
+    });
+    rollback(context, rollbackInstantTime, inflightInstant, true, false);
   }
 
   /**

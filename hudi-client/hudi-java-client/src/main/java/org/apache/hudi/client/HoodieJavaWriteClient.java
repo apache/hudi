@@ -54,7 +54,7 @@ public class HoodieJavaWriteClient<T> extends
 
   public HoodieJavaWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     super(context, writeConfig, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer(), getTransactionManager());
   }
 
   @Override
@@ -67,7 +67,7 @@ public class HoodieJavaWriteClient<T> extends
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, JavaUpgradeDowngradeHelper.getInstance());
-    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer());
+    this.tableServiceClient = new HoodieJavaTableServiceClient<>(context, writeConfig, getTimelineServer(), getTransactionManager());
   }
 
   @Override
