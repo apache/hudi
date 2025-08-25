@@ -278,7 +278,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.2,0.15.1,1.0.3,1.1.0")
       .withDocumentation("If set to true, the writer enables the validation on whether the table "
-          + "uses the complex key generator which a single record key field, which can be affected "
+          + "uses the complex key generator with a single record key field, which can be affected "
           + "by a breaking change in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases, causing key "
           + "encoding change and potential duplicates in the table. The validation fails the "
           + "pipeline if the table meets the condition for the user to take proper action. "
