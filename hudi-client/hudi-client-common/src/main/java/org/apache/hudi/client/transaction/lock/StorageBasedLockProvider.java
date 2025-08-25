@@ -494,8 +494,6 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       }
 
       long oldExpirationMs = getLock().getValidUntilMs();
-      hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-          (int) (oldExpirationMs - getCurrentEpochMs())));
       // Attempt conditional update, extend lock. There are 3 cases:
       // 1. Happy case: lock has not expired yet, we extend the lease to a longer
       // period.
@@ -528,7 +526,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
           // Only positive outcome
           this.setLock(currentLock.getRight().get());
           hoodieLockMetrics.ifPresent(metrics -> metrics.updateLockExpirationDeadlineMetric(
-              (int) (currentLock.getRight().get().getValidUntilMs() - getCurrentEpochMs())));
+              (int) (oldExpirationMs - getCurrentEpochMs())));
           logger.info("Owner {}: Lock renewal successful. The renewal completes {} ms before expiration for lock {}.",
               ownerId, oldExpirationMs - getCurrentEpochMs(), lockFilePath);
           // Let heartbeat continue to renew lock lease again later.
