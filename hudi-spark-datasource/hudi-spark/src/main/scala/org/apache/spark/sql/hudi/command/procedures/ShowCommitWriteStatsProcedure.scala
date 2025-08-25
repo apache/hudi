@@ -34,9 +34,11 @@ import scala.collection.JavaConverters._
 
 class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(2, "instant_time", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.required(3, "instant_time", DataTypes.StringType),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -53,12 +55,21 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
-    val instantTime = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
+    val instantTime = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
-    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
-    val basePath = hoodieCatalogTable.tableLocation
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+
+    val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
@@ -78,7 +89,12 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
     val rows = new util.ArrayList[Row]
     rows.add(Row(action, bytesWritten, recordsWritten, avgRecSize))
 
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
+    } else {
+      results
+    }
   }
 
   override def build: Procedure = new ShowCommitWriteStatsProcedure()

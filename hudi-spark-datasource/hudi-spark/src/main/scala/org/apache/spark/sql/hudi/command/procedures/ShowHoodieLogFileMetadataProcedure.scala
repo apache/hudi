@@ -37,9 +37,11 @@ import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorC
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.required(1, "log_file_path_pattern", DataTypes.StringType),
-    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.required(2, "log_file_path_pattern", DataTypes.StringType),
+    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   override def outputType: StructType = StructType(Array[StructField](
@@ -53,9 +55,19 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
   override def call(args: ProcedureArgs): Seq[Row] = {
     checkArgs(parameters, args)
     val table = getArgValueOrDefault(args, parameters(0))
-    val logFilePathPattern: String = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
-    val limit: Int = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
-    val basePath = getBasePath(table)
+    val path = getArgValueOrDefault(args, parameters(1))
+    val logFilePathPattern: String = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
+    val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
+    val filter = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[String]
+
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+    val basePath = getBasePath(table, path)
     val storage = createMetaClient(jsc, basePath).getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
       .map(_.getPath.toString).toList
@@ -125,7 +137,12 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             ))
         }
     }
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
+    } else {
+      results
+    }
   }
 
   override def build: Procedure = new ShowHoodieLogFileMetadataProcedure

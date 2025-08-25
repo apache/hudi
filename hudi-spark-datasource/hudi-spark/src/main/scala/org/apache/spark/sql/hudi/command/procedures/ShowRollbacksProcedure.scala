@@ -34,14 +34,18 @@ import scala.collection.JavaConverters._
 
 class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val ROLLBACKS_PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(3, "filter", DataTypes.StringType, "")
   )
 
   private val ROLLBACK_PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(2, "instant_time", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.required(3, "instant_time", DataTypes.StringType),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val ROLLBACKS_OUTPUT_TYPE = new StructType(Array[StructField](
@@ -68,16 +72,35 @@ class ShowRollbacksProcedure(showDetails: Boolean) extends BaseProcedure with Pr
     super.checkArgs(parameters, args)
 
     val tableName = getArgValueOrDefault(args, parameters(0))
-    val limit = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[Int]
+    val tablePath = getArgValueOrDefault(args, parameters(1))
+    val limit = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Int]
+    val filter = if (showDetails) {
+      getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[String]
+    } else {
+      getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[String]
+    }
 
-    val basePath = getBasePath(tableName)
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+
+    val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val activeTimeline = metaClient.getActiveTimeline
-    if (showDetails) {
-      val instantTime = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
+    val results = if (showDetails) {
+      val instantTime = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[String]
       getRollbackDetail(metaClient, activeTimeline, instantTime, limit)
     } else {
       getRollbacks(activeTimeline, limit)
+    }
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
+    } else {
+      results
     }
   }
 

@@ -108,10 +108,11 @@ import scala.collection.JavaConverters._
 class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "filter", DataTypes.StringType, "")
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(3, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -148,10 +149,11 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
-    val showArchived = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
-    val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
+    val showArchived = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
@@ -161,8 +163,7 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
       }
     }
 
-    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
-    val basePath = hoodieCatalogTable.tableLocation
+    val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
     val activeResults = if (includePartitionMetadata) {

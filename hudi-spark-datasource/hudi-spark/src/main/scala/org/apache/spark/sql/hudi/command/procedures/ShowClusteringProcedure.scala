@@ -33,7 +33,8 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20),
-    ProcedureParameter.optional(3, "show_involved_partition", DataTypes.BooleanType, false)
+    ProcedureParameter.optional(3, "show_involved_partition", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, ""),
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -54,7 +55,15 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
     val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
     val showInvolvedPartitions = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val clusteringInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
@@ -68,7 +77,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
       ClusteringUtils.getClusteringPlan(metaClient, instant)
     ).filter(clusteringPlan => clusteringPlan.isPresent)
 
-    if (showInvolvedPartitions) {
+    val results = if (showInvolvedPartitions) {
       clusteringPlans.map { p =>
         Row(p.get().getLeft.requestedTime, p.get().getRight.getInputGroups.size(),
           p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala.toSeq))
@@ -78,6 +87,11 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
         Row(p.get().getLeft.requestedTime, p.get().getRight.getInputGroups.size(),
           p.get().getLeft.getState.name(), "*")
       }
+    }
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
+    } else {
+      results
     }
   }
 

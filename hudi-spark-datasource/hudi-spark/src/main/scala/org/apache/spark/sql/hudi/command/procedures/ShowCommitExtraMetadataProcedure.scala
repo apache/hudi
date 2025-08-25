@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
@@ -34,10 +33,12 @@ import scala.collection.JavaConverters._
 
 class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 100),
-    ProcedureParameter.optional(2, "instant_time", DataTypes.StringType),
-    ProcedureParameter.optional(3, "metadata_key", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 100),
+    ProcedureParameter.optional(3, "instant_time", DataTypes.StringType),
+    ProcedureParameter.optional(4, "metadata_key", DataTypes.StringType),
+    ProcedureParameter.optional(5, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -54,13 +55,22 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
-    val instantTime = getArgValueOrDefault(args, PARAMETERS(2))
-    val metadataKey = getArgValueOrDefault(args, PARAMETERS(3))
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
+    val instantTime = getArgValueOrDefault(args, PARAMETERS(3))
+    val metadataKey = getArgValueOrDefault(args, PARAMETERS(4))
+    val filter = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
 
-    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
-    val basePath = hoodieCatalogTable.tableLocation
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+
+    val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
@@ -92,7 +102,13 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
 
     val rows = new util.ArrayList[Row]
     metadatas.asScala.foreach(r => rows.add(Row(timestamp, action, r._1, r._2)))
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
+    } else {
+      results
+    }
   }
 
   override def build: Procedure = new ShowCommitExtraMetadataProcedure()

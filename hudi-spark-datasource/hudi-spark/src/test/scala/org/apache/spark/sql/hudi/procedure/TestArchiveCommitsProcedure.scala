@@ -19,7 +19,18 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.spark.SparkConf
+
 class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
+  override def sparkConf(): SparkConf = {
+    super.sparkConf()
+      .set("spark.driver.host", "localhost")
+      .set("spark.driver.port", "0") // Let Spark choose a random available port
+      .set("spark.ui.port", "0") // Let Spark choose a random available port for UI
+      .set("spark.blockManager.port", "0") // Let Spark choose a random available port for block manager
+      .set("spark.driver.bindAddress", "127.0.0.1")
+      .set("spark.sql.defaultColumn.enabled", "false") // Also add this to avoid other warnings
+  }
 
   test("Test Call archive_commits Procedure by Table") {
     withTempDir { tmp =>

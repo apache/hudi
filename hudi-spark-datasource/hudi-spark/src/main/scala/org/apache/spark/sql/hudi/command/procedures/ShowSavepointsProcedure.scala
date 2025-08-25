@@ -29,7 +29,8 @@ import java.util.stream.Collectors
 class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType)
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -45,6 +46,15 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val filter = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
+
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
@@ -53,8 +63,13 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder {
     val timeline: HoodieTimeline = activeTimeline.getSavePointTimeline.filterCompletedInstants
     val commits: util.List[HoodieInstant] = timeline.getReverseOrderedInstants.collect(Collectors.toList[HoodieInstant])
 
-    if (commits.isEmpty) Seq.empty[Row] else {
+    val results = if (commits.isEmpty) Seq.empty[Row] else {
       commits.toArray.map(instant => instant.asInstanceOf[HoodieInstant].requestedTime).map(p => Row(p)).toSeq
+    }
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
+    } else {
+      results
     }
   }
 

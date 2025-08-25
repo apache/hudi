@@ -70,9 +70,11 @@ import scala.collection.mutable
  */
 class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "partition", DataTypes.StringType),
-    ProcedureParameter.optional(2, "targetColumns", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "partition", DataTypes.StringType),
+    ProcedureParameter.optional(3, "targetColumns", DataTypes.StringType),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -95,17 +97,27 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0))
-    val partitions = getArgValueOrDefault(args, PARAMETERS(1)).getOrElse("").toString
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val partitions = getArgValueOrDefault(args, PARAMETERS(2)).getOrElse("").toString
     val partitionsSeq = partitions.split(",").filter(_.nonEmpty).toSeq
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
+
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
 
     val targetColumnsSeq = getTargetColumnsSeq(args)
-    val basePath = getBasePath(table)
+    val basePath = getBasePath(tableName, tablePath)
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build
     val metaClient = createMetaClient(jsc, basePath)
     val schema = getSchema(metaClient)
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
-    val fsView = buildFileSystemView(table)
+    val fsView = buildFileSystemView(tableName, tablePath)
     val engineCtx = new HoodieSparkEngineContext(jsc)
     val metaTable = metaClient.getTableFormat.getMetadataFactory.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
     val allFileSlices = getAllFileSlices(partitionsSeq, metaTable, fsView)
@@ -123,11 +135,17 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     addStatisticsToRows(groupedPoints, fileSlicesSizeByPartition.toMap, rows)
 
     // The returned results are sorted by column name and average value
-    rows.asScala.toList.sortBy(row => (row.getString(1), row.getDouble(2)))
+    val results = rows.asScala.toList.sortBy(row => (row.getString(1), row.getDouble(2)))
+
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
+    } else {
+      results
+    }
   }
 
   private def getTargetColumnsSeq(args: ProcedureArgs): Seq[String] = {
-    val targetColumns = getArgValueOrDefault(args, PARAMETERS(2)).getOrElse("").toString
+    val targetColumns = getArgValueOrDefault(args, PARAMETERS(3)).getOrElse("").toString
     if (targetColumns != "") {
       targetColumns.split(",").toSeq
     } else {
@@ -252,8 +270,8 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     values(index)
   }
 
-  def buildFileSystemView(table: Option[Any]): HoodieTableFileSystemView = {
-    val basePath = getBasePath(table)
+  def buildFileSystemView(tableName: Option[Any], tablePath: Option[Any]): HoodieTableFileSystemView = {
+    val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val storage = metaClient.getStorage
     val globPath = s"$basePath/**"
@@ -274,7 +292,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
  * @param partitionPath The partition path
  * @param columnName    The name of the column
  * @param value         The point value
- * @param pType The type of operation, either "min" or "max"
+ * @param pType         The type of operation, either "min" or "max"
  * @param schemaType    The schema type, such as "string", "int", etc.
  */
 class ColumnStatsPoint(val partitionPath: String, val columnName: String, val value: String, val pType: String, val schemaType: String) extends Ordered[ColumnStatsPoint] with Logging {
@@ -316,6 +334,7 @@ object ShowColumnStatsOverlapProcedure {
   val NAME = "show_metadata_column_stats_overlap"
   val MIN_VALUE_TYPE = "min"
   val MAX_VALUE_TYPE = "max"
+
   def builder: Supplier[ProcedureBuilder] = new Supplier[ProcedureBuilder] {
     override def get() = new ShowColumnStatsOverlapProcedure()
   }

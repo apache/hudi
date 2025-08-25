@@ -17,7 +17,18 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.spark.SparkConf
+
 class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
+  override def sparkConf(): SparkConf = {
+    super.sparkConf()
+      .set("spark.driver.host", "localhost")
+      .set("spark.driver.port", "0") // Let Spark choose a random available port
+      .set("spark.ui.port", "0") // Let Spark choose a random available port for UI
+      .set("spark.blockManager.port", "0") // Let Spark choose a random available port for block manager
+      .set("spark.driver.bindAddress", "127.0.0.1")
+      .set("spark.sql.defaultColumn.enabled", "false") // Also add this to avoid other warnings
+  }
 
   test("Test Call show_archived_commits Procedure") {
     withTempDir { tmp =>
@@ -52,7 +63,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_archived_commits(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect active commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
@@ -102,7 +113,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_archived_commits_metadata(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect active commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
@@ -318,7 +329,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_commit_extra_metadata()""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
@@ -336,6 +347,62 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       // get last instantTime's extraMetadatas and filter extraMetadatas with metadata_key
       val metadatas3 = spark.sql(s"""call show_commit_extra_metadata(table => '$tableName', metadata_key => 'schema')""").collect()
       assertResult(1){metadatas3.length}
+    }
+  }
+
+  test("Test Call show_commits Procedure - with bytes written filter") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+
+      val allCommits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      assertResult(3) {
+        allCommits.length
+      }
+
+      val filteredCommitsDf = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  limit => 10,
+           |  filter => "total_bytes_written > 0"
+           |)""".stripMargin)
+      filteredCommitsDf.show(false)
+      val filteredCommits = filteredCommitsDf.collect()
+
+      assert(filteredCommits.length >= 1, s"Should find at least 1 commit with bytes written > 0, got: ${filteredCommits.length}")
+      filteredCommits.foreach { row =>
+        assert(row.getLong(3) > 0, s"total_bytes_written should be > 0, got: ${row.getLong(3)}")
+      }
+
+      val complexFilterCommits = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  limit => 10,
+           |  filter => "total_bytes_written > 0 AND total_files_added >= 1"
+           |)""".stripMargin).collect()
+
+      assert(complexFilterCommits.length >= 1, s"Should find commits matching complex filter, got: ${complexFilterCommits.length}")
+      complexFilterCommits.foreach { row =>
+        assert(row.getLong(3) > 0, s"total_bytes_written should be > 0, got: ${row.getLong(3)}")
+        assert(row.getLong(4) >= 1, s"total_files_added should be >= 1, got: ${row.getLong(4)}")
+      }
     }
   }
 }

@@ -31,7 +31,9 @@ import scala.collection.JavaConverters._
 
 class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -47,8 +49,17 @@ class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuil
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
+    val path = getArgValueOrDefault(args, PARAMETERS(1))
+    val filter = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
 
-    val basePath = getBasePath(table)
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+    val basePath = getBasePath(table, path)
     val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metadata = new HoodieBackedTableMetadata(
@@ -59,7 +70,12 @@ class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuil
     for (entry <- stats.entrySet.asScala) {
       rows.add(Row(entry.getKey, entry.getValue))
     }
-    rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
+    } else {
+      results
+    }
   }
 
   override def build: Procedure = new ShowMetadataTableStatsProcedure()

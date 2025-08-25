@@ -46,7 +46,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_commits(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
@@ -79,7 +79,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_commits_metadata(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect commits for table
       val commits = spark.sql(s"""call show_commits_metadata(table => '$tableName', limit => 10)""").collect()
@@ -354,6 +354,69 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
       val rollback = spark.sql(s"""call show_rollback_detail(table => '$tableName', instant_time => '$instant_time')""").collect()
       assertResult(1) {
         rollback.length
+      }
+    }
+  }
+
+  test("Test Call show_rollbacks Procedure - with total files deleted filter") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+
+      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      assertResult(3){commits.length}
+
+      var instant_time = commits(0).get(0).toString
+      spark.sql(s"""call rollback_to_instant(table => '$tableName', instant_time => '$instant_time')""")
+
+      instant_time = commits(1).get(0).toString
+      spark.sql(s"""call rollback_to_instant(table => '$tableName', instant_time => '$instant_time')""")
+
+      val allRollbacks = spark.sql(s"""call show_rollbacks(table => '$tableName', limit => 10)""").collect()
+      assertResult(2) {
+        allRollbacks.length
+      }
+
+      val filteredRollbacksDf = spark.sql(
+        s"""call show_rollbacks(
+           |  table => '$tableName',
+           |  limit => 10,
+           |  filter => "total_files_deleted >= 0"
+           |)""".stripMargin)
+      filteredRollbacksDf.show(false)
+      val filteredRollbacks = filteredRollbacksDf.collect()
+
+      assert(filteredRollbacks.length >= 1, s"Should find at least 1 rollback with files deleted >= 0, got: ${filteredRollbacks.length}")
+      filteredRollbacks.foreach { row =>
+        assert(row.getInt(2) >= 0, s"total_files_deleted should be >= 0, got: ${row.getInt(2)}")
+      }
+
+      val specificDeleteFilter = spark.sql(
+        s"""call show_rollbacks(
+           |  table => '$tableName',
+           |  limit => 10,
+           |  filter => "total_files_deleted = 1"
+           |)""".stripMargin).collect()
+
+      specificDeleteFilter.foreach { row =>
+        assert(row.getInt(2) == 1, s"total_files_deleted should be 1, got: ${row.getInt(2)}")
       }
     }
   }

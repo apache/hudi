@@ -38,7 +38,8 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
-    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20)
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20),
+    ProcedureParameter.optional(3, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -57,7 +58,15 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
     val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
+    val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
 
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
@@ -70,10 +79,15 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
       .reverse
       .take(limit)
 
-    compactionInstants.map(instant =>
+    val results = compactionInstants.map(instant =>
       (instant, CompactionUtils.getCompactionPlan(metaClient, instant.requestedTime))
     ).map { case (instant, plan) =>
       Row(instant.requestedTime, plan.getOperations.size(), instant.getState.name())
+    }
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
+    } else {
+      results
     }
   }
 

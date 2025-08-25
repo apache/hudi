@@ -38,10 +38,12 @@ import scala.collection.JavaConverters._
 
 class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuilder {
   override def parameters: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.required(1, "log_file_path_pattern", DataTypes.StringType),
-    ProcedureParameter.optional(2, "merge", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.required(2, "log_file_path_pattern", DataTypes.StringType),
+    ProcedureParameter.optional(3, "merge", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(5, "filter", DataTypes.StringType, "")
   )
 
   override def outputType: StructType = StructType(Array[StructField](
@@ -51,10 +53,20 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
   override def call(args: ProcedureArgs): Seq[Row] = {
     checkArgs(parameters, args)
     val table = getArgValueOrDefault(args, parameters(0))
-    val logFilePathPattern: String = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
-    val merge: Boolean = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Boolean]
-    val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
-    val basePath = getBasePath(table)
+    val path = getArgValueOrDefault(args, parameters(1))
+    val logFilePathPattern: String = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
+    val merge: Boolean = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Boolean]
+    val limit: Int = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[Int]
+    val filter = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[String]
+
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+    val basePath = getBasePath(table, path)
     val client = createMetaClient(jsc, basePath)
     val storage = client.getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
@@ -108,7 +120,12 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     allRecords.asScala.foreach(record => {
       rows.add(Row(record.toString))
     })
-    rows.asScala.toSeq
+    val results = rows.asScala.toSeq
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
+    } else {
+      results
+    }
   }
 
   override def build: Procedure = new ShowHoodieLogFileRecordsProcedure

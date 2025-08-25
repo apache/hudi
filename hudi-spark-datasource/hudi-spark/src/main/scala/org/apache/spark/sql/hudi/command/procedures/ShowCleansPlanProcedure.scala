@@ -38,10 +38,13 @@ import scala.util.{Failure, Success, Try}
  * Clean plans contain metadata about which files are scheduled for deletion during the next clean operation.
  *
  * == Parameters ==
- * - `table`: Required. The name of the Hudi table to query
+ * - `table`: Optional. The name of the Hudi table to query
+ * - `path`: Optional. The file system path to the Hudi table location
  * - `limit`: Optional. Maximum number of clean plans to return (default: 10)
  * - `showArchived`: Optional. Whether to include archived clean plans (default: false)
  * - `filter`: Optional. SQL expression to filter results (default: empty string)
+ *
+ * Note: Either `table` or `path` must be provided, but not both are required.
  *
  * == Output Schema ==
  * - `plan_time`: Timestamp when the clean plan was created
@@ -142,13 +145,11 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val tableName = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
-    val showArchived = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
-    val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
-
-    validateInputs(tableName, limit)
-
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
+    val showArchived = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
         case Left(errorMessage) =>
@@ -158,13 +159,14 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
     }
 
     val rows = Try {
-      val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, tableName)
-      val metaClient = createMetaClient(jsc, hoodieCatalogTable.tableLocation)
+      val basePath = getBasePath(tableName, tablePath)
+      val metaClient = createMetaClient(jsc, basePath)
       getCleanerPlans(metaClient, limit, showArchived)
     } match {
       case Success(result) => result
       case Failure(exception) =>
-        val errorMsg = s"Failed to retrieve clean plan information for table '$tableName'"
+        val tableRef = tableName.map(_.asInstanceOf[String]).orElse(tablePath.map(_.asInstanceOf[String])).getOrElse("unknown")
+        val errorMsg = s"Failed to retrieve clean plan information for table/path '$tableRef'"
         logError(errorMsg, exception)
         throw new HoodieException(s"$errorMsg: ${exception.getMessage}", exception)
     }
@@ -177,11 +179,6 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
   }
 
   override def build: Procedure = new ShowCleansPlanProcedure()
-
-  private def validateInputs(tableName: String, limit: Int): Unit = {
-    require(tableName.nonEmpty, "Table name cannot be empty")
-    require(limit > 0, s"Limit must be positive, got: $limit")
-  }
 
   private def getCleanerPlans(metaClient: HoodieTableMetaClient, limit: Int, showArchived: Boolean): Seq[Row] = {
     val activeCleanInstants = getSortedCleanInstants(metaClient.getActiveTimeline)
@@ -297,10 +294,11 @@ object ShowCleansPlanProcedure {
   val NAME = "show_clean_plans"
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(2, "showArchived", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "filter", DataTypes.StringType, "")
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(3, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
