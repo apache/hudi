@@ -104,9 +104,8 @@ public class FlinkWriteHelper<T, R> extends BaseWriteHelper<T, Iterator<HoodieRe
 
     // caution that the avro schema is not serializable
     final Schema schema = new Schema.Parser().parse(schemaStr);
-    TypedProperties mergedProperties = readerContext.getMergeProps(props);
     return keyedRecords.values().stream().map(x -> x.stream().reduce((previous, next) ->
-      reduceRecords(mergedProperties, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext())
+      reduceRecords(props, recordMerger, orderingFieldNames, previous, next, schema, readerContext.getRecordContext())
     ).orElse(null)).filter(Objects::nonNull).iterator();
   }
 }
