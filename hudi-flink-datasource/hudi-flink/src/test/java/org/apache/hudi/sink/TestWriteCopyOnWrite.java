@@ -313,6 +313,28 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   @Test
+  public void testMergeHandleDeduplication() throws Exception {
+    // reset the config option
+    conf.set(FlinkOptions.PRE_COMBINE, true);
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,4,par1]");
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT_DUPLICATES)
+        .assertEmptyDataFiles()
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED3, 1)
+        // insert duplicates again
+        .consume(TestData.DATA_SET_DISORDER_DUPLICATES)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .checkWrittenData(expected, 1)
+        .end();
+  }
+
+  @Test
   public void testUpsert() throws Exception {
     // open the function and ingest data
     preparePipeline()

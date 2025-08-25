@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
@@ -159,7 +160,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     this.tracer = new TotalSizeTracer(this.config);
     initBuffer();
     initWriteFunction();
-    initMergeClass();
     initRecordConverter();
     registerMetrics();
   }
@@ -231,7 +231,10 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     this.recordConverter = RecordConverter.getInstance(keyGen);
   }
 
-  private void initMergeClass() {
+  private void initMergeClassIfNecessary() {
+    if (recordMerger != null) {
+      return;
+    }
     readerContext = writeClient.getEngineContext().<RowData>getReaderContextFactory(metaClient).getContext();
     readerContext.initRecordMergerForIngestion(writeClient.getConfig().getProps());
     orderingFieldNames = getOrderingFieldNames(readerContext.getMergeMode(), writeClient.getConfig().getProps(), metaClient);
@@ -436,20 +439,22 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         rowItr, rowData -> recordConverter.convert(rowData, rowDataBucket.getBucketInfo()));
 
     List<WriteStatus> statuses = writeFunction.write(
-        deduplicateRecordsIfNeeded(recordItr), rowDataBucket.getBucketInfo(), instant);
+        deduplicateRecordsIfNeeded(recordItr, rowDataBucket.getBucketInfo().getBucketType()), rowDataBucket.getBucketInfo(), instant);
     writeMetrics.endFileFlush();
     writeMetrics.increaseNumOfFilesWritten();
     return statuses;
   }
 
-  protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records) {
-    if (config.get(FlinkOptions.PRE_COMBINE)) {
+  protected Iterator<HoodieRecord> deduplicateRecordsIfNeeded(Iterator<HoodieRecord> records, BucketType bucketType) {
+    // do not need deduplication if the merge handle supports deduplicating
+    if (!config.get(FlinkOptions.PRE_COMBINE) || OptionsResolver.isMergeHandleSupportDeduplication(config) && bucketType == BucketType.UPDATE) {
+      return records;
+    } else {
+      initMergeClassIfNecessary();
       return FlinkWriteHelper.newInstance().deduplicateRecords(
           records, null, -1, this.writeClient.getConfig().getSchema(),
           this.writeClient.getConfig().getProps(),
           recordMerger, readerContext, orderingFieldNames.toArray(new String[0]));
-    } else {
-      return records;
     }
   }
 

@@ -39,6 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
@@ -510,6 +511,14 @@ public class OptionsResolver {
     } catch (Throwable e) {
       throw new HoodieException("Could not create custom insert partitioner " + insertPartitionerClass, e);
     }
+  }
+
+  /**
+   * Returns whether the configured write merge handle is {@link FileGroupReaderBasedMergeHandle}.
+   */
+  public static boolean isMergeHandleSupportDeduplication(Configuration conf) {
+    String mergeHandleClass = conf.getString(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.defaultValue());
+    return FileGroupReaderBasedMergeHandle.class.getName().equalsIgnoreCase(mergeHandleClass);
   }
 
   // -------------------------------------------------------------------------
