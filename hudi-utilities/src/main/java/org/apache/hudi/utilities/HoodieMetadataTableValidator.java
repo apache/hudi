@@ -780,6 +780,25 @@ public class HoodieMetadataTableValidator implements Serializable {
           misMatch.set(false);
         }
       }
+      if (!additionalFromFS.isEmpty()) {
+        // check for all additional partitions from FS is they are empty ones.
+        List<String> emptyPartitions = additionalFromFS.stream().filter(partition -> {
+          try {
+            StoragePath partitionPath = new StoragePath(basePath, partition);
+            return metaClient.getStorage().listFiles(partitionPath).stream()
+                .noneMatch(fileStatus -> fileStatus.isFile() && !fileStatus.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
+          } catch (IOException ex) {
+            throw new HoodieIOException("Error listing partition " + partition, ex);
+          }
+        }).collect(Collectors.toList());
+        additionalFromFS.removeAll(emptyPartitions);
+        if (additionalFromFS.isEmpty()) {
+          LOG.warn("All out of sync partitions turned out to be empty {}", emptyPartitions);
+          misMatch.set(false);
+        } else {
+          misMatch.set(true);
+        }
+      }
       if (misMatch.get()) {
         String message = "Compare Partitions Failed! " + " Additional "
             + additionalFromFS.size() + " partitions from FS, but missing from MDT : \""
