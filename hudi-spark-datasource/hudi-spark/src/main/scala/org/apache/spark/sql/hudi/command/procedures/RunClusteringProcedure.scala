@@ -59,7 +59,8 @@ class RunClusteringProcedure extends BaseProcedure
     ProcedureParameter.optional(7, "options", DataTypes.StringType),
     ProcedureParameter.optional(8, "instants", DataTypes.StringType),
     ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType),
-    ProcedureParameter.optional(10, "limit", DataTypes.IntegerType)
+    ProcedureParameter.optional(10, "selected_partitions_reg", DataTypes.StringType),
+    ProcedureParameter.optional(11, "limit", DataTypes.IntegerType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -86,7 +87,8 @@ class RunClusteringProcedure extends BaseProcedure
     val options = getArgValueOrDefault(args, PARAMETERS(7))
     val specificInstants = getArgValueOrDefault(args, PARAMETERS(8))
     val parts = getArgValueOrDefault(args, PARAMETERS(9))
-    val limit = getArgValueOrDefault(args, PARAMETERS(10))
+    val partsReg = getArgValueOrDefault(args, PARAMETERS(10))
+    val limit = getArgValueOrDefault(args, PARAMETERS(11))
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
@@ -100,6 +102,11 @@ class RunClusteringProcedure extends BaseProcedure
 
     if (selectedPartitions == null) {
       logInfo("No partition selected")
+      if (partsReg.isDefined) {
+        confs = confs ++ Map(
+          HoodieClusteringConfig.PARTITION_REGEX_PATTERN.key() -> partsReg.get.asInstanceOf[String]
+        )
+      }
     } else if (selectedPartitions.isEmpty) {
       logInfo("No partition matched")
       // scalastyle:off return
