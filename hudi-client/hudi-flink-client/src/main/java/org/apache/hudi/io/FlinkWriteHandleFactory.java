@@ -147,6 +147,11 @@ public class FlinkWriteHandleFactory {
         String fileId);
   }
 
+  private static boolean isFileGroupReaderBasedHandle(HoodieWriteConfig writeConfig) {
+    String mergeHandleClass = writeConfig.getMergeHandleClassName();
+    return FileGroupReaderBasedMergeHandle.class.getName().equalsIgnoreCase(mergeHandleClass);
+  }
+
   /**
    * Write handle factory for commit.
    */
@@ -168,8 +173,13 @@ public class FlinkWriteHandleFactory {
         String partitionPath,
         String fileId,
         StoragePath basePath) {
-      return new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
-          table.getTaskContextSupplier(), basePath);
+      if (isFileGroupReaderBasedHandle(config)) {
+        return new FlinkFileGroupReaderBasedMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+            table.getTaskContextSupplier(), basePath);
+      } else {
+        return new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+            table.getTaskContextSupplier(), basePath);
+      }
     }
 
     @Override
@@ -180,8 +190,13 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId) {
-      return new FlinkMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
-          fileId, table.getTaskContextSupplier());
+      if (isFileGroupReaderBasedHandle(config)) {
+        return new FlinkFileGroupReaderBasedMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
+            fileId, table.getTaskContextSupplier());
+      } else {
+        return new FlinkMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
+            fileId, table.getTaskContextSupplier());
+      }
     }
   }
 
@@ -244,8 +259,13 @@ public class FlinkWriteHandleFactory {
         String partitionPath,
         String fileId,
         StoragePath basePath) {
-      return new FlinkMergeAndReplaceHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath, fileId,
-          table.getTaskContextSupplier(), basePath);
+      if (isFileGroupReaderBasedHandle(config)) {
+        return new FlinkFileGroupReaderBasedMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+            table.getTaskContextSupplier(), basePath);
+      } else {
+        return new FlinkMergeAndReplaceHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath, fileId,
+            table.getTaskContextSupplier(), basePath);
+      }
     }
 
     @Override
@@ -256,8 +276,13 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId) {
-      return new FlinkMergeHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath,
-          fileId, table.getTaskContextSupplier());
+      if (isFileGroupReaderBasedHandle(config)) {
+        return new FlinkFileGroupReaderBasedMergeHandle<>(config, instantTime, table, recordItr, partitionPath,
+            fileId, table.getTaskContextSupplier());
+      } else {
+        return new FlinkMergeHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath,
+            fileId, table.getTaskContextSupplier());
+      }
     }
   }
 

@@ -50,7 +50,7 @@ public class QuickstartConfigurations {
           DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
           DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
           DataTypes.FIELD("age", DataTypes.INT()),
-          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // ordering field
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
@@ -68,7 +68,7 @@ public class QuickstartConfigurations {
           DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
           DataTypes.FIELD("age", DataTypes.INT()),
           DataTypes.FIELD("salary", DataTypes.DOUBLE()),
-          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+          DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // ordering field
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 

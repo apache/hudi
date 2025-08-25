@@ -35,7 +35,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -48,6 +47,7 @@ import org.joda.time.DateTimeZone
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.scalatest.Assertions.assertResult
 import org.slf4j.LoggerFactory
 
 import java.io.File
@@ -133,7 +133,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
-    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
+    HoodieSparkSqlTestBase.checkAnswer(spark, sql)(expects: _*)
   }
 
   protected def checkAnswer(array: Array[Row])(expects: Seq[Any]*): Unit = {
@@ -433,6 +433,10 @@ object HoodieSparkSqlTestBase {
                            filePath: StoragePath): Unit = {
     storage.deleteFile(filePath)
     storage.createNewFile(filePath)
+  }
+
+  def checkAnswer(spark: SparkSession, sql: String)(expects: Seq[Any]*): Unit = {
+    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
   }
 
   def validateDeleteLogBlockPrecombineNullOrZero(basePath: String): Unit = {

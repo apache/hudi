@@ -24,8 +24,6 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -56,7 +53,6 @@ import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -92,7 +88,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
-import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateExpectedPartitionNumRecords;
 import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateTestRecordsForBulkInsert;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -104,7 +100,6 @@ import static org.mockito.Mockito.when;
 public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestCopyOnWriteActionExecutor.class);
-  private static final Schema SCHEMA = getSchemaFromResource(TestCopyOnWriteActionExecutor.class, "/exampleSchema.avsc");
   private static final Stream<Arguments> indexType() {
     HoodieIndex.IndexType[] data = new HoodieIndex.IndexType[] {
         HoodieIndex.IndexType.BLOOM,
@@ -144,7 +139,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString())
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestUtils.SIMPLE_RECORD_SCHEMA.toString())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build());
   }
@@ -182,22 +177,10 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
     // Get some records belong to the same partition (2016/01/31)
-    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    String recordStr4 = "{\"_row_key\":\"8eb5b87d-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":51}";
-
     List<HoodieRecord> records = new ArrayList<>();
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
+    records.add(createSimpleRecord("8eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 12));
+    records.add(createSimpleRecord("8eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:20:41.415Z", 100));
+    records.add(createSimpleRecord("8eb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15));
 
     // Insert new records
     final HoodieSparkCopyOnWriteTable cowTable = table;
@@ -227,16 +210,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     }
 
     // We update the 1st record & add a new record
-    String updateRecordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
-    RawTripTestPayload updateRowChanges1 = new RawTripTestPayload(updateRecordStr1);
-    HoodieRecord updatedRecord1 = new HoodieAvroRecord(
-        new HoodieKey(updateRowChanges1.getRowKey(), updateRowChanges1.getPartitionPath()), updateRowChanges1);
-
-    RawTripTestPayload rowChange4 = new RawTripTestPayload(recordStr4);
-    HoodieRecord insertedRecord1 =
-        new HoodieAvroRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
-
+    HoodieRecord updatedRecord1 = createSimpleRecord("8eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15);
+    HoodieRecord insertedRecord1 = createSimpleRecord("8eb5b87d-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 51);
     List<HoodieRecord> updatedRecords = Arrays.asList(updatedRecord1, insertedRecord1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -304,20 +279,17 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
 
-  private List<HoodieRecord> newHoodieRecords(int n, String time) throws Exception {
-    List<HoodieRecord> records = new ArrayList<>();
+  private List<HoodieRecord> newHoodieRecords(int n, String time) {
+    List<HoodieRecord> records = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
-      String recordStr =
-          String.format("{\"_row_key\":\"%s\",\"time\":\"%s\",\"number\":%d}", UUID.randomUUID().toString(), time, i);
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      records.add(new HoodieAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+      records.add(createSimpleRecord(UUID.randomUUID().toString(), time, i));
     }
     return records;
   }
 
   // Check if record level metadata is aggregated properly at the end of write.
   @Test
-  public void testMetadataAggregateFromWriteStatus() throws Exception {
+  public void testMetadataAggregateFromWriteStatus() {
     // Prepare the AvroParquetIO
     HoodieWriteConfig config =
         makeHoodieClientConfigBuilder().withWriteStatusClass(MetadataMergeWriteStatus.class).build();
@@ -327,21 +299,11 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
     // Get some records belong to the same partition (2016/01/31)
-    String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"8eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"8eb5b87c-1fej-4edd-87b4-6ec96dc405a0\","
-        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    HoodieRecord record1 = createSimpleRecord("8eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord("8eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:20:41.415Z", 100);
+    HoodieRecord record3 = createSimpleRecord("8eb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15);
 
-    List<HoodieRecord> records = new ArrayList<>();
-    RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1));
-    RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2));
-    RawTripTestPayload rowChange3 = new RawTripTestPayload(recordStr3);
-    records.add(new HoodieAvroRecord(new HoodieKey(rowChange3.getRowKey(), rowChange3.getPartitionPath()), rowChange3));
-
+    List<HoodieRecord> records = Arrays.asList(record1, record2, record3);
     // Insert new records
     BaseSparkCommitActionExecutor actionExecutor = new SparkInsertCommitActionExecutor(context, config, table,
         firstCommitTime, context.parallelize(records));
@@ -373,7 +335,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
   }
 
   @Test
-  public void testInsertRecords() throws Exception {
+  public void testInsertRecords() {
     HoodieWriteConfig config = makeHoodieClientConfig();
     String instantTime = makeNewCommitTime();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -422,7 +384,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
   }
 
   @Test
-  public void testFileSizeUpsertRecords() throws Exception {
+  public void testFileSizeUpsertRecords() {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().withStorageConfig(HoodieStorageConfig.newBuilder()
         .parquetMaxFileSize(64 * 1024).hfileMaxFileSize(64 * 1024)
         .parquetBlockSize(64 * 1024).parquetPageSize(64 * 1024).build()).build();
@@ -433,10 +395,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     List<HoodieRecord> records = new ArrayList<>();
     // Approx 1150 records are written for block size of 64KB
     for (int i = 0; i < 2050; i++) {
-      String recordStr = "{\"_row_key\":\"" + UUID.randomUUID().toString()
-          + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":" + i + "}";
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      records.add(new HoodieAvroRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange));
+      records.add(createSimpleRecord(UUID.randomUUID().toString(), "2016-01-31T03:16:41.415Z", i));
     }
 
     // Insert new records
@@ -471,8 +430,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
         (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
     String instantTime = "000";
     // Perform inserts of 100 records to test CreateHandle and BufferedExecutor
-    final List<HoodieRecord> inserts =
-        dataGen.generateInsertsWithHoodieAvroPayload(instantTime, 100);
+    final List<HoodieRecord> inserts = dataGen.generateInserts(instantTime, 100);
     BaseSparkCommitActionExecutor actionExecutor =
         new SparkInsertCommitActionExecutor(context, config, table,
             instantTime, context.parallelize(inserts));

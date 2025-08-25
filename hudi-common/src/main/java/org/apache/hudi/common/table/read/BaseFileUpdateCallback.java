@@ -47,4 +47,9 @@ public interface BaseFileUpdateCallback<T> {
    * @param hoodieOperation the operation type of the incoming record, used to infer type of delete operation
    */
   void onDelete(String recordKey, BufferedRecord<T> previousRecord, HoodieOperation hoodieOperation);
+
+  /**
+   * Used for write failure retraction.
+   */
+  void onFailure(String recordKey);
 }

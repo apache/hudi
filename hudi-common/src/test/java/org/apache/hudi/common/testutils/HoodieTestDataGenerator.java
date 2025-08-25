@@ -22,17 +22,17 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -50,6 +50,7 @@ import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -331,11 +332,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return numOfRecords * BYTES_PER_RECORD + BLOOM_FILTER_BYTES;
   }
 
-  public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
+  public IndexedRecord generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
     return generateRandomValueAsPerSchema(schemaStr, key, commitTime, isFlattened, false);
   }
 
-  public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened, boolean isDelete) throws IOException {
+  public IndexedRecord generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened, boolean isDelete) throws IOException {
     if (!isDelete) {
       if (TRIP_FLATTENED_SCHEMA.equals(schemaStr)) {
         return generateRandomValue(key, commitTime, true);
@@ -373,7 +374,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @param instantTime Instant time to use.
    * @return Raw paylaod of a test record.
    */
-  public RawTripTestPayload generateRandomValue(HoodieKey key, String instantTime) throws IOException {
+  public IndexedRecord generateRandomValue(HoodieKey key, String instantTime) {
     return generateRandomValue(key, instantTime, false);
   }
 
@@ -387,79 +388,61 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    * @return Raw paylaod of a test record.
    * @throws IOException
    */
-  private RawTripTestPayload generateRandomValue(
-      HoodieKey key, String instantTime, boolean isFlattened) throws IOException {
+  private IndexedRecord generateRandomValue(HoodieKey key, String instantTime, boolean isFlattened) {
     return generateRandomValue(key, instantTime, isFlattened, 0);
   }
 
-  private RawTripTestPayload generateNestedExampleRandomValue(
-      HoodieKey key, String instantTime) throws IOException {
+  private IndexedRecord generateNestedExampleRandomValue(HoodieKey key, String instantTime) {
     return generateNestedExampleRandomValue(key, instantTime, 0);
   }
 
-  private RawTripTestPayload generateRandomValue(
-      HoodieKey key, String instantTime, boolean isFlattened, long timestamp) throws IOException {
-    GenericRecord rec = generateGenericRecord(
+  private IndexedRecord generateRandomValue(HoodieKey key, String instantTime, boolean isFlattened, long timestamp) {
+    return generateGenericRecord(
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
         false, isFlattened);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), extendedSchema.map(Schema::toString).orElse(TRIP_EXAMPLE_SCHEMA));
   }
 
-  private RawTripTestPayload generateNestedExampleRandomValue(
-      HoodieKey key, String instantTime, int ts) throws IOException {
-    GenericRecord rec = generateNestedExampleGenericRecord(
+  private IndexedRecord generateNestedExampleRandomValue(HoodieKey key, String instantTime, int ts) {
+    return generateNestedExampleGenericRecord(
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, ts,
         false);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
   /**
    * Generates a new avro record with TRIP_ENCODED_DECIMAL_SCHEMA, retaining the key if optionally provided.
    */
-  public RawTripTestPayload generatePayloadForTripEncodedDecimalSchema(HoodieKey key, String commitTime)
-      throws IOException {
-    GenericRecord rec =
-        generateRecordForTripEncodedDecimalSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(),
-        TRIP_ENCODED_DECIMAL_SCHEMA);
+  public IndexedRecord generatePayloadForTripEncodedDecimalSchema(HoodieKey key, String commitTime) {
+    return generateRecordForTripEncodedDecimalSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
   }
 
-  public RawTripTestPayload generatePayloadForLogicalTypesSchema(HoodieKey key, String commitTime, boolean isDelete)
-      throws IOException {
-    GenericRecord rec =
-        generateRecordForTripLogicalTypesSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0, isDelete);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(),
-        TRIP_LOGICAL_TYPES_SCHEMA);
+  public IndexedRecord generatePayloadForLogicalTypesSchema(HoodieKey key, String commitTime, boolean isDelete) {
+    return generateRecordForTripLogicalTypesSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0, isDelete);
   }
 
   /**
    * Generates a new avro record with TRIP_SCHEMA, retaining the key if optionally provided.
    */
-  public RawTripTestPayload generatePayloadForTripSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_SCHEMA);
+  public IndexedRecord generatePayloadForTripSchema(HoodieKey key, String commitTime) {
+    return generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
   }
 
-  public RawTripTestPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForShortTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
+  public IndexedRecord generatePayloadForShortTripSchema(HoodieKey key, String commitTime) {
+    return generateRecordForShortTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
   }
 
   /**
    * Generates a new avro record of the above schema format for a delete.
    */
-  private RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
+  private IndexedRecord generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
+    return generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
         true, false);
-    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true, 0);
   }
 
   /**
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
-  private HoodieAvroPayload generateAvroPayload(HoodieKey key, String instantTime) {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0);
-    return new HoodieAvroPayload(Option.of(rec));
+  private IndexedRecord generateAvroPayload(HoodieKey key, String instantTime) {
+    return generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0);
   }
 
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
@@ -579,13 +562,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       rec.put("_hoodie_is_deleted", false);
     }
   }
-  
+
   /**
    * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
    */
   public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
-                                                    long timestamp, boolean isDeleteRecord,
-                                                    boolean isFlattened) {
+                                             long timestamp, boolean isDeleteRecord,
+                                             boolean isFlattened) {
     GenericRecord rec = new GenericData.Record(extendedSchema.orElseGet(() -> isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA));
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     if (isFlattened) {
@@ -601,7 +584,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return rec;
   }
 
-  public RawTripTestPayload generateRandomValueWithColumnRequired(HoodieKey key,
+  public IndexedRecord generateRandomValueWithColumnRequired(HoodieKey key,
                                                              String instantTime) throws IOException {
     GenericRecord rec = new GenericData.Record(AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS);
     generateTripPrefixValues(
@@ -618,18 +601,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     generateOpColumnValue(rec);
     generateEventLSNValue(rec);
     generateTripSuffixValues(rec, false);
-    return new RawTripTestPayload(
-        rec.toString(),
-        key.getRecordKey(),
-        key.getPartitionPath(),
-        TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
+    return rec;
   }
 
   /**
    * Generate record conforming to TRIP_NESTED_EXAMPLE_SCHEMA
    */
   public GenericRecord generateNestedExampleGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
-                                                        long timestamp, boolean isDeleteRecord) {
+                                                          long timestamp, boolean isDeleteRecord) {
     GenericRecord rec = new GenericData.Record(NESTED_AVRO_SCHEMA);
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     generateFareNestedValues(rec);
@@ -835,7 +814,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
 
   private static void createMetadataFile(String f, String basePath, StorageConfiguration<?> configuration, HoodieInstantWriter writer) {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME
-            + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + f);
+        + "/" + HoodieTableMetaClient.TIMELINEFOLDER_NAME + "/" + f);
     OutputStream os = null;
     try {
       HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
@@ -1010,7 +989,8 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       populateKeysBySchema(schemaStr, currSize + i, kp);
       incrementNumExistingKeysBySchema(schemaStr);
       try {
-        return new HoodieAvroRecord(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened));
+        return new HoodieAvroIndexedRecord(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened),
+            null, Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -1037,38 +1017,20 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     }
   }
 
-  public List<HoodieRecord> generateSameKeyInserts(String instantTime, List<HoodieRecord> origin) throws IOException {
+  public List<HoodieRecord> generateSameKeyInserts(String instantTime, List<HoodieRecord> origin) {
     List<HoodieRecord> copy = new ArrayList<>();
     for (HoodieRecord r : origin) {
       HoodieKey key = r.getKey();
-      HoodieRecord record = new HoodieAvroRecord(key, generateRandomValue(key, instantTime));
+      HoodieRecord record = new HoodieAvroIndexedRecord(key, generateRandomValue(key, instantTime));
       copy.add(record);
     }
     return copy;
   }
 
-  public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String instantTime, int limit) {
-    List<HoodieRecord> inserts = new ArrayList<>();
-    int currSize = getNumExistingKeys(TRIP_EXAMPLE_SCHEMA);
-    for (int i = 0; i < limit; i++) {
-      String partitionPath = partitionPaths[rand.nextInt(partitionPaths.length)];
-      HoodieKey key = new HoodieKey(genPseudoRandomUUID(rand).toString(), partitionPath);
-      HoodieRecord record = new HoodieAvroRecord(key, generateAvroPayload(key, instantTime));
-      inserts.add(record);
-
-      KeyPartition kp = new KeyPartition();
-      kp.key = key;
-      kp.partitionPath = partitionPath;
-      populateKeysBySchema(TRIP_EXAMPLE_SCHEMA, currSize + i, kp);
-      incrementNumExistingKeysBySchema(TRIP_EXAMPLE_SCHEMA);
-    }
-    return inserts;
-  }
-
   public List<HoodieRecord> generateUpdatesWithHoodieAvroPayload(String instantTime, List<HoodieRecord> baseRecords) {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
-      HoodieRecord record = new HoodieAvroRecord(baseRecord.getKey(), generateAvroPayload(baseRecord.getKey(), instantTime));
+      HoodieRecord record = new HoodieAvroIndexedRecord(baseRecord.getKey(), generateAvroPayload(baseRecord.getKey(), instantTime));
       updates.add(record);
     }
     return updates;
@@ -1088,23 +1050,21 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return deletes;
   }
 
-  public HoodieRecord generateDeleteRecord(HoodieRecord existingRecord) throws IOException {
+  public HoodieRecord generateDeleteRecord(HoodieRecord existingRecord) {
     HoodieKey key = existingRecord.getKey();
     return generateDeleteRecord(key);
   }
 
-  public HoodieRecord generateDeleteRecord(HoodieKey key) throws IOException {
-    RawTripTestPayload payload =
-        new RawTripTestPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true, OrderingValues.getDefault());
-    return new HoodieAvroRecord(key, payload);
+  public HoodieRecord generateDeleteRecord(HoodieKey key) {
+    return new HoodieEmptyRecord(key, HoodieRecord.HoodieRecordType.AVRO);
   }
 
   public HoodieRecord generateUpdateRecord(HoodieKey key, String instantTime) throws IOException {
-    return new HoodieAvroRecord(key, generateRandomValue(key, instantTime));
+    return new HoodieAvroIndexedRecord(key, generateRandomValue(key, instantTime));
   }
 
-  public HoodieRecord generateUpdateRecordWithTimestamp(HoodieKey key, String instantTime, long timestamp) throws IOException {
-    return new HoodieAvroRecord(key, generateRandomValue(key, instantTime, false, timestamp));
+  public HoodieRecord generateUpdateRecordWithTimestamp(HoodieKey key, String instantTime, long timestamp) {
+    return new HoodieAvroIndexedRecord(key, generateRandomValue(key, instantTime, false, timestamp));
   }
 
   public List<HoodieRecord> generateUpdates(String instantTime, List<HoodieRecord> baseRecords) throws IOException {
@@ -1116,7 +1076,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesWithTimestamp(String instantTime, List<HoodieRecord> baseRecords, long timestamp) throws IOException {
+  public List<HoodieRecord> generateUpdatesWithTimestamp(String instantTime, List<HoodieRecord> baseRecords, long timestamp) {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       updates.add(generateUpdateRecordWithTimestamp(baseRecord.getKey(), instantTime, timestamp));
@@ -1124,8 +1084,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesForDifferentPartition(String instantTime, List<HoodieRecord> baseRecords, long timestamp, String newPartition)
-      throws IOException {
+  public List<HoodieRecord> generateUpdatesForDifferentPartition(String instantTime, List<HoodieRecord> baseRecords, long timestamp, String newPartition) {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       String partition = baseRecord.getPartitionPath();
@@ -1244,7 +1203,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       logger.debug("key getting updated: {}", kp.key.getRecordKey());
       used.add(kp);
       try {
-        return new HoodieAvroRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));
+        return new HoodieAvroIndexedRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -1320,7 +1279,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
         key = new HoodieKey(key.getRecordKey(), updatedPartitionPath);
       }
       try {
-        result.add(new HoodieAvroRecord(key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false, true)));
+        result.add(new HoodieAvroIndexedRecord(key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false, true)));
       } catch (IOException e) {
         throw new HoodieIOException(e.getMessage(), e);
       }
@@ -1454,17 +1413,13 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
       return new RecordIdentifier(toClone.recordKey, toClone.partitionPath, orderingVal, toClone.riderValue);
     }
 
-    public static RecordIdentifier fromTripTestPayload(RawTripTestPayload payload) {
-      try {
-        String recordKey = payload.getRowKey();
-        String partitionPath = payload.getPartitionPath();
-        Comparable orderingValue = payload.getOrderingValue();
-        String orderingValStr = orderingValue.toString();
-        String riderValue = payload.getJsonDataAsMap().getOrDefault("rider", "").toString();
-        return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);
-      } catch (IOException ex) {
-        throw new HoodieIOException("Failed to parse payload", ex);
-      }
+    public static RecordIdentifier fromTripTestPayload(HoodieAvroIndexedRecord record, String[] orderingFields) {
+      String recordKey = record.getRecordKey();
+      String partitionPath = record.getPartitionPath();
+      Comparable orderingValue = record.getOrderingValue(record.getData().getSchema(), CollectionUtils.emptyProps(), orderingFields);
+      String orderingValStr = orderingValue.toString();
+      String riderValue = ((GenericRecord) record.getData()).hasField("rider") ? ((GenericRecord) record.getData()).get("rider").toString() : "";
+      return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);
     }
 
     @Override
@@ -1715,5 +1670,26 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     GenericRecord customRecord = new GenericData.Record(mapElementSchema);
     generateCustomValues(customRecord, customPrefix);
     return Collections.singletonMap("customMapKey", customRecord);
+  }
+
+  public static List<String> recordsToStrings(List<HoodieRecord> records) {
+    return records.stream().map(HoodieTestDataGenerator::recordToString).filter(Option::isPresent).map(Option::get)
+        .collect(Collectors.toList());
+  }
+
+  public static Option<String> recordToString(HoodieRecord record) {
+    try {
+      String str = ((GenericRecord) record.getData()).toString();
+      // Remove the last } bracket
+      str = str.substring(0, str.length() - 1);
+      return Option.of(str + ", \"partition\": \"" + record.getPartitionPath() + "\"}");
+    } catch (Exception e) {
+      return Option.empty();
+    }
+  }
+
+  public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
+    return records.stream().map(record -> "{\"_row_key\": \"" + record.getRecordKey() + "\",\"partition\": \"" + record.getPartitionPath() + "\"}")
+        .collect(Collectors.toList());
   }
 }

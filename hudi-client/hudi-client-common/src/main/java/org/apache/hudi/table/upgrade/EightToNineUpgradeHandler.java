@@ -50,10 +50,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_FILE_COL_NAME;
+import static org.apache.hudi.common.model.debezium.DebeziumConstants.FLATTENED_POS_COL_NAME;
 import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
@@ -110,6 +111,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
                                                        SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // Populate missing index versions indexes
@@ -135,7 +137,6 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
         throw new RuntimeException(e);
       }
     }
-    Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     // Handle merge mode config.
     reconcileMergeModeConfig(tablePropsToAdd, tableConfig);
     // Handle partial update mode config.
@@ -144,6 +145,8 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     reconcileMergePropertiesConfig(tablePropsToAdd, tableConfig);
     // Handle payload class configs.
     reconcilePayloadClassConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
+    // Handle ordering fields config.
+    reconcileOrderingFieldsConfig(tablePropsToAdd, tablePropsToRemove, tableConfig);
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, tablePropsToRemove);
   }
 
@@ -193,8 +196,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd,
-                                              HoodieTableConfig tableConfig) {
+  private void reconcileMergePropertiesConfig(Map<ConfigProperty, String> tablePropsToAdd, HoodieTableConfig tableConfig) {
     String payloadClass = tableConfig.getPayloadClass();
     String mergeStrategy = tableConfig.getRecordMergeStrategyId();
     if (!BUILTIN_MERGE_STRATEGIES.contains(mergeStrategy) || StringUtils.isNullOrEmpty(payloadClass)) {
@@ -212,6 +214,19 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
           ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue(), // // to be fixed once we land PR #13721.
           DEBEZIUM_UNAVAILABLE_VALUE);
     }
+  }
+
+  private void reconcileOrderingFieldsConfig(Map<ConfigProperty, String> tablePropsToAdd,
+                                             Set<ConfigProperty> tablePropsToRemove,
+                                             HoodieTableConfig tableConfig) {
+    String payloadClass = tableConfig.getPayloadClass();
+    Option<String> orderingFieldsOpt = MySqlDebeziumAvroPayload.class.getName().equals(payloadClass)
+        ? Option.of(FLATTENED_FILE_COL_NAME + "," + FLATTENED_POS_COL_NAME)
+        : tableConfig.getOrderingFieldsStr();
+    orderingFieldsOpt.ifPresent(orderingFields -> {
+      tablePropsToAdd.put(HoodieTableConfig.ORDERING_FIELDS, orderingFields);
+      tablePropsToRemove.add(HoodieTableConfig.PRECOMBINE_FIELD);
+    });
   }
 
   /**

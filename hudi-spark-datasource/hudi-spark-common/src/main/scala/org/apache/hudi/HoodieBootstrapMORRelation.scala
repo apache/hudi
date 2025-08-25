@@ -64,7 +64,7 @@ case class HoodieBootstrapMORRelation(override val sqlContext: SQLContext,
   override type Relation = HoodieBootstrapMORRelation
 
   protected lazy val mandatoryFieldsForMerging: Seq[String] =
-    Seq(recordKeyField) ++ preCombineFields
+    Seq(recordKeyField) ++ orderingFields
 
   override lazy val mandatoryFields: Seq[String] = mandatoryFieldsForMerging
 

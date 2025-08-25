@@ -41,7 +41,7 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table

@@ -25,10 +25,13 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.debezium.DebeziumConstants;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
+import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -42,8 +45,8 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_MODE;
+import static org.apache.hudi.common.table.HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
@@ -63,6 +66,7 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSE
  *     set hoodie.record.merge.mode=CUSTOM
  *     set hoodie.record.merge.strategy.id accordingly
  *   remove any properties with prefix hoodie.record.merge.property.
+ *   fix precombine field value for MySqlDebeziumAvroPayload.
  */
 public class NineToEightDowngradeHandler implements DowngradeHandler {
   @Override
@@ -78,17 +82,18 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     // Update table properties.
     Set<ConfigProperty> propertiesToRemove = new HashSet<>();
     Map<ConfigProperty, String> propertiesToAdd = new HashMap<>();
-    reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, metaClient);
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    reconcileMergeConfigs(propertiesToAdd, propertiesToRemove, tableConfig);
+    reconcileOrderingFieldsConfig(propertiesToAdd, propertiesToRemove, tableConfig);
     return new UpgradeDowngrade.TableConfigChangeSet(propertiesToAdd, propertiesToRemove);
   }
 
   private void reconcileMergeConfigs(Map<ConfigProperty, String> propertiesToAdd,
                                      Set<ConfigProperty> propertiesToRemove,
-                                     HoodieTableMetaClient metaClient) {
+                                     HoodieTableConfig tableConfig) {
     // Update table properties.
     propertiesToRemove.add(PARTIAL_UPDATE_MODE);
     // For specified payload classes, add strategy id and custom merge mode.
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     String legacyPayloadClass = tableConfig.getLegacyPayloadClass();
     if (!StringUtils.isNullOrEmpty(legacyPayloadClass) && (PAYLOAD_CLASSES_TO_HANDLE.contains(legacyPayloadClass))) {
       propertiesToRemove.add(LEGACY_PAYLOAD_CLASS_NAME);
@@ -99,7 +104,6 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
         propertiesToAdd.put(RECORD_MERGE_STRATEGY_ID, PAYLOAD_BASED_MERGE_STRATEGY_UUID);
         propertiesToAdd.put(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
       }
-      // don't we need to fix merge strategy Id for OverwriteWithLatestAvroPayload and DefaultHoodieRecordPayload ?
       if (legacyPayloadClass.equals(AWSDmsAvroPayload.class.getName())) {
         propertiesToRemove.add(
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + DELETE_KEY).noDefaultValue());
@@ -111,5 +115,17 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
             ConfigProperty.key(RECORD_MERGE_PROPERTY_PREFIX + PARTIAL_UPDATE_UNAVAILABLE_VALUE).noDefaultValue());
       }
     }
+  }
+
+  private void reconcileOrderingFieldsConfig(Map<ConfigProperty, String> propertiesToAdd,
+                                             Set<ConfigProperty> propertiesToRemove,
+                                             HoodieTableConfig tableConfig) {
+    Option<String> orderingFieldsOpt = MySqlDebeziumAvroPayload.class.getName().equals(tableConfig.getLegacyPayloadClass())
+        ? Option.of(DebeziumConstants.ADDED_SEQ_COL_NAME)
+        : tableConfig.getOrderingFieldsStr();
+    orderingFieldsOpt.ifPresent(orderingFields -> {
+      propertiesToAdd.put(HoodieTableConfig.PRECOMBINE_FIELD, orderingFields);
+      propertiesToRemove.add(HoodieTableConfig.ORDERING_FIELDS);
+    });
   }
 }

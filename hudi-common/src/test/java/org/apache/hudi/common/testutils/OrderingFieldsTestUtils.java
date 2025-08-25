@@ -28,16 +28,16 @@ import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Stream;
 
-public class PreCombineTestUtils {
-  private static String[] preCombineConfigs = new String[] {
-      HoodieTableConfig.PRECOMBINE_FIELDS.key(),
+public class OrderingFieldsTestUtils {
+  private static String[] orderingConfigs = new String[] {
+      HoodieTableConfig.ORDERING_FIELDS.key(),
       "hoodie.datasource.write.precombine.field",
       HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY
   };
 
-  public static Stream<Arguments> configurePreCombine() {
+  public static Stream<Arguments> configureOrderingFields() {
     return Stream.of(
-        Arrays.stream(preCombineConfigs).map(Arguments::of).toArray(Arguments[]::new)
+        Arrays.stream(orderingConfigs).map(Arguments::of).toArray(Arguments[]::new)
     );
   }
 
@@ -45,8 +45,8 @@ public class PreCombineTestUtils {
    * Sets specified key to the value provided. The other preCombine related configs are
    * removed from properties.
    */
-  public static void setPreCombineConfig(Properties props, String key, String value) {
-    for (String config : preCombineConfigs) {
+  public static void setOrderingFieldsConfig(Properties props, String key, String value) {
+    for (String config : orderingConfigs) {
       if (key.equals(config)) {
         props.setProperty(key, value);
       } else {

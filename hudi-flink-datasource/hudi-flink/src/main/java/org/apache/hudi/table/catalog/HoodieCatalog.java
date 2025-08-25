@@ -337,7 +337,7 @@ public class HoodieCatalog extends AbstractCatalog {
     }
 
     // check preCombine
-    StreamerUtil.checkPreCombineKey(conf, resolvedSchema.getColumnNames());
+    StreamerUtil.checkOrderingFields(conf, resolvedSchema.getColumnNames());
 
     if (resolvedTable.isPartitioned()) {
       final String partitions = String.join(",", resolvedTable.getPartitionKeys());

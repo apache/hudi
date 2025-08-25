@@ -18,7 +18,7 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -102,15 +102,13 @@ public class TestBoundedInMemoryQueue extends HoodieSparkClientTestHarness {
     final Iterator<HoodieRecord> originalRecordIterator = hoodieRecords.iterator();
     int recordsRead = 0;
     while (queue.iterator().hasNext()) {
-      final HoodieAvroRecord originalRecord = (HoodieAvroRecord) originalRecordIterator.next();
-      final Option<IndexedRecord> originalInsertValue =
-          originalRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
+      final HoodieAvroIndexedRecord originalRecord = (HoodieAvroIndexedRecord) originalRecordIterator.next();
+      final IndexedRecord originalInsertValue = originalRecord.getData();
       final HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> genResult = queue.iterator().next();
       // Ensure that record ordering is guaranteed.
       assertEquals(originalRecord, genResult.getResult());
       // cached insert value matches the expected insert value.
-      assertEquals(originalInsertValue,
-          ((HoodieAvroRecord) genResult.getResult()).getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA));
+      assertEquals(originalInsertValue, ((HoodieAvroIndexedRecord) genResult.getResult()).getData());
       recordsRead++;
     }
     assertFalse(queue.iterator().hasNext() || originalRecordIterator.hasNext());

@@ -28,7 +28,7 @@
     options={
         'type': 'mor',
         'primaryKey': 'id',
-        'precombineKey': 'ts',
+        'orderingFields': 'ts',
     },
     unique_key='id',
     partition_by='datestr',

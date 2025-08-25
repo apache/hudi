@@ -21,6 +21,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.client.model.BootstrapRowData;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
+import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -109,6 +110,9 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       case COMMIT_TIME_ORDERING:
         return Option.of(new CommitTimeFlinkRecordMerger());
       default:
+        if (mergeImplClasses.contains(PartialUpdateFlinkRecordMerger.class.getName())) {
+          return Option.of(new PartialUpdateFlinkRecordMerger());
+        }
         Option<HoodieRecordMerger> recordMerger = HoodieRecordUtils.createValidRecordMerger(EngineType.FLINK, mergeImplClasses, mergeStrategyId);
         if (recordMerger.isEmpty()) {
           throw new HoodieValidationException("No valid flink merger implementation set for `"

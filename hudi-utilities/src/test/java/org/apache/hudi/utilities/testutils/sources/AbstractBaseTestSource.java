@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.RocksDBBasedMap;
 import org.apache.hudi.exception.HoodieIOException;
@@ -159,11 +158,6 @@ public abstract class AbstractBaseTestSource extends AvroSource {
   }
 
   private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
-    try {
-      RawTripTestPayload payload = (RawTripTestPayload) hoodieRecord.getData();
-      return (GenericRecord) payload.getRecordToInsert(avroSchema);
-    } catch (IOException e) {
-      return null;
-    }
+    return (GenericRecord) hoodieRecord.getData();
   }
 }

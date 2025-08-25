@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.util.escapeSingleQuotedString
-import org.apache.spark.sql.hudi.HoodieOptionConfig.{SQL_KEY_PRECOMBINE_FIELD, SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGE_STRATEGY_ID}
+import org.apache.spark.sql.hudi.HoodieOptionConfig.{SQL_KEY_ORDERING_FIELDS, SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGE_STRATEGY_ID}
 import org.apache.spark.sql.types.StringType
 
 case class ShowHoodieCreateTableCommand(table: TableIdentifier)
@@ -80,8 +80,9 @@ case class ShowHoodieCreateTableCommand(table: TableIdentifier)
   }
 
   private def showHoodieTableProperties(metadata: HoodieCatalogTable, builder: StringBuilder): Unit = {
-    val standardOptions = Seq(SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_PRECOMBINE_FIELD,
-      SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGE_STRATEGY_ID).map(key => key.sqlKeyName)
+    val standardOptions = Seq(SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_ORDERING_FIELDS,
+      SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGE_STRATEGY_ID)
+      .flatMap(key => (List(key.sqlKeyName) ++ key.alternatives).toStream)
     val props = metadata.catalogProperties.filter(key => standardOptions.contains(key._1)).map {
       case (key, value) => s"$key='${escapeSingleQuotedString(value)}'"
     } ++ metadata.catalogProperties.filterNot(_._1.equals(ConfigUtils.IS_QUERY_AS_RO_TABLE)).map {

@@ -176,7 +176,7 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
          |CREATE TABLE $tableName USING HUDI TBLPROPERTIES (
          |  type = '$tableType',
          |  primaryKey = 'id',
-         |  preCombineField = 'ts',
+         |  orderingFields = 'ts',
          |  hoodie.populate.meta.fields = 'false'
          |  ${if (opts.nonEmpty) "," + opts.map{ case (k, v) => s"'$k' = '$v'" }.mkString(",") else ""}
          |)
