@@ -80,7 +80,7 @@ public class PrometheusReporter extends MetricsReporter {
     }
     if (!PORT_TO_SERVER.containsKey(serverPort)) {
       try {
-        HTTPServer server = new HTTPServer(new InetSocketAddress(serverPort), PORT_TO_COLLECTOR_REGISTRY.get(serverPort));
+        HTTPServer server = new HTTPServer(new InetSocketAddress(serverPort), PORT_TO_COLLECTOR_REGISTRY.get(serverPort), true);
         PORT_TO_SERVER.put(serverPort, server);
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
       } catch (Exception e) {
