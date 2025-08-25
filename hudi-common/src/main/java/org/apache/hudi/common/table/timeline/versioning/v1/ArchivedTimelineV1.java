@@ -61,7 +61,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
   private HoodieTableMetaClient metaClient;
   // The first key is the timestamp -> multiple action types -> hoodie instant state and contents
   private final Map<String, Map<String, Map<HoodieInstant.State, byte[]>>> 
-  readCommits = new HashMap<>();
+      readCommits = new HashMap<>();
   private final ArchivedTimelineLoaderV1 timelineLoader = new ArchivedTimelineLoaderV1();
 
   private static final Logger LOG = LoggerFactory.getLogger(org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.class);
