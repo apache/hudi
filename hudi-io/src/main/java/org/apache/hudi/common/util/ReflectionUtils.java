@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.exception.HoodieException;
 
 import org.slf4j.Logger;
@@ -62,12 +61,39 @@ public class ReflectionUtils {
     if (useThreadContextClassLoader == null) {
       synchronized (ReflectionUtils.class) {
         if (useThreadContextClassLoader == null) {
-          useThreadContextClassLoader = DFSPropertiesConfiguration.getGlobalProps()
-              .getBoolean(ENABLE_THREAD_CONTEXT_REFLECTION_KEY, false);
+          useThreadContextClassLoader = loadConfigValue();
         }
       }
     }
     return useThreadContextClassLoader;
+  }
+
+  private static boolean loadConfigValue() {
+    // Try to load via reflection with full DFS support
+    try {
+      Class<?> dfsConfigClass = Class.forName(
+          "org.apache.hudi.common.config.DFSPropertiesConfiguration",
+          true,
+          Thread.currentThread().getContextClassLoader());
+      
+      Method getGlobalPropsMethod = dfsConfigClass.getMethod("getGlobalProps");
+      Object typedProps = getGlobalPropsMethod.invoke(null);
+      
+      Method getBooleanMethod = typedProps.getClass()
+          .getMethod("getBoolean", String.class, boolean.class);
+      
+      return (Boolean) getBooleanMethod.invoke(typedProps, 
+          ENABLE_THREAD_CONTEXT_REFLECTION_KEY, false);
+      
+    } catch (ClassNotFoundException e) {
+      LOG.info("DFSPropertiesConfiguration not available in classpath, "
+               + "using default value (false) for " + ENABLE_THREAD_CONTEXT_REFLECTION_KEY);
+    } catch (Exception e) {
+      LOG.warn("Failed to load config via reflection, using default value (false)", e);
+    }
+    
+    // If reflection fails, use default value
+    return false;
   }
 
   public static Class<?> getClass(String clazzName) {
