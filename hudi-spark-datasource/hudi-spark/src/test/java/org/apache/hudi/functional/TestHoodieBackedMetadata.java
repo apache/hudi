@@ -188,6 +188,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
+import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
@@ -3223,7 +3224,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         Map<String, HoodieColumnRangeMetadata<Comparable>> parquetStatsMap =
             HoodieIOFactory.getIOFactory(metaClient.getStorage())
                 .getFileFormatUtils(HoodieFileFormat.PARQUET)
-                .readColumnStatsFromMetadata(metaClient.getStorage(), fullFilePath, columns)
+                .readColumnStatsFromMetadata(metaClient.getStorage(), fullFilePath, columns, V1)
                 .stream()
                 .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
         Map<String, HoodieMetadataColumnStats> columnStatsMap = stats.stream().collect(Collectors.toMap(HoodieMetadataColumnStats::getColumnName, Function.identity()));

@@ -83,9 +83,10 @@ public class SchemaChangeUtils {
       case BINARY:
         return dsr == Types.StringType.get();
       case DECIMAL:
-        if (dsr.typeId() == Type.TypeID.DECIMAL) {
-          Types.DecimalType decimalSrc = (Types.DecimalType)src;
-          Types.DecimalType decimalDsr = (Types.DecimalType)dsr;
+      case DECIMAL_BYTES:
+        if (dsr.typeId() == Type.TypeID.DECIMAL || dsr.typeId() == Type.TypeID.DECIMAL_BYTES) {
+          Types.DecimalBase decimalSrc = (Types.DecimalBase)src;
+          Types.DecimalBase decimalDsr = (Types.DecimalBase)dsr;
           if (decimalDsr.isWiderThan(decimalSrc)) {
             return true;
           }

@@ -22,6 +22,7 @@ import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
+import org.apache.hudi.avro.ValueMetadata
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
@@ -35,6 +36,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERA
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
+import org.apache.hudi.metadata.HoodieIndexVersion
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
@@ -1073,7 +1075,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val parquetFilePath = new StoragePath(
       fs.listStatus(path).filter(fs => fs.getPath.getName.endsWith(".parquet")).toSeq.head.getPath.toUri)
 
-    val ranges = utils.readColumnStatsFromMetadata(storage, parquetFilePath, Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava)
+    val ranges = utils.readColumnStatsFromMetadata(storage, parquetFilePath, Seq("c1", "c2", "c3a", "c3b", "c3c", "c4", "c5", "c6", "c7", "c8").asJava, HoodieIndexVersion.V1)
 
     ranges.asScala.foreach(r => {
       // NOTE: Unfortunately Parquet can't compute statistics for Timestamp column, hence we
@@ -1107,7 +1109,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       assertTrue(unwrapped.isInstanceOf[ByteBuffer], "Expected a ByteBuffer")
     }
     // Deserialize into a java.math.BigDecimal.
-    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt)
+    val deserialized = ColumnStatsIndexSupport.deserialize(unwrapped, dt, ValueMetadata.V1EmptyMetadata.get)
     assertTrue(deserialized.isInstanceOf[JBigDecimal], "Deserialized value should be a java.math.BigDecimal")
     assertEquals(expected, deserialized.asInstanceOf[JBigDecimal],
       s"Decimal value from $description does not match")
