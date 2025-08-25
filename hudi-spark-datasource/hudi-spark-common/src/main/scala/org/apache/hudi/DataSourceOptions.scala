@@ -219,6 +219,9 @@ object DataSourceReadOptions {
     .markAdvanced()
     .withDocumentation("When doing an incremental query whether we should fall back to full table scans if file does not exist.")
 
+  // 0.14.0 backport
+  val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN_FOR_NON_EXISTING_FILES: ConfigProperty[String] = INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
+
   val SCHEMA_EVOLUTION_ENABLED: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
