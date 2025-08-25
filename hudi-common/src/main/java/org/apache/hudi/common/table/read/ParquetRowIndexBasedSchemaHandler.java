@@ -21,7 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -36,7 +36,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
-import static org.apache.hudi.common.table.read.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME;
+import static org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME;
 
 /**
  * This class is responsible for handling the schema for the file group reader that supports row index based positional merge.
@@ -46,17 +46,17 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
                                            Schema dataSchema,
                                            Schema requestedSchema,
                                            Option<InternalSchema> internalSchemaOpt,
-                                           HoodieTableConfig hoodieTableConfig,
-                                           TypedProperties properties) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig, properties);
-    if (!readerContext.supportsParquetRowIndex()) {
+                                           TypedProperties properties,
+                                           HoodieTableMetaClient metaClient) {
+    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, metaClient);
+    if (!readerContext.getRecordContext().supportsParquetRowIndex()) {
       throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
     }
   }
 
   @Override
-  protected Schema prepareRequiredSchema() {
-    Schema preMergeSchema = super.prepareRequiredSchema();
+  protected Schema prepareRequiredSchema(DeleteContext deleteContext) {
+    Schema preMergeSchema = super.prepareRequiredSchema(deleteContext);
     return readerContext.getShouldMergeUseRecordPosition()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;

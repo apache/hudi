@@ -157,8 +157,8 @@ public class HoodieStreamer implements Serializable {
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
     Triple<RecordMergeMode, String, String> mergingConfigs =
-        HoodieTableConfig.inferCorrectMergingBehavior(
-            cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField,
+        HoodieTableConfig.inferMergingConfigsForWrites(
+            cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
             HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(this.properties, HoodieWriteConfig.WRITE_TABLE_VERSION)));
     cfg.recordMergeMode = mergingConfigs.getLeft();
     cfg.payloadClassName = mergingConfigs.getMiddle();
@@ -272,9 +272,9 @@ public class HoodieStreamer implements Serializable {
             + "JsonKafkaSource, AvroKafkaSource, HiveIncrPullSource}")
     public String sourceClassName = JsonDFSSource.class.getName();
 
-    @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
-        + " to break ties between records with same key in input data.")
-    public String sourceOrderingField = null;
+    @Parameter(names = {"--source-ordering-fields", "--source-ordering-field"}, description = "Comma separated list of fields within source record to decide how"
+        + " to break ties between records with same key in input data. --source-ordering-field is deprecated, please use --source-ordering-fields instead")
+    public String sourceOrderingFields = null;
 
     @Parameter(names = {"--payload-class"}, description = "Deprecated. "
         + "Use --merge-mode for commit time or event time merging. "
@@ -505,7 +505,7 @@ public class HoodieStreamer implements Serializable {
           && Objects.equals(propsFilePath, config.propsFilePath)
           && Objects.equals(configs, config.configs)
           && Objects.equals(sourceClassName, config.sourceClassName)
-          && Objects.equals(sourceOrderingField, config.sourceOrderingField)
+          && Objects.equals(sourceOrderingFields, config.sourceOrderingFields)
           && Objects.equals(payloadClassName, config.payloadClassName)
           && Objects.equals(schemaProviderClassName, config.schemaProviderClassName)
           && Objects.equals(transformerClassNames, config.transformerClassNames)
@@ -538,7 +538,7 @@ public class HoodieStreamer implements Serializable {
     public int hashCode() {
       return Objects.hash(targetBasePath, targetTableName, tableType,
           baseFileFormat, propsFilePath, configs, sourceClassName,
-          sourceOrderingField, payloadClassName, schemaProviderClassName,
+          sourceOrderingFields, payloadClassName, schemaProviderClassName,
           transformerClassNames, sourceLimit, operation, filterDupes,
           enableHiveSync, enableMetaSync, forceEmptyMetaSync, syncClientToolClassNames, maxPendingCompactions, maxPendingClustering,
           continuousMode, minSyncIntervalSeconds, sparkMaster, commitOnErrors,
@@ -557,7 +557,7 @@ public class HoodieStreamer implements Serializable {
           + ", propsFilePath='" + propsFilePath + '\''
           + ", configs=" + configs
           + ", sourceClassName='" + sourceClassName + '\''
-          + ", sourceOrderingField='" + sourceOrderingField + '\''
+          + ", sourceOrderingField='" + sourceOrderingFields + '\''
           + ", payloadClassName='" + payloadClassName + '\''
           + ", schemaProviderClassName='" + schemaProviderClassName + '\''
           + ", transformerClassNames=" + transformerClassNames

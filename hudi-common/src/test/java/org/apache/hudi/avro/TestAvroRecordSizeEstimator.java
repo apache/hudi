@@ -43,14 +43,14 @@ public class TestAvroRecordSizeEstimator {
     record.put("favorite_number", 100);
     record.put("favorite_color", "red");
     SizeEstimator<BufferedRecord<IndexedRecord>> estimator = new AvroRecordSizeEstimator(schema);
-    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, false);
+    BufferedRecord<IndexedRecord> bufferedRecord = new BufferedRecord<>("id", 100, record, 1, null);
     long size = estimator.sizeEstimate(bufferedRecord);
     // size can be various for different OS / JVM version
     Assertions.assertTrue(size < 400 && size > 0);
 
     // testing generated IndexedRecord
     HoodieMetadataRecord metadataRecord = new HoodieMetadataRecord("__all_partitions__", 1, new HashMap<>(), null, null, null, null);
-    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, false);
+    bufferedRecord = new BufferedRecord<>("__all_partitions__", 0, metadataRecord, 1, null);
     size = estimator.sizeEstimate(bufferedRecord);
     // size can be various for different OS / JVM version
     Assertions.assertTrue(size < 400 && size > 0);

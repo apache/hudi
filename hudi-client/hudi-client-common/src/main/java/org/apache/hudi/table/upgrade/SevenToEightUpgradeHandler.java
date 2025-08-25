@@ -36,7 +36,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
@@ -52,8 +51,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -62,6 +59,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +71,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.SIX_TO_EIGHT_TIMELINE_ACTION_MAP;
-import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.rollbackFailedWritesAndCompact;
+import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
 
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
@@ -84,25 +82,17 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
   private static final Logger LOG = LoggerFactory.getLogger(SevenToEightUpgradeHandler.class);
 
   @Override
-  public Map<ConfigProperty, String> upgrade(HoodieWriteConfig config, HoodieEngineContext context,
-                                             String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
+                                                                         HoodieEngineContext context,
+                                                                         String instantTime,
+                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    // If auto upgrade is disabled, set writer version to 6 and return
-    if (!config.autoUpgrade()) {
-      config.setValue(HoodieWriteConfig.WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
-      return tablePropsToAdd;
-    }
-
     // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
-    if (!table.isMetadataTable() && config.isMetadataTableEnabled() && isMetadataTableBehindDataTable(config, metaClient)) {
-      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
-    }
+    checkAndHandleMetadataTable(context, table, config, metaClient, true);
 
-    // Rollback and run compaction in one step
-    rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()), HoodieTableVersion.SIX);
     try {
       HoodieTableMetaClient.createTableLayoutOnStorage(context.getStorageConf(), new StoragePath(config.getBasePath()), config.getProps(), TimelineLayoutVersion.VERSION_2, false);
     } catch (IOException e) {
@@ -144,24 +134,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
 
     upgradeToLSMTimeline(table, context, config);
 
-    return tablePropsToAdd;
-  }
-
-  private static boolean isMetadataTableBehindDataTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    // if metadata table does not exist, then it is not behind
-    if (!metaClient.getTableConfig().isMetadataTableAvailable()) {
-      return false;
-    }
-    // get last commit instant in data table and metadata table
-    HoodieInstant lastCommitInstantInDataTable = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
-    HoodieTableMetaClient metadataTableMetaClient = HoodieTableMetaClient.builder()
-        .setConf(metaClient.getStorageConf().newInstance())
-        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(config.getBasePath()))
-        .build();
-    HoodieInstant lastCommitInstantInMetadataTable = metadataTableMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().orElse(null);
-    // if last commit instant in data table is greater than the last commit instant in metadata table, then metadata table is behind
-    return lastCommitInstantInDataTable != null && lastCommitInstantInMetadataTable != null
-        && InstantComparison.compareTimestamps(lastCommitInstantInMetadataTable.requestedTime(), InstantComparison.LESSER_THAN, lastCommitInstantInDataTable.requestedTime());
+    return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptySet());
   }
 
   static void upgradePartitionFields(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
@@ -175,7 +148,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
 
   static void upgradeMergeMode(HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
     String payloadClass = tableConfig.getPayloadClass();
-    String preCombineField = tableConfig.getPreCombineField();
+    String orderingFields = tableConfig.getOrderingFieldsStr().orElse(null);
     if (isCustomPayloadClass(payloadClass)) {
       // This contains a special case: HoodieMetadataPayload.
       tablePropsToAdd.put(
@@ -190,7 +163,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     } else if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
       setEventTimeOrCommitTimeBasedOnPayload(payloadClass, tablePropsToAdd);
     } else { // MOR table
-      if (StringUtils.nonEmpty(preCombineField)) {
+      if (StringUtils.nonEmpty(orderingFields)) {
         // This contains a special case: OverwriteWithLatestPayload with preCombine field.
         tablePropsToAdd.put(
             HoodieTableConfig.PAYLOAD_CLASS_NAME,

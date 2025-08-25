@@ -18,16 +18,19 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, PRECOMBINE_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
 import org.apache.hudi.avro.{AvroSchemaCache, HoodieAvroUtils}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
+import org.apache.hudi.common.util.{HoodieRecordUtils, Option => HOption, OrderingValues}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+import org.apache.hudi.util.JFunction
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
@@ -57,7 +60,8 @@ object HoodieCreateRecordUtils {
                                        instantTime: String,
                                        preppedSparkSqlWrites: Boolean,
                                        preppedSparkSqlMergeInto: Boolean,
-                                       preppedWriteOperation: Boolean)
+                                       preppedWriteOperation: Boolean,
+                                       orderingFields: java.util.List[String])
 
   def createHoodieRecordRdd(args: createHoodieRecordRddArgs) = {
     val df = args.df
@@ -72,6 +76,7 @@ object HoodieCreateRecordUtils {
     val preppedSparkSqlWrites = args.preppedSparkSqlWrites
     val preppedSparkSqlMergeInto = args.preppedSparkSqlMergeInto
     val preppedWriteOperation = args.preppedWriteOperation
+    val orderingFields = args.orderingFields
 
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
@@ -124,12 +129,11 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
-          val precombine = config.getString(PRECOMBINE_FIELD)
-          val precombineEmpty = StringUtils.isNullOrEmpty(precombine)
+          val requiresPayload = isChangingRecords(operation) && !config.isFileGroupReaderBasedMergeHandle
 
           // handle dropping partition columns
           it.map { avroRec =>
-            val (hoodieKey: HoodieKey, recordLocation: Option[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
+            val (hoodieKey: HoodieKey, recordLocation: HOption[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
             val avroRecWithoutMeta: GenericRecord = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
               HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema))
@@ -143,14 +147,17 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine && !precombineEmpty) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
-                false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
-              DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, recordLocation)
+            val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
+              val orderingVal = OrderingValues.create(
+                orderingFields,
+                JFunction.toJavaFunction[String, Comparable[_]](
+                  field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
+                    consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
+              HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
+                config.getPayloadClass, null, recordLocation, requiresPayload)
             } else {
-              DataSourceUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getPayloadClass, recordLocation)
+              HoodieRecordUtils.createHoodieRecord(processedRecord, hoodieKey,
+                config.getPayloadClass, recordLocation, requiresPayload)
             }
             hoodieRecord
           }
@@ -197,7 +204,7 @@ object HoodieCreateRecordUtils {
 
   def getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator: Option[BaseKeyGenerator], avroRec: GenericRecord,
                                                  useMetaFieldsForRecordKeyAndPartition: Boolean, fetchRecordLocationFromMetaFields: Boolean):
-  (HoodieKey, Option[HoodieRecordLocation]) = {
+  (HoodieKey, HOption[HoodieRecordLocation]) = {
     //use keygen for sqlMergeIntoPrepped recordKey and partitionPath because the keygenerator handles
     //fetching from the meta fields if they are populated and otherwise doing keygen
     val recordKey = if (useMetaFieldsForRecordKeyAndPartition) {
@@ -225,11 +232,11 @@ object HoodieCreateRecordUtils {
     else {
       None
     }
-    val recordLocation: Option[HoodieRecordLocation] = if (instantTime.isDefined && fileName.isDefined) {
+    val recordLocation: HOption[HoodieRecordLocation] = if (instantTime.isDefined && fileName.isDefined) {
       val fileId = FSUtils.getFileId(fileName.get)
-      Some(new HoodieRecordLocation(instantTime.get, fileId))
+      HOption.of(new HoodieRecordLocation(instantTime.get, fileId))
     } else {
-      None
+      HOption.empty()
     }
     (hoodieKey, recordLocation)
   }

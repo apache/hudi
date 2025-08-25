@@ -25,8 +25,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -37,19 +37,22 @@ import org.apache.hudi.util.RowProjection;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-
-import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 /**
  * Flink Engine-specific Implementations of `HoodieRecord`, which is expected to hold {@code RowData} as payload.
@@ -69,8 +72,9 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
     this.orderingValue = orderingValue;
   }
 
-  public HoodieFlinkRecord(HoodieKey key, RowData rowData) {
-    super(key, rowData);
+  public HoodieFlinkRecord(HoodieKey key, HoodieOperation op, Comparable<?> orderingValue, RowData rowData, boolean isDelete) {
+    super(key, rowData, op, isDelete, Option.empty());
+    this.orderingValue = orderingValue;
   }
 
   @Override
@@ -89,20 +93,16 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public HoodieOperation getOperation() {
-    if (this.operation == null) {
-      this.operation = HoodieOperation.fromValue(data.getRowKind().toByteValue());
-    }
-    return this.operation;
-  }
-
-  @Override
-  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props) {
-    String orderingField = ConfigUtils.getOrderingField(props);
-    if (isNullOrEmpty(orderingField) || recordSchema.getField(orderingField) == null) {
-      return DEFAULT_ORDERING_VALUE;
+  protected Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
+    if (orderingFields == null) {
+      return OrderingValues.getDefault();
     } else {
-      return (Comparable<?>) getColumnValueAsJava(recordSchema, orderingField, props, false);
+      return OrderingValues.create(orderingFields, field -> {
+        if (recordSchema.getField(field) == null) {
+          return OrderingValues.getDefault();
+        }
+        return (Comparable<?>) getColumnValueAsJava(recordSchema, field, props, false);
+      });
     }
   }
 
@@ -139,6 +139,29 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   @Override
   protected RowData readRecordPayload(Kryo kryo, Input input) {
     throw new UnsupportedOperationException("Not supported for " + this.getClass().getSimpleName());
+  }
+
+  @Override
+  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+                                                 Object fieldValue,
+                                                 boolean keepConsistentLogicalTimestamp) {
+    if (fieldValue == null) {
+      return null;
+    }
+    LogicalType logicalType = fieldSchema.getLogicalType();
+
+    if (logicalType == LogicalTypes.date()) {
+      return LocalDate.ofEpochDay(((Integer) fieldValue).longValue());
+    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
+      TimestampData ts = (TimestampData) fieldValue;
+      return ts.getMillisecond();
+    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
+      TimestampData ts = (TimestampData) fieldValue;
+      return ts.getMillisecond() / 1000;
+    } else if (logicalType instanceof LogicalTypes.Decimal) {
+      return ((DecimalData) fieldValue).toBigDecimal();
+    }
+    return fieldValue;
   }
 
   @Override
@@ -193,7 +216,7 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) {
+  protected boolean checkIsDelete(Schema recordSchema, Properties props) {
     if (data == null) {
       return true;
     }

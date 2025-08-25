@@ -117,9 +117,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
             conf.set(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
           }
-          if (tableConfig.contains(HoodieTableConfig.PRECOMBINE_FIELD)
-              && !conf.contains(FlinkOptions.PRECOMBINE_FIELD)) {
-            conf.set(FlinkOptions.PRECOMBINE_FIELD, tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD));
+          if (tableConfig.contains(HoodieTableConfig.ORDERING_FIELDS)
+              && !conf.contains(FlinkOptions.ORDERING_FIELDS)) {
+            conf.set(FlinkOptions.ORDERING_FIELDS, tableConfig.getString(HoodieTableConfig.ORDERING_FIELDS));
           }
           if (tableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE)
               && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
@@ -177,7 +177,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
     }
-    StreamerUtil.checkPreCombineKey(conf, schema.getColumnNames());
+    StreamerUtil.checkOrderingFields(conf, schema.getColumnNames());
   }
 
   /**

@@ -82,7 +82,12 @@ public class BaseTestHandle extends HoodieSparkClientTestHarness {
         }
       }
     }
-    existingRecords.addAll(deletes);
+    // Add 5 deletes with ignoreIndexUpdate set to true to validate that this is propagated to the record delegates
+    deletes.stream().limit(5).forEach(hoodieRecord -> {
+      hoodieRecord.setIgnoreIndexUpdate(true);
+      existingRecords.add(hoodieRecord);
+    });
+    existingRecords.addAll(deletes.subList(5, deletes.size()));
     return deletes.size();
   }
 

@@ -28,6 +28,7 @@ import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -55,9 +56,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
-import org.apache.hudi.common.function.SerializableFunctionUnchecked;
-import org.apache.hudi.common.function.SerializablePairFunction;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -77,15 +75,14 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
-import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
-import org.apache.hudi.common.table.read.KeyBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.UpdateProcessor;
+import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -96,6 +93,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -161,10 +159,9 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -211,7 +208,6 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_EXPRESSION_INDEX_PREFIX = "expr_index_";
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
-  public static final SerializableFunctionUnchecked<String, String> IDENTITY_ENCODING = key -> key;
 
   private static final Set<Schema.Type> SUPPORTED_TYPES_PARTITION_STATS = new HashSet<>(Arrays.asList(
       Schema.Type.INT, Schema.Type.LONG, Schema.Type.FLOAT, Schema.Type.DOUBLE, Schema.Type.STRING, Schema.Type.BOOLEAN, Schema.Type.NULL, Schema.Type.BYTES));
@@ -416,13 +412,14 @@ public class HoodieTableMetadataUtil {
    * @param enabledPartitionTypes - Set of enabled MDT partitions to update
    * @param bloomFilterType       - Type of generated bloom filter records
    * @param bloomIndexParallelism - Parallelism for bloom filter record generation
+   * @param enableOptimizeLogBlocksScan - flag used to enable scanInternalV2 for log blocks in data table
    * @return Map of partition to metadata records for the commit action
    */
   public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context, HoodieConfig hoodieConfig, HoodieCommitMetadata commitMetadata,
                                                                                String instantTime, HoodieTableMetaClient dataMetaClient, HoodieTableMetadata tableMetadata,
                                                                                HoodieMetadataConfig metadataConfig, Set<String> enabledPartitionTypes, String bloomFilterType,
                                                                                int bloomIndexParallelism, int writesFileIdEncoding, EngineType engineType,
-                                                                               Option<HoodieRecordType> recordTypeOpt) {
+                                                                               Option<HoodieRecordType> recordTypeOpt, boolean enableOptimizeLogBlocksScan) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = context.parallelize(
         convertMetadataToFilesPartitionRecords(commitMetadata, instantTime), 1);
@@ -450,7 +447,7 @@ public class HoodieTableMetadataUtil {
     }
     if (enabledPartitionTypes.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath())) {
       partitionToRecordsMap.put(MetadataPartitionType.RECORD_INDEX.getPartitionPath(), convertMetadataToRecordIndexRecords(context, commitMetadata, metadataConfig,
-          dataMetaClient, writesFileIdEncoding, instantTime, engineType));
+          dataMetaClient, writesFileIdEncoding, instantTime, engineType, enableOptimizeLogBlocksScan));
     }
     return partitionToRecordsMap;
   }
@@ -833,7 +830,8 @@ public class HoodieTableMetadataUtil {
                                                                                  HoodieTableMetaClient dataTableMetaClient,
                                                                                  int writesFileIdEncoding,
                                                                                  String instantTime,
-                                                                                 EngineType engineType) {
+                                                                                 EngineType engineType,
+                                                                                 boolean enableOptimizeLogBlocksScan) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     // Return early if there are no write stats, or if the operation is a compaction.
@@ -876,7 +874,8 @@ public class HoodieTableMetadataUtil {
               return baseFileWriteStats.stream()
                   .flatMap(writeStat -> {
                     HoodieStorage storage = HoodieStorageUtils.getStorage(new StoragePath(writeStat.getPath()), storageConfiguration);
-                    return CollectionUtils.toStream(BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage));
+                    return CollectionUtils.toStream(BaseFileRecordParsingUtils
+                        .generateRLIMetadataHoodieRecordsForBaseFile(basePath, writeStat, writesFileIdEncoding, instantTime, storage, metadataConfig.isPartitionedRecordIndexEnabled()));
                   })
                   .iterator();
             }
@@ -897,7 +896,7 @@ public class HoodieTableMetadataUtil {
                   .collect(Collectors.toList());
               // Extract revived and deleted keys
               Pair<Set<String>, Set<String>> revivedAndDeletedKeys = getRevivedAndDeletedKeysFromMergedLogs(dataTableMetaClient, instantTime, allLogFilePaths, finalWriterSchemaOpt,
-                  currentLogFilePaths, partitionPath, readerContextFactory.getContext());
+                  currentLogFilePaths, partitionPath, readerContextFactory.getContext(), enableOptimizeLogBlocksScan);
               Set<String> revivedKeys = revivedAndDeletedKeys.getLeft();
               Set<String> deletedKeys = revivedAndDeletedKeys.getRight();
               // Process revived keys to create updates
@@ -906,7 +905,7 @@ public class HoodieTableMetadataUtil {
                   .collect(Collectors.toList());
               // Process deleted keys to create deletes
               List<HoodieRecord> deletedRecords = deletedKeys.stream()
-                  .map(HoodieMetadataPayload::createRecordIndexDelete)
+                  .map(key -> HoodieMetadataPayload.createRecordIndexDelete(key, partitionPath, metadataConfig.isPartitionedRecordIndexEnabled()))
                   .collect(Collectors.toList());
               // Combine all records into one list
               List<HoodieRecord> allRecords = new ArrayList<>();
@@ -932,7 +931,7 @@ public class HoodieTableMetadataUtil {
       // (TODO: make this configurable)
       long targetPartitionSize = 100 * 1024 * 1024;
       parallelism = (int) Math.max(1, (totalWriteBytesForRLI + targetPartitionSize - 1) / targetPartitionSize);
-      return reduceByKeys(recordIndexRecords, parallelism);
+      return reduceByKeys(recordIndexRecords, parallelism, metadataConfig.isPartitionedRecordIndexEnabled());
     } catch (Exception e) {
       throw new HoodieException("Failed to generate RLI records for metadata table", e);
     }
@@ -952,6 +951,7 @@ public class HoodieTableMetadataUtil {
    * @param logFilePaths         list of log file paths including current and previous file slices
    * @param finalWriterSchemaOpt records schema
    * @param currentLogFilePaths  list of log file paths for the current instant
+   * @param enableOptimizedLogBlocksScan - flag used to enable scanInternalV2 for log blocks in data table
    * @return pair of revived and deleted keys
    */
   @VisibleForTesting
@@ -961,7 +961,8 @@ public class HoodieTableMetadataUtil {
                                                                                           Option<Schema> finalWriterSchemaOpt,
                                                                                           List<String> currentLogFilePaths,
                                                                                           String partitionPath,
-                                                                                          HoodieReaderContext<T> readerContext) {
+                                                                                          HoodieReaderContext<T> readerContext,
+                                                                                          boolean enableOptimizedLogBlocksScan) {
     // Separate out the current log files
     List<String> logFilePathsWithoutCurrentLogFiles = logFilePaths.stream()
         .filter(logFilePath -> !currentLogFilePaths.contains(logFilePath))
@@ -969,7 +970,7 @@ public class HoodieTableMetadataUtil {
     if (logFilePathsWithoutCurrentLogFiles.isEmpty()) {
       // Only current log file is present, so we can directly get the deleted record keys from it and return the RLI records.
       try (ClosableIterator<BufferedRecord<T>> currentLogRecords =
-               getLogRecords(currentLogFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext)) {
+               getLogRecords(currentLogFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext, enableOptimizedLogBlocksScan)) {
         Set<String> deletedKeys = new HashSet<>();
         currentLogRecords.forEachRemaining(record -> {
           if (record.isDelete()) {
@@ -979,17 +980,24 @@ public class HoodieTableMetadataUtil {
         return Pair.of(Collections.emptySet(), deletedKeys);
       }
     }
-    return getRevivedAndDeletedKeys(dataTableMetaClient, instantTime, partitionPath, readerContext, logFilePaths, finalWriterSchemaOpt, logFilePathsWithoutCurrentLogFiles);
+    return getRevivedAndDeletedKeys(dataTableMetaClient, instantTime, partitionPath, readerContext,
+            logFilePaths, finalWriterSchemaOpt, logFilePathsWithoutCurrentLogFiles, enableOptimizedLogBlocksScan);
   }
 
-  private static <T> Pair<Set<String>, Set<String>> getRevivedAndDeletedKeys(HoodieTableMetaClient dataTableMetaClient, String instantTime, String partitionPath, HoodieReaderContext<T> readerContext,
-                                                                             List<String> logFilePaths, Option<Schema> finalWriterSchemaOpt, List<String> logFilePathsWithoutCurrentLogFiles) {
+  private static <T> Pair<Set<String>, Set<String>> getRevivedAndDeletedKeys(HoodieTableMetaClient dataTableMetaClient,
+                                                                             String instantTime,
+                                                                             String partitionPath,
+                                                                             HoodieReaderContext<T> readerContext,
+                                                                             List<String> logFilePaths,
+                                                                             Option<Schema> finalWriterSchemaOpt,
+                                                                             List<String> logFilePathsWithoutCurrentLogFiles,
+                                                                             boolean enableOptimizedLogBlocksScan) {
     // Partition valid (non-deleted) and deleted keys from all log files, including current, in a single pass
     Set<String> validKeysForAllLogs = new HashSet<>();
     Set<String> deletedKeysForAllLogs = new HashSet<>();
     // Fetch log records for all log files
     try (ClosableIterator<BufferedRecord<T>> allLogRecords =
-             getLogRecords(logFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext)) {
+             getLogRecords(logFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext, enableOptimizedLogBlocksScan)) {
       allLogRecords.forEachRemaining(record -> {
         if (record.isDelete()) {
           deletedKeysForAllLogs.add(record.getRecordKey());
@@ -1004,7 +1012,7 @@ public class HoodieTableMetadataUtil {
     Set<String> deletedKeysForPreviousLogs = new HashSet<>();
     // Fetch log records for previous log files (excluding the current log files)
     try (ClosableIterator<BufferedRecord<T>> previousLogRecords =
-             getLogRecords(logFilePathsWithoutCurrentLogFiles, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext)) {
+             getLogRecords(logFilePathsWithoutCurrentLogFiles, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext, enableOptimizedLogBlocksScan)) {
       previousLogRecords.forEachRemaining(record -> {
         if (record.isDelete()) {
           deletedKeysForPreviousLogs.add(record.getRecordKey());
@@ -1022,7 +1030,8 @@ public class HoodieTableMetadataUtil {
                                                                        Option<Schema> writerSchemaOpt,
                                                                        String latestCommitTimestamp,
                                                                        String partitionPath,
-                                                                       HoodieReaderContext<T> readerContext) {
+                                                                       HoodieReaderContext<T> readerContext,
+                                                                       boolean enableOptimizedLogBlocksScan) {
     if (writerSchemaOpt.isPresent() && !logFilePaths.isEmpty()) {
       List<HoodieLogFile> logFiles = logFilePaths.stream().map(HoodieLogFile::new).collect(Collectors.toList());
       FileSlice fileSlice = new FileSlice(partitionPath, logFiles.get(0).getFileId(), logFiles.get(0).getDeltaCommitTime());
@@ -1034,11 +1043,11 @@ public class HoodieTableMetadataUtil {
       readerContext.setHasLogFiles(true);
       HoodieTableConfig tableConfig = datasetMetaClient.getTableConfig();
       readerContext.initRecordMerger(properties);
-      readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), tableConfig, properties));
+      readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), properties, datasetMetaClient));
       HoodieReadStats readStats = new HoodieReadStats();
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), PartialUpdateMode.NONE, properties, Option.ofNullable(tableConfig.getPreCombineField()),
-          UpdateProcessor.create(readStats, readerContext, true, Option.empty()));
+          readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getOrderingFields(),
+          UpdateProcessor.create(readStats, readerContext, true, Option.empty(), properties));
 
       // CRITICAL: Ensure allowInflightInstants is set to true
       try (HoodieMergedLogRecordReader<T> mergedLogRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
@@ -1052,6 +1061,7 @@ public class HoodieTableMetadataUtil {
           .withMetaClient(datasetMetaClient)
           .withAllowInflightInstants(true)
           .withRecordBuffer(recordBuffer)
+          .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
           .build()) {
         // initializes the record buffer with the log records
         return recordBuffer.getLogRecordIterator();
@@ -1084,24 +1094,32 @@ public class HoodieTableMetadataUtil {
    * @return
    */
   @VisibleForTesting
-  public static HoodieData<HoodieRecord> reduceByKeys(HoodieData<HoodieRecord> recordIndexRecords, int parallelism) {
-    return recordIndexRecords.mapToPair(
-            (SerializablePairFunction<HoodieRecord, HoodieKey, HoodieRecord>) t -> Pair.of(t.getKey(), t))
-        .reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
-          boolean isRecord1Deleted = record1.getData() instanceof EmptyHoodieRecordPayload;
-          boolean isRecord2Deleted = record2.getData() instanceof EmptyHoodieRecordPayload;
-          if (isRecord1Deleted && !isRecord2Deleted) {
-            return record2;
-          } else if (!isRecord1Deleted && isRecord2Deleted) {
-            return record1;
-          } else if (isRecord1Deleted && isRecord2Deleted) {
-            // let's delete just 1 of them
-            return record1;
-          } else {
-            throw new HoodieIOException("Two HoodieRecord updates to RLI is seen for same record key " + record2.getRecordKey() + ", record 1 : "
-                + record1.getData().toString() + ", record 2 : " + record2.getData().toString());
-          }
-        }, parallelism).values();
+  public static HoodieData<HoodieRecord> reduceByKeys(HoodieData<HoodieRecord> recordIndexRecords, int parallelism, boolean isPartitionedRLI) {
+    HoodiePairData<HoodieKey, HoodieRecord> recordIndexRecordsPair;
+    if (isPartitionedRLI) {
+      recordIndexRecordsPair = recordIndexRecords.mapToPair(r -> {
+        String recordPartitionPath = r.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps())
+            ? ((EmptyHoodieRecordPayloadWithPartition) r.getData()).getPartitionPath() : ((HoodieMetadataPayload) r.getData()).getDataPartition();
+        return Pair.of(new HoodieKey(r.getRecordKey(), recordPartitionPath), r);
+      });
+    } else {
+      recordIndexRecordsPair = recordIndexRecords.mapToPair(r -> Pair.of(r.getKey(), r));
+    }
+    return recordIndexRecordsPair.reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
+      boolean isRecord1Deleted = record1.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps());
+      boolean isRecord2Deleted = record2.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps());
+      if (isRecord1Deleted && !isRecord2Deleted) {
+        return record2;
+      } else if (!isRecord1Deleted && isRecord2Deleted) {
+        return record1;
+      } else if (isRecord1Deleted && isRecord2Deleted) {
+        // let's delete just 1 of them
+        return record1;
+      } else {
+        throw new HoodieIOException("Two HoodieRecord updates to RLI is seen for same record key " + record2.getRecordKey() + ", record 1 : "
+            + record1 + ", record 2 : " + record2);
+      }
+    }, parallelism).values();
   }
 
   /**
@@ -1354,7 +1372,7 @@ public class HoodieTableMetadataUtil {
   public static SerializableBiFunction<String, Integer, Integer> getSecondaryKeyToFileGroupMappingFunction(boolean needsSecondaryKeyExtraction) {
     if (needsSecondaryKeyExtraction) {
       return (recordKey, numFileGroups) -> {
-        String secondaryKey = SecondaryIndexKeyUtils.getUnescapedSecondaryKeyFromSecondaryIndexKey(recordKey);
+        String secondaryKey = SecondaryIndexKeyUtils.getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey(recordKey);
         return mapRecordKeyToFileGroupIndex(secondaryKey, numFileGroups);
       };
     }
@@ -1363,6 +1381,9 @@ public class HoodieTableMetadataUtil {
 
   // change to configurable larger group
   public static int mapRecordKeyToFileGroupIndex(String recordKey, int numFileGroups) {
+    if (numFileGroups == 1) {
+      return 0;
+    }
     int h = 0;
     for (int i = 0; i < recordKey.length(); ++i) {
       h = 31 * h + recordKey.charAt(i);
@@ -2193,13 +2214,34 @@ public class HoodieTableMetadataUtil {
    *
    * @param partitionType The type of the MDT partition
    * @param index         Index of the file group within the partition
+   * @param partitionName Name of the partition in the MDT
+   * @param dataPartitionName If this is a partitioned index, then pass in option of the partition name for the data table
    * @return The fileID
    */
-  public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index, String partitionName) {
+  public static String getFileIDForFileGroup(MetadataPartitionType partitionType, int index, String partitionName, Option<String> dataPartitionName) {
     if (MetadataPartitionType.EXPRESSION_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
       return String.format("%s%04d-%d", partitionName.replaceAll("_", "-").concat("-"), index, 0);
+    } else if (dataPartitionName.isPresent()) {
+      return String.format("%s%s%04d-%d", partitionType.getFileIdPrefix(), PartitionPathEncodeUtils.escapeFileName(dataPartitionName.get()).concat("-"), index, 0);
     }
     return String.format("%s%04d-%d", partitionType.getFileIdPrefix(), index, 0);
+  }
+
+  /**
+   * Uses the MDT filegroup name to determine which partition in the data table the filegroup is an index for
+   *
+   * @param fileGroupName The name of an mdt filegroup
+   * @return the partition in the data table that is indexed by this filegroup
+   */
+  public static String getDataTablePartitionNameFromFileGroupName(String fileGroupName) {
+    String[] splits = fileGroupName.split("-");
+    assert splits.length > 3;
+    return PartitionPathEncodeUtils.unescapePathName(splits[splits.length - 3]);
+  }
+
+  public static boolean verifyRLIFile(String fileID, boolean isPartitioned) {
+    long dashCount = fileID.chars().filter(c -> c == '-').count();
+    return (dashCount == 4) == isPartitioned;
   }
 
   /**
@@ -2302,7 +2344,7 @@ public class HoodieTableMetadataUtil {
     }
 
     // Does any enabled partition being enabled need to track the written records
-    return config.isRecordIndexEnabled();
+    return config.isRecordIndexEnabled() || config.isPartitionedRecordIndexEnabled();
   }
 
   /**
@@ -2368,7 +2410,8 @@ public class HoodieTableMetadataUtil {
                                                                      int recordIndexMaxParallelism,
                                                                      StoragePath basePath,
                                                                      StorageConfiguration<?> configuration,
-                                                                     String activeModule) {
+                                                                     String activeModule,
+                                                                     boolean isPartitionedRLI) {
     if (partitionBaseFilePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -2386,7 +2429,7 @@ public class HoodieTableMetadataUtil {
       HoodieFileReader reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(basePath, configuration))
           .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
           .getFileReader(config, dataFilePath);
-      return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime);
+      return getHoodieRecordIterator(reader.getRecordKeyIterator(), forDelete, partition, fileId, instantTime, isPartitionedRLI);
     });
   }
 
@@ -2398,7 +2441,8 @@ public class HoodieTableMetadataUtil {
                                                                           List<Pair<String, FileSlice>> partitionFileSlicePairs,
                                                                           int recordIndexMaxParallelism,
                                                                           String activeModule,
-                                                                          HoodieTableMetaClient metaClient) {
+                                                                          HoodieTableMetaClient metaClient,
+                                                                          boolean isPartitionedRLI) {
     if (partitionFileSlicePairs.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
@@ -2430,7 +2474,7 @@ public class HoodieTableMetadataUtil {
             .build();
 
         ClosableIterator<String> recordKeyIterator = fileGroupReader.getClosableKeyIterator();
-        return getHoodieRecordIterator(recordKeyIterator, false, partition, fileSlice.getFileId(), fileSlice.getBaseInstantTime());
+        return getHoodieRecordIterator(recordKeyIterator, false, partition, fileSlice.getFileId(), fileSlice.getBaseInstantTime(), isPartitionedRLI);
       }
       final HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
       final String filename = baseFile.getFileName();
@@ -2442,7 +2486,7 @@ public class HoodieTableMetadataUtil {
       HoodieFileReader reader = HoodieIOFactory.getIOFactory(metaClient.getStorage())
           .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
           .getFileReader(hoodieConfig, dataFilePath);
-      return getHoodieRecordIterator(reader.getRecordKeyIterator(), false, partition, fileId, instantTime);
+      return getHoodieRecordIterator(reader.getRecordKeyIterator(), false, partition, fileId, instantTime, isPartitionedRLI);
     });
   }
 
@@ -2457,20 +2501,6 @@ public class HoodieTableMetadataUtil {
     return addMetadataFields(projectSchema(tableSchema, mergedFields));
   }
 
-  /**
-   * Given table schema and fields to index, checks if each field's data type are supported.
-   *
-   * @param sourceFields fields to index
-   * @param tableSchema  table schema
-   * @return true if each field's data type are supported, false otherwise
-   */
-  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, Schema tableSchema) {
-    return sourceFields.stream().anyMatch(fieldToIndex -> {
-      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
-      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
-    });
-  }
-
   public static StoragePath filePath(StoragePath basePath, String partition, String filename) {
     if (partition.isEmpty()) {
       return new StoragePath(basePath, filename);
@@ -2483,7 +2513,8 @@ public class HoodieTableMetadataUtil {
                                                                         boolean forDelete,
                                                                         String partition,
                                                                         String fileId,
-                                                                        String instantTime
+                                                                        String instantTime,
+                                                                        boolean isPartitionedRLI
   ) {
     return new ClosableIterator<HoodieRecord>() {
       @Override
@@ -2499,7 +2530,7 @@ public class HoodieTableMetadataUtil {
       @Override
       public HoodieRecord next() {
         return forDelete
-            ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next())
+            ? HoodieMetadataPayload.createRecordIndexDelete(recordKeyIterator.next(), partition, isPartitionedRLI)
             : HoodieMetadataPayload.createRecordIndexUpdate(recordKeyIterator.next(), partition, fileId, instantTime, 0);
       }
     };
@@ -2718,7 +2749,8 @@ public class HoodieTableMetadataUtil {
           // Fetch metadata table COLUMN_STATS partition records for above files
           List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
               .getRecordsByKeyPrefixes(
-                  HoodieListData.lazy(generateKeyPrefixes(colsToIndex, partitionName)), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false, IDENTITY_ENCODING)
+                  HoodieListData.lazy(generateColumnStatsKeys(colsToIndex, partitionName)),
+                  MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
               // schema and properties are ignored in getInsertValue, so simply pass as null
               .map(record -> ((HoodieMetadataPayload)record.getData()).getColumnStatMetadata())
               .filter(Option::isPresent)
@@ -2759,7 +2791,7 @@ public class HoodieTableMetadataUtil {
     if (!indexDefs.containsKey(metadataPartitionPath)) {
       return Option.empty();
     }
-    return Option.of(indexDefs.get(metadataPartitionPath).getVersion());
+    return Option.ofNullable(indexDefs.get(metadataPartitionPath).getVersion());
   }
 
   public static HoodieIndexVersion existingIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {
@@ -2769,18 +2801,25 @@ public class HoodieTableMetadataUtil {
 
   /**
    * Generate key prefixes for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
+   * @deprecated Use {@link #generateColumnStatsKeys} instead
    */
+  @Deprecated
   public static List<String> generateKeyPrefixes(List<String> columnsToIndex, String partitionName) {
-    List<String> keyPrefixes = new ArrayList<>();
-    PartitionIndexID partitionIndexId = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionName));
-    for (String columnName : columnsToIndex) {
-      ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
-      String keyPrefix = columnIndexID.asBase64EncodedString()
-          .concat(partitionIndexId.asBase64EncodedString());
-      keyPrefixes.add(keyPrefix);
-    }
+    List<ColumnStatsIndexPrefixRawKey> rawKeys = generateColumnStatsKeys(columnsToIndex, partitionName);
+    return rawKeys.stream()
+        .map(key -> key.encode())
+        .collect(Collectors.toList());
+  }
 
-    return keyPrefixes;
+  /**
+   * Generate column stats index keys for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
+   */
+  public static List<ColumnStatsIndexPrefixRawKey> generateColumnStatsKeys(List<String> columnsToIndex, String partitionName) {
+    List<ColumnStatsIndexPrefixRawKey> keys = new ArrayList<>();
+    for (String columnName : columnsToIndex) {
+      keys.add(new ColumnStatsIndexPrefixRawKey(columnName, partitionName));
+    }
+    return keys;
   }
 
   private static List<HoodieColumnRangeMetadata<Comparable>> translateWriteStatToFileStats(HoodieWriteStat writeStat,

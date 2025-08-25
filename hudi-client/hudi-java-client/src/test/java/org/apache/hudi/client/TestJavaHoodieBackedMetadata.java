@@ -30,14 +30,13 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -47,7 +46,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
@@ -78,7 +76,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -91,6 +88,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.metadata.ColumnStatsIndexPrefixRawKey;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -164,7 +162,6 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.IDENTITY_ENCODING;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
@@ -963,6 +960,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withRequestedSchema(schema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
+        .withEnableOptimizedLogBlockScan(writeConfig.getMetadataConfig().isOptimizedLogBlocksScanEnabled())
         .build();
 
     try (ClosableIterator<HoodieRecord<IndexedRecord>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
@@ -1423,7 +1421,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       AtomicInteger counter = new AtomicInteger();
       List<HoodieRecord> processedRecords = records.stream().map(entry ->
-              new HoodieAvroRecord(new HoodieKey("key1_" + counter.getAndIncrement(), entry.getPartitionPath()), (HoodieRecordPayload) entry.getData()))
+              entry.newInstance(new HoodieKey("key1_" + counter.getAndIncrement(), entry.getPartitionPath())))
           .collect(Collectors.toList());
 
       WriteClientTestUtils.startCommitWithTime(client, firstCommit);
@@ -1437,7 +1435,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       records = dataGen.generateInserts(secondCommit, 20);
       AtomicInteger counter1 = new AtomicInteger();
       processedRecords = records.stream().map(entry ->
-              new HoodieAvroRecord(new HoodieKey("key2_" + counter1.getAndIncrement(), entry.getPartitionPath()), (HoodieRecordPayload) entry.getData()))
+              entry.newInstance(new HoodieKey("key2_" + counter1.getAndIncrement(), entry.getPartitionPath())))
           .collect(Collectors.toList());
       writeStatuses = client.insert(processedRecords, secondCommit);
       client.commit(secondCommit, writeStatuses);
@@ -1471,10 +1469,9 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       HoodieTableMetadata tableMetadata = metadata(client);
       // prefix search for column (_hoodie_record_key)
-      ColumnIndexID columnIndexID = new ColumnIndexID(HoodieRecord.RECORD_KEY_METADATA_FIELD);
       List<HoodieRecord<HoodieMetadataPayload>> result = tableMetadata.getRecordsByKeyPrefixes(
-          HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString())),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
+          HoodieListData.lazy(Collections.singletonList(new ColumnStatsIndexPrefixRawKey(HoodieRecord.RECORD_KEY_METADATA_FIELD))),
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
 
       // there are 3 partitions in total and 2 commits. total entries should be 6.
       assertEquals(result.size(), 6);
@@ -1485,8 +1482,10 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // prefix search for col(_hoodie_record_key) and first partition. only 2 files should be matched
       PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
       result = tableMetadata.getRecordsByKeyPrefixes(
-          HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
+          HoodieListData.lazy(HoodieTableMetadataUtil.generateColumnStatsKeys(
+              Collections.singletonList(HoodieRecord.RECORD_KEY_METADATA_FIELD), 
+              HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)),
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
       result.forEach(entry -> {
@@ -1503,10 +1502,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       });
 
       // prefix search for column {commit time} and first partition
-      columnIndexID = new ColumnIndexID(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
       result = tableMetadata.getRecordsByKeyPrefixes(
-          HoodieListData.lazy(Collections.singletonList(columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString()))),
-          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true, IDENTITY_ENCODING).collectAsList();
+          HoodieListData.lazy(HoodieTableMetadataUtil.generateColumnStatsKeys(
+              Collections.singletonList(HoodieRecord.COMMIT_TIME_METADATA_FIELD), 
+              HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)),
+          MetadataPartitionType.COLUMN_STATS.getPartitionPath(), true).collectAsList();
 
       // 1 partition and 2 commits. total entries should be 2.
       assertEquals(result.size(), 2);
@@ -2440,7 +2440,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testGetFileGroupIndexFromFileId() {
     int index = new Random().nextInt(10000);
-    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index, FILES.getPartitionPath());
+    String fileId = HoodieTableMetadataUtil.getFileIDForFileGroup(FILES, index, FILES.getPartitionPath(), Option.empty());
     assertEquals(fileId.substring(0, fileId.length() - 2), HoodieTableMetadataUtil.getFileGroupPrefix(fileId));
     assertEquals(index, HoodieTableMetadataUtil.getFileGroupIndexFromFileId(fileId));
 

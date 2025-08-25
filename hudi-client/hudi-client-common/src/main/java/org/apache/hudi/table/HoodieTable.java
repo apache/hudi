@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.avro.AvroSchemaCompatibility;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
@@ -45,6 +47,8 @@ import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -102,6 +106,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +117,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.LAZY;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -804,10 +810,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException
    */
   void reconcileAgainstMarkers(HoodieEngineContext context,
-                                         String instantTs,
-                                         List<HoodieWriteStat> stats,
-                                         boolean consistencyCheckEnabled,
-                                         boolean shouldFailOnDuplicateDataFileDetection,
+                               String instantTs,
+                               List<HoodieWriteStat> stats,
+                               boolean consistencyCheckEnabled,
+                               boolean shouldFailOnDuplicateDataFileDetection,
                                WriteMarkers markers) throws HoodieIOException {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
@@ -928,7 +934,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * When inserting/updating data, we read records using the last used schema and convert them to the
    * GenericRecords with writerSchema. Hence, we need to ensure that this conversion can take place without errors.
    */
-  private void validateSchema() throws HoodieUpsertException, HoodieInsertException {
+  public void validateSchema() throws HoodieUpsertException, HoodieInsertException {
 
     boolean shouldValidate = config.shouldValidateAvroSchema();
     boolean allowProjection = config.shouldAllowAutoEvolutionColumnDrop();
@@ -949,10 +955,80 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       Schema writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
       Schema tableSchema = HoodieAvroUtils.createHoodieWriteSchema(existingTableSchema.get());
       AvroSchemaUtils.checkSchemaCompatible(tableSchema, writerSchema, shouldValidate, allowProjection, getDropPartitionColNames());
+      
+      // Check secondary index column compatibility
+      Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
+      if (indexMetadata.isPresent()) {
+        validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata.get());
+      }
     } catch (SchemaCompatibilityException e) {
       throw e;
     } catch (Exception e) {
       throw new SchemaCompatibilityException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
+    }
+  }
+
+  /**
+   * Validates that columns with secondary indexes are not evolved in an incompatible way.
+   *
+   * @param tableSchema the current table schema
+   * @param writerSchema the new writer schema
+   * @param indexMetadata the index metadata containing all index definitions
+   * @throws SchemaCompatibilityException if a secondary index column has incompatible evolution
+   */
+  static void validateSecondaryIndexSchemaEvolution(
+      Schema tableSchema,
+      Schema writerSchema,
+      HoodieIndexMetadata indexMetadata) throws SchemaCompatibilityException {
+    
+    // Filter for secondary index definitions
+    List<HoodieIndexDefinition> secondaryIndexDefs = indexMetadata.getIndexDefinitions().values().stream()
+        .filter(indexDef -> MetadataPartitionType.fromPartitionPath(indexDef.getIndexName()).equals(MetadataPartitionType.SECONDARY_INDEX))
+        .collect(Collectors.toList());
+    
+    if (secondaryIndexDefs.isEmpty()) {
+      return;
+    }
+    
+    // Create a map from source field to index name for efficient lookup
+    Map<String, String> columnToIndexName = new HashMap<>();
+    for (HoodieIndexDefinition indexDef : secondaryIndexDefs) {
+      String indexName = indexDef.getIndexName();
+      for (String sourceField : indexDef.getSourceFields()) {
+        // Note: If a column is part of multiple indexes, this will use the last one
+        // This is fine since we just need any index name for error reporting
+        columnToIndexName.put(sourceField, indexName);
+      }
+    }
+    
+    // Check each indexed column for schema evolution
+    for (Map.Entry<String, String> entry : columnToIndexName.entrySet()) {
+      String columnName = entry.getKey();
+      String indexName = entry.getValue();
+      
+      Schema.Field tableField = tableSchema.getField(columnName);
+      
+      if (tableField == null) {
+        // This shouldn't happen as indexed columns should exist in table schema
+        LOG.warn("Secondary index '{}' references non-existent column: {}", indexName, columnName);
+        continue;
+      }
+      
+      // Use AvroSchemaCompatibility's field lookup logic to handle aliases
+      Schema.Field writerField = AvroSchemaCompatibility.lookupWriterField(writerSchema, tableField);
+      
+      if (writerField != null && !tableField.schema().equals(writerField.schema())) {
+        // Check if this is just making the field nullable/non-nullable, which is safe from SI perspective
+        if (resolveNullableSchema(tableField.schema()).equals(resolveNullableSchema(writerField.schema()))) {
+          continue;
+        }
+        
+        String errorMessage = String.format(
+            "Column '%s' has secondary index '%s' and cannot evolve from schema '%s' to '%s'. "
+            + "Please drop the secondary index before changing the column type.",
+            columnName, indexName, tableField.schema(), writerField.schema());
+        throw new SchemaCompatibilityException(errorMessage);
+      }
     }
   }
 
@@ -1118,7 +1194,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
         metadataIndexDisabled = !config.isMetadataBloomFilterIndexEnabled();
         break;
       case RECORD_INDEX:
-        metadataIndexDisabled = !config.isRecordIndexEnabled();
+        metadataIndexDisabled = !config.isRecordIndexEnabled() && !config.isPartitionedRecordIndexEnabled();
         break;
       // PARTITION_STATS should have same behavior as COLUMN_STATS
       case PARTITION_STATS:
@@ -1204,5 +1280,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       return Collections.emptySet();
     }
     return new HashSet<>(Arrays.asList(partitionFields.get()));
+  }
+
+  public ReaderContextFactory<T> getReaderContextFactoryForWrite() {
+    // question: should we just return null when context is serialized as null? the mismatch reader context would throw anyway.
+    return (ReaderContextFactory<T>) getContext().getReaderContextFactoryForWrite(metaClient, config.getRecordMerger().getRecordType(),
+        config.getProps());
   }
 }

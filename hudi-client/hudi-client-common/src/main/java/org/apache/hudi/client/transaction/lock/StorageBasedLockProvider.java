@@ -217,7 +217,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
       if (!isClosed && actuallyHoldsLock()) {
         tryExpireCurrentLock(true);
       }
-      // Do not execute any further actions
+      // Do not execute any further actions, mark closed
+      this.isClosed = true;
       return;
     } else {
       try {

@@ -240,6 +240,7 @@ public class HoodieLogFileCommand {
       HoodieFileGroupId fileGroupId = new HoodieFileGroupId(FSUtils.getRelativePartitionPath(HoodieCLI.getTableMetaClient().getBasePath(), firstLogFile), FSUtils.getFileIdFromLogPath(firstLogFile));
       FileSlice fileSlice = new FileSlice(fileGroupId, HoodieTimeline.INIT_INSTANT_TS, null, logFilePaths.stream()
           .map(l -> new HoodieLogFile(new StoragePath(l))).collect(Collectors.toList()));
+      TypedProperties fileGroupReaderProperties = buildFileGroupReaderProperties();
       try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(HoodieCLI.getTableMetaClient())
@@ -247,7 +248,7 @@ public class HoodieLogFileCommand {
           .withDataSchema(readerSchema)
           .withRequestedSchema(readerSchema)
           .withLatestCommitTime(client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(HoodieInstantTimeGenerator.getCurrentInstantTimeStr()))
-          .withProps(buildFileGroupReaderProperties())
+          .withProps(fileGroupReaderProperties)
           .withShouldUseRecordPosition(false)
           .build();
            ClosableIterator<IndexedRecord> recordIterator = fileGroupReader.getClosableIterator()) {
@@ -311,6 +312,7 @@ public class HoodieLogFileCommand {
     props.setProperty(
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         Boolean.toString(DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()));
+
     return props;
   }
 }

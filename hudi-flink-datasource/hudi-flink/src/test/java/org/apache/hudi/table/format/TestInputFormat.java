@@ -34,8 +34,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePath;
@@ -1094,6 +1097,29 @@ public class TestInputFormat {
   }
 
   @Test
+  void testMergeRecordWithUpdateBefore() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.CHANGELOG_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    // write first batch with all insert data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    // write second batch with UPDATE_BEFORE record, send UPDATE_BEFORE for `id1`
+    TestData.writeData(TestData.DATA_SET_UPDATE_BEFORE, conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    final String baseResult = TestData.rowDataToString(readData(inputFormat));
+    String expected = "["
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:00.002, par1], "
+        + "+I[id3, Julian, 53, 1970-01-01T00:00:00.003, par2], "
+        + "+I[id4, Fabian, 31, 1970-01-01T00:00:00.004, par2], "
+        + "+I[id5, Sophia, 18, 1970-01-01T00:00:00.005, par3], "
+        + "+I[id6, Emma, 20, 1970-01-01T00:00:00.006, par3], "
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:00.007, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:00.008, par4]]";
+    assertThat(baseResult, is(expected));
+  }
+
+  @Test
   void testReadArchivedCommitsIncrementally() throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
@@ -1379,12 +1405,18 @@ public class TestInputFormat {
     TestData.assertRowDataEquals(result, TestData.DATA_SET_INSERT);
   }
 
-  @Test
-  public void testWriteCowWithPartialUpdate() throws Exception {
+  @ParameterizedTest
+  @MethodSource("partialUpdateParams")
+  public void testWriteCowWithPartialUpdate(HoodieTableVersion tableVersion, String mergeHandleClass, boolean usePayloadConf) throws Exception {
     Map<String, String> options = new HashMap<>();
+    options.put(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), mergeHandleClass);
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), tableVersion.versionCode() + "");
     // new config with merge classes and merge mode
-    options.put(FlinkOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
-    options.put(FlinkOptions.RECORD_MERGER_IMPLS.key(), PartialUpdateFlinkRecordMerger.class.getName());
+    if (usePayloadConf) {
+      options.put(FlinkOptions.PAYLOAD_CLASS_NAME.key(), PartialUpdateAvroPayload.class.getName());
+    } else {
+      options.put(FlinkOptions.RECORD_MERGER_IMPLS.key(), PartialUpdateFlinkRecordMerger.class.getName());
+    }
     beforeEach(HoodieTableType.COPY_ON_WRITE, options);
 
     // first insert
@@ -1410,6 +1442,23 @@ public class TestInputFormat {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  /**
+   * Return test params => (tableVersion, writeMergeHandleClass, usePayloadConf).
+   */
+  private static Stream<Arguments> partialUpdateParams() {
+    Object[][] data =
+        new Object[][] {
+            {HoodieTableVersion.NINE, FileGroupReaderBasedMergeHandle.class.getName(), true},
+            {HoodieTableVersion.NINE, FileGroupReaderBasedMergeHandle.class.getName(), false},
+            {HoodieTableVersion.NINE, HoodieWriteMergeHandle.class.getName(), true},
+            {HoodieTableVersion.NINE, HoodieWriteMergeHandle.class.getName(), false},
+            {HoodieTableVersion.EIGHT, FileGroupReaderBasedMergeHandle.class.getName(), true},
+            {HoodieTableVersion.EIGHT, FileGroupReaderBasedMergeHandle.class.getName(), false},
+            {HoodieTableVersion.EIGHT, HoodieWriteMergeHandle.class.getName(), true},
+            {HoodieTableVersion.EIGHT, HoodieWriteMergeHandle.class.getName(), false}};
+    return Stream.of(data).map(Arguments::of);
+  }
 
   /**
    * Return test params => (preCombining, changelog mode).

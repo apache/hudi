@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -35,10 +36,12 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -187,6 +190,16 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
 
   @Override
   public ReaderContextFactory<IndexedRecord> getReaderContextFactory(HoodieTableMetaClient metaClient) {
+    return getEngineReaderContextFactory(metaClient);
+  }
+
+  @Override
+  public ReaderContextFactory<IndexedRecord> getEngineReaderContextFactory(HoodieTableMetaClient metaClient) {
     return new AvroReaderContextFactory(metaClient);
+  }
+
+  @Override
+  public KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
+    throw new UnsupportedOperationException("Not yet implemented");
   }
 }

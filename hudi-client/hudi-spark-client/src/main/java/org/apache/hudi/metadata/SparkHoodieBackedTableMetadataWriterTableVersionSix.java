@@ -141,6 +141,12 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   @Override
   protected void upsertAndCommit(BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, JavaRDD<WriteStatus>> writeClient, String instantTime, JavaRDD<HoodieRecord> preppedRecordInputs) {
+    // When specified, reduce the parallelism of input record RDD to improve write performance.
+    int parallelism = dataWriteConfig.getMetadataConfig().getRecordPreparationParallelism();
+    if (parallelism > 0 && preppedRecordInputs.getNumPartitions() > parallelism) {
+      preppedRecordInputs = preppedRecordInputs.coalesce(parallelism);
+    }
+
     JavaRDD<WriteStatus> writeStatusJavaRDD = writeClient.upsertPreppedRecords(preppedRecordInputs, instantTime);
     writeClient.commit(instantTime, writeStatusJavaRDD, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap());
   }
@@ -154,10 +160,10 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
 
   @Override
   protected void bulkCommit(
-      String instantTime, String partitionName, HoodieData<HoodieRecord> records,
-      int fileGroupCount) {
-    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
-    commitInternal(instantTime, Collections.singletonMap(partitionName, records), true, Option.of(partitioner));
+      String instantTime, String partitionPath, HoodieData<HoodieRecord> records,
+      MetadataTableFileGroupIndexParser indexParser) {
+    SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(indexParser);
+    commitInternal(instantTime, Collections.singletonMap(partitionPath, records), true, Option.of(partitioner));
   }
 
   @Override

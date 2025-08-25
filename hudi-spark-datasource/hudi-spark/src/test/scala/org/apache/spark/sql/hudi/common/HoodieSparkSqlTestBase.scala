@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
 import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig, SyncableFileSystemView}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -46,6 +47,7 @@ import org.joda.time.DateTimeZone
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.scalatest.Assertions.assertResult
 import org.slf4j.LoggerFactory
 
 import java.io.File
@@ -131,7 +133,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
-    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
+    HoodieSparkSqlTestBase.checkAnswer(spark, sql)(expects: _*)
   }
 
   protected def checkAnswer(array: Array[Row])(expects: Seq[Any]*): Unit = {
@@ -369,6 +371,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       }
     }
   }
+
+  /**
+   * Wraps test execution with RDD persistence validation.
+   * This ensures that no new RDDs remain persisted after test execution.
+   *
+   * @param f The test code to execute
+   */
+  protected def withRDDPersistenceValidation(f: => Unit): Unit = {
+    org.apache.hudi.testutils.SparkRDDValidationUtils.withRDDPersistenceValidation(spark, new org.apache.hudi.testutils.SparkRDDValidationUtils.ThrowingRunnable {
+      override def run(): Unit = f
+    })
+  }
 }
 
 object HoodieSparkSqlTestBase {
@@ -421,6 +435,10 @@ object HoodieSparkSqlTestBase {
     storage.createNewFile(filePath)
   }
 
+  def checkAnswer(spark: SparkSession, sql: String)(expects: Seq[Any]*): Unit = {
+    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
+  }
+
   def validateDeleteLogBlockPrecombineNullOrZero(basePath: String): Unit = {
     val (metaClient, fsView) = getMetaClientAndFileSystemView(basePath)
     val fileSlice: Optional[FileSlice] = fsView.getAllFileSlices("").findFirst()
@@ -438,7 +456,7 @@ object HoodieSparkSqlTestBase {
       val logBlock = logReader.next()
       if (logBlock.isInstanceOf[HoodieDeleteBlock]) {
         val deleteLogBlock = logBlock.asInstanceOf[HoodieDeleteBlock]
-        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue() == 0 || i.getOrderingValue() == null))
+        assertTrue(deleteLogBlock.getRecordsToDelete.forall(i => i.getOrderingValue().equals(OrderingValues.getDefault) || i.getOrderingValue() == null))
         deleteLogBlockFound = true
       }
     }

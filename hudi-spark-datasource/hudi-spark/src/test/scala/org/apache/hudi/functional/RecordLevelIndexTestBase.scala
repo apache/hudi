@@ -22,7 +22,8 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
@@ -59,31 +60,32 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     RECORDKEY_FIELD.key -> "uuid",
     SECONDARYKEY_COLUMN_NAME.key -> "city",
     PARTITIONPATH_FIELD.key -> "state",
-    PRECOMBINE_FIELD.key -> "ts",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
     HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
   ) ++ metadataOpts
 
   val commonOptsWithSecondaryIndexSITest: Map[String, String] = commonOptsNewTableSITest ++ secondaryIndexOpts
 
   protected def doWriteAndValidateDataAndRecordIndex(hudiOpts: Map[String, String],
-                                                   operation: String,
-                                                   saveMode: SaveMode,
-                                                   validate: Boolean = true,
-                                                   numUpdates: Int = 1,
-                                                   onlyUpdates: Boolean = false): DataFrame = {
+                                                     operation: String,
+                                                     saveMode: SaveMode,
+                                                     validate: Boolean = true,
+                                                     numUpdates: Int = 1,
+                                                     onlyUpdates: Boolean = false,
+                                                     schemaStr: String = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA): DataFrame = {
     var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime()
-      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, numUpdates))
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, numUpdates, schemaStr))
       if (!onlyUpdates) {
-        records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 1)))
+        records.addAll(recordsToStrings(dataGen.generateInsertsAsPerSchema(instantTime, 1, schemaStr)))
       }
       latestBatch = records.asScala
     } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
-      latestBatch = recordsToStrings(dataGen.generateInsertsForPartition(
-        getInstantTime(), 5, dataGen.getPartitionPaths.last)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInsertsForPartitionPerSchema(
+        getInstantTime(), 5, dataGen.getPartitionPaths.last, schemaStr)).asScala
     } else {
-      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInsertsAsPerSchema(getInstantTime(), 5, schemaStr)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
@@ -127,7 +129,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     val readDf = spark.read.format("hudi").load(basePath)
     readDf.cache()
     val rowArr = readDf.collect()
-    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndex(
+    val recordIndexMap = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndexLocationsWithKeys(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava)))
 
     assertTrue(rowArr.length > 0)
@@ -141,7 +143,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
     }
 
     val deletedRows = deletedDf.collect()
-    val recordIndexMapForDeletedRows = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndex(
+    val recordIndexMapForDeletedRows = HoodieDataUtils.dedupeAndCollectAsMap(metadata.readRecordIndexLocationsWithKeys(
       HoodieListData.eager(JavaConverters.seqAsJavaListConverter(deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava)))
 
     assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")

@@ -18,16 +18,14 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.HoodieTableSchema
-
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{StringType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-class InternalRowToJsonStringConverter(originTableSchema: HoodieTableSchema) {
+class InternalRowToJsonStringConverter(schema: StructType) {
 
   private lazy val mapper: ObjectMapper = {
     val _mapper = new ObjectMapper
@@ -39,7 +37,7 @@ class InternalRowToJsonStringConverter(originTableSchema: HoodieTableSchema) {
 
   def convert(record: InternalRow): UTF8String = {
     val map = scala.collection.mutable.Map.empty[String, Any]
-    originTableSchema.structTypeSchema.zipWithIndex.foreach {
+    schema.zipWithIndex.foreach {
       case (field, idx) =>
         if (field.dataType.isInstanceOf[StringType]) {
           map(field.name) = Option(record.getUTF8String(idx)).map(_.toString).orNull

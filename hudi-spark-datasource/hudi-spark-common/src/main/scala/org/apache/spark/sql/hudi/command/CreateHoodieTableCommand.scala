@@ -35,7 +35,7 @@ import org.apache.spark.sql.catalyst.expressions.Cast
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isUsingHiveCatalog, isUsingPolarisCatalog}
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand.validateTableSchema
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
@@ -125,7 +125,8 @@ object CreateHoodieTableCommand {
       val originTableConfig = hoodieCatalogTable.tableConfig.getProps.asScala.toMap
       val tableOptions = hoodieCatalogTable.catalogProperties
 
-      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PRECOMBINE_FIELD.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.ORDERING_FIELDS.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PRECOMBINE_FIELD.key())
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PARTITION_FIELDS.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.RECORDKEY_FIELDS.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
@@ -173,7 +174,7 @@ object CreateHoodieTableCommand {
       .copy(table = tableName, database = Some(newDatabaseName))
 
     val partitionColumnNames = hoodieCatalogTable.partitionSchema.map(_.name)
-    // Remove some properties should not be used;append pk, preCombineKey, type to the properties of table
+    // Remove some properties should not be used;append pk, orderingFields, type to the properties of table
     var newTblProperties =
       hoodieCatalogTable.catalogProperties.--(needFilterProps) ++ HoodieOptionConfig.extractSqlOptions(properties)
 
@@ -190,12 +191,15 @@ object CreateHoodieTableCommand {
       properties = newTblProperties
     )
 
-    // Create table in the catalog
-    val enableHive = isUsingHiveCatalog(sparkSession)
-    if (enableHive) {
-      createHiveDataSourceTable(sparkSession, newTable)
-    } else {
-      catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
+    // If polaris is not enabled, we should create the table in hive or spark session catalog
+    // otherwise if enabled, hudi will use the delegate to create the table
+    if (!isUsingPolarisCatalog(sparkSession)) {
+      val enableHive = isUsingHiveCatalog(sparkSession)
+      if (enableHive) {
+        createHiveDataSourceTable(sparkSession, newTable)
+      } else {
+        catalog.createTable(newTable, ignoreIfExists = false, validateLocation = false)
+      }
     }
   }
 

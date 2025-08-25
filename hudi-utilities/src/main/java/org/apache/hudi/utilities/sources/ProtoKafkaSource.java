@@ -41,8 +41,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.streaming.kafka010.KafkaUtils;
-import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
 import java.io.Serializable;
@@ -93,11 +91,11 @@ public class ProtoKafkaSource extends KafkaSource<JavaRDD<Message>> {
           className.isPresent(),
           ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key() + " config must be present.");
       ProtoDeserializer deserializer = new ProtoDeserializer(className.get());
-      return KafkaUtils.<String, byte[]>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-          LocationStrategies.PreferConsistent()).map(obj -> deserializer.parse(obj.value()));
+      JavaRDD<ConsumerRecord<String, byte[]>> kafkaRDD = createKafkaRDD(this.props, sparkContext, offsetGen, offsetRanges);
+      return kafkaRDD.map(obj -> deserializer.parse(obj.value()));
     } else {
-      return KafkaUtils.<String, Message>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
-          LocationStrategies.PreferConsistent()).map(ConsumerRecord::value);
+      JavaRDD<ConsumerRecord<String, Message>> kafkaRDD = createKafkaRDD(this.props, sparkContext, offsetGen, offsetRanges);
+      return kafkaRDD.map(ConsumerRecord::value);
     }
   }
 

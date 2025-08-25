@@ -60,6 +60,7 @@
     <module>packaging/hudi-trino-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink-datasource</module>
+    <module>hudi-flink-datasource/${hudi.flink.module}</module>
     <module>hudi-kafka-connect</module>
     <module>packaging/hudi-flink-bundle</module>
     <module>packaging/hudi-kafka-connect-bundle</module>
@@ -111,10 +112,10 @@
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
     <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.13.0</junit.jupiter.version>
-    <junit.vintage.version>5.13.0</junit.vintage.version>
-    <junit.platform.version>1.13.0</junit.platform.version>
-    <mockito.jupiter.version>3.12.4</mockito.jupiter.version>
+    <junit.jupiter.version>5.13.4</junit.jupiter.version>
+    <junit.vintage.version>5.13.4</junit.vintage.version>
+    <junit.platform.version>1.13.4</junit.platform.version>
+    <mockito.jupiter.version>4.11.0</mockito.jupiter.version>
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
@@ -463,8 +464,6 @@
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
               <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
-              <!-- native HFile reader uses protobuf -->
-              <include>com.google.protobuf:protobuf-java</include>
             </includes>
           </artifactSet>
           <relocations>
@@ -481,10 +480,6 @@
               <pattern>com.fasterxml.jackson.module</pattern>
               <shadedPattern>org.apache.hudi.com.fasterxml.jackson.module
               </shadedPattern>
-            </relocation>
-            <relocation>
-              <pattern>com.google.protobuf.</pattern>
-              <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
             </relocation>
           </relocations>
         </configuration>
@@ -2568,9 +2563,6 @@
         <flink.format.parquet.version>1.14.4</flink.format.parquet.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink2.0.x</module>
-      </modules>
       <activation>
         <property>
           <name>flink2.0</name>
@@ -2589,9 +2581,6 @@
         <flink.connector.kafka.version>3.3.0-1.20</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.20.x</module>
-      </modules>
       <activation>
         <activeByDefault>true</activeByDefault>
         <property>
@@ -2611,9 +2600,6 @@
         <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.19.x</module>
-      </modules>
       <activation>
         <property>
           <name>flink1.19</name>
@@ -2632,9 +2618,6 @@
         <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.18.x</module>
-      </modules>
       <activation>
         <property>
           <name>flink1.18</name>
@@ -2653,9 +2636,6 @@
         <flink.connector.kafka.version>${flink1.17.version}</flink.connector.kafka.version>
         <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility_2.12</flink.hadoop.compatibility.artifactId>
       </properties>
-      <modules>
-        <module>hudi-flink-datasource/hudi-flink1.17.x</module>
-      </modules>
       <activation>
         <property>
           <name>flink1.17</name>

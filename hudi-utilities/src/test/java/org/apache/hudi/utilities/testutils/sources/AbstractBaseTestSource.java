@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.RocksDBBasedMap;
 import org.apache.hudi.exception.HoodieIOException;
@@ -138,7 +137,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     if (!reachedMax && numUpdates >= 50) {
       LOG.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=50, maxUniqueRecords={}", numInserts, (numUpdates - 50), maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
-      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50).map(AbstractBaseTestSource::toGenericRecord);
+      deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50, false).map(AbstractBaseTestSource::toGenericRecord);
       updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .map(AbstractBaseTestSource::toGenericRecord);
     } else {
@@ -155,11 +154,6 @@ public abstract class AbstractBaseTestSource extends AvroSource {
   }
 
   private static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
-    try {
-      RawTripTestPayload payload = (RawTripTestPayload) hoodieRecord.getData();
-      return (GenericRecord) payload.getRecordToInsert(HoodieTestDataGenerator.AVRO_SCHEMA);
-    } catch (IOException e) {
-      return null;
-    }
+    return (GenericRecord) hoodieRecord.getData();
   }
 }

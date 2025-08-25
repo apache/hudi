@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -159,7 +158,7 @@ public interface HoodieRecordMerger extends Serializable {
   }
 
   /**
-   * Returns a list of fields required for mor merging. The default implementation will return the recordkey field and the precombine
+   * Returns a list of fields required for mor merging. The default implementation will return the recordKey field and the ordering fields.
    */
   default String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
     ArrayList<String> requiredFields = new ArrayList<>();
@@ -173,10 +172,8 @@ public interface HoodieRecordMerger extends Serializable {
       }
     }
 
-    String preCombine = cfg.getPreCombineField();
-    if (!StringUtils.isNullOrEmpty(preCombine)) {
-      requiredFields.add(preCombine);
-    }
+    List<String> orderingFields = cfg.getOrderingFields();
+    requiredFields.addAll(orderingFields);
     return requiredFields.toArray(new String[0]);
   }
 

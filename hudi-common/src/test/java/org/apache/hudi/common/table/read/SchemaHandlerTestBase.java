@@ -22,11 +22,14 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -36,11 +39,13 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.provider.Arguments;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -64,6 +69,13 @@ public abstract class SchemaHandlerTestBase {
       .map(Schema.Field::name).filter(f -> !f.equals("_hoodie_is_deleted")).toArray(String[]::new));
   protected static final Schema DATA_COLS_ONLY_SCHEMA = generateProjectionSchema("begin_lat", "tip_history", "rider");
   protected static final Schema META_COLS_ONLY_SCHEMA = generateProjectionSchema("_hoodie_commit_seqno", "_hoodie_record_key");
+  protected final HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+  protected final HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
+
+  @BeforeEach
+  void setup() {
+    when(metaClient.getTableConfig()).thenReturn(hoodieTableConfig);
+  }
 
   static Stream<Arguments> testMorParams(boolean supportsParquetRowIndex) {
     Stream.Builder<Arguments> b = Stream.builder();
@@ -86,14 +98,13 @@ public abstract class SchemaHandlerTestBase {
                       boolean supportsParquetRowIndex,
                       boolean hasBuiltInDelete) throws IOException {
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
-    HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     setupMORTable(mergeMode, hasPrecombine, hoodieTableConfig);
     HoodieRecordMerger merger = mockRecordMerger(isProjectionCompatible,
         isProjectionCompatible ? new String[] {"begin_lat", "begin_lon", "_hoodie_record_key", "timestamp"} : new String[] {"begin_lat", "begin_lon", "timestamp"});
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, supportsParquetRowIndex, true, false, mergeUseRecordPosition, merger);
     readerContext.setRecordMerger(Option.of(merger));
     Schema requestedSchema = dataSchema;
-    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
     Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
         : requestedSchema;
@@ -102,7 +113,7 @@ public abstract class SchemaHandlerTestBase {
 
     //read subset of columns
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
-    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
     Schema expectedRequiredSchema;
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "begin_lat", "tip_history", "rider", "_hoodie_record_key", "timestamp");
@@ -127,13 +138,12 @@ public abstract class SchemaHandlerTestBase {
                                boolean supportsParquetRowIndex,
                                boolean hasBuiltInDelete) throws IOException {
     Schema dataSchema = hasBuiltInDelete ? DATA_SCHEMA : DATA_SCHEMA_NO_DELETE;
-    HoodieTableConfig hoodieTableConfig = mock(HoodieTableConfig.class);
     setupMORTable(mergeMode, hasPrecombine, hoodieTableConfig);
     HoodieRecordMerger merger = mockRecordMerger(isProjectionCompatible, new String[] {"begin_lat", "begin_lon", "timestamp"});
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, supportsParquetRowIndex, true, true, mergeUseRecordPosition, merger);
     readerContext.setRecordMerger(Option.of(merger));
     Schema requestedSchema = dataSchema;
-    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
+    FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
     Schema expectedRequiredFullSchema = supportsParquetRowIndex && mergeUseRecordPosition
         ? ParquetRowIndexBasedSchemaHandler.addPositionalMergeCol(requestedSchema)
         : requestedSchema;
@@ -150,7 +160,7 @@ public abstract class SchemaHandlerTestBase {
 
     //read subset of columns
     requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
-    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
     Schema expectedRequiredSchema;
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
@@ -177,7 +187,7 @@ public abstract class SchemaHandlerTestBase {
 
     // request only data cols
     requestedSchema = DATA_COLS_ONLY_SCHEMA;
-    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_record_key", "begin_lat", "tip_history", "rider", "timestamp");
       assertTrue(readerContext.getNeedsBootstrapMerge());
@@ -212,7 +222,7 @@ public abstract class SchemaHandlerTestBase {
 
     // request only meta cols
     requestedSchema = META_COLS_ONLY_SCHEMA;
-    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, hoodieTableConfig, supportsParquetRowIndex);
+    schemaHandler = createSchemaHandler(readerContext, dataSchema, requestedSchema, supportsParquetRowIndex);
     if (mergeMode == EVENT_TIME_ORDERING && hasPrecombine) {
       expectedRequiredSchema = generateProjectionSchema(hasBuiltInDelete, "_hoodie_commit_seqno", "_hoodie_record_key", "timestamp");
       assertTrue(readerContext.getNeedsBootstrapMerge());
@@ -247,15 +257,16 @@ public abstract class SchemaHandlerTestBase {
   private static void setupMORTable(RecordMergeMode mergeMode, boolean hasPrecombine, HoodieTableConfig hoodieTableConfig) {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(mergeMode);
+    when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     if (hasPrecombine) {
-      when(hoodieTableConfig.getPreCombineField()).thenReturn("timestamp");
+      when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.of("timestamp"));
+      when(hoodieTableConfig.getOrderingFields()).thenReturn(Collections.singletonList("timestamp"));
     } else {
-      when(hoodieTableConfig.getPreCombineField()).thenReturn(null);
+      when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
+      when(hoodieTableConfig.getOrderingFields()).thenReturn(Collections.emptyList());
     }
     if (mergeMode == CUSTOM) {
       when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn("asdf");
-      // NOTE: in this test custom doesn't have any meta cols because it is more interesting of a test case
-      when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.EIGHT);
     }
   }
 
@@ -278,8 +289,7 @@ public abstract class SchemaHandlerTestBase {
   }
 
   abstract FileGroupReaderSchemaHandler createSchemaHandler(HoodieReaderContext<String> readerContext, Schema dataSchema,
-                                                          Schema requestedSchema, HoodieTableConfig hoodieTableConfig,
-                                                          boolean supportsParquetRowIndex);
+                                                            Schema requestedSchema, boolean supportsParquetRowIndex);
 
   static Schema generateProjectionSchema(String... fields) {
     return HoodieAvroUtils.generateProjectionSchema(DATA_SCHEMA, Arrays.asList(fields));
@@ -299,16 +309,69 @@ public abstract class SchemaHandlerTestBase {
   }
 
   static class StubbedReaderContext extends HoodieReaderContext<String> {
-    private final boolean supportsParquetRowIndex;
 
     protected StubbedReaderContext(HoodieTableConfig hoodieTableConfig, boolean supportsParquetRowIndex) {
-      super(null, hoodieTableConfig, Option.empty(), Option.empty());
-      this.supportsParquetRowIndex = supportsParquetRowIndex;
-    }
+      super(null, hoodieTableConfig, Option.empty(), Option.empty(), new RecordContext<String>(hoodieTableConfig, new DefaultJavaTypeConverter()) {
+        @Override
+        public boolean supportsParquetRowIndex() {
+          return supportsParquetRowIndex;
+        }
 
-    @Override
-    public boolean supportsParquetRowIndex() {
-      return this.supportsParquetRowIndex;
+        @Override
+        public String convertAvroRecord(IndexedRecord avroRecord) {
+          return "";
+        }
+
+        @Override
+        public GenericRecord convertToAvroRecord(String record, Schema schema) {
+          return null;
+        }
+
+        @Override
+        public String getDeleteRow(String recordKey) {
+          return "";
+        }
+
+        @Override
+        public Object getValue(String record, Schema schema, String fieldName) {
+          return null;
+        }
+
+        @Override
+        public String getMetaFieldValue(String record, int pos) {
+          return "";
+        }
+
+        @Override
+        public HoodieRecord<String> constructHoodieRecord(BufferedRecord<String> bufferedRecord, String partitionPath) {
+          return null;
+        }
+
+        @Override
+        public String mergeWithEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
+          return "";
+        }
+
+        @Override
+        public String constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+          return "";
+        }
+
+        @Override
+        public String seal(String record) {
+          return "";
+        }
+
+        @Override
+        public String toBinaryRow(Schema avroSchema, String record) {
+          return "";
+        }
+
+        @Override
+        public UnaryOperator<String> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+          return null;
+        }
+      });
     }
 
     @Override
@@ -317,63 +380,13 @@ public abstract class SchemaHandlerTestBase {
     }
 
     @Override
-    public String convertAvroRecord(IndexedRecord avroRecord) {
-      return "";
-    }
-
-    @Override
-    public GenericRecord convertToAvroRecord(String record, Schema schema) {
-      return null;
-    }
-
-    @Override
-    public String getDeleteRow(String record, String recordKey) {
-      return "";
-    }
-
-    @Override
     public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergeStrategyId, String mergeImplClasses) {
       return null;
     }
 
     @Override
-    public Object getValue(String record, Schema schema, String fieldName) {
-      return null;
-    }
-
-    @Override
-    public String getMetaFieldValue(String record, int pos) {
-      return "";
-    }
-
-    @Override
-    public HoodieRecord<String> constructHoodieRecord(BufferedRecord<String> bufferedRecord) {
-      return null;
-    }
-
-    @Override
-    public String constructEngineRecord(Schema schema, Map<Integer, Object> updateValues, BufferedRecord<String> baseRecord) {
-      return "";
-    }
-
-    @Override
-    public String seal(String record) {
-      return "";
-    }
-
-    @Override
-    public String toBinaryRow(Schema avroSchema, String record) {
-      return "";
-    }
-
-    @Override
     public ClosableIterator<String> mergeBootstrapReaders(ClosableIterator<String> skeletonFileIterator, Schema skeletonRequiredSchema, ClosableIterator<String> dataFileIterator,
                                                           Schema dataRequiredSchema, List<Pair<String, Object>> requiredPartitionFieldAndValues) {
-      return null;
-    }
-
-    @Override
-    public UnaryOperator<String> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
       return null;
     }
   }

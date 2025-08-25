@@ -110,14 +110,15 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final String NO_PRE_COMBINE = "no_precombine";
-  public static final ConfigOption<String> PRECOMBINE_FIELD = ConfigOptions
-      .key("precombine.field")
+  public static final ConfigOption<String> ORDERING_FIELDS = ConfigOptions
+      .key("ordering.fields")
       .stringType()
       .defaultValue("ts")
-      .withFallbackKeys("write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
-      .withDescription("Field used in preCombining before actual write. When two records have the same\n"
-          + "key value, we will pick the one with the largest value for the precombine field,\n"
-          + "determined by Object.compareTo(..)");
+      .withFallbackKeys("precombine.field", "write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
+      .withDescription("Comma separated list of fields used in records merging. When two records have the same\n"
+          + "key value, we will pick the one with the largest value for the ordering field,\n"
+          + "determined by Object.compareTo(..). For multiple fields if first key comparison is same, second key comparison is made and so on.\n"
+          + "Config precombine.field is now deprecated, please use ordering.fields instead.");
 
   @AdvancedConfig
   public static final ConfigOption<String> PAYLOAD_CLASS_NAME = ConfigOptions

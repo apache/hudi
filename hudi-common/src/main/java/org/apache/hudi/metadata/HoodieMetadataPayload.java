@@ -67,7 +67,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -172,7 +172,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * HoodieMetadata secondary index payload field ids
    */
   public static final String SECONDARY_INDEX_RECORD_KEY_ESCAPE_CHAR = "\\";
-  public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = "$";
+  public static final char SECONDARY_INDEX_RECORD_KEY_SEPARATOR_CHAR = '$';
+  public static final String SECONDARY_INDEX_RECORD_KEY_SEPARATOR = String.valueOf(SECONDARY_INDEX_RECORD_KEY_SEPARATOR_CHAR);
   public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
 
   /**
@@ -706,10 +707,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * Create and return a {@code HoodieMetadataPayload} to delete a record in the Metadata Table's record index.
    *
    * @param recordKey Key of the record to be deleted
+   * @param partitionPath of the record to be deleted
    */
-  public static HoodieRecord createRecordIndexDelete(String recordKey) {
+  public static HoodieRecord createRecordIndexDelete(String recordKey, String partitionPath, boolean isPartitionedRLI) {
     HoodieKey key = new HoodieKey(recordKey, MetadataPartitionType.RECORD_INDEX.getPartitionPath());
-    return new HoodieAvroRecord<>(key, new EmptyHoodieRecordPayload());
+    return new HoodieAvroRecord<>(key, isPartitionedRLI
+        ? new EmptyHoodieRecordPayloadWithPartition(partitionPath)
+        : new EmptyHoodieRecordPayload());
   }
 
   /**
@@ -717,6 +721,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    */
   public HoodieRecordGlobalLocation getRecordGlobalLocation() {
     return getLocationFromRecordIndexInfo(recordIndexMetadata);
+  }
+
+  public String getDataPartition() {
+    return recordIndexMetadata.getPartitionName();
   }
 
   public boolean isDeleted() {

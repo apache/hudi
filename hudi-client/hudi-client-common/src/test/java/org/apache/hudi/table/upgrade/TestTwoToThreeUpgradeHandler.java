@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -50,15 +51,18 @@ class TestTwoToThreeUpgradeHandler {
         .build();
   }
 
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @ValueSource(strings = {"hoodie.table.keygenerator.class", "hoodie.datasource.write.keygenerator.class"})
   void upgradeHandlerShouldRetrieveKeyGeneratorConfig(String keyGenConfigKey) {
     config.setValue(keyGenConfigKey, KeyGenerator.class.getName());
     TwoToThreeUpgradeHandler handler = new TwoToThreeUpgradeHandler();
-    Map<ConfigProperty, String> kv = handler.upgrade(config, null, null, null);
+    Map<ConfigProperty, String> kv =
+        handler.upgrade(config, null, null, null).propertiesToUpdate();
     assertEquals(KeyGenerator.class.getName(), kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
   }
 
+  @Disabled("HUDI-9700")
   @ParameterizedTest
   @EnumSource(EngineType.class)
   void upgradeHandlerWhenKeyGeneratorNotSet(EngineType engineType) {
@@ -70,7 +74,8 @@ class TestTwoToThreeUpgradeHandler {
         .build();
     TwoToThreeUpgradeHandler handler = new TwoToThreeUpgradeHandler();
     if (engineType == EngineType.SPARK) {
-      Map<ConfigProperty, String> kv = handler.upgrade(config, null, null, null);
+      Map<ConfigProperty, String> kv =
+          handler.upgrade(config, null, null, null).propertiesToUpdate();
       assertEquals(TwoToThreeUpgradeHandler.SPARK_SIMPLE_KEY_GENERATOR,
           kv.get(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
     } else {

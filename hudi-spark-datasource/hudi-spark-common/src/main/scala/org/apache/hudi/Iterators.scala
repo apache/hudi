@@ -86,14 +86,14 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   }
   private val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
-  protected val payloadProps: TypedProperties = tableState.preCombineFieldOpt
-    .map { preCombineField =>
-      HoodiePayloadConfig.newBuilder
-        .withPayloadOrderingField(preCombineField)
-        .build
-        .getProps
-    }
-    .getOrElse(new TypedProperties())
+  protected val payloadProps: TypedProperties = if (tableState.orderingFields.nonEmpty) {
+    HoodiePayloadConfig.newBuilder
+      .withPayloadOrderingFields(String.join(",", tableState.orderingFields: _*))
+      .build
+      .getProps
+  } else {
+    new TypedProperties()
+  }
 
   protected override val avroSchema: Schema = requiredAvroSchema
   protected override val structTypeSchema: StructType = requiredStructTypeSchema

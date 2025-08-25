@@ -20,8 +20,11 @@
 package org.apache.spark.sql.hudi.feature
 
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
+import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.DataSourceWriteOptions.{ENABLE_MERGE_INTO_PARTIAL_UPDATES, SPARK_SQL_INSERT_INTO_OPERATION}
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_BEFORE, DATA_BEFORE_AFTER, OP_KEY_ONLY}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.DataFrame
@@ -68,7 +71,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
              | partitioned by (name)
              | tblproperties (
              |   'primaryKey' = 'id',
-             |   'preCombineField' = 'ts',
+             |   'orderingFields' = 'ts',
              |   'hoodie.table.cdc.enabled' = 'true',
              |   'hoodie.table.cdc.supplemental.logging.mode' = '$DATA_BEFORE_AFTER',
              |   type = '$tableType'
@@ -122,7 +125,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | ) using hudi
                | tblproperties (
                |   'primaryKey' = 'id',
-               |   'preCombineField' = 'ts',
+               |   'orderingFields' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
                |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   $otherTableProperties
@@ -245,7 +248,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | partitioned by (pt)
                | tblproperties (
                |   'primaryKey' = 'id',
-               |   'preCombineField' = 'ts',
+               |   'orderingFields' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
                |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   'type' = '$tableType'
@@ -300,6 +303,87 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
 
           val totalCdcData = cdcDataFrame(basePath, commitTime1.toLong - 1)
           assertCDCOpCnt(totalCdcData, 5, 2, 1)
+        }
+      }
+    }
+  }
+
+  test("Test Partial Updates With Spark CDC") {
+    val databaseName = "hudi_database"
+    spark.sql(s"create database if not exists $databaseName")
+    spark.sql(s"use $databaseName")
+    withSQLConf(HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
+      DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key -> "true",
+      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> "true") {
+      Seq(OP_KEY_ONLY, DATA_BEFORE, DATA_BEFORE_AFTER).foreach { loggingMode =>
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               | create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long,
+               |  pt string
+               | ) using hudi
+               | partitioned by (pt)
+               | tblproperties (
+               |   'primaryKey' = 'id',
+               |   'orderingFields' = 'ts',
+               |   'hoodie.table.cdc.enabled' = 'true',
+               |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
+               |   '${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}' = 'true',
+               |   'type' = 'mor'
+               | )
+               | location '$basePath'
+      """.stripMargin)
+
+          val metaClient = createMetaClient(spark, basePath)
+
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1, 'a1', 11, 1000, '2021'),
+               | (2, 'a2', 12, 1000, '2022'),
+               | (3, 'a3', 13, 1000, '2022')
+      """.stripMargin)
+          val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+          val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
+          cdcDataOnly1.show(false)
+          assertCDCOpCnt(cdcDataOnly1, 3, 0, 0)
+
+          spark.sql(s"insert overwrite table $tableName partition (pt = '2021') values (1, 'a1_v2', 11, 1100)")
+          val commitTime2 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+          val cdcDataOnly2 = cdcDataFrame(basePath, commitTime2.toLong - 1)
+          cdcDataOnly2.show(false)
+          assertCDCOpCnt(cdcDataOnly2, 1, 0, 1)
+
+          spark.sql(s"update $tableName set name = 'a2_v2', ts = 1200 where id = 2")
+          val commitTime3 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+          val cdcDataOnly3 = cdcDataFrame(basePath, commitTime3.toLong - 1)
+          cdcDataOnly3.show(false)
+          assertCDCOpCnt(cdcDataOnly3, 0, 1, 0)
+
+          spark.sql(
+            s"""
+               | merge into $tableName
+               | using (
+               |  select * from (
+               |  select 1 as id, 'a1_v3' as name, cast(1300 as long) as ts, "2021" as pt
+               |  )
+               | ) s0
+               | on s0.id = $tableName.id
+               | when matched then update set id = s0.id, name = s0.name, ts = s0.ts, pt = s0.pt
+      """.stripMargin)
+          val commitTime4 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+          val cdcDataOnly4 = cdcDataFrame(basePath, commitTime4.toLong - 1)
+          cdcDataOnly4.show(false)
+          assertCDCOpCnt(cdcDataOnly4, 0, 1, 0)
+
+          val totalCdcData = cdcDataFrame(basePath, commitTime1.toLong - 1)
+          assertCDCOpCnt(totalCdcData, 4, 2, 1)
         }
       }
     }

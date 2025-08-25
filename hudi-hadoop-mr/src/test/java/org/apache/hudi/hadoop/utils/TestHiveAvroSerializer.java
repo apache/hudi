@@ -19,18 +19,22 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.junit.jupiter.api.Test;
 
@@ -38,9 +42,17 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHiveAvroSerializer {
@@ -155,5 +167,246 @@ public class TestHiveAvroSerializer {
     }
 
     return columnTypes;
+  }
+
+  private static final String SCHEMA_WITH_NESTED_RECORD = "{\n"
+          + "  \"type\": \"record\",\n"
+          + "  \"name\": \"TestRecord\",\n"
+          + "  \"fields\": [\n"
+          + "    {\"name\": \"id\", \"type\": \"int\"},\n"
+          + "    {\"name\": \"name\", \"type\": \"string\"},\n"
+          + "    {\"name\": \"address\", \"type\": {\n"
+          + "      \"type\": \"record\",\n"
+          + "      \"name\": \"Address\",\n"
+          + "      \"fields\": [\n"
+          + "        {\"name\": \"city\", \"type\": \"string\"},\n"
+          + "        {\"name\": \"zip\", \"type\": \"int\"}\n"
+          + "      ]\n"
+          + "    }}\n"
+          + "  ]\n"
+          + "}";
+
+  private static final String SCHEMA_WITH_ARRAY_AND_MAP = "{\n"
+          + "  \"type\": \"record\",\n"
+          + "  \"name\": \"ComplexRecord\",\n"
+          + "  \"fields\": [\n"
+          + "    {\"name\": \"id\", \"type\": \"int\"},\n"
+          + "    {\"name\": \"tags\", \"type\": {\"type\": \"array\", \"items\": \"string\"}},\n"
+          + "    {\"name\": \"properties\", \"type\": {\"type\": \"map\", \"values\": \"string\"}}\n"
+          + "  ]\n"
+          + "}";
+
+  @Test
+  public void testGetTopLevelFields() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
+
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new IntWritable(101),
+        new Text("John Doe"),
+        new ArrayWritable(Writable.class, new Writable[]{
+            new Text("New York"),
+            new IntWritable(10001)
+        })
+    });
+
+    assertEquals(new IntWritable(101), serializer.getValue(record, "id"));
+    assertEquals(new Text("John Doe"), serializer.getValue(record, "name"));
+  }
+
+  @Test
+  public void testGetNestedFields() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
+
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new IntWritable(202),
+        new Text("Alice"),
+        new ArrayWritable(Writable.class, new Writable[]{
+            new Text("San Francisco"),
+            new IntWritable(94107)
+        })
+    });
+
+    assertEquals(new Text("San Francisco"), serializer.getValue(record, "address.city"));
+    assertEquals(new IntWritable(94107), serializer.getValue(record, "address.zip"));
+  }
+
+  @Test
+  public void testInvalidFieldNameThrows() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
+
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new IntWritable(303),
+        new Text("Bob"),
+        new ArrayWritable(Writable.class, new Writable[]{
+            new Text("Los Angeles"),
+            new IntWritable(90001)
+        })
+    });
+
+    assertThrows(HoodieException.class, () -> {
+      serializer.getValue(record, "nonexistent");
+    });
+
+    assertThrows(HoodieException.class, () -> {
+      serializer.getValue(record, "address.nonexistent");
+    });
+  }
+
+  @Test
+  public void testGetValueFromArrayOrMap() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_ARRAY_AND_MAP);
+    HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
+
+    ArrayWritable tagsArray = new ArrayWritable(Text.class, new Text[]{
+        new Text("a"), new Text("b")
+    });
+
+    ArrayWritable propertiesMap = new ArrayWritable(Writable.class, new Writable[]{
+        new ArrayWritable(Writable.class, new Writable[]{new Text("key1"), new Text("val1")}),
+        new ArrayWritable(Writable.class, new Writable[]{new Text("key2"), new Text("val2")})
+    });
+
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new IntWritable(1), tagsArray, propertiesMap
+    });
+
+    // Access the entire field is ok
+    Object tagsResult = serializer.getValue(record, "tags");
+    assertInstanceOf(ArrayWritable.class, tagsResult);
+    assertEquals(tagsArray, tagsResult);
+
+    Object propertiesResult = serializer.getValue(record, "properties");
+    assertInstanceOf(ArrayWritable.class, propertiesResult);
+    assertEquals(propertiesMap, propertiesResult);
+
+    // access element or key/value is not ok
+    assertThrows(HoodieException.class, () -> {
+      serializer.getValue(record, "tags.element");
+    });
+
+    assertThrows(HoodieException.class, () -> {
+      serializer.getValue(record, "properties.key");
+    });
+
+    assertThrows(HoodieException.class, () -> {
+      serializer.getValue(record, "properties.value");
+    });
+  }
+
+  @Test
+  public void testGetJavaTopLevelFields() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
+
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new IntWritable(101),
+        new Text("John Doe"),
+        new ArrayWritable(Writable.class, new Writable[]{
+            new Text("New York"),
+            new IntWritable(10001)
+        })
+    });
+
+    assertEquals(101, serializer.getValueAsJava(record, "id"));
+    assertEquals(new Utf8("John Doe"), serializer.getValueAsJava(record, "name"));
+  }
+
+  @Test
+  public void testGetJavaNestedFields() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_RECORD);
+    HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
+
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new IntWritable(202),
+        new Text("Alice"),
+        new ArrayWritable(Writable.class, new Writable[]{
+            new Text("San Francisco"),
+            new IntWritable(94107)
+        })
+    });
+
+    assertEquals(new Utf8("San Francisco"), serializer.getValueAsJava(record, "address.city"));
+    assertEquals(94107, serializer.getValueAsJava(record, "address.zip"));
+  }
+
+  @Test
+  public void testGetJavaArrayAndMap() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_ARRAY_AND_MAP);
+    HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
+
+    ArrayWritable tagsArray = new ArrayWritable(Text.class, new Text[]{
+        new Text("a"), new Text("b")
+    });
+
+    ArrayWritable propertiesMap = new ArrayWritable(Writable.class, new Writable[]{
+        new ArrayWritable(Writable.class, new Writable[]{new Text("key1"), new Text("val1")}),
+        new ArrayWritable(Writable.class, new Writable[]{new Text("key2"), new Text("val2")})
+    });
+
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new IntWritable(1), tagsArray, propertiesMap
+    });
+
+    Object tags = serializer.getValueAsJava(record, "tags");
+    assertInstanceOf(Collection.class, tags);
+
+    Collection<?> tagList = (Collection<?>) tags;
+    List<Utf8> expectedValues = Arrays.asList(new Utf8("a"), new Utf8("b"));
+
+    Iterator<?> actualIter = tagList.iterator();
+    Iterator<Utf8> expectedIter = expectedValues.iterator();
+
+    while (expectedIter.hasNext() && actualIter.hasNext()) {
+      Object actual = actualIter.next();
+      Utf8 expected = expectedIter.next();
+      assertEquals(expected,  actual);
+    }
+
+    assertFalse(actualIter.hasNext(), "Actual has more elements than expected");
+    assertFalse(expectedIter.hasNext(), "Expected has more elements than actual");
+
+
+    Object props = serializer.getValueAsJava(record, "properties");
+    assertInstanceOf(Map.class, props);
+
+    Map<Utf8, Utf8> resultMap = new HashMap<>();
+    resultMap.put(new Utf8("key1"), new Utf8("val1"));
+    resultMap.put(new Utf8("key2"), new Utf8("val2"));
+
+    assertEquals(resultMap, props);
+  }
+
+  @Test
+  public void testGetJavaInvalidFieldAccess() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_ARRAY_AND_MAP);
+    HiveAvroSerializer serializer = new HiveAvroSerializer(schema);
+
+    ArrayWritable tagsArray = new ArrayWritable(Text.class, new Text[]{
+        new Text("a"), new Text("b")
+    });
+
+    ArrayWritable propertiesMap = new ArrayWritable(Writable.class, new Writable[]{
+        new ArrayWritable(Writable.class, new Writable[]{new Text("key1"), new Text("val1")}),
+        new ArrayWritable(Writable.class, new Writable[]{new Text("key2"), new Text("val2")})
+    });
+
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new IntWritable(1), tagsArray, propertiesMap
+    });
+
+    assertThrows(HoodieException.class, () -> {
+      serializer.getValueAsJava(record, "tags.element");
+    });
+
+    assertThrows(HoodieException.class, () -> {
+      serializer.getValueAsJava(record, "properties.key");
+    });
+
+    assertThrows(HoodieException.class, () -> {
+      serializer.getValueAsJava(record, "properties.value");
+    });
   }
 }

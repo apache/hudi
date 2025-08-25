@@ -151,6 +151,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     testUtils.setup();
     topicName = "topic" + testNum;
     prepareInitialConfigs(storage, basePath, testUtils.brokerAddress());
+    // reset TestDataSource recordInstantTime which may be set by any other test
+    TestDataSource.recordInstantTime = Option.empty();
   }
 
   @AfterEach
@@ -636,7 +638,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       cfg.transformerClassNames = transformerClassNames;
       cfg.operation = op;
       cfg.enableHiveSync = enableHiveSync;
-      cfg.sourceOrderingField = sourceOrderingField;
+      cfg.sourceOrderingFields = sourceOrderingField;
       cfg.propsFilePath = UtilitiesTestBase.basePath + "/" + propsFilename;
       cfg.sourceLimit = sourceLimit;
       cfg.checkpoint = checkpoint;
@@ -648,8 +650,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       }
       cfg.allowCommitOnNoCheckpointChange = allowCommitOnNoCheckpointChange;
       Triple<RecordMergeMode, String, String> mergeCfgs =
-          HoodieTableConfig.inferCorrectMergingBehavior(
-              cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingField,
+          HoodieTableConfig.inferMergingConfigsForWrites(
+              cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergeStrategyId, cfg.sourceOrderingFields,
               HoodieTableVersion.current());
       cfg.recordMergeMode = mergeCfgs.getLeft();
       cfg.payloadClassName = mergeCfgs.getMiddle();
@@ -665,7 +667,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       cfg.tableType = "COPY_ON_WRITE";
       cfg.sourceClassName = HoodieIncrSource.class.getName();
       cfg.operation = op;
-      cfg.sourceOrderingField = "timestamp";
+      cfg.sourceOrderingFields = "timestamp";
       cfg.propsFilePath = UtilitiesTestBase.basePath + "/test-downstream-source.properties";
       cfg.sourceLimit = 1000;
       if (null != schemaProviderClassName) {

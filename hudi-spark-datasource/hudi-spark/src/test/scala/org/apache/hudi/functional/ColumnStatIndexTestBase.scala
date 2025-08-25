@@ -23,7 +23,7 @@ import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
@@ -51,6 +51,7 @@ import java.util.List
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
+import scala.collection.convert.ImplicitConversions.`map AsJavaMap`
 import scala.collection.immutable.TreeSet
 import scala.util.Random
 
@@ -185,7 +186,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                               includedCols: Seq[String],
                                             indexedCols: Seq[String],
                                             indexSchema: StructType,
-                                              sourceTableSchema: StructType): DataFrame = {
+                                            sourceTableSchema: StructType): DataFrame = {
     val metaClient = HoodieTableMetaClient.builder().setConf(new HadoopStorageConfiguration(jsc.hadoopConfiguration())).setBasePath(tablePath).build()
     val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().enable(false).build())
     fsv.loadAllPartitions()

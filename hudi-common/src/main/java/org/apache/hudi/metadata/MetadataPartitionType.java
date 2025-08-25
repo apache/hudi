@@ -43,8 +43,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -159,7 +159,7 @@ public enum MetadataPartitionType {
   RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-", 5) {
     @Override
     public boolean isMetadataPartitionEnabled(HoodieMetadataConfig metadataConfig) {
-      return metadataConfig.isRecordIndexEnabled();
+      return metadataConfig.isRecordIndexEnabled() || metadataConfig.isPartitionedRecordIndexEnabled();
     }
 
     @Override

@@ -72,7 +72,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
          |TBLPROPERTIES (
          |  type = '$tableType',
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          |)
          |LOCATION '$basePath/$tableName'
          """.stripMargin)
@@ -171,7 +171,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
          |TBLPROPERTIES (
          |  type = '$tableType',
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          |)
          |LOCATION '$basePath/$tableName'
          """.stripMargin)

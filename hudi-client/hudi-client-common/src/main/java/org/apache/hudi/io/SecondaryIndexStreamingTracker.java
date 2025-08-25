@@ -20,12 +20,14 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -42,6 +44,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -107,7 +110,7 @@ public class SecondaryIndexStreamingTracker {
         } else {
           // delete previous entry and insert new value if secondaryKey is different
           String previousSecondaryKey = recordKeyToSecondaryKeyForPreviousFileSlice.get(recordKey);
-          if (!previousSecondaryKey.equals(secondaryKey)) {
+          if (!Objects.equals(previousSecondaryKey, secondaryKey)) {
             status.getIndexStats().addSecondaryIndexStats(indexName, recordKey, previousSecondaryKey, true);
             status.getIndexStats().addSecondaryIndexStats(indexName, recordKey, secondaryKey, false);
           }
@@ -136,12 +139,10 @@ public class SecondaryIndexStreamingTracker {
    */
   static void trackSecondaryIndexStats(HoodieRecord record, WriteStatus writeStatus, Schema writeSchemaWithMetaFields,
                                        List<HoodieIndexDefinition> secondaryIndexDefns, HoodieWriteConfig config) {
-    // Add secondary index records for all the inserted records
+    // Add secondary index records for all the inserted records (including null values)
     secondaryIndexDefns.forEach(def -> {
       Object secondaryKey = record.getColumnValueAsJava(writeSchemaWithMetaFields, def.getSourceFieldsKey(), config.getProps());
-      if (secondaryKey != null) {
-        writeStatus.getIndexStats().addSecondaryIndexStats(def.getIndexName(), record.getRecordKey(), secondaryKey.toString(), false);
-      }
+      addSecondaryIndexStat(writeStatus, def.getIndexName(), record.getRecordKey(), secondaryKey, false);
     });
   }
 
@@ -167,28 +168,135 @@ public class SecondaryIndexStreamingTracker {
 
     secondaryIndexDefns.forEach(def -> {
       String secondaryIndexSourceField = def.getSourceFieldsKey();
-      Object oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields, secondaryIndexSourceField, config.getProps());
+
+      // Handle three cases explicitly:
+      // 1. Old record does not exist (INSERT operation)
+      // 2. Old record exists with a value (could be null value)
+      // 3. New record state after operation
+
+      boolean hasOldValue = oldRecord != null;
+      Object oldSecondaryKey = null;
+
+      if (hasOldValue) {
+        oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields, secondaryIndexSourceField, config.getProps());
+      }
+
+      // For new/combined record
+      boolean hasNewValue = false;
       Object newSecondaryKey = null;
+
       if (combinedRecordOpt.isPresent() && !isDelete) {
         Schema newSchema = newSchemaSupplier.get();
         newSecondaryKey = combinedRecordOpt.get().getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
+        hasNewValue = true;
       }
 
-      boolean shouldUpdate = true;
-      if (oldSecondaryKey != null && newSecondaryKey != null) {
-        // If new secondary key is different from old secondary key, update secondary index records
-        shouldUpdate = !oldSecondaryKey.equals(newSecondaryKey);
+      // Determine if we need to update the secondary index
+      boolean shouldUpdate;
+      if (!hasOldValue && !hasNewValue) {
+        // Case 4: Neither old nor new value exists - do nothing
+        shouldUpdate = false;
+      } else if (hasOldValue && hasNewValue) {
+        // Both old and new values exist - check if they differ
+        shouldUpdate = !Objects.equals(oldSecondaryKey, newSecondaryKey);
+      } else {
+        // One exists but not the other - need to update
+        shouldUpdate = true;
       }
+
+      // All possible cases:
+      // 1. Old record exists, new record does not exist - delete old secondary index entry
+      // 2. Old record exists, new record exists - update secondary index entry
+      // 3. Old record does not exist, new record exists - add new secondary index entry
+      // 4. Old record does not exist, new record does not exist - do nothing
       if (shouldUpdate) {
         String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
             .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
             .or(() -> combinedRecordOpt.map(HoodieRecord::getRecordKey))
             .get();
-        // Add secondary index delete records for old records
-        if (oldSecondaryKey != null) {
+
+        // Delete old secondary index entry if old record exists.
+        if (hasOldValue) {
           addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, oldSecondaryKey, true);
         }
-        if (newSecondaryKey != null) {
+
+        // Add new secondary index entry if new value exists (including null values)
+        if (hasNewValue) {
+          addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, newSecondaryKey, false);
+        }
+      }
+    });
+  }
+
+  /**
+   * The utility function used by Merge Handle to generate secondary index stats for the corresponding record.
+   * It considers the new merged version of the record and compares it with the older version of the record to generate
+   * secondary index stats.
+   *
+   * @param hoodieKey                 The hoodie key
+   * @param combinedRecordOpt         New record merged with the old record
+   * @param oldRecord                 The old record
+   * @param isDelete                  Whether the record is a DELETE
+   * @param writeStatus               The Write status
+   * @param secondaryIndexDefns       Definitions for secondary index which need to be updated
+   */
+  static <T> void trackSecondaryIndexStats(HoodieKey hoodieKey, Option<BufferedRecord<T>> combinedRecordOpt, @Nullable BufferedRecord<T> oldRecord, boolean isDelete,
+                                           WriteStatus writeStatus, List<HoodieIndexDefinition> secondaryIndexDefns, RecordContext<T> recordContext) {
+
+    secondaryIndexDefns.forEach(def -> {
+      String secondaryIndexSourceField = def.getSourceFieldsKey();
+
+      // Handle three cases explicitly:
+      // 1. Old record does not exist (INSERT operation)
+      // 2. Old record exists with a value (could be null value)
+      // 3. New record state after operation
+
+      boolean hasOldValue = oldRecord != null;
+      Object oldSecondaryKey = null;
+
+      if (hasOldValue) {
+        Schema schema = recordContext.decodeAvroSchema(oldRecord.getSchemaId());
+        oldSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(oldRecord.getRecord(), schema, secondaryIndexSourceField));
+      }
+
+      // For new/combined record
+      boolean hasNewValue = false;
+      Object newSecondaryKey = null;
+
+      if (combinedRecordOpt.isPresent() && !isDelete) {
+        Schema schema = recordContext.decodeAvroSchema(combinedRecordOpt.get().getSchemaId());
+        newSecondaryKey = recordContext.getTypeConverter().castToString(recordContext.getValue(combinedRecordOpt.get().getRecord(), schema, secondaryIndexSourceField));
+        hasNewValue = true;
+      }
+
+      // Determine if we need to update the secondary index
+      boolean shouldUpdate;
+      if (!hasOldValue && !hasNewValue) {
+        // Case 4: Neither old nor new value exists - do nothing
+        shouldUpdate = false;
+      } else if (hasOldValue && hasNewValue) {
+        // Both old and new values exist - check if they differ
+        shouldUpdate = !Objects.equals(oldSecondaryKey, newSecondaryKey);
+      } else {
+        // One exists but not the other - need to update
+        shouldUpdate = true;
+      }
+
+      // All possible cases:
+      // 1. Old record exists, new record does not exist - delete old secondary index entry
+      // 2. Old record exists, new record exists - update secondary index entry
+      // 3. Old record does not exist, new record exists - add new secondary index entry
+      // 4. Old record does not exist, new record does not exist - do nothing
+      if (shouldUpdate) {
+        String recordKey = hoodieKey.getRecordKey();
+
+        // Delete old secondary index entry if old record exists.
+        if (hasOldValue) {
+          addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, oldSecondaryKey, true);
+        }
+
+        // Add new secondary index entry if new value exists (including null values)
+        if (hasNewValue) {
           addSecondaryIndexStat(writeStatus, def.getIndexName(), recordKey, newSecondaryKey, false);
         }
       }
@@ -196,6 +304,8 @@ public class SecondaryIndexStreamingTracker {
   }
 
   private static void addSecondaryIndexStat(WriteStatus writeStatus, String secondaryIndexPartitionPath, String recordKey, Object secKey, boolean isDeleted) {
-    writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPath, recordKey, secKey.toString(), isDeleted);
+    // Convert null to string representation - null values are valid in secondary indexes
+    String secKeyStr = secKey == null ? null : secKey.toString();
+    writeStatus.getIndexStats().addSecondaryIndexStats(secondaryIndexPartitionPath, recordKey, secKeyStr, isDeleted);
   }
 }

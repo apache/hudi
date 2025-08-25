@@ -21,9 +21,9 @@ import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, Quicks
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, RawTripTestPayload}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
@@ -36,7 +36,6 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.streaming.OutputMode.Append
 import org.apache.spark.sql.types.{DoubleType, FloatType, IntegerType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -61,7 +60,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
          | options (
          |  type = '$tableType',
          |  primaryKey = 'id',
-         |  preCombineField = 'comb'
+         |  orderingFields = 'comb'
          | )
          | partitioned by (par)
              """.stripMargin)
@@ -205,7 +204,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df = spark.createDataFrame(rowRdd, structType)
         df.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())
@@ -224,7 +223,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df2 = spark.createDataFrame(rowRdd2, structType)
         df2.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())
@@ -250,7 +249,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val df3 = spark.createDataFrame(rowRdd3, structType3)
         df3.write.format("hudi")
           .option("hoodie.datasource.write.recordkey.field", "id")
-          .option("hoodie.datasource.write.precombine.field", "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key(), "ts")
           .option("hoodie.datasource.write.partitionpath.field", "partition")
           .option("hoodie.table.name", tableName)
           .option("hoodie.datasource.write.table.type", tableType.name())
@@ -285,7 +284,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
        """.stripMargin)
 
@@ -358,8 +357,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
           checkException(s"Alter table $tableName add columns(col_new1 int after $f)")("forbid adjust the position of ordinary columns between meta columns")
         }
         Seq("id", "comb", "par").foreach { col =>
-          checkException(s"alter table $tableName drop column $col")("cannot support apply changes for primaryKey/CombineKey/partitionKey")
-          checkException(s"alter table $tableName rename column $col to ${col + col}")("cannot support apply changes for primaryKey/CombineKey/partitionKey")
+          checkException(s"alter table $tableName drop column $col")("cannot support apply changes for primaryKey/orderingFields/partitionKey")
+          checkException(s"alter table $tableName rename column $col to ${col + col}")("cannot support apply changes for primaryKey/orderingFields/partitionKey")
         }
         // check duplicate add or rename
         // keep consistent with hive, column names insensitive
@@ -534,50 +533,53 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test Chinese table ") {
     withRecordType()(withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        spark.sql("set hoodie.schema.on.read.enable=true")
-        spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int, comb int, `名字` string, col9 string, `成绩` int, `身高` float, `体重` double, `上次更新时间` date, par date
-             |) using hudi
-             | location '$tablePath'
-             | options (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'comb'
-             | )
-             | partitioned by (par)
+        withSparkSqlSessionConfig(
+          "hoodie.schema.on.read.enable" -> "true",
+          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
+          DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert") {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int, comb int, `名字` string, col9 string, `成绩` int, `身高` float, `体重` double, `上次更新时间` date, par date
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  orderingFields = 'comb'
+               | )
+               | partitioned by (par)
              """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-25', DATE'2021-12-26')
-             |""".stripMargin)
-        spark.sql(s"alter table $tableName rename column col9 to `爱好_Best`")
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-25', DATE'2021-12-26')
+               |""".stripMargin)
+          spark.sql(s"alter table $tableName rename column col9 to `爱好_Best`")
 
-        // update current table to produce log files for mor
-        spark.sql(
-          s"""
-             | insert into $tableName values
-             | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-26', DATE'2021-12-26')
-             |""".stripMargin)
+          // update current table to produce log files for mor
+          spark.sql(
+            s"""
+               | insert into $tableName values
+               | (1,3,'李明', '读书', 100,180.0001,99.0001,DATE'2021-12-26', DATE'2021-12-26')
+               |""".stripMargin)
 
-        // alter date to string
-        spark.sql(s"alter table $tableName alter column `上次更新时间` type string ")
-        checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
-          Seq("2021-12-26")
-        )
-        // alter string to date
-        spark.sql(s"alter table $tableName alter column `上次更新时间` type date ")
-        spark.sql(s"select `上次更新时间` from $tableName").collect()
-        checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
-          Seq(java.sql.Date.valueOf("2021-12-26"))
-        )
+          // alter date to string
+          spark.sql(s"alter table $tableName alter column `上次更新时间` type string ")
+          checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
+            Seq("2021-12-26")
+          )
+          // alter string to date
+          spark.sql(s"alter table $tableName alter column `上次更新时间` type date ")
+          spark.sql(s"select `上次更新时间` from $tableName").collect()
+          checkAnswer(spark.sql(s"select `上次更新时间` from $tableName").collect())(
+            Seq(java.sql.Date.valueOf("2021-12-26"))
+          )
+        }
+        spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
       }
-      spark.sessionState.conf.unsetConf(DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key)
     })
   }
 
@@ -585,61 +587,64 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column by add rename and drop") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        spark.sql("set hoodie.schema.on.read.enable=true")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '$tablePath'
-             | options (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
+        withSparkSqlSessionConfig(
+          "hoodie.schema.on.read.enable" -> "true",
+          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  orderingFields = 'ts'
+               | )
              """.stripMargin)
-        spark.sql(s"show create table ${tableName}").show(false)
-        spark.sql(s"insert into ${tableName} values (1, 'jack', 0.9, 1000)")
-        spark.sql(s"update ${tableName} set price = 1.9  where id =  1")
+          spark.sql(s"show create table ${tableName}").show(false)
+          spark.sql(s"insert into ${tableName} values (1, 'jack', 0.9, 1000)")
+          spark.sql(s"update ${tableName} set price = 1.9  where id =  1")
 
-        spark.sql(s"alter table ${tableName} alter column id type long")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", 1.9, 1000)
-        )
-        // test add action, include position change
-        spark.sql(s"alter table ${tableName} add columns(ext1 string comment 'add ext1' after name)")
-        spark.sql(s"insert into ${tableName} values (2, 'jack', 'exx1', 0.9, 1000)")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", null, 1.9, 1000), Seq(2, "jack","exx1", 0.9, 1000)
-        )
-        // test rename
-        spark.sql(s"alter table ${tableName} rename column price to newprice")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", null, 1.9, 1000), Seq(2, "jack","exx1", 0.9, 1000)
-        )
-        spark.sql(s"update ${tableName} set ext1 =  'haha' where id =  1 ")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", "haha", 1.9, 1000), Seq(2, "jack","exx1", 0.9, 1000)
-        )
-        var maxColumnId = getMaxColumnId(tablePath)
-        // drop column newprice
-        spark.sql(s"alter table ${tableName} drop column newprice")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", "haha", 1000), Seq(2, "jack","exx1", 1000)
-        )
-        validateInternalSchema(tablePath, isDropColumn = true, currentMaxColumnId = maxColumnId)
-        maxColumnId = getMaxColumnId(tablePath)
-        // add newprice back
-        spark.sql(s"alter table ${tableName} add columns(newprice string comment 'add newprice back' after ext1)")
-        checkAnswer(createTestResult(tableName))(
-          Seq(1, "jack", "haha", null, 1000), Seq(2, "jack","exx1", null, 1000)
-        )
-        validateInternalSchema(tablePath, isDropColumn = false, currentMaxColumnId = maxColumnId)
+          spark.sql(s"alter table ${tableName} alter column id type long")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", 1.9, 1000)
+          )
+          // test add action, include position change
+          spark.sql(s"alter table ${tableName} add columns(ext1 string comment 'add ext1' after name)")
+          spark.sql(s"insert into ${tableName} values (2, 'jack', 'exx1', 0.9, 1000)")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", null, 1.9, 1000), Seq(2, "jack", "exx1", 0.9, 1000)
+          )
+          // test rename
+          spark.sql(s"alter table ${tableName} rename column price to newprice")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", null, 1.9, 1000), Seq(2, "jack", "exx1", 0.9, 1000)
+          )
+          spark.sql(s"update ${tableName} set ext1 =  'haha' where id =  1 ")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", "haha", 1.9, 1000), Seq(2, "jack", "exx1", 0.9, 1000)
+          )
+          var maxColumnId = getMaxColumnId(tablePath)
+          // drop column newprice
+          spark.sql(s"alter table ${tableName} drop column newprice")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", "haha", 1000), Seq(2, "jack", "exx1", 1000)
+          )
+          validateInternalSchema(tablePath, isDropColumn = true, currentMaxColumnId = maxColumnId)
+          maxColumnId = getMaxColumnId(tablePath)
+          // add newprice back
+          spark.sql(s"alter table ${tableName} add columns(newprice string comment 'add newprice back' after ext1)")
+          checkAnswer(createTestResult(tableName))(
+            Seq(1, "jack", "haha", null, 1000), Seq(2, "jack", "exx1", null, 1000)
+          )
+          validateInternalSchema(tablePath, isDropColumn = false, currentMaxColumnId = maxColumnId)
+        }
       }
     }
   }
@@ -678,7 +683,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              """.stripMargin)
         spark.sql(s"alter table $tableName alter column name drop not null")
@@ -691,35 +696,38 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column multiple times") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val tableName = generateTableName
-        val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        spark.sql("set hoodie.schema.on.read.enable=true")
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  col1 string,
-             |  col2 string,
-             |  ts long
-             |) using hudi
-             | location '$tablePath'
-             | options (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
+        withSparkSqlSessionConfig(
+          "hoodie.schema.on.read.enable" -> "true",
+          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+          val tableName = generateTableName
+          val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  col1 string,
+               |  col2 string,
+               |  ts long
+               |) using hudi
+               | location '$tablePath'
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  orderingFields = 'ts'
+               | )
              """.stripMargin)
-        spark.sql(s"show create table ${tableName}").show(false)
-        spark.sql(s"insert into ${tableName} values (1, 'aaa', 'bbb', 1000)")
+          spark.sql(s"show create table ${tableName}").show(false)
+          spark.sql(s"insert into ${tableName} values (1, 'aaa', 'bbb', 1000)")
 
-        // Rename to a previously existing column name + insert
-        spark.sql(s"alter table ${tableName} drop column col1")
-        spark.sql(s"alter table ${tableName} rename column col2 to col1")
+          // Rename to a previously existing column name + insert
+          spark.sql(s"alter table ${tableName} drop column col1")
+          spark.sql(s"alter table ${tableName} rename column col2 to col1")
 
-        spark.sql(s"insert into ${tableName} values (2, 'aaa', 1000)")
-        checkAnswer(spark.sql(s"select col1 from ${tableName} order by id").collect())(
-          Seq("bbb"), Seq("aaa")
-        )
+          spark.sql(s"insert into ${tableName} values (2, 'aaa', 1000)")
+          checkAnswer(spark.sql(s"select col1 from ${tableName} order by id").collect())(
+            Seq("bbb"), Seq("aaa")
+          )
+        }
       }
     }
   }
@@ -727,6 +735,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   test("Test alter column with complex schema") {
     withTempDir { tmp =>
       withSQLConf(s"${DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION}" -> "upsert",
+        "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
         "hoodie.schema.on.read.enable" -> "true",
         "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
         val tableName = generateTableName
@@ -744,7 +753,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = 'mor',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              """.stripMargin)
 
@@ -818,7 +827,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
         val dataGen = new HoodieTestDataGenerator
         val schema = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA
-        val records1 = RawTripTestPayload.recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 1000, schema)).asScala.toList
+        val records1 = HoodieTestDataGenerator.recordsToStrings(dataGen.generateInsertsAsPerSchema("001", 1000, schema)).asScala.toList
         val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
         // drop tip_history.element.amount, city_to_state, distance_in_meters, drivers
         val orgStringDf = inputDF1.drop("city_to_state", "distance_in_meters", "drivers")
@@ -848,7 +857,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
             .load(tablePath)
         oldView.show(5, false)
 
-        val records2 = RawTripTestPayload.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
+        val records2 = HoodieTestDataGenerator.recordsToStrings(dataGen.generateUpdatesAsPerSchema("002", 100, schema)).asScala.toList
         val inputD2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
         val updatedStringDf = inputD2.drop("fare").drop("height")
         val checkRowKey = inputD2.select("_row_key").collectAsList().asScala.map(_.getString(0)).head
@@ -999,7 +1008,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | options (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by (ts)
              """.stripMargin)
@@ -1043,7 +1052,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
              | )
            """.stripMargin)
@@ -1081,7 +1090,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey = 'id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              |  ${if (tableType.equals("mor")) ", hoodie.index.type = 'INMEMORY'" else ""}
              | )
            """.stripMargin)
@@ -1162,7 +1171,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              |tblproperties (
              | primaryKey = 'id',
              | type = '$tableType',
-             | preCombineField = 'ts'
+             | orderingFields = 'ts'
              |)
              |partitioned by (region, dt)""".stripMargin)
 

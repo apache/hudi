@@ -20,19 +20,15 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
@@ -50,14 +46,11 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PART
 public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
   @Override
-  public Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public UpgradeDowngrade.TableConfigChangeSet downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 
     // Since version 6 includes a new schema field for metadata table(MDT), the MDT needs to be deleted during downgrade to avoid column drop error.
     HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
-    // The log block version has been upgraded in version six so compaction is required for downgrade.
-    UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(table, context, config, upgradeDowngradeHelper, HoodieTableType.MERGE_ON_READ.equals(table.getMetaClient().getTableType()),
-        HoodieTableVersion.SIX);
     UpgradeDowngradeUtils.syncCompactionRequestedFileToAuxiliaryFolder(table);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(table.getMetaClient());
@@ -67,7 +60,7 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
         .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS, v));
     Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS_INFLIGHT))
         .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS_INFLIGHT, v));
-    return Pair.of(updatedTableProps, Collections.emptyList());
+    return new UpgradeDowngrade.TableConfigChangeSet(updatedTableProps, Collections.emptySet());
   }
 
 }

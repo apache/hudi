@@ -51,7 +51,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
                                             private val userSchema: Option[StructType],
                                             private val prunedDataSchema: Option[StructType] = None)
   extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, Seq(), userSchema, prunedDataSchema)
-    with HoodieIncrementalRelationV1Trait {
+    with HoodieIncrementalRelationV1Trait with MergeOnReadIncrementalRelation {
 
   override type Relation = MergeOnReadIncrementalRelationV1
 
@@ -123,7 +123,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
     }
   }
 
-  def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]] = {
+  override def listFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Map[InternalRow, Seq[FileSlice]] = {
     val slices = if (includedCommits.isEmpty) {
       List()
     } else {
@@ -152,7 +152,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
     })
   }
 
-  def getRequiredFilters: Seq[Filter] = {
+  override def getRequiredFilters: Seq[Filter] = {
     if (includedCommits.isEmpty) {
       Seq.empty
     } else {
@@ -250,8 +250,7 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
   override lazy val mandatoryFields: Seq[String] = {
     // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
     //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
-    Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
-      preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
+    Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++ orderingFields
   }
 
   protected def validate(): Unit = {

@@ -73,7 +73,6 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieConcatHandle;
-import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -101,6 +100,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -169,11 +169,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Determine what level of persistence is used to cache write RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
 
+  @Deprecated
   public static final ConfigProperty<String> PRECOMBINE_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
       .noDefaultValue()
-      .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
-          + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
+      .withDocumentation("Comma separated list of fields used in preCombining before actual write. When two records have the same key value, "
+          + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..). "
+          + "For multiple fields if first key comparison is same, second key comparison is made and so on. This config is used for combining records "
+          + "within the same batch and also for merging using event time merge mode");
 
   public static final ConfigProperty<String> WRITE_PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.datasource.write.payload.class")
@@ -855,7 +858,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MERGE_HANDLE_CLASS_NAME = ConfigProperty
       .key("hoodie.write.merge.handle.class")
-      .defaultValue(HoodieWriteMergeHandle.class.getName())
+      .defaultValue(FileGroupReaderBasedMergeHandle.class.getName())
       .markAdvanced()
       .sinceVersion("1.1.0")
       .withDocumentation("The merge handle class that implements interface{@link HoodieMergeHandle} to merge the records "
@@ -1356,6 +1359,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieTableVersion.fromVersionCode(getIntOrDefault(WRITE_TABLE_VERSION));
   }
 
+  public void setWriteVersion(HoodieTableVersion version) {
+    setValue(WRITE_TABLE_VERSION, String.valueOf(version.versionCode()));
+  }
+
   public boolean autoUpgrade() {
     return getBoolean(AUTO_UPGRADE_VERSION);
   }
@@ -1401,8 +1408,14 @@ public class HoodieWriteConfig extends HoodieConfig {
         HoodieTableConfig.TYPE, HoodieTableConfig.TYPE.defaultValue().name()).toUpperCase());
   }
 
-  public String getPreCombineField() {
-    return getString(PRECOMBINE_FIELD_NAME);
+  @Deprecated
+  public List<String> getPreCombineFields() {
+    return Option.ofNullable(getString(PRECOMBINE_FIELD_NAME))
+        .map(preCombine -> Arrays.asList(preCombine.split(",")))
+        .orElse(Collections.emptyList())
+        .stream()
+        .filter(StringUtils::nonEmpty)
+        .collect(Collectors.toList());
   }
 
   public String getKeyGeneratorClass() {
@@ -1834,6 +1847,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
   }
 
+  public boolean isBinaryCopySchemaEvolutionEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
+  }
+
   public int getInlineClusterMaxCommits() {
     return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS);
   }
@@ -2102,6 +2119,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.isRecordIndexEnabled();
   }
 
+  public boolean isPartitionedRecordIndexEnabled() {
+    return metadataConfig.isPartitionedRecordIndexEnabled();
+  }
+
   public int getPartitionStatsIndexParallelism() {
     return metadataConfig.getPartitionStatsIndexParallelism();
   }
@@ -2193,7 +2214,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public String getRecordIndexInputStorageLevel() {
     return getStringOrDefault(HoodieIndexConfig.RECORD_INDEX_INPUT_STORAGE_LEVEL_VALUE);
   }
-  
+
   public boolean isUsingRemotePartitioner() {
     return getBoolean(HoodieIndexConfig.BUCKET_PARTITIONER);
   }
@@ -2631,6 +2652,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getRecordIndexMaxFileGroupCount();
   }
 
+  public int getPartitionedRecordIndexMinFileGroupCount() {
+    return metadataConfig.getPartitionedRecordIndexMinFileGroupCount();
+  }
+
+  public int getPartitionedRecordIndexMaxFileGroupCount() {
+    return metadataConfig.getPartitionedRecordIndexMaxFileGroupCount();
+  }
+
   public float getRecordIndexGrowthFactor() {
     return metadataConfig.getRecordIndexGrowthFactor();
   }
@@ -2994,6 +3023,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    @Deprecated
     public Builder withPreCombineField(String preCombineField) {
       writeConfig.setValue(PRECOMBINE_FIELD_NAME, preCombineField);
       return this;
@@ -3650,5 +3680,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
     }
+  }
+
+  public boolean isFileGroupReaderBasedMergeHandle() {
+    return isFileGroupReaderBasedMergeHandle(props);
+  }
+
+  public static boolean isFileGroupReaderBasedMergeHandle(TypedProperties props) {
+    return ReflectionUtils.isSubClass(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, true), FileGroupReaderBasedMergeHandle.class);
   }
 }

@@ -21,18 +21,17 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -40,9 +39,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Objects;
-
-import static org.apache.hudi.common.model.HoodieRecord.DEFAULT_ORDERING_VALUE;
+import java.util.List;
 
 /**
  * Factory to create a {@link BufferedRecordMerger}.
@@ -56,11 +53,24 @@ public class BufferedRecordMergerFactory {
                                                    RecordMergeMode recordMergeMode,
                                                    boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
-                                                   Option<String> orderingFieldName,
+                                                   List<String> orderingFieldNames,
                                                    Option<String> payloadClass,
                                                    Schema readerSchema,
                                                    TypedProperties props,
-                                                   PartialUpdateMode partialUpdateMode) {
+                                                   Option<PartialUpdateMode> partialUpdateModeOpt) {
+    return create(readerContext, recordMergeMode, enablePartialMerging, recordMerger,
+        orderingFieldNames, readerSchema, payloadClass.map(p -> Pair.of(p, p)), props, partialUpdateModeOpt);
+  }
+
+  public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
+                                                   RecordMergeMode recordMergeMode,
+                                                   boolean enablePartialMerging,
+                                                   Option<HoodieRecordMerger> recordMerger,
+                                                   List<String> orderingFieldNames,
+                                                   Schema readerSchema,
+                                                   Option<Pair<String, String>> payloadClasses,
+                                                   TypedProperties props,
+                                                   Option<PartialUpdateMode> partialUpdateModeOpt) {
     /**
      * This part implements KEEP_VALUES partial update mode, which merges two records that do not have all columns.
      * Other Partial update modes, like IGNORE_DEFAULTS assume all columns exists in the record,
@@ -68,27 +78,33 @@ public class BufferedRecordMergerFactory {
      */
     if (enablePartialMerging) {
       BufferedRecordMerger<T> deleteRecordMerger = create(
-          readerContext, recordMergeMode, false, recordMerger, orderingFieldName, payloadClass, readerSchema, props, partialUpdateMode);
-      return new PartialUpdateBufferedRecordMerger<>(readerContext, recordMerger, deleteRecordMerger, readerSchema, props);
+          readerContext, recordMergeMode, false, recordMerger, orderingFieldNames, readerSchema, payloadClasses, props, Option.empty());
+      return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, orderingFieldNames, readerSchema, props);
     }
 
+    // might need to introduce a merge config for the factory in the future to get rid of this.
+    // props = readerContext.getMergeProps(props);
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
-        if (partialUpdateMode == PartialUpdateMode.NONE) {
-          return new CommitTimeBufferedRecordMerger<>();
+        if (partialUpdateModeOpt.isEmpty()) {
+          return new CommitTimeRecordMerger<>();
         }
-        return new CommitTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
+        return new CommitTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateModeOpt.get(), props);
       case EVENT_TIME_ORDERING:
-        if (partialUpdateMode == PartialUpdateMode.NONE) {
-          return new EventTimeBufferedRecordMerger<>();
+        if (partialUpdateModeOpt.isEmpty()) {
+          return new EventTimeRecordMerger<>();
         }
-        return new EventTimeBufferedRecordPartialUpdateMerger<>(readerContext, partialUpdateMode, props);
+        return new EventTimePartialRecordMerger<>(readerContext.getRecordContext(), partialUpdateModeOpt.get(), props);
       default:
-        if (payloadClass.isPresent()) {
-          return new CustomPayloadBufferedRecordMerger<>(
-              readerContext, recordMerger, orderingFieldName, payloadClass.get(), readerSchema, props);
+        if (payloadClasses.isPresent()) {
+          if (payloadClasses.get().getRight().equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")) {
+            return new ExpressionPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames,
+                payloadClasses.get().getLeft(), payloadClasses.get().getRight(), readerSchema, props);
+          } else {
+            return new CustomPayloadRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, payloadClasses.get().getLeft(), readerSchema, props);
+          }
         } else {
-          return new CustomBufferedRecordMerger<>(readerContext, recordMerger, readerSchema, props);
+          return new CustomRecordMerger<>(readerContext.getRecordContext(), recordMerger, orderingFieldNames, readerSchema, props);
         }
     }
   }
@@ -97,7 +113,7 @@ public class BufferedRecordMergerFactory {
    * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code COMMIT_TIME_ORDERING} merge mode.
    */
-  private static class CommitTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
+  private static class CommitTimeRecordMerger<T> implements BufferedRecordMerger<T> {
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       return Option.of(newRecord);
@@ -109,8 +125,8 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
-      return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+    public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      return newerRecord;
     }
   }
 
@@ -118,42 +134,44 @@ public class BufferedRecordMergerFactory {
    * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code COMMIT_TIME_ORDERING} merge mode and partial update mode.
    */
-  private static class CommitTimeBufferedRecordPartialUpdateMerger<T> extends CommitTimeBufferedRecordMerger<T> {
-    private final PartialUpdateStrategy<T> partialUpdateStrategy;
-    private final HoodieReaderContext<T> readerContext;
+  private static class CommitTimePartialRecordMerger<T> extends CommitTimeRecordMerger<T> {
+    private final PartialUpdateHandler<T> partialUpdateHandler;
+    private final RecordContext<T> recordContext;
 
-    public CommitTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
-                                                       PartialUpdateMode partialUpdateMode,
-                                                       TypedProperties props) {
+    public CommitTimePartialRecordMerger(RecordContext<T> recordContext,
+                                         PartialUpdateMode partialUpdateMode,
+                                         TypedProperties props) {
       super();
-      this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
-      this.readerContext = readerContext;
+      this.partialUpdateHandler = new PartialUpdateHandler<>(recordContext, partialUpdateMode, props);
+      this.recordContext = recordContext;
     }
 
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
                                                 BufferedRecord<T> existingRecord) {
       if (existingRecord != null) {
-        newRecord = partialUpdateStrategy.partialMerge(
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
+        newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
-            readerContext.getSchemaFromBufferRecord(newRecord),
-            readerContext.getSchemaFromBufferRecord(existingRecord),
-            false);
+            newSchema,
+            recordContext.getSchemaFromBufferRecord(existingRecord),
+            newSchema);
       }
       return Option.of(newRecord);
     }
 
     @Override
-    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord,
-                                       BufferedRecord<T> newerRecord) {
-      newerRecord = partialUpdateStrategy.partialMerge(
+    public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord,
+                                     BufferedRecord<T> newerRecord) {
+      Schema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
+      newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
-          readerContext.getSchemaFromBufferRecord(newerRecord),
-          readerContext.getSchemaFromBufferRecord(olderRecord),
-          false);
-      return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+          newSchema,
+          recordContext.getSchemaFromBufferRecord(olderRecord),
+          newSchema);
+      return newerRecord;
     }
   }
 
@@ -161,7 +179,7 @@ public class BufferedRecordMergerFactory {
    * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code EVENT_TIME_ORDERING} merge mode.
    */
-  private static class EventTimeBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
+  private static class EventTimeRecordMerger<T> implements BufferedRecordMerger<T> {
     @Override
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) {
       if (existingRecord == null || shouldKeepNewerRecord(existingRecord, newRecord)) {
@@ -176,27 +194,27 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+    public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
       if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
-        return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+        return newerRecord;
       }
-      return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
+      return olderRecord;
     }
   }
 
   /**
-   * An implementation of {@link EventTimeBufferedRecordMerger} which merges {@link BufferedRecord}s
+   * An implementation of {@link EventTimeRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code EVENT_TIME_ORDERING} merge mode and partial update mode.
    */
-  private static class EventTimeBufferedRecordPartialUpdateMerger<T> extends EventTimeBufferedRecordMerger<T> {
-    private final PartialUpdateStrategy<T> partialUpdateStrategy;
-    private final HoodieReaderContext<T> readerContext;
+  private static class EventTimePartialRecordMerger<T> extends EventTimeRecordMerger<T> {
+    private final PartialUpdateHandler<T> partialUpdateHandler;
+    private final RecordContext<T> recordContext;
 
-    public EventTimeBufferedRecordPartialUpdateMerger(HoodieReaderContext<T> readerContext,
-                                                      PartialUpdateMode partialUpdateMode,
-                                                      TypedProperties props) {
-      this.partialUpdateStrategy = new PartialUpdateStrategy<>(readerContext, partialUpdateMode, props);
-      this.readerContext = readerContext;
+    public EventTimePartialRecordMerger(RecordContext<T> recordContext,
+                                        PartialUpdateMode partialUpdateMode,
+                                        TypedProperties props) {
+      this.partialUpdateHandler = new PartialUpdateHandler<>(recordContext, partialUpdateMode, props);
+      this.recordContext = recordContext;
     }
 
     @Override
@@ -204,52 +222,55 @@ public class BufferedRecordMergerFactory {
       if (existingRecord == null) {
         return Option.of(newRecord);
       } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
-        newRecord = partialUpdateStrategy.partialMerge(
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
+        newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
-            readerContext.getSchemaFromBufferRecord(newRecord),
-            readerContext.getSchemaFromBufferRecord(existingRecord),
-            false);
+            newSchema,
+            recordContext.getSchemaFromBufferRecord(existingRecord),
+            newSchema);
         return Option.of(newRecord);
       } else {
         // Use existing record as the base record since existing record has higher ordering value.
-        existingRecord = partialUpdateStrategy.partialMerge(
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
+        existingRecord = partialUpdateHandler.partialMerge(
             existingRecord,
             newRecord,
-            readerContext.getSchemaFromBufferRecord(existingRecord),
-            readerContext.getSchemaFromBufferRecord(newRecord),
-            true);
+            recordContext.getSchemaFromBufferRecord(existingRecord),
+            newSchema,
+            newSchema);
         return Option.of(existingRecord);
       }
     }
 
     @Override
-    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+    public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
       if (newerRecord.isCommitTimeOrderingDelete()) {
-        return Pair.of(true, newerRecord.getRecord());
+        return newerRecord;
       }
 
       Comparable newOrderingValue = newerRecord.getOrderingValue();
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
+      Schema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       if (!olderRecord.isCommitTimeOrderingDelete()
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         // Use old record as the base record since old record has higher ordering value.
-        olderRecord = partialUpdateStrategy.partialMerge(
+        olderRecord = partialUpdateHandler.partialMerge(
             olderRecord,
             newerRecord,
-            readerContext.getSchemaFromBufferRecord(olderRecord),
-            readerContext.getSchemaFromBufferRecord(newerRecord),
-            true);
-        return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
+            recordContext.getSchemaFromBufferRecord(olderRecord),
+            newSchema,
+            newSchema);
+        return olderRecord;
       }
 
-      newerRecord = partialUpdateStrategy.partialMerge(
+      newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
-          readerContext.getSchemaFromBufferRecord(newerRecord),
-          readerContext.getSchemaFromBufferRecord(olderRecord),
-          false);
-      return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+          newSchema,
+          recordContext.getSchemaFromBufferRecord(olderRecord),
+          newSchema);
+      return newerRecord;
     }
   }
 
@@ -258,23 +279,26 @@ public class BufferedRecordMergerFactory {
    * based on partial update merging.
    */
   private static class PartialUpdateBufferedRecordMerger<T> implements BufferedRecordMerger<T> {
-    private final HoodieReaderContext<T> readerContext;
+    private final RecordContext<T> recordContext;
     private final Option<HoodieRecordMerger> recordMerger;
     private final BufferedRecordMerger<T> deleteRecordMerger;
     private final Schema readerSchema;
     private final TypedProperties props;
+    private final String[] orderingFields;
 
     public PartialUpdateBufferedRecordMerger(
-        HoodieReaderContext<T> readerContext,
+        RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         BufferedRecordMerger<T> deleteRecordMerger,
+        List<String> orderingFieldNames,
         Schema readerSchema,
         TypedProperties props) {
-      this.readerContext = readerContext;
+      this.recordContext = recordContext;
       this.recordMerger = recordMerger;
       this.deleteRecordMerger = deleteRecordMerger;
       this.readerSchema = readerSchema;
       this.props = props;
+      this.orderingFields = orderingFieldNames.toArray(new String[0]);
     }
 
     @Override
@@ -286,10 +310,10 @@ public class BufferedRecordMergerFactory {
       //  and use the record merge mode to control how to merge partial updates
       // Merge and store the combined record
       Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().partialMerge(
-          readerContext.constructHoodieRecord(existingRecord),
-          readerContext.getSchemaFromBufferRecord(existingRecord),
-          readerContext.constructHoodieRecord(newRecord),
-          readerContext.getSchemaFromBufferRecord(newRecord),
+          recordContext.constructHoodieRecord(existingRecord),
+          recordContext.getSchemaFromBufferRecord(existingRecord),
+          recordContext.constructHoodieRecord(newRecord),
+          recordContext.getSchemaFromBufferRecord(newRecord),
           readerSchema,
           props);
       if (!combinedRecordAndSchemaOpt.isPresent()) {
@@ -300,7 +324,7 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
+        return Option.of(BufferedRecords.fromHoodieRecord(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
@@ -311,24 +335,23 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+    public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
       // TODO(HUDI-7843): decouple the merging logic from the merger
       //  and use the record merge mode to control how to merge partial updates
       Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().partialMerge(
-          readerContext.constructHoodieRecord(olderRecord), readerContext.getSchemaFromBufferRecord(olderRecord),
-          readerContext.constructHoodieRecord(newerRecord), readerContext.getSchemaFromBufferRecord(newerRecord),
+          recordContext.constructHoodieRecord(olderRecord), recordContext.getSchemaFromBufferRecord(olderRecord),
+          recordContext.constructHoodieRecord(newerRecord), recordContext.getSchemaFromBufferRecord(newerRecord),
           readerSchema, props);
 
       if (mergedRecord.isPresent()
           && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
         HoodieRecord hoodieRecord = mergedRecord.get().getLeft();
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
-          T data = (T) hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData();
-          return Pair.of(false, data);
+          hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
         }
-        return Pair.of(false, (T) hoodieRecord.getData());
+        return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
       }
-      return Pair.of(true, null);
+      return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
   }
 
@@ -336,27 +359,31 @@ public class BufferedRecordMergerFactory {
    * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code CUSTOM} merge mode.
    */
-  private static class CustomBufferedRecordMerger<T> extends BaseCustomMerger<T> {
-    public CustomBufferedRecordMerger(
-        HoodieReaderContext<T> readerContext,
+  private static class CustomRecordMerger<T> extends BaseCustomMerger<T> {
+    private final String[] orderingFields;
+
+    public CustomRecordMerger(
+        RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
+        List<String> orderingFieldNames,
         Schema readerSchema,
         TypedProperties props) {
-      super(readerContext, recordMerger, readerSchema, props);
+      super(recordContext, recordMerger, readerSchema, props);
+      this.orderingFields = orderingFieldNames.toArray(new String[0]);
     }
 
     @Override
     public Option<BufferedRecord<T>> deltaMergeNonDeleteRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
-      Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
-          readerContext.constructHoodieRecord(existingRecord),
-          readerContext.getSchemaFromBufferRecord(existingRecord),
-          readerContext.constructHoodieRecord(newRecord),
-          readerContext.getSchemaFromBufferRecord(newRecord),
+      Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.merge(
+          recordContext.constructHoodieRecord(existingRecord),
+          recordContext.getSchemaFromBufferRecord(existingRecord),
+          recordContext.constructHoodieRecord(newRecord),
+          recordContext.getSchemaFromBufferRecord(newRecord),
           props);
 
       if (!combinedRecordAndSchemaOpt.isPresent()) {
         // An empty Option indicates that the output represents a delete.
-        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE, null, null, true));
+        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, HoodieOperation.DELETE));
       }
 
       Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
@@ -364,25 +391,56 @@ public class BufferedRecordMergerFactory {
 
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecord.getRecord()) {
-        return Option.of(BufferedRecord.forRecordWithContext(combinedRecord, combinedRecordAndSchema.getRight(), readerContext, props));
+        return Option.of(BufferedRecords.fromHoodieRecord(combinedRecord, combinedRecordAndSchema.getRight(), recordContext, props, orderingFields));
       }
       return Option.empty();
     }
 
     @Override
-    public Pair<Boolean, T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-          readerContext.constructHoodieRecord(olderRecord), readerContext.getSchemaFromBufferRecord(olderRecord),
-          readerContext.constructHoodieRecord(newerRecord), readerContext.getSchemaFromBufferRecord(newerRecord), props);
+    public BufferedRecord<T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+      Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.merge(
+          recordContext.constructHoodieRecord(olderRecord), recordContext.getSchemaFromBufferRecord(olderRecord),
+          recordContext.constructHoodieRecord(newerRecord), recordContext.getSchemaFromBufferRecord(newerRecord), props);
       if (mergedRecord.isPresent()
           && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
         HoodieRecord hoodieRecord = mergedRecord.get().getLeft();
-        if (!mergedRecord.get().getRight().equals(readerSchema)) {
-          return Pair.of(false, (T) hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
-        }
-        return Pair.of(false, (T) hoodieRecord.getData());
+        return BufferedRecords.fromHoodieRecord(hoodieRecord, mergedRecord.get().getRight(), recordContext, props, orderingFields, false);
       }
-      return Pair.of(true, null);
+      return BufferedRecords.createDelete(newerRecord.getRecordKey());
+    }
+  }
+
+  /**
+   * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s based on the ExpressionPayload.
+   * The delta merge expects the incoming records to both be Expression Payload, whereas the final merge expects the existing
+   * record payload to match the table's configured payload and the new record to be an Expression Payload.
+   */
+  private static class ExpressionPayloadRecordMerger<T> extends CustomPayloadRecordMerger<T> {
+    private final String basePayloadClass;
+    private final HoodieRecordMerger deltaMerger;
+
+    public ExpressionPayloadRecordMerger(RecordContext<T> recordContext, Option<HoodieRecordMerger> recordMerger, List<String> orderingFieldNames, String basePayloadClass, String incomingPayloadClass,
+                                         Schema readerSchema, TypedProperties props) {
+      super(recordContext, recordMerger, orderingFieldNames, incomingPayloadClass, readerSchema, props);
+      this.basePayloadClass = basePayloadClass;
+      this.deltaMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger.get());
+    }
+
+    @Override
+    protected Pair<HoodieRecord, HoodieRecord> getFinalMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(recordContext, olderRecord, basePayloadClass);
+      HoodieRecord newHoodieRecord = constructHoodieAvroRecord(recordContext, newerRecord, payloadClass);
+      return Pair.of(oldHoodieRecord, newHoodieRecord);
+    }
+
+    @Override
+    protected Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
+      if (isFinalMerge) {
+        return super.getMergedRecord(olderRecord, newerRecord, isFinalMerge);
+      } else {
+        Pair<HoodieRecord, HoodieRecord> records = getDeltaMergeRecords(olderRecord, newerRecord);
+        return deltaMerger.merge(records.getLeft(), getSchemaForAvroPayloadMerge(olderRecord), records.getRight(), getSchemaForAvroPayloadMerge(newerRecord), props);
+      }
     }
   }
 
@@ -390,82 +448,96 @@ public class BufferedRecordMergerFactory {
    * An implementation of {@link BufferedRecordMerger} which merges {@link BufferedRecord}s
    * based on {@code CUSTOM} merge mode and a given record payload class.
    */
-  private static class CustomPayloadBufferedRecordMerger<T> extends BaseCustomMerger<T> {
-    private final Option<String> orderingFieldName;
-    private final String payloadClass;
+  private static class CustomPayloadRecordMerger<T> extends BaseCustomMerger<T> {
+    private final String[] orderingFieldNames;
+    protected final String payloadClass;
 
-    public CustomPayloadBufferedRecordMerger(
-        HoodieReaderContext<T> readerContext,
+    public CustomPayloadRecordMerger(
+        RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
-        Option<String> orderingFieldName,
+        List<String> orderingFieldNames,
         String payloadClass,
         Schema readerSchema,
         TypedProperties props) {
-      super(readerContext, recordMerger, readerSchema, props);
-      this.orderingFieldName = orderingFieldName;
+      super(recordContext, recordMerger, readerSchema, props);
+      this.orderingFieldNames = orderingFieldNames.toArray(new String[0]);
       this.payloadClass = payloadClass;
     }
 
     @Override
     public Option<BufferedRecord<T>> deltaMergeNonDeleteRecord(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
-      Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = getMergedRecord(existingRecord, newRecord);
-      if (combinedRecordAndSchemaOpt.isPresent()) {
-        T combinedRecordData = readerContext.convertAvroRecord((IndexedRecord) combinedRecordAndSchemaOpt.get().getLeft().getData());
-        // If pre-combine does not return existing record, update it
-        if (combinedRecordData != existingRecord.getRecord()) {
-          Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
-          return Option.of(BufferedRecord.forRecordWithContext(combinedRecordData, combinedRecordAndSchema.getRight(), readerContext, orderingFieldName, false));
-        }
+      Option<Pair<HoodieRecord, Schema>> mergedRecordAndSchema = getMergedRecord(existingRecord, newRecord, false);
+      if (mergedRecordAndSchema.isEmpty()) {
+        // An empty Option indicates that the output represents a delete.
+        return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), OrderingValues.getDefault(), null, null, HoodieOperation.DELETE));
+      }
+      HoodieRecord mergedRecord = mergedRecordAndSchema.get().getLeft();
+      Schema mergeResultSchema = mergedRecordAndSchema.get().getRight();
+      // Special handling for SENTINEL record in Expression Payload. This is returned if the condition does not match.
+      if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
         return Option.empty();
       }
-      // An empty Option indicates that the output represents a delete.
-      return Option.of(new BufferedRecord<>(newRecord.getRecordKey(), DEFAULT_ORDERING_VALUE, null, null, true));
+      T combinedRecordData = recordContext.convertAvroRecord(mergedRecord.toIndexedRecord(mergeResultSchema, props).get().getData());
+      // If pre-combine does not return existing record, update it
+      if (combinedRecordData != existingRecord.getRecord()) {
+        // For pkless we need to use record key from existing record
+        return Option.of(BufferedRecords.fromEngineRecord(combinedRecordData, mergeResultSchema, recordContext, orderingFieldNames,
+            existingRecord.getRecordKey(), mergedRecord.isDelete(mergeResultSchema, props)));
+      }
+      return Option.empty();
     }
 
     @Override
-    public Pair<Boolean, T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      Option<Pair<HoodieRecord, Schema>> mergedRecord =
-          getMergedRecord(olderRecord, newerRecord);
-      if (mergedRecord.isPresent()
-          && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
-        IndexedRecord indexedRecord;
-        if (!mergedRecord.get().getRight().equals(readerSchema)) {
-          indexedRecord = (IndexedRecord) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData();
-        } else {
-          indexedRecord = (IndexedRecord) mergedRecord.get().getLeft().getData();
-        }
-        return Pair.of(false, readerContext.convertAvroRecord(indexedRecord));
+    public BufferedRecord<T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+      Option<Pair<HoodieRecord, Schema>> mergedRecordAndSchema = getMergedRecord(olderRecord, newerRecord, true);
+      if (mergedRecordAndSchema.isEmpty()) {
+        return BufferedRecords.createDelete(newerRecord.getRecordKey());
       }
-      return Pair.of(true, null);
+      HoodieRecord mergedRecord = mergedRecordAndSchema.get().getLeft();
+      Schema mergeResultSchema = mergedRecordAndSchema.get().getRight();
+      // Special handling for SENTINEL record in Expression Payload
+      if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
+        return olderRecord;
+      }
+      if (!mergedRecord.isDelete(mergeResultSchema, props)) {
+        IndexedRecord indexedRecord = (IndexedRecord) mergedRecord.getData();
+        return BufferedRecords.fromEngineRecord(
+            recordContext.convertAvroRecord(indexedRecord), mergeResultSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
+      }
+      return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
 
-    private Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      ValidationUtils.checkArgument(!Objects.equals(payloadClass, OverwriteWithLatestAvroPayload.class.getCanonicalName())
-          && !Objects.equals(payloadClass, DefaultHoodieRecordPayload.class.getCanonicalName()));
-      HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(readerContext, olderRecord);
-      HoodieRecord newHoodieRecord = constructHoodieAvroRecord(readerContext, newerRecord);
-      Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-          oldHoodieRecord, getSchemaForAvroPayloadMerge(oldHoodieRecord, olderRecord),
-          newHoodieRecord, getSchemaForAvroPayloadMerge(newHoodieRecord, newerRecord), props);
-      return mergedRecord;
+    protected Pair<HoodieRecord, HoodieRecord> getDeltaMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(recordContext, olderRecord, payloadClass);
+      HoodieRecord newHoodieRecord = constructHoodieAvroRecord(recordContext, newerRecord, payloadClass);
+      return Pair.of(oldHoodieRecord, newHoodieRecord);
     }
 
-    private HoodieRecord constructHoodieAvroRecord(HoodieReaderContext<T> readerContext, BufferedRecord<T> bufferedRecord) {
+    protected Pair<HoodieRecord, HoodieRecord> getFinalMergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) {
+      return getDeltaMergeRecords(olderRecord, newerRecord);
+    }
+
+    protected Option<Pair<HoodieRecord, Schema>> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
+      Pair<HoodieRecord, HoodieRecord> records = isFinalMerge ? getFinalMergeRecords(olderRecord, newerRecord) : getDeltaMergeRecords(olderRecord, newerRecord);
+      return recordMerger.merge(records.getLeft(), getSchemaForAvroPayloadMerge(olderRecord), records.getRight(), getSchemaForAvroPayloadMerge(newerRecord), props);
+    }
+
+    protected HoodieRecord constructHoodieAvroRecord(RecordContext<T> recordContext, BufferedRecord<T> bufferedRecord, String payloadClass) {
       GenericRecord record = null;
       if (!bufferedRecord.isDelete()) {
-        Schema recordSchema = readerContext.getSchemaFromBufferRecord(bufferedRecord);
-        record = readerContext.convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
+        Schema recordSchema = recordContext.getSchemaFromBufferRecord(bufferedRecord);
+        record = recordContext.convertToAvroRecord(bufferedRecord.getRecord(), recordSchema);
       }
       HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), null);
       return new HoodieAvroRecord<>(hoodieKey,
           HoodieRecordUtils.loadPayload(payloadClass, record, bufferedRecord.getOrderingValue()), null);
     }
 
-    private Schema getSchemaForAvroPayloadMerge(HoodieRecord record, BufferedRecord<T> bufferedRecord) throws IOException {
-      if (record.isDelete(readerSchema, props)) {
+    protected Schema getSchemaForAvroPayloadMerge(BufferedRecord<T> bufferedRecord) {
+      if (bufferedRecord.getSchemaId() == null) {
         return readerSchema;
       }
-      return readerContext.getSchemaFromBufferRecord(bufferedRecord);
+      return recordContext.getSchemaFromBufferRecord(bufferedRecord);
     }
   }
 
@@ -474,18 +546,18 @@ public class BufferedRecordMergerFactory {
    * based on {@code CUSTOM} merge mode.
    */
   private abstract static class BaseCustomMerger<T> implements BufferedRecordMerger<T> {
-    protected final HoodieReaderContext<T> readerContext;
-    protected final Option<HoodieRecordMerger> recordMerger;
+    protected final RecordContext<T> recordContext;
+    protected final HoodieRecordMerger recordMerger;
     protected final Schema readerSchema;
     protected final TypedProperties props;
 
     public BaseCustomMerger(
-        HoodieReaderContext<T> readerContext,
+        RecordContext<T> recordContext,
         Option<HoodieRecordMerger> recordMerger,
         Schema readerSchema,
         TypedProperties props) {
-      this.readerContext = readerContext;
-      this.recordMerger = recordMerger;
+      this.recordContext = recordContext;
+      this.recordMerger = recordMerger.orElseThrow(() -> new IllegalArgumentException("RecordMerger must be present for custom merging"));
       this.readerSchema = readerSchema;
       this.props = props;
     }
@@ -516,21 +588,21 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    public Pair<Boolean, T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
+    public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
       if (olderRecord.isDelete() || newerRecord.isDelete()) {
         if (shouldKeepNewerRecord(olderRecord, newerRecord)) {
           // IMPORTANT:
           // this is needed when the fallback HoodieAvroRecordMerger got used, the merger would
           // return Option.empty when the new payload data is empty(a delete) and ignores its ordering value directly.
-          return Pair.of(newerRecord.isDelete(), newerRecord.getRecord());
+          return newerRecord;
         } else {
-          return Pair.of(olderRecord.isDelete(), olderRecord.getRecord());
+          return olderRecord;
         }
       }
       return mergeNonDeleteRecord(olderRecord, newerRecord);
     }
 
-    public abstract Pair<Boolean, T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
+    public abstract BufferedRecord<T> mergeNonDeleteRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
   }
 
   // -------------------------------------------------------------------------
@@ -548,8 +620,8 @@ public class BufferedRecordMergerFactory {
     Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
     // Checks the ordering value does not equal to 0
     // because we use 0 as the default value which means natural order
-    boolean chooseExisting = !deleteOrderingVal.equals(0)
-        && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
+    boolean chooseExisting = !OrderingValues.isDefault(deleteOrderingVal)
+        && OrderingValues.isSameClass(existingOrderingVal, deleteOrderingVal)
         && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
     if (chooseExisting) {
       // The DELETE message is obsolete if the old message has greater orderingVal.

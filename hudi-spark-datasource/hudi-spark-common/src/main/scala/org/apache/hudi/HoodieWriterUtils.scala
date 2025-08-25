@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
@@ -55,7 +56,6 @@ object HoodieWriterUtils {
     val hoodieConfig: HoodieConfig = new HoodieConfig(props)
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
-    hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)
@@ -217,6 +217,33 @@ object HoodieWriterUtils {
   }
 
   /**
+   * This function adds specific rules to choose the right config key for payload class for version 9 tables.
+   *
+   * RULE 1: When
+   *   1. table version is 9,
+   *   2. writer key is a payload class key, and
+   *   3. table config has legacy payload class configured,
+   * then
+   *   return legacy payload class key.
+   *
+   * Basic rule:
+   *   return writer key.
+   */
+  def getPayloadClassConfigKeyFromTableConfig(key: String, tableConfig: HoodieConfig): String = {
+    if (tableConfig == null) {
+      key
+    } else {
+      if (tableConfig.getInt(HoodieTableConfig.VERSION) == HoodieTableVersion.NINE.versionCode()
+        && !StringUtils.isNullOrEmpty(tableConfig.getStringOrDefault(
+        HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME, StringUtils.EMPTY_STRING).trim)) {
+        HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key
+      } else {
+        key
+      }
+    }
+  }
+
+  /**
    * Detects conflicts between new parameters and existing table configurations
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
@@ -227,9 +254,14 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         if (!shouldIgnoreConfig(key, value, params, tableConfig)) {
-          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
+          val keyInTableConfig = if (key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key))  {
+            getPayloadClassConfigKeyFromTableConfig(key, tableConfig)
+          } else {
+            key
+          }
+          val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, keyInTableConfig)
           if (null != existingValue && !resolver(existingValue, value)) {
-            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
+            diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(keyInTableConfig)}\n")
           }
         }
       }
@@ -247,10 +279,10 @@ object HoodieWriterUtils {
           }
         }
 
-        val datasourcePreCombineKey = params.getOrElse(PRECOMBINE_FIELD.key(), null)
-        val tableConfigPreCombineKey = tableConfig.getString(HoodieTableConfig.PRECOMBINE_FIELD)
-        if (null != datasourcePreCombineKey && null != tableConfigPreCombineKey && datasourcePreCombineKey != tableConfigPreCombineKey) {
-          diffConfigs.append(s"PreCombineKey:\t$datasourcePreCombineKey\t$tableConfigPreCombineKey\n")
+        val datasourceOrderingFields = params.getOrElse(ORDERING_FIELDS.key(), null)
+        val tableConfigOrderingKey = tableConfig.getString(HoodieTableConfig.ORDERING_FIELDS)
+        if (null != datasourceOrderingFields && null != tableConfigOrderingKey && datasourceOrderingFields != tableConfigOrderingKey) {
+          diffConfigs.append(s"OrderingFields:\t$datasourceOrderingFields\t$tableConfigOrderingKey\n")
         }
 
         val datasourceKeyGen = getOriginKeyGenerator(params)
@@ -340,7 +372,7 @@ object HoodieWriterUtils {
   private val sparkDatasourceConfigsToTableConfigsMap = Map(
     TABLE_NAME -> HoodieTableConfig.NAME,
     TABLE_TYPE -> HoodieTableConfig.TYPE,
-    PRECOMBINE_FIELD -> HoodieTableConfig.PRECOMBINE_FIELD,
+    ORDERING_FIELDS -> HoodieTableConfig.ORDERING_FIELDS,
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,

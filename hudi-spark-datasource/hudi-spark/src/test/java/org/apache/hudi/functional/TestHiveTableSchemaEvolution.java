@@ -99,9 +99,10 @@ public class TestHiveTableSchemaEvolution {
     String path = new Path(basePath.toAbsolutePath().toString()).toUri().toString();
 
     spark.sql("set hoodie.schema.on.read.enable=true");
+    spark.sql("set hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true");
 
     spark.sql(String.format("create table %s (col0 int, col1 float, col2 string, col3 timestamp) using hudi "
-            + "tblproperties (type='mor', primaryKey='col0', preCombineField='col1', "
+            + "tblproperties (type='mor', primaryKey='col0', orderingFields='col1', "
             + "hoodie.compaction.payload.class='org.apache.hudi.common.model.OverwriteWithLatestAvroPayload') location '%s'",
         tableName, path));
     spark.sql(String.format("insert into %s values(1, 1.1, 'text', timestamp('2021-12-25 12:01:01'))", tableName));
@@ -145,8 +146,9 @@ public class TestHiveTableSchemaEvolution {
     String path = new Path(basePath.toAbsolutePath().toString()).toUri().toString();
 
     spark.sql("set hoodie.schema.on.read.enable=true");
+    spark.sql("set hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true");
     spark.sql(String.format("create table %s (col0 int, col1 float, col2 string) using hudi "
-            + "tblproperties (type='%s', primaryKey='col0', preCombineField='col1', "
+            + "tblproperties (type='%s', primaryKey='col0', orderingFields='col1', "
             + "hoodie.compaction.payload.class='org.apache.hudi.common.model.OverwriteWithLatestAvroPayload') location '%s'",
         tableName, tableType, path));
     spark.sql(String.format("insert into %s values(1, 1.1, 'text')", tableName));
@@ -210,7 +212,7 @@ public class TestHiveTableSchemaEvolution {
     spark.sql("set hoodie.schema.on.read.enable=true");
 
     spark.sql(String.format("create table %s (col0 int, col1 float, col2 string, col3 timestamp) using hudi "
-                    + "tblproperties (type='%s', primaryKey='col0', preCombineField='col1', "
+                    + "tblproperties (type='%s', primaryKey='col0', orderingFields='col1', "
                     + "hoodie.compaction.payload.class='org.apache.hudi.common.model.OverwriteWithLatestAvroPayload') location '%s'",
             tableName, tableType, path));
     spark.sql(String.format("insert into %s values(1, 1.1, 'text', timestamp('2021-12-25 12:01:01'))", tableName));

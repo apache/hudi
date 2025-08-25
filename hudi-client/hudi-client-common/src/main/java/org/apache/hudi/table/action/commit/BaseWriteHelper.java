@@ -18,18 +18,35 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
-import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
+import org.apache.avro.Schema;
+
+import java.io.IOException;
+import java.util.List;
 
 public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I> {
 
@@ -85,9 +102,69 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    * @return Collection of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    HoodieRecordMerger recordMerger = HoodieRecordUtils.mergerToPreCombineMode(table.getConfig().getRecordMerger());
-    return deduplicateRecords(records, table.getIndex(), parallelism, table.getConfig().getSchema(), table.getConfig().getProps(), recordMerger);
+    HoodieReaderContext<T> readerContext =
+        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps())
+            .getContext();
+    HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
+    readerContext.initRecordMergerForIngestion(table.getConfig().getProps());
+    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), table.getConfig().getProps(), table.getMetaClient());
+    Schema recordSchema;
+    if (StringUtils.nonEmpty(table.getConfig().getPartialUpdateSchema())) {
+      recordSchema = new Schema.Parser().parse(table.getConfig().getPartialUpdateSchema());
+    } else {
+      recordSchema = new Schema.Parser().parse(table.getConfig().getWriteSchema());
+    }
+    recordSchema = AvroSchemaCache.intern(recordSchema);
+    TypedProperties mergedProperties = readerContext.getMergeProps(table.getConfig().getProps());
+    BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
+        readerContext,
+        readerContext.getMergeMode(),
+        false,
+        readerContext.getRecordMerger().map(HoodieRecordUtils::mergerToPreCombineMode),
+        orderingFieldNames,
+        Option.ofNullable(table.getConfig().getPayloadClass()),
+        recordSchema,
+        mergedProperties,
+        tableConfig.getPartialUpdateMode());
+    return deduplicateRecords(
+        records,
+        table.getIndex(),
+        parallelism,
+        table.getConfig().getSchema(),
+        mergedProperties,
+        bufferedRecordMerger,
+        readerContext,
+        orderingFieldNames.toArray(new String[0]));
   }
 
-  public abstract I deduplicateRecords(I records, HoodieIndex<?, ?> index, int parallelism, String schema, TypedProperties props, HoodieRecordMerger merger);
+  public abstract I deduplicateRecords(I records,
+                                       HoodieIndex<?, ?> index,
+                                       int parallelism,
+                                       String schema,
+                                       TypedProperties props,
+                                       BufferedRecordMerger<T> merger,
+                                       HoodieReaderContext<T> readerContext,
+                                       String[] orderingFieldNames);
+
+  protected static <T> HoodieRecord<T> reduceRecords(TypedProperties props, BufferedRecordMerger<T> recordMerger, String[] orderingFieldNames,
+                                                     HoodieRecord<T> previous, HoodieRecord<T> next, Schema schema, RecordContext<T> recordContext) {
+    try {
+      // NOTE: The order of previous and next is uncertain within a batch in "reduceByKey".
+      // If the return value is empty, it means the previous should be chosen.
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(next, schema, recordContext, props, orderingFieldNames);
+      // Construct old buffered record.
+      BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(previous, schema, recordContext, props, orderingFieldNames);
+      // Run merge.
+      Option<BufferedRecord<T>> merged = recordMerger.deltaMerge(newBufferedRecord, oldBufferedRecord);
+      // NOTE: For merge mode based merging, it returns non-null.
+      //       For mergers / payloads based merging, it may return null.
+      HoodieRecord<T> reducedRecord = merged.map(bufferedRecord -> recordContext.constructHoodieRecord(bufferedRecord, next.getPartitionPath())).orElse(previous);
+      boolean choosePrevious = merged.isEmpty();
+      HoodieKey reducedKey = choosePrevious ? previous.getKey() : next.getKey();
+      HoodieOperation operation = choosePrevious ? previous.getOperation() : next.getOperation();
+      return reducedRecord.newInstance(reducedKey, operation);
+    } catch (IOException e) {
+      throw new HoodieException(String.format("Error to merge two records, %s, %s", previous, next), e);
+    }
+  }
 }

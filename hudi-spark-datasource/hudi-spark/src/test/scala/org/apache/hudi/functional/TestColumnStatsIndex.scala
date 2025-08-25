@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
-import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -63,127 +63,135 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 @Tag("functional-b")
 class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
+  protected def withRDDPersistenceValidation(f: => Unit): Unit = {
+    org.apache.hudi.testutils.SparkRDDValidationUtils.withRDDPersistenceValidation(spark, new org.apache.hudi.testutils.SparkRDDValidationUtils.ThrowingRunnable {
+      override def run(): Unit = f
+    })
+  }
+
   val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
     HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c4","c5","c6","c7","c8")
 
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
   def testMetadataColumnStatsIndex(testCase: ColumnStatsTestCase): Unit = {
-    val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
-    )
+    withRDDPersistenceValidation {
+      val metadataOpts = Map(
+        HoodieMetadataConfig.ENABLE.key -> "true",
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+      )
 
-    val commonOpts = Map(
-      "hoodie.insert.shuffle.parallelism" -> "4",
-      "hoodie.upsert.shuffle.parallelism" -> "4",
-      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
-      RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
-      "hoodie.compact.inline.max.delta.commits" -> "10",
-      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
-    ) ++ metadataOpts
+      val commonOpts = Map(
+        "hoodie.insert.shuffle.parallelism" -> "4",
+        "hoodie.upsert.shuffle.parallelism" -> "4",
+        HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+        DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+        RECORDKEY_FIELD.key -> "c1",
+        HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
+        HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+        "hoodie.compact.inline.max.delta.commits" -> "10",
+        HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
+      ) ++ metadataOpts
 
-    // write empty first commit to validate edge cases
-    sparkSession.emptyDataFrame
-      .write
-      .format("hudi")
-      .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
+      // write empty first commit to validate edge cases
+      sparkSession.emptyDataFrame
+        .write
+        .format("hudi")
+        .options(commonOpts)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
 
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
-      dataSourcePath = "index/colstats/input-table-json",
-      expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append))
+      doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+        dataSourcePath = "index/colstats/input-table-json",
+        expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
+        operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append))
 
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
-      dataSourcePath = "index/colstats/another-input-table-json",
-      expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append))
+      doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+        dataSourcePath = "index/colstats/another-input-table-json",
+        expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
+        operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append))
 
-    // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
-    //       deferred updates), diverging from COW
-    var expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
-      "index/colstats/cow-updated2-column-stats-index-table.json"
-    } else {
-      "index/colstats/mor-updated2-column-stats-index-table.json"
+      // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
+      //       deferred updates), diverging from COW
+      var expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+        "index/colstats/cow-updated2-column-stats-index-table.json"
+      } else {
+        "index/colstats/mor-updated2-column-stats-index-table.json"
+      }
+
+      doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+        dataSourcePath = "index/colstats/update-input-table-json",
+        expectedColStatsSourcePath = expectedColStatsSourcePath,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append))
+
+      validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
+
+      // update list of columns to explicit list of cols.
+      val metadataOpts1 = Map(
+        HoodieMetadataConfig.ENABLE.key -> "true",
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+        HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
+      )
+
+      expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+        "index/colstats/cow-updated3-column-stats-index-table.json"
+      } else {
+        "index/colstats/mor-updated3-column-stats-index-table.json"
+      }
+
+      doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
+        dataSourcePath = "index/colstats/update5-input-table-json",
+        expectedColStatsSourcePath = expectedColStatsSourcePath,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append))
+
+      validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+        HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1", "c2", "c3", "c5", "c6", "c7", "c8"))
+
+      // lets explicitly override again. ignore c6
+      // update list of columns to explicit list of cols.
+      val metadataOpts2 = Map(
+        HoodieMetadataConfig.ENABLE.key -> "true",
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+        HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
+      )
+
+      expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+        "index/colstats/cow-updated4-column-stats-index-table.json"
+      } else {
+        "index/colstats/mor-updated4-column-stats-index-table.json"
+      }
+
+      doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts2, commonOpts,
+        dataSourcePath = "index/colstats/update6-input-table-json",
+        expectedColStatsSourcePath = expectedColStatsSourcePath,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append))
+
+      validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+        HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1", "c2", "c3", "c5", "c7", "c8"))
+
+      // update list of columns to explicit list of cols.
+      val metadataOpts3 = Map(
+        HoodieMetadataConfig.ENABLE.key -> "true",
+        HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
+      )
+      // disable col stats
+      doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts3, commonOpts,
+        dataSourcePath = "index/colstats/update6-input-table-json",
+        expectedColStatsSourcePath = expectedColStatsSourcePath,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append,
+        shouldValidateColStats = false,
+        shouldValidateManually = false))
+
+      metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+      validateNonExistantColumnsToIndexDefn(metaClient)
     }
-
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
-      dataSourcePath = "index/colstats/update-input-table-json",
-      expectedColStatsSourcePath = expectedColStatsSourcePath,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append))
-
-    validateColumnsToIndex(metaClient, DEFAULT_COLUMNS_TO_INDEX)
-
-    // update list of columns to explicit list of cols.
-    val metadataOpts1 = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c6,c7,c8" // ignore c4
-    )
-
-    expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
-      "index/colstats/cow-updated3-column-stats-index-table.json"
-    } else {
-      "index/colstats/mor-updated3-column-stats-index-table.json"
-    }
-
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts1, commonOpts,
-      dataSourcePath = "index/colstats/update5-input-table-json",
-      expectedColStatsSourcePath = expectedColStatsSourcePath,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append))
-
-    validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c6","c7","c8"))
-
-    // lets explicitly override again. ignore c6
-    // update list of columns to explicit list of cols.
-    val metadataOpts2 = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "c1,c2,c3,c5,c7,c8" // ignore c4,c6
-    )
-
-    expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
-      "index/colstats/cow-updated4-column-stats-index-table.json"
-    } else {
-      "index/colstats/mor-updated4-column-stats-index-table.json"
-    }
-
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts2, commonOpts,
-      dataSourcePath = "index/colstats/update6-input-table-json",
-      expectedColStatsSourcePath = expectedColStatsSourcePath,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append))
-
-    validateColumnsToIndex(metaClient, Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
-      HoodieRecord.PARTITION_PATH_METADATA_FIELD, "c1","c2","c3","c5","c7","c8"))
-
-    // update list of columns to explicit list of cols.
-    val metadataOpts3 = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
-      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
-    )
-    // disable col stats
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts3, commonOpts,
-      dataSourcePath = "index/colstats/update6-input-table-json",
-      expectedColStatsSourcePath = expectedColStatsSourcePath,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append,
-      shouldValidateColStats = false,
-      shouldValidateManually = false))
-
-    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
-    validateNonExistantColumnsToIndexDefn(metaClient)
   }
 
   /**
@@ -204,7 +212,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
     ) ++ metadataOpts
@@ -264,7 +272,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "5",
@@ -278,7 +286,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
       false,
-      numPartitions =  1,
+      numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
@@ -289,7 +297,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       false,
-        numPartitions =  1,
+      numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
@@ -300,7 +308,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       false,
-      numPartitions =  1,
+      numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
@@ -330,7 +338,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       val allPartitionPaths = fsv.getPartitionPaths
       allPartitionPaths.forEach(partitionPath => {
         val pPath = FSUtils.getRelativePartitionPath(baseStoragePath, partitionPath)
-        assertTrue (fsv.getLatestFileSlices(pPath).filter(fileSlice => fileSlice.hasLogFiles).count() > 0)
+        assertTrue(fsv.getLatestFileSlices(pPath).filter(fileSlice => fileSlice.hasLogFiles).count() > 0)
       })
       fsv.close()
     }
@@ -342,7 +350,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       latestCompletedCommit = latestCompletedCommit,
-      numPartitions =  1,
+      numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
@@ -359,7 +367,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       latestCompletedCommit = latestCompletedCommit,
-      numPartitions =  1,
+      numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
@@ -381,7 +389,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       "hoodie.write.markers.type" -> "DIRECT",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
@@ -395,7 +403,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
       shouldValidateColStats = false,
-      numPartitions =  1,
+      numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
@@ -406,7 +414,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       shouldValidateColStats = false,
-      numPartitions =  1,
+      numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
@@ -436,7 +444,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
       latestCompletedCommit = latestCompletedCommit,
-      numPartitions =  1,
+      numPartitions = 1,
       parquetMaxFileSize = 100 * 1024 * 1024,
       smallFileLimit = 0))
 
@@ -512,7 +520,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "5",
@@ -569,7 +577,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1",
@@ -635,7 +643,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> partitionCol,
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1",
@@ -704,7 +712,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts
@@ -755,7 +763,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       PARTITIONPATH_FIELD.key() -> "c8",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true",
@@ -852,7 +860,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true",
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
@@ -967,7 +975,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "hoodie.upsert.shuffle.parallelism" -> "4",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
-      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "c1",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString
     ) ++ metadataOpts

@@ -200,14 +200,7 @@ public class ParquetUtils extends FileFormatUtils {
     try {
       Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
       conf.addResource(storage.newInstance(filePath, storage.getConf()).getConf().unwrapAs(Configuration.class));
-      Schema readSchema = keyGeneratorOpt
-          .map(keyGenerator -> {
-            List<String> fields = new ArrayList<>();
-            fields.addAll(keyGenerator.getRecordKeyFieldNames());
-            fields.addAll(keyGenerator.getPartitionPathFields());
-            return HoodieAvroUtils.projectSchema(readAvroSchema(storage, filePath), fields);
-          })
-          .orElse(partitionPath.isPresent() ? HoodieAvroUtils.getRecordKeySchema() : HoodieAvroUtils.getRecordKeyPartitionPathSchema());
+      Schema readSchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
       AvroReadSupport.setAvroReadSchema(conf, readSchema);
       AvroReadSupport.setRequestedProjection(conf, readSchema);
       ParquetReader<GenericRecord> reader =
@@ -238,6 +231,21 @@ public class ParquetUtils extends FileFormatUtils {
    */
   public MessageType readSchema(HoodieStorage storage, StoragePath parquetFilePath) {
     return readMetadata(storage, parquetFilePath).getFileMetaData().getSchema();
+  }
+  
+  /**
+   * Get the hash code of the schema from a parquet file.
+   * This is useful for quickly comparing schemas without full comparison.
+   */
+  public static Integer readSchemaHash(HoodieStorage storage, StoragePath parquetFilePath) {
+    try {
+      ParquetUtils parquetUtils = new ParquetUtils();
+      MessageType schema = parquetUtils.readSchema(storage, parquetFilePath);
+      return schema.hashCode();
+    } catch (Exception e) {
+      LOG.warn("Failed to read schema hash from file: " + parquetFilePath, e);
+      return 0;
+    }
   }
 
   @Override

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.common.testutils.PreCombineTestUtils;
+import org.apache.hudi.common.testutils.OrderingFieldsTestUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -29,7 +29,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -64,9 +63,9 @@ public class TestDefaultHoodieRecordPayload {
   }
 
   @ParameterizedTest
-  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
   public void testActiveRecords(String key) throws IOException {
-    PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
     record1.put("partition", "partition0");
@@ -92,9 +91,9 @@ public class TestDefaultHoodieRecordPayload {
   }
 
   @ParameterizedTest
-  @MethodSource("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine")
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
   public void testDeletedRecord(String key) throws IOException {
-    PreCombineTestUtils.setPreCombineConfig(props, key, "ts");
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
     record1.put("partition", "partition0");
@@ -199,28 +198,6 @@ public class TestDefaultHoodieRecordPayload {
     assertFalse(payload.getMetadata().isPresent());
   }
 
-  @ParameterizedTest
-  @ValueSource(longs = {1L, 1612542030000L})
-  public void testGetEventTimeInMetadata(long eventTime) throws IOException {
-    GenericRecord record1 = new GenericData.Record(schema);
-    record1.put("id", "1");
-    record1.put("partition", "partition0");
-    record1.put("ts", 0L);
-    record1.put("_hoodie_is_deleted", false);
-
-    GenericRecord record2 = new GenericData.Record(schema);
-    record2.put("id", "1");
-    record2.put("partition", "partition0");
-    record2.put("ts", eventTime);
-    record2.put("_hoodie_is_deleted", false);
-
-    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, eventTime);
-    payload2.combineAndGetUpdateValue(record1, schema, props);
-    assertTrue(payload2.getMetadata().isPresent());
-    assertEquals(eventTime,
-        Long.parseLong(payload2.getMetadata().get().get(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY)));
-  }
-
   @Test
   public void testEmptyProperty() throws IOException {
     GenericRecord record1 = new GenericData.Record(schema);
@@ -239,21 +216,5 @@ public class TestDefaultHoodieRecordPayload {
     Properties properties = new Properties();
     payload.getInsertValue(schema, properties);
     payload.combineAndGetUpdateValue(record2, schema, properties);
-  }
-
-  @ParameterizedTest
-  @ValueSource(longs = {1L, 1612542030000L})
-  public void testGetEventTimeInMetadataForInserts(long eventTime) throws IOException {
-    GenericRecord record = new GenericData.Record(schema);
-
-    record.put("id", "1");
-    record.put("partition", "partition0");
-    record.put("ts", eventTime);
-    record.put("_hoodie_is_deleted", false);
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, eventTime);
-    payload.getInsertValue(schema, props);
-    assertTrue(payload.getMetadata().isPresent());
-    assertEquals(eventTime,
-        Long.parseLong(payload.getMetadata().get().get(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY)));
   }
 }

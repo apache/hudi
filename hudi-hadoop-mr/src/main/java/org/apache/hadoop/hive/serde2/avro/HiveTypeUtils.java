@@ -18,6 +18,8 @@
 
 package org.apache.hadoop.hive.serde2.avro;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+
 import static org.apache.avro.Schema.Type.BOOLEAN;
 import static org.apache.avro.Schema.Type.BYTES;
 import static org.apache.avro.Schema.Type.DOUBLE;
@@ -235,9 +237,8 @@ public class HiveTypeUtils {
                                                  Set<Schema> seenSchemas) throws AvroSerdeException {
     // Avro requires NULLable types to be defined as unions of some type T
     // and NULL.  This is annoying and we're going to hide it from the user.
-    if (AvroSerdeUtils.isNullableType(schema)) {
-      return generateTypeInfo(
-          AvroSerdeUtils.getOtherTypeFromNullableType(schema), seenSchemas);
+    if (AvroSchemaUtils.isNullable(schema)) {
+      return generateTypeInfo(AvroSchemaUtils.resolveNullableSchema(schema), seenSchemas);
     }
 
     Schema.Type type = schema.getType();

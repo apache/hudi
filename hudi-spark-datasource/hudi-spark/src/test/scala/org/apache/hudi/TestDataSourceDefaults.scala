@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.testutils.{PreCombineTestUtils, SchemaTestUtil}
+import org.apache.hudi.common.testutils.{OrderingFieldsTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodiePayloadConfig
@@ -556,10 +556,10 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("org.apache.hudi.common.testutils.PreCombineTestUtils#configurePreCombine"))
+  @MethodSource(Array("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields"))
   def testOverwriteWithLatestAvroPayloadCombineAndGetUpdateValue(key: String): Unit = {
     val props = new TypedProperties()
-    PreCombineTestUtils.setPreCombineConfig(props, key, "favoriteIntNumber")
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "favoriteIntNumber")
     val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
 
@@ -579,7 +579,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   @Test def testDefaultHoodieRecordPayloadCombineAndGetUpdateValue(): Unit = {
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
     val props = HoodiePayloadConfig.newBuilder()
-      .withPayloadOrderingField("favoriteIntNumber").build().getProps;
+      .withPayloadOrderingFields("favoriteIntNumber").build().getProps;
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")

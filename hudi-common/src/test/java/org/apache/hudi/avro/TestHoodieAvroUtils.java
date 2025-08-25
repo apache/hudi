@@ -87,8 +87,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -161,14 +161,14 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"firstname\",\"type\":\"string\"},"
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
       + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
-      + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+      + "{\"name\":\"firstnameNested\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastnameNested\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
 
   private static final String SCHEMA_WITH_NESTED_FIELD_RENAMED =
       "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"fn\",\"type\":\"string\"},"
       + "{\"name\":\"ln\",\"type\":\"string\"},"
       + "{\"name\":\"ss\",\"type\":{\"name\":\"ss\",\"type\":\"record\",\"fields\":["
-      + "{\"name\":\"fn\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"ln\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+      + "{\"name\":\"fnn\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lnn\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
 
   public static final String SCHEMA_WITH_AVRO_TYPES_STR = "{\"name\":\"TestRecordAvroTypes\",\"type\":\"record\",\"fields\":["
       // Primitive types
@@ -440,30 +440,30 @@ public class TestHoodieAvroUtils {
 
     // test get student
     GenericRecord studentRecord = new GenericData.Record(rec.getSchema().getField("student").schema());
-    studentRecord.put("firstname", "person");
+    studentRecord.put("firstnameNested", "person");
     rec.put("student", studentRecord);
     assertEquals(studentRecord, HoodieAvroUtils.getNestedFieldVal(rec, "student", false, false));
 
     // test get student.fake_key
-    assertEquals("student.fake_key(Part -fake_key) field not found in record. Acceptable fields were :[firstname, lastname]",
+    assertEquals("student.fake_key(Part -fake_key) field not found in record. Acceptable fields were :[firstnameNested, lastnameNested]",
         assertThrows(HoodieException.class, () ->
             HoodieAvroUtils.getNestedFieldVal(rec, "student.fake_key", false, false)).getMessage());
 
     // test get student.firstname
-    assertEquals("person", HoodieAvroUtils.getNestedFieldVal(rec, "student.firstname", false, false));
+    assertEquals("person", HoodieAvroUtils.getNestedFieldVal(rec, "student.firstnameNested", false, false));
 
     // test get student.lastname(null)
-    assertNull(HoodieAvroUtils.getNestedFieldVal(rec, "student.lastname", false, false));
+    assertNull(HoodieAvroUtils.getNestedFieldVal(rec, "student.lastnameNested", false, false));
 
     // test get student.firstname.fake_key
-    assertEquals("Cannot find a record at part value :firstname",
+    assertEquals("Cannot find a record at part value :firstnameNested",
         assertThrows(HoodieException.class, () ->
-            HoodieAvroUtils.getNestedFieldVal(rec, "student.firstname.fake_key", false, false)).getMessage());
+            HoodieAvroUtils.getNestedFieldVal(rec, "student.firstnameNested.fake_key", false, false)).getMessage());
 
     // test get student.lastname(null).fake_key
-    assertEquals("Cannot find a record at part value :lastname",
+    assertEquals("Cannot find a record at part value :lastnameNested",
         assertThrows(HoodieException.class, () ->
-            HoodieAvroUtils.getNestedFieldVal(rec, "student.lastname.fake_key", false, false)).getMessage());
+            HoodieAvroUtils.getNestedFieldVal(rec, "student.lastnameNested.fake_key", false, false)).getMessage());
   }
 
   @Test
@@ -508,12 +508,12 @@ public class TestHoodieAvroUtils {
     rec3.put("firstname", "person1");
     rec3.put("lastname", "person2");
     GenericRecord studentRecord = new GenericData.Record(rec3.getSchema().getField("student").schema());
-    studentRecord.put("firstname", "person1");
-    studentRecord.put("lastname", "person2");
+    studentRecord.put("firstnameNested", "person1");
+    studentRecord.put("lastnameNested", "person2");
     rec3.put("student", studentRecord);
 
-    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec3.getSchema(), "student.firstname"));
-    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(nestedSchema, "student.firstname"));
+    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(rec3.getSchema(), "student.firstnameNested"));
+    assertEquals(Schema.create(Schema.Type.STRING), getNestedFieldSchemaFromWriteSchema(nestedSchema, "student.firstnameNested"));
   }
 
   @Test
@@ -550,8 +550,8 @@ public class TestHoodieAvroUtils {
     rec3.put("firstname", "person1");
     rec3.put("lastname", "person2");
     GenericRecord studentRecord = new GenericData.Record(rec3.getSchema().getField("student").schema());
-    studentRecord.put("firstname", "person1");
-    studentRecord.put("lastname", "person2");
+    studentRecord.put("firstnameNested", "person3");
+    studentRecord.put("lastnameNested", "person4");
     rec3.put("student", studentRecord);
 
     Schema nestedSchemaRename = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_RENAMED);
@@ -559,10 +559,51 @@ public class TestHoodieAvroUtils {
     colRenames.put("fn", "firstname");
     colRenames.put("ln", "lastname");
     colRenames.put("ss", "student");
-    colRenames.put("ss.fn", "firstname");
-    colRenames.put("ss.ln", "lastname");
+    colRenames.put("ss.fnn", "firstnameNested");
+    colRenames.put("ss.lnn", "lastnameNested");
     GenericRecord studentRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(rec3, nestedSchemaRename, colRenames);
-    Assertions.assertEquals(GenericData.get().validate(nestedSchemaRename, studentRecordRename), true);
+    Assertions.assertTrue(GenericData.get().validate(nestedSchemaRename, studentRecordRename));
+    Assertions.assertEquals("person1", studentRecordRename.get("fn"));
+    Assertions.assertEquals("person2",  studentRecordRename.get("ln"));
+    Assertions.assertEquals("person3", ((GenericRecord) studentRecordRename.get("ss")).get("fnn"));
+    Assertions.assertEquals("person4",  ((GenericRecord) studentRecordRename.get("ss")).get("lnn"));
+  }
+
+  @Test
+  public void testReWriteAvroRecordWithSwappedNames() {
+    Schema origNestedSchema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
+    GenericRecord rec = new GenericData.Record(origNestedSchema);
+    rec.put("firstname", "John");
+    rec.put("lastname",  "Doe");
+
+    GenericRecord student = new GenericData.Record(
+        origNestedSchema.getField("student").schema());
+    student.put("firstnameNested", "Albert");
+    student.put("lastnameNested",  "Einstein");
+    rec.put("student", student);
+
+    final String SCHEMA_WITH_SWAPPED_NAMES =
+        "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
+            +   "{\"name\":\"fn\",\"type\":\"string\"},"
+            +   "{\"name\":\"firstname\",\"type\":\"string\"},"
+            +   "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
+            +     "{\"name\":\"fnn\",\"type\":[\"null\",\"string\"],\"default\":null},"
+            +     "{\"name\":\"firstnameNested\",\"type\":[\"null\",\"string\"],\"default\":null}]}}]}";
+
+    Schema swappedSchema = new Schema.Parser().parse(SCHEMA_WITH_SWAPPED_NAMES);
+
+    Map<String, String> renames = new HashMap<>();
+    renames.put("fn", "firstname");
+    renames.put("firstname", "lastname");
+    renames.put("student.fnn", "firstnameNested");
+    renames.put("student.firstnameNested", "lastnameNested");
+
+    GenericRecord rewritten = HoodieAvroUtils.rewriteRecordWithNewSchema(rec, swappedSchema, renames);
+    Assertions.assertTrue(GenericData.get().validate(swappedSchema, rewritten));
+    Assertions.assertEquals("Albert", ((GenericRecord) rewritten.get("student")).get("fnn"));
+    Assertions.assertEquals("Einstein",  ((GenericRecord) rewritten.get("student")).get("firstnameNested"));
+    Assertions.assertEquals("John", rewritten.get("fn"));
+    Assertions.assertEquals("Doe",  rewritten.get("firstname"));
   }
 
   @Test
@@ -837,8 +878,18 @@ public class TestHoodieAvroUtils {
   void testCreateFullName() {
     String result = HoodieAvroUtils.createFullName(new ArrayDeque<>(Arrays.asList("a", "b", "c")));
     String resultSingle = HoodieAvroUtils.createFullName(new ArrayDeque<>(Collections.singletonList("a")));
+    String resultEmpty = HoodieAvroUtils.createFullName(new ArrayDeque<>());
     assertEquals("c.b.a", result);
     assertEquals("a", resultSingle);
+    assertEquals("", resultEmpty);
+  }
+
+  @Test
+  public void testCreateNamePrefix() {
+    assertNull(HoodieAvroUtils.createNamePrefix(true, new ArrayDeque<>(Collections.singletonList("field1"))));
+    assertEquals("field1", HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>(Collections.singletonList("field1"))));
+    assertNull(HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>()));
+    assertEquals("parent.child", HoodieAvroUtils.createNamePrefix(false, new ArrayDeque<>(Arrays.asList("child", "parent"))));
   }
 
   @ParameterizedTest
@@ -1079,5 +1130,54 @@ public class TestHoodieAvroUtils {
     Schema projectedSchema = HoodieAvroUtils.projectSchema(SCHEMA_WITH_NESTED_FIELD_LARGE, projectedFields);
     assertEquals(expectedSchema, projectedSchema);
     assertTrue(AvroSchemaUtils.isSchemaCompatible(projectedSchema, expectedSchema, false));
+  }
+
+  private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {
+    Schema decimal1 = LogicalTypes.decimal(12, 2).addToSchema(Schema.create(Schema.Type.BYTES));
+    Schema decimal2 = LogicalTypes.decimal(10, 2).addToSchema(Schema.create(Schema.Type.BYTES));
+    Schema dateSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
+    Schema doubleSchema = Schema.create(Schema.Type.DOUBLE);
+    Schema intSchema = Schema.create(Schema.Type.INT);
+    Schema longSchema = Schema.create(Schema.Type.LONG);
+    Schema floatSchema = Schema.create(Schema.Type.FLOAT);
+    Schema stringSchema = Schema.create(Schema.Type.STRING);
+
+    Schema recordSchema1 = Schema.createRecord("record1", null, "com.example", false,
+        Arrays.asList(new Schema.Field("decimalField", decimal1, null, null),
+            new Schema.Field("doubleField", doubleSchema, null, null)));
+
+    Schema recordSchema2 = Schema.createRecord("record2", null, "com.example2", false,
+        Arrays.asList(new Schema.Field("decimalField", decimal1, null, null),
+            new Schema.Field("doubleField", doubleSchema, null, null)));
+
+    return Stream.of(
+        Arguments.of(intSchema, longSchema, false),
+        Arguments.of(intSchema, floatSchema, false),
+        Arguments.of(longSchema, intSchema, true),
+        Arguments.of(longSchema, floatSchema, false),
+        Arguments.of(decimal1, decimal2, true),
+        Arguments.of(doubleSchema, decimal1, true),
+        Arguments.of(decimal1, doubleSchema, true),
+        Arguments.of(intSchema, stringSchema, true),
+        Arguments.of(longSchema, doubleSchema, false),
+        Arguments.of(intSchema, doubleSchema, false),
+        Arguments.of(longSchema, stringSchema, true),
+        Arguments.of(floatSchema, stringSchema, true),
+        Arguments.of(doubleSchema, stringSchema, true),
+        Arguments.of(decimal1, stringSchema, true),
+        Arguments.of(stringSchema, decimal2, true),
+        Arguments.of(stringSchema, intSchema, true),
+        Arguments.of(floatSchema, doubleSchema, true),
+        Arguments.of(doubleSchema, floatSchema, true),
+        Arguments.of(recordSchema1, recordSchema2, false),
+        Arguments.of(dateSchema, stringSchema, true)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void recordNeedsRewriteForExtendedAvroTypePromotion(Schema writerSchema, Schema readerSchema, boolean expected) {
+    boolean result = HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(writerSchema, readerSchema);
+    assertEquals(expected, result);
   }
 }

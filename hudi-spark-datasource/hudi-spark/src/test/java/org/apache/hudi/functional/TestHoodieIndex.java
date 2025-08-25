@@ -50,6 +50,8 @@ import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.RawTripTestPayloadKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -91,7 +93,9 @@ import scala.Tuple2;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.SIMPLE_RECORD_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataPartition;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartitionExists;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
@@ -149,16 +153,18 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     config = getConfigBuilder()
         .withProperties(keyGenProps)
-        .withSchema(RawTripTestPayload.JSON_DATA_SCHEMA_STR)
+        .withSchema(SIMPLE_RECORD_SCHEMA.toString())
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(RawTripTestPayload.class.getName())
-            .withPayloadOrderingField("number").build())
+            .withPayloadOrderingFields("number").build())
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withIndexConfig(indexBuilder.build())
         .withMetadataConfig(metadataConfigBuilder.build())
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().fromProperties(indexBuilder.build().getProps())
             .withLayoutPartitioner(SparkBucketIndexPartitioner.class.getName()).build())
         .build();
+    KeyGeneratorType keyGeneratorType = HoodieSparkKeyGeneratorFactory.inferKeyGeneratorTypeFromWriteConfig(config.getProps());
+    config.setValue(HoodieWriteConfig.KEYGENERATOR_TYPE, keyGeneratorType.name());
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
   }
@@ -178,9 +184,9 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
       properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
       properties.put("hoodie.datasource.write.keygenerator.class", RawTripTestPayloadKeyGenerator.class.getName());
       properties.put("hoodie.datasource.write.partitionpath.field", "time");
-      properties.put("hoodie.datasource.write.precombine.field", "number");
+      properties.put(HoodieTableConfig.ORDERING_FIELDS.key(), "number");
       properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "time");
-      properties.put(HoodieTableConfig.PRECOMBINE_FIELD.key(), "number");
+      properties.put(HoodieTableConfig.ORDERING_FIELDS.key(), "number");
     }
     return properties;
   }
@@ -190,40 +196,12 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     cleanupResources();
   }
 
-  private static List<HoodieRecord> getInserts() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":1}";
-    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":2}";
-    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":3}";
-    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":4}";
+  private static List<HoodieRecord> getInserts() {
     return Arrays.asList(
-        new RawTripTestPayload(recordStr1).toHoodieRecord(),
-        new RawTripTestPayload(recordStr2).toHoodieRecord(),
-        new RawTripTestPayload(recordStr3).toHoodieRecord(),
-        new RawTripTestPayload(recordStr4).toHoodieRecord());
-  }
-
-  private static List<HoodieRecord> getInsertsBatch2() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"005\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
-    String recordStr2 = "{\"_row_key\":\"006\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
-    String recordStr3 = "{\"_row_key\":\"007\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
-    String recordStr4 = "{\"_row_key\":\"008\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
-    return Arrays.asList(
-        new RawTripTestPayload(recordStr1).toHoodieRecord(),
-        new RawTripTestPayload(recordStr2).toHoodieRecord(),
-        new RawTripTestPayload(recordStr3).toHoodieRecord(),
-        new RawTripTestPayload(recordStr4).toHoodieRecord());
-  }
-
-  private static List<HoodieRecord> getUpdates() throws IOException {
-    String recordStr1 = "{\"_row_key\":\"001\",\"time\":\"2016-01-31T00:00:01.000Z\",\"number\":5}";
-    String recordStr2 = "{\"_row_key\":\"002\",\"time\":\"2016-01-31T00:00:02.000Z\",\"number\":6}";
-    String recordStr3 = "{\"_row_key\":\"003\",\"time\":\"2016-01-31T00:00:03.000Z\",\"number\":7}";
-    String recordStr4 = "{\"_row_key\":\"004\",\"time\":\"2017-01-31T00:00:04.000Z\",\"number\":8}";
-    return new ArrayList<>(Arrays.asList(
-        new RawTripTestPayload(recordStr1).toHoodieRecord(),
-        new RawTripTestPayload(recordStr2).toHoodieRecord(),
-        new RawTripTestPayload(recordStr3).toHoodieRecord(),
-        new RawTripTestPayload(recordStr4).toHoodieRecord()));
+        createSimpleRecord("001", "2016-01-31T00:00:01.000Z", 1),
+        createSimpleRecord("002", "2016-01-31T00:00:02.000Z", 2),
+        createSimpleRecord("003", "2016-01-31T00:00:03.000Z", 3),
+        createSimpleRecord("004", "2016-01-31T00:00:04.000Z", 4));
   }
 
   @ParameterizedTest
@@ -419,15 +397,11 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     String rowKey1 = UUID.randomUUID().toString();
     String rowKey2 = UUID.randomUUID().toString();
     String rowKey3 = UUID.randomUUID().toString();
-    String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
-    String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
-    String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
+    HoodieRecord record1 = createSimpleRecord(rowKey1, "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord(rowKey2, "2016-01-31T03:20:41.415Z", 100);
+    HoodieRecord record3 = createSimpleRecord(rowKey3, "2016-01-31T03:16:41.415Z", 15);
     // place same row key under a different partition.
-    String recordStr4 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2015-01-31T03:16:41.415Z\",\"number\":32}";
-    HoodieRecord record1 = new RawTripTestPayload(recordStr1).toHoodieRecord();
-    HoodieRecord record2 = new RawTripTestPayload(recordStr2).toHoodieRecord();
-    HoodieRecord record3 = new RawTripTestPayload(recordStr3).toHoodieRecord();
-    HoodieRecord record4 = new RawTripTestPayload(recordStr4).toHoodieRecord();
+    HoodieRecord record4 = createSimpleRecord(rowKey1, "2015-01-31T03:16:41.415Z", 32);
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
     String newCommitTime = writeClient.startCommit();
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -442,7 +416,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     }
 
     // We create three parquet files, each having one record (two different partitions)
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA), metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, addMetadataFields(SIMPLE_RECORD_SCHEMA), metadataWriter);
     final String fileId1 = "fileID1";
     final String fileId2 = "fileID2";
     final String fileId3 = "fileID3";
@@ -560,7 +534,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     assertTrue(HoodieIndexUtils.checkIfValidCommit(timeline, instantTimestampSec));
 
     // With a sec format instant time checkIfValid should return false assuming its > first entry in the active timeline
-    Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
+    Thread.sleep(2010); // sleep required so that new timestamp differs in the seconds rather than msec
     instantTimestamp = WriteClientTestUtils.createNewInstantTime();
     instantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     assertFalse(timeline.empty());
@@ -572,7 +546,7 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
     // Timestamp contain in inflight timeline, checkContainsInstant() should return true
     String checkInstantTimestampSec = instantTimestamp.substring(0, instantTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     String checkInstantTimestamp = checkInstantTimestampSec + HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT;
-    Thread.sleep(1010); // sleep required so that new timestamp differs in the seconds rather than msec
+    Thread.sleep(2010); // sleep required so that new timestamp differs in the seconds rather than msec
     String newTimestamp = WriteClientTestUtils.createNewInstantTime();
     String newTimestampSec = newTimestamp.substring(0, newTimestamp.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
     final HoodieInstant instant5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, newTimestamp);

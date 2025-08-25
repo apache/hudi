@@ -18,12 +18,14 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -39,10 +41,12 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.datasources.FileFormat;
-import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader;
+import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader;
 import org.apache.spark.sql.hudi.SparkAdapter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
+import org.apache.spark.sql.types.StructType;
 import org.apache.spark.util.SerializableConfiguration;
 
 import java.util.Collections;
@@ -57,16 +61,16 @@ import scala.collection.JavaConverters;
 /**
  * Factory that provides the {@link InternalRow} based {@link HoodieReaderContext} for reading data into the spark native format.
  */
-class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
-  private final Broadcast<SparkParquetReader> parquetReaderBroadcast;
+public class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
+  private final Broadcast<SparkColumnarFileReader> baseFileReaderBroadcast;
   private final Broadcast<SerializableConfiguration> configurationBroadcast;
   private final Broadcast<HoodieTableConfig> tableConfigBroadcast;
 
-  SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient) {
+  public SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient) {
     this(hoodieSparkEngineContext, metaClient, new TableSchemaResolver(metaClient), SparkAdapterSupport$.MODULE$.sparkAdapter());
   }
 
-  SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient,
+  public SparkReaderContextFactory(HoodieSparkEngineContext hoodieSparkEngineContext, HoodieTableMetaClient metaClient,
                             TableSchemaResolver resolver, SparkAdapter sparkAdapter) {
     SQLConf sqlConf = hoodieSparkEngineContext.getSqlContext().sessionState().conf();
     JavaSparkContext jsc = hoodieSparkEngineContext.jsc();
@@ -88,10 +92,18 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
     configs.set(SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE().key(), sqlConf.getConfString(SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE().key()));
     configs.set(SQLConf.PARQUET_WRITE_LEGACY_FORMAT().key(), sqlConf.getConfString(SQLConf.PARQUET_WRITE_LEGACY_FORMAT().key()));
     configurationBroadcast = jsc.broadcast(new SerializableConfiguration(configs));
-    // Broadcast: ParquetReader.
-    // Spark parquet reader has to be instantiated on the driver and broadcast to the executors
-    SparkParquetReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
-    parquetReaderBroadcast = jsc.broadcast(parquetFileReader);
+    // Broadcast: BaseFilereader.
+    if (metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled()) {
+      SparkColumnarFileReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
+      SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
+      baseFileReaderBroadcast = jsc.broadcast(new MultipleColumnarFileFormatReader(parquetFileReader, orcFileReader));
+    } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.ORC) {
+      SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
+      baseFileReaderBroadcast = jsc.broadcast(orcFileReader);
+    } else {
+      baseFileReaderBroadcast = jsc.broadcast(
+          sparkAdapter.createParquetFileReader(false, sqlConf, options, configs));
+    }
     // Broadcast: TableConfig.
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     tableConfigBroadcast = jsc.broadcast(tableConfig);
@@ -99,7 +111,7 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
 
   @Override
   public HoodieReaderContext<InternalRow> getContext() {
-    if (parquetReaderBroadcast == null) {
+    if (baseFileReaderBroadcast == null) {
       throw new HoodieException("Spark Parquet reader broadcast is not initialized.");
     }
 
@@ -111,17 +123,30 @@ class SparkReaderContextFactory implements ReaderContextFactory<InternalRow> {
       throw new HoodieException("Table config broadcast is not initialized.");
     }
 
-    SparkParquetReader sparkParquetReader = parquetReaderBroadcast.getValue();
-    if (sparkParquetReader != null) {
+    SparkColumnarFileReader baseFileReader = baseFileReaderBroadcast.getValue();
+    if (baseFileReader != null) {
       List<Filter> filters = Collections.emptyList();
       return new SparkFileFormatInternalRowReaderContext(
-          sparkParquetReader,
+          baseFileReader,
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
           new HadoopStorageConfiguration(configurationBroadcast.getValue().value()),
           tableConfigBroadcast.getValue());
     } else {
       throw new HoodieException("Cannot get the broadcast Spark Parquet reader.");
+    }
+  }
+
+  private static SparkColumnarFileReader getOrcFileReader(TableSchemaResolver resolver,
+                                                          SQLConf sqlConf,
+                                                          scala.collection.immutable.Map<String, String> options,
+                                                          Configuration configs,
+                                                          SparkAdapter sparkAdapter) {
+    try {
+      StructType dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(resolver.getTableAvroSchema());
+      return sparkAdapter.createOrcFileReader(false, sqlConf, options, configs, dataSchema);
+    } catch (Exception e) {
+      throw new HoodieException("Failed to broadcast ORC file reader", e);
     }
   }
 

@@ -81,7 +81,7 @@ case class HoodieTableSchema(structTypeSchema: StructType, avroSchemaStr: String
 case class HoodieTableState(tablePath: String,
                             latestCommitTimestamp: Option[String],
                             recordKeyField: String,
-                            preCombineFieldOpt: Option[String],
+                            orderingFields: List[String],
                             usesVirtualKeys: Boolean,
                             recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
@@ -135,15 +135,16 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       keyFields.head
     }
 
-  protected lazy val preCombineFieldOpt: Option[String] =
-    Option(tableConfig.getPreCombineField)
-      .orElse(optParams.get(DataSourceWriteOptions.PRECOMBINE_FIELD.key)) match {
-      // NOTE: This is required to compensate for cases when empty string is used to stub
-      //       property value to avoid it being set with the default value
-      // TODO(HUDI-3456) cleanup
-      case Some(f) if !StringUtils.isNullOrEmpty(f) => Some(f)
-      case _ => None
+  protected lazy val orderingFields: List[String] = {
+    val tableOrderingFields = tableConfig.getOrderingFields
+    if (tableOrderingFields.isEmpty) {
+      DataSourceOptionsHelper.getPreCombineFields(optParams)
+        .orElse(java.util.Collections.emptyList[String])
+        .asScala.toList
+    } else {
+      tableOrderingFields.asScala.toList
     }
+  }
 
   protected lazy val specifiedQueryTimestamp: Option[String] =
     optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
@@ -264,11 +265,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   lazy val tableState: HoodieTableState = {
     val recordMergerImpls = optParams.get(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key()).map(impls => ConfigUtils.split2List(impls).asScala.toList).getOrElse(List.empty)
     // Subset of the state of table's configuration as of at the time of the query
-    HoodieTableState(
-      tablePath = basePath.toString,
+    HoodieTableState(tablePath = basePath.toString,
       latestCommitTimestamp = queryTimestamp,
       recordKeyField = recordKeyField,
-      preCombineFieldOpt = preCombineFieldOpt,
+      orderingFields = orderingFields,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
       recordPayloadClassName = tableConfig.getPayloadClass,
       metadataConfig = fileIndex.metadataConfig,

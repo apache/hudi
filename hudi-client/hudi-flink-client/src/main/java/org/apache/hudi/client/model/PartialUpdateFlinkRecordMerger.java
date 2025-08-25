@@ -21,6 +21,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -81,9 +82,11 @@ import java.io.IOException;
  */
 public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
+  private String[] orderingFields;
+
   @Override
   public String getMergingStrategy() {
-    return CUSTOM_MERGE_STRATEGY_UUID;
+    return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 
   @Override
@@ -97,7 +100,10 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
     ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
 
-    if (older.getOrderingValue(oldSchema, props).compareTo(newer.getOrderingValue(newSchema, props)) > 0) {
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+    }
+    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
       if (older.isDelete(oldSchema, props) || newer.isDelete(newSchema, props)) {
         return Option.of(Pair.of(older, oldSchema));
       } else {
@@ -161,7 +167,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
     return new HoodieFlinkRecord(
         highOrderRecord.getKey(),
         highOrderRecord.getOperation(),
-        highOrderRecord.getOrderingValue(highOrderSchema, props),
+        highOrderRecord.getOrderingValue(highOrderSchema, props, orderingFields),
         mergedRow);
   }
 }

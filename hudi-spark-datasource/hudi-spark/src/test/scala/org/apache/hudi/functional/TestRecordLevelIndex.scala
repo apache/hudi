@@ -20,28 +20,34 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config._
 import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
 
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.junit.jupiter.api._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
 
+import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.Executors
+import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -265,7 +271,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     deleteDf.cache()
     deleteDf.write.format("hudi")
       .options(hudiOpts)
-      .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
+      .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
     val prevDf = mergedDfList.last
@@ -276,23 +282,56 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIForDeletesWithHoodieIsDeletedColumn(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()) +
+      (HoodieIndexConfig.INDEX_TYPE.key -> "RECORD_INDEX") +
+      (HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE.key -> "true")
+    val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    insertDf.cache()
+
+    val instantTime = getNewInstantTime
+    // Issue two deletes, one with the original partition and one with an updated partition
+    val recordsToDelete = dataGen.generateUniqueDeleteRecords(instantTime, 1)
+    recordsToDelete.addAll(dataGen.generateUniqueDeleteRecordsWithUpdatedPartition(instantTime, 1))
+    val deleteBatch = recordsToStrings(recordsToDelete).asScala
+    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
+    deleteDf.cache()
+    val recordKeyToDelete1 = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
+    val recordKeyToDelete2 = deleteDf.collectAsList().get(1).getAs("_row_key").asInstanceOf[String]
+    deleteDf.write.format("org.apache.hudi")
+      .options(hudiOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val prevDf = mergedDfList.last
+    mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete1 &&
+      row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete2)
+    validateDataAndRecordIndices(hudiOpts, deleteDf)
+    deleteDf.unpersist()
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIForDeletesWithSQLDelete(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
     val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
     insertDf.cache()
 
-    val deleteBatch = recordsToStrings(dataGen.generateUniqueDeleteRecords(getNewInstantTime, 1)).asScala
-    val deleteDf = spark.read.json(spark.sparkContext.parallelize(deleteBatch.toSeq, 1))
-    deleteDf.cache()
-    val recordKeyToDelete = deleteDf.collectAsList().get(0).getAs("_row_key").asInstanceOf[String]
-    deleteDf.write.format("org.apache.hudi")
-      .options(hudiOpts)
-      .mode(SaveMode.Append)
-      .save(basePath)
+    spark.sql(s"CREATE TABLE IF NOT EXISTS hudi_indexed_table USING hudi OPTIONS (hoodie.metadata.enable = 'true', hoodie.metadata.record.index.enable = 'true', hoodie.write.merge.handle.class = 'org.apache.hudi.io.FileGroupReaderBasedMergeHandle') LOCATION '$basePath'")
+    val existingKeys = dataGen.getExistingKeys
+    spark.sql(s"DELETE FROM hudi_indexed_table WHERE _row_key IN ('${existingKeys.get(0)}', '${existingKeys.get(1)}')")
+
     val prevDf = mergedDfList.last
-    mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete)
+    mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != existingKeys.get(0) &&
+      row.getAs("_row_key").asInstanceOf[String] != existingKeys.get(1))
+    val structType = new StructType(Array(StructField("_row_key", StringType)))
+    val convertToRow: Function[String, Row] = key => new GenericRowWithSchema(Array(key), structType)
+    val rows: java.util.List[Row] = util.Arrays.asList(convertToRow.apply(existingKeys.get(0)), convertToRow.apply(existingKeys.get(1)))
+    val deleteDf = spark.createDataFrame(rows, structType)
     validateDataAndRecordIndices(hudiOpts, deleteDf)
+    deleteDf.unpersist()
   }
 
   @ParameterizedTest
@@ -365,6 +404,9 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
 
     val lastCleanInstant = getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant()
     assertTrue(lastCleanInstant.isPresent)
+    val writeConfig = getWriteConfig(hudiOpts)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    client.savepoint("user", "note")
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -372,11 +414,10 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     assertTrue(getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant().get().requestedTime
       .compareTo(lastCleanInstant.get().requestedTime) > 0)
 
-    var rollbackedInstant: Option[HoodieInstant] = Option.empty
-    while (rollbackedInstant.isEmpty || rollbackedInstant.get.getAction != ActionType.clean.name()) {
-      // rollback clean instant
-      rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
-    }
+    client.restoreToSavepoint()
+    client.close()
+    // last commit is no longer present so remove it from the mergedDfList
+    mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     validateDataAndRecordIndices(hudiOpts)
   }
 
@@ -574,12 +615,28 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
     val function = () => doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    executeFunctionNTimes(function, 5)
+    executeFunctionNTimes(function, 3)
 
+    // create a savepoint on the data table before the metadata table clean operation
+    assertFalse(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
+    val writeConfig = getWriteConfig(hudiOpts)
+    val client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+    client.savepoint("user", "note")
+
+    // validate that the clean is present in the metadata table timeline
+    var iterations = 0
+    while (getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isEmpty) {
+      doWriteAndValidateDataAndRecordIndex(hudiOpts,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append)
+      iterations += 1
+    }
     assertTrue(getMetadataMetaClient(hudiOpts).getActiveTimeline.getCleanerTimeline.lastInstant().isPresent)
-    rollbackLastInstant(hudiOpts)
-    // Rolling back clean instant from MDT
-    rollbackLastInstant(hudiOpts)
+    // restore to the savepoint to force the metadata table state to roll back to before the clean
+    client.restoreToSavepoint()
+    client.close()
+    // remove the commits that were created after the savepoint
+    mergedDfList = mergedDfList.take(mergedDfList.size - iterations)
     validateDataAndRecordIndices(hudiOpts)
   }
 

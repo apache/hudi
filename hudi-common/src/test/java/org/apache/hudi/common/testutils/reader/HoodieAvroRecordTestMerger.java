@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -34,6 +35,9 @@ import java.io.IOException;
 import java.util.Properties;
 
 public class HoodieAvroRecordTestMerger extends HoodieAvroRecordMerger {
+
+  private String[] orderingFields;
+
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(
       HoodieRecord older,
@@ -42,8 +46,12 @@ public class HoodieAvroRecordTestMerger extends HoodieAvroRecordMerger {
       Schema newSchema,
       TypedProperties props
   ) throws IOException {
-    Comparable oldOrderingVal = older.getOrderingValue(oldSchema, props);
-    Comparable newOrderingVal = newer.getOrderingValue(newSchema, props);
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+    }
+
+    Comparable oldOrderingVal = older.getOrderingValue(oldSchema, props, orderingFields);
+    Comparable newOrderingVal = newer.getOrderingValue(newSchema, props, orderingFields);
 
     // The record with higher ordering value is returned.
     if (oldOrderingVal == null || newOrderingVal.compareTo(oldOrderingVal) > 0) {

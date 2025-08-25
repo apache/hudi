@@ -79,6 +79,15 @@ public class InstantComparators {
 
     @Override
     public int compare(HoodieInstant instant1, HoodieInstant instant2) {
+      if (instant1.getCompletionTime() == null && instant2.getCompletionTime() != null) {
+        return 1; // instant1 is not completed, so it is greater than instant2
+      }
+      if (instant2.getCompletionTime() == null && instant1.getCompletionTime() != null) {
+        return -1; // instant2 is not completed, so it is greater than instant1
+      }
+      if (instant1.getCompletionTime() == null && instant2.getCompletionTime() == null) {
+        return timestampBasedComparator.compare(instant1, instant2); // both are not completed, compare by requested time
+      }
       int res = instant1.getCompletionTime().compareTo(instant2.getCompletionTime());
       if (res == 0) {
         res = timestampBasedComparator.compare(instant1, instant2);

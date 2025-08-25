@@ -19,6 +19,7 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
@@ -127,9 +128,9 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   lazy val primaryKeys: Array[String] = tableConfig.getRecordKeyFields.orElse(Array.empty)
 
   /**
-   * PreCombine Field
+   * Comparables Field
    */
-  lazy val preCombineKey: Option[String] = Option(tableConfig.getPreCombineField)
+  lazy val orderingFields: java.util.List[String] = tableConfig.getOrderingFields
 
   /**
    * Partition Fields

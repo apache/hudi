@@ -19,7 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceUtils
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, KEYGENERATOR_CLASS_NAME, OPERATION, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, PRECOMBINE_FIELD, RECORD_MERGE_MODE, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_OPERATION_OPT_VAL, KEYGENERATOR_CLASS_NAME, OPERATION, ORDERING_FIELDS, PARTITIONPATH_FIELD, PAYLOAD_CLASS_NAME, RECORD_MERGE_MODE, RECORDKEY_FIELD, TABLE_TYPE, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload, TableServiceType}
@@ -107,7 +107,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode.name)
       assertEquals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
     } else {
-      if (StringUtils.isNullOrEmpty(metaClient.getTableConfig.getPreCombineField)) {
+      if (metaClient.getTableConfig.getOrderingFieldsStr.isPresent && StringUtils.isNullOrEmpty(metaClient.getTableConfig.getOrderingFieldsStr.get())) {
         assertEquals(classOf[OverwriteWithLatestAvroPayload].getName, metaClient.getTableConfig.getPayloadClass)
         assertEquals(RecordMergeMode.COMMIT_TIME_ORDERING.name, metaClient.getTableConfig.getRecordMergeMode.name)
         assertEquals(HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID, metaClient.getTableConfig.getRecordMergeStrategyId)
@@ -133,7 +133,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
     val hudiOptions = Map[String, String](
       "hoodie.table.name" -> tableName,
       RECORDKEY_FIELD.key -> "id",
-      PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
       OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
       KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
