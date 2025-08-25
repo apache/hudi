@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.client.transaction.lock.models.HeartbeatManager;
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
 import org.apache.hudi.client.transaction.lock.models.LockProviderHeartbeatManager;
@@ -124,6 +125,26 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             LockProviderHeartbeatManager::new,
             getStorageLockClientClassName(),
             LOGGER);
+  }
+
+  /**
+   * Constructor for StorageBasedLockProvider with HoodieLockMetrics support.
+   * This constructor allows lock providers to access metrics for fine-grained metrics collection.
+   * 
+   * @param lockConfiguration The lock configuration, should be transformable into
+   *                          StorageBasedLockConfig
+   * @param conf              Storage config, ignored.
+   * @param metrics           HoodieLockMetrics instance for metrics collection
+   */
+  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, final HoodieLockMetrics metrics) {
+    this(
+            UUID.randomUUID().toString(),
+            lockConfiguration.getConfig(),
+            LockProviderHeartbeatManager::new,
+            getStorageLockClientClassName(),
+            LOGGER);
+    // Store metrics reference for fine-grained metrics collection by this lock provider
+    // TODO: Implement fine-grained metrics in lock operations (tryLock, unlock, etc.)
   }
 
   private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockClientClassName() {
