@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -141,10 +142,11 @@ public interface UpdateProcessor<T> {
           if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
             return null;
           } else {
-            Schema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
             // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
-            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
-                .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
+            hoodieRecord.toIndexedRecord(recordSchema, properties).ifPresent(o -> {
+              HoodieAvroIndexedRecord avroIndexedRecord = (HoodieAvroIndexedRecord) o;
+              mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(avroIndexedRecord.getData()));
+            });
           }
         } catch (IOException e) {
           throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);
