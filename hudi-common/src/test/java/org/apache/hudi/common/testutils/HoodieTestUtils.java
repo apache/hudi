@@ -21,7 +21,9 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
@@ -59,6 +61,9 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.junit.jupiter.api.Assumptions;
@@ -72,16 +77,18 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -103,6 +110,24 @@ public class HoodieTestUtils {
   public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new DefaultInstantFileNameParser();
   public static final CommitMetadataSerDe COMMIT_METADATA_SER_DE = new DefaultCommitMetadataSerDe();
   public static final InstantComparator INSTANT_COMPARATOR = new DefaultInstantComparator();
+  public static final Schema SIMPLE_RECORD_SCHEMA = getSchemaFromResource(HoodieTestUtils.class, "/exampleSchema.avsc", false);
+
+  public static HoodieAvroIndexedRecord createSimpleRecord(String rowKey, String time, Integer number) {
+    return createSimpleRecord(rowKey, time, number, Option.empty());
+  }
+
+  public static HoodieAvroIndexedRecord createSimpleRecord(String rowKey, String time, Integer number, Option<String> partitionPath) {
+    GenericRecord record = new GenericData.Record(SIMPLE_RECORD_SCHEMA);
+    record.put("_row_key", rowKey);
+    record.put("time", time);
+    record.put("number", number);
+    String partition = partitionPath.orElseGet(() -> extractPartitionFromTimeField(time));
+    return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partition), record, null, Option.of(Collections.singletonMap("InputRecordCount_1506582000", "2")));
+  }
+
+  public static String extractPartitionFromTimeField(String timeField) {
+    return timeField.split("T")[0].replace("-", "/");
+  }
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
     return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,

@@ -21,8 +21,8 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{AWSDmsAvroPayload, DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieRecordMerger, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.model.{AWSDmsAvroPayload, DefaultHoodieRecordPayload, EventTimeAvroPayload, HoodieRecordMerger, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, OverwriteWithLatestAvroPayload, PartialUpdateAvroPayload}
 import org.apache.hudi.common.model.debezium.{DebeziumConstants, MySqlDebeziumAvroPayload, PostgresDebeziumAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
@@ -43,12 +43,14 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest
   @MethodSource(Array("providePayloadClassTestCases"))
-  def testMergerBuiltinPayload(tableType: String,
-                               payloadClazz: String,
-                               expectedConfigs: Map[String, String]): Unit = {
+  def testMergerBuiltinPayloadUpgradePath(tableType: String,
+                                          payloadClazz: String,
+                                          expectedConfigs: Map[String, String]): Unit = {
     val opts: Map[String, String] = Map(
-      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz)
-    val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME)
+      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
+      HoodieMetadataConfig.ENABLE.key() -> "false")
+    val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq",
+      DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME)
     // 1. Add an insert.
     val data = Seq(
       (10, 1L, "rider-A", "driver-A", 19.10, "i", "10.1", 10, 1),
@@ -83,7 +85,8 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
     assertTrue(metaClient.getActiveTimeline.firstInstant().isPresent)
     // 2. Add an update.
     val firstUpdateData = Seq(
-      (11, 1L, "rider-X", "driver-X", 19.10, "D", "11.1", 11, 1),
+      (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1),
+      (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1),
       (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1))
     val firstUpdate = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
     firstUpdate.write.format("hudi").
@@ -133,7 +136,19 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       }
     }
 
-    // 5. Validate.
+    // 5. Add a delete.
+    val fourthUpdateData = Seq(
+      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
+      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
+    val fourthUpdate = spark.createDataFrame(fourthUpdateData).toDF(columns: _*)
+    fourthUpdate.write.format("hudi").
+      option(OPERATION.key(), "delete").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // 6. Validate.
     // Validate table configs.
     tableConfig = metaClient.getTableConfig
     expectedConfigs.foreach { case (key, expectedValue) =>
@@ -168,6 +183,162 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
       && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
   }
 
+  @ParameterizedTest
+  @MethodSource(Array("providePayloadClassTestCases"))
+  def testMergerBuiltinPayloadFromTableCreationPath(tableType: String,
+                                                    payloadClazz: String,
+                                                    expectedConfigs: Map[String, String]): Unit = {
+    val opts: Map[String, String] = Map(
+      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> payloadClazz,
+      HoodieMetadataConfig.ENABLE.key() -> "false")
+    val columns = Seq("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq",
+      DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME)
+    // 1. Add an insert.
+    val data = Seq(
+      (10, 1L, "rider-A", "driver-A", 19.10, "i", "10.1", 10, 1),
+      (10, 2L, "rider-B", "driver-B", 27.70, "i", "10.1", 10, 1),
+      (10, 3L, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1),
+      (10, 4L, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
+      (10, 5L, "rider-E", "driver-E", 17.85, "i", "10.1", 10, 1))
+    val inserts = spark.createDataFrame(data).toDF(columns: _*)
+    val orderingFields = if (payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      "_event_bin_file,_event_pos"
+    } else {
+      "ts"
+    }
+    inserts.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "_event_lsn").
+      option(ORDERING_FIELDS.key(), orderingFields).
+      option(TABLE_TYPE.key(), tableType).
+      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      options(opts).
+      mode(SaveMode.Overwrite).
+      save(basePath)
+    // Verify table was created successfully
+    var metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(storageConf())
+      .build()
+    var tableConfig = metaClient.getTableConfig
+    // Verify table version is 9
+    assertEquals(9, tableConfig.getTableVersion.versionCode())
+    assertTrue(metaClient.getActiveTimeline.firstInstant().isPresent)
+    // Verify table properties
+    expectedConfigs.foreach { case (key, expectedValue) =>
+      if (expectedValue != null) {
+        assertEquals(expectedValue, tableConfig.getString(key), s"Config $key should be $expectedValue")
+      } else {
+        assertFalse(tableConfig.contains(key), s"Config $key should not be present")
+      }
+    }
+
+    // 2. Add an update.
+    val firstUpdateData = Seq(
+      (11, 1L, "rider-X", "driver-X", 19.10, "i", "11.1", 11, 1),
+      (12, 1L, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1),
+      (11, 2L, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1))
+    val firstUpdate = spark.createDataFrame(firstUpdateData).toDF(columns: _*)
+    firstUpdate.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      mode(SaveMode.Append).
+      save(basePath)
+    // Validate table version.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
+    val firstUpdateInstantTime = metaClient.getActiveTimeline.getInstants.get(1).requestedTime()
+
+
+    // 3. Add an update. This is expected to trigger the upgrade
+    val compactionEnabled = if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
+      "true"
+    } else {
+      "false"
+    }
+    val secondUpdateData = Seq(
+      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
+      (9, 4L, "rider-DD", "driver-DD", 34.15, "i", "9.1", 9, 1),
+      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
+    val secondUpdate = spark.createDataFrame(secondUpdateData).toDF(columns: _*)
+    secondUpdate.write.format("hudi").
+      option(OPERATION.key(), "upsert").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), compactionEnabled).
+      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      mode(SaveMode.Append).
+      save(basePath)
+    // Validate table version as 9.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertEquals(9, metaClient.getTableConfig.getTableVersion.versionCode())
+    assertEquals(payloadClazz, metaClient.getTableConfig.getLegacyPayloadClass)
+    val compactionInstants = metaClient.getActiveTimeline.getCommitsAndCompactionTimeline.getInstants
+    val foundCompaction = compactionInstants.stream().anyMatch(i => i.getAction.equals("commit"))
+    assertTrue(foundCompaction)
+
+    // 4. Add a trivial update to trigger payload class mismatch.
+    val thirdUpdateData = Seq(
+      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1))
+    val thirdUpdate = spark.createDataFrame(thirdUpdateData).toDF(columns: _*)
+    if (!payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
+      assertThrows[HoodieException] {
+        thirdUpdate.write.format("hudi").
+          option(OPERATION.key(), "upsert").
+          option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+          option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+          option(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(),
+            classOf[MySqlDebeziumAvroPayload].getName).
+          mode(SaveMode.Append).
+          save(basePath)
+      }
+    }
+
+    // 5. Add a delete.
+    val fourthUpdateData = Seq(
+      (12, 3L, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
+      (12, 5L, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
+    val fourthUpdate = spark.createDataFrame(fourthUpdateData).toDF(columns: _*)
+    fourthUpdate.write.format("hudi").
+      option(OPERATION.key(), "delete").
+      option(HoodieCompactionConfig.INLINE_COMPACT.key(), "false").
+      option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1").
+      mode(SaveMode.Append).
+      save(basePath)
+
+    // 6. Validate.
+    // Validate table configs again.
+    tableConfig = metaClient.getTableConfig
+    expectedConfigs.foreach { case (key, expectedValue) =>
+      if (expectedValue != null) {
+        assertEquals(expectedValue, tableConfig.getString(key), s"Config $key should be $expectedValue")
+      } else {
+        assertFalse(tableConfig.contains(key), s"Config $key should not be present")
+      }
+    }
+    // Validate snapshot query.
+    val df = spark.read.format("hudi").load(basePath)
+    val finalDf = df.select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME)
+      .sort("_event_lsn")
+    val expectedData = getExpectedResultForSnapshotQuery(payloadClazz)
+    val expectedDf = spark.createDataFrame(spark.sparkContext.parallelize(expectedData)).toDF(columns: _*).sort("_event_lsn")
+    expectedDf.show(false)
+    finalDf.show(false)
+    assertTrue(expectedDf.except(finalDf).isEmpty && finalDf.except(expectedDf).isEmpty)
+    // Validate time travel query.
+    val timeTravelDf = spark.read.format("hudi")
+      .option("as.of.instant", firstUpdateInstantTime).load(basePath)
+      .select("ts", "_event_lsn", "rider", "driver", "fare", "Op", "_event_seq", DebeziumConstants.FLATTENED_FILE_COL_NAME, DebeziumConstants.FLATTENED_POS_COL_NAME)
+      .sort("_event_lsn")
+    timeTravelDf.show(false)
+    val expectedTimeTravelData = getExpectedResultForTimeTravelQuery(payloadClazz)
+    val expectedTimeTravelDf = spark.createDataFrame(
+      spark.sparkContext.parallelize(expectedTimeTravelData)).toDF(columns: _*).sort("_event_lsn")
+    expectedTimeTravelDf.show(false)
+    timeTravelDf.show(false)
+    assertTrue(
+      expectedTimeTravelDf.except(timeTravelDf).isEmpty
+        && timeTravelDf.except(expectedTimeTravelDf).isEmpty)
+  }
+
   def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
     val props = TypedProperties.fromMap(hudiOpts.asJava)
     HoodieWriteConfig.newBuilder()
@@ -184,25 +355,19 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
         || payloadClazz.equals(classOf[PostgresDebeziumAvroPayload].getName)
         || payloadClazz.equals(classOf[MySqlDebeziumAvroPayload].getName)) {
         Seq(
-          (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1", 11, 1),
+          (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
-          (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
-          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
-          (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
+          (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1))
       } else {
         Seq(
-          (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1", 11, 1),
+          (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1),
           (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
-          (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
-          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 9, 1),
-          (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
+          (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 9, 1))
       }
     } else {
       Seq(
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
-        (12, 3, "rider-CC", "driver-CC", 33.90, "i", "12.1", 12, 1),
-        (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 9, 1),
-        (12, 5, "rider-EE", "driver-EE", 17.85, "i", "12.1", 12, 1))
+        (9, 4, "rider-DD", "driver-DD", 34.15, "i", "9.1", 9, 1))
     }
   }
 
@@ -210,7 +375,7 @@ class TestPayloadDeprecationFlow extends SparkClientFunctionalTestHarness {
   Seq[(Int, Long, String, String, Double, String, String, Int, Int)] = {
     if (!payloadClazz.equals(classOf[AWSDmsAvroPayload].getName)) {
       Seq(
-        (11, 1, "rider-X", "driver-X", 19.10, "D", "11.1", 11, 1),
+        (12, 1, "rider-X", "driver-X", 20.10, "D", "12.1", 12, 1),
         (11, 2, "rider-Y", "driver-Y", 27.70, "u", "11.1", 11, 1),
         (10, 3, "rider-C", "driver-C", 33.90, "i", "10.1", 10, 1),
         (10, 4, "rider-D", "driver-D", 34.15, "i", "10.1", 10, 1),
@@ -234,15 +399,15 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)
+      ),
       Arguments.of(
         "COPY_ON_WRITE",
         classOf[OverwriteWithLatestAvroPayload].getName,
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
-        )
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
       ),
       Arguments.of(
         "COPY_ON_WRITE",
@@ -250,18 +415,20 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
-        HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS")
+      ),
       Arguments.of(
         "COPY_ON_WRITE",
         classOf[PostgresDebeziumAvroPayload].getName,
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PostgresDebeziumAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
-        HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_MARKERS",
-        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE
-          -> "__debezium_unavailable_value"),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "FILL_UNAVAILABLE",
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE
+            -> "__debezium_unavailable_value")
+      ),
       Arguments.of(
         "COPY_ON_WRITE",
         classOf[MySqlDebeziumAvroPayload].getName,
@@ -276,9 +443,10 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[AWSDmsAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
-        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_KEY -> "Op",
-        HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_MARKER -> "D"),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_KEY -> "Op",
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_MARKER -> "D")
+      ),
       Arguments.of(
         "COPY_ON_WRITE",
         classOf[EventTimeAvroPayload].getName,
@@ -304,15 +472,15 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[DefaultHoodieRecordPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID)
+      ),
       Arguments.of(
         "MERGE_ON_READ",
         classOf[OverwriteWithLatestAvroPayload].getName,
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID
-        )
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)
       ),
       Arguments.of(
         "MERGE_ON_READ",
@@ -320,18 +488,20 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PartialUpdateAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
-          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS"),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_DEFAULTS")
+      ),
       Arguments.of(
         "MERGE_ON_READ",
         classOf[PostgresDebeziumAvroPayload].getName,
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "EVENT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[PostgresDebeziumAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID),
-          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "IGNORE_MARKERS",
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID,
+          HoodieTableConfig.PARTIAL_UPDATE_MODE.key() -> "FILL_UNAVAILABLE",
           HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + HoodieTableConfig.PARTIAL_UPDATE_UNAVAILABLE_VALUE
-            -> "__debezium_unavailable_value"),
+            -> "__debezium_unavailable_value")
+      ),
       Arguments.of(
         "MERGE_ON_READ",
         classOf[MySqlDebeziumAvroPayload].getName,
@@ -346,9 +516,10 @@ object TestPayloadDeprecationFlow {
         Map(
           HoodieTableConfig.RECORD_MERGE_MODE.key() -> "COMMIT_TIME_ORDERING",
           HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME.key() -> classOf[AWSDmsAvroPayload].getName,
-          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID),
+          HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key() -> HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID,
           HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_KEY -> "Op",
-          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_MARKER -> "D"),
+          HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX + DefaultHoodieRecordPayload.DELETE_MARKER -> "D")
+      ),
       Arguments.of(
         "MERGE_ON_READ",
         classOf[EventTimeAvroPayload].getName,

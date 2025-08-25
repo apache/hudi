@@ -103,7 +103,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
    */
   public I deduplicateRecords(I records, HoodieTable<T, I, K, O> table, int parallelism) {
     HoodieReaderContext<T> readerContext =
-        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps(), true)
+        (HoodieReaderContext<T>) table.getContext().<T>getReaderContextFactoryForWrite(table.getMetaClient(), table.getConfig().getRecordMerger().getRecordType(), table.getConfig().getProps())
             .getContext();
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
     readerContext.initRecordMergerForIngestion(table.getConfig().getProps());
@@ -115,6 +115,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       recordSchema = new Schema.Parser().parse(table.getConfig().getWriteSchema());
     }
     recordSchema = AvroSchemaCache.intern(recordSchema);
+    TypedProperties mergedProperties = readerContext.getMergeProps(table.getConfig().getProps());
     BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         readerContext.getMergeMode(),
@@ -123,14 +124,14 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         orderingFieldNames,
         Option.ofNullable(table.getConfig().getPayloadClass()),
         recordSchema,
-        table.getConfig().getProps(),
+        mergedProperties,
         tableConfig.getPartialUpdateMode());
     return deduplicateRecords(
         records,
         table.getIndex(),
         parallelism,
         table.getConfig().getSchema(),
-        table.getConfig().getProps(),
+        mergedProperties,
         bufferedRecordMerger,
         readerContext,
         orderingFieldNames.toArray(new String[0]));

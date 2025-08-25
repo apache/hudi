@@ -95,6 +95,11 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
+  public InternalRow constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+    return new GenericInternalRow(fieldValues);
+  }
+
+  @Override
   public InternalRow mergeWithEngineRecord(Schema schema,
                                            Map<Integer, Object> updateValues,
                                            BufferedRecord<InternalRow> baseRecord) {

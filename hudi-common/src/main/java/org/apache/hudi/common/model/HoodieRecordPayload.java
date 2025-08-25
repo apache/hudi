@@ -36,7 +36,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_PAYLOAD_CLASS_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.LEGACY_PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 
@@ -206,8 +205,6 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     String payloadClassName = null;
     if (ConfigUtils.containsConfigProperty(props, PAYLOAD_CLASS_NAME)) {
       payloadClassName = ConfigUtils.getStringWithAltKeys(props, PAYLOAD_CLASS_NAME);
-    } else if (props.containsKey(LEGACY_PAYLOAD_CLASS_NAME.key())) {
-      payloadClassName = ConfigUtils.getStringWithAltKeys(props, LEGACY_PAYLOAD_CLASS_NAME);
     } else if (props.containsKey("hoodie.datasource.write.payload.class")) {
       payloadClassName = props.getProperty("hoodie.datasource.write.payload.class");
     }

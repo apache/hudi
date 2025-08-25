@@ -383,4 +383,43 @@ public class TestConfigUtils {
     Map<String, String> result = ConfigUtils.extractWithPrefix(null, RECORD_MERGE_PROPERTY_PREFIX);
     assertTrue(result.isEmpty());
   }
+
+  @Test
+  void testParseRecordMergePropertiesWithPrefixedProperties() {
+    TypedProperties tableProps = new TypedProperties();
+    tableProps.put(RECORD_MERGE_PROPERTY_PREFIX + "strategy", "overwrite");
+    tableProps.put(RECORD_MERGE_PROPERTY_PREFIX + "field", "col1");
+
+    TypedProperties props = ConfigUtils.getMergeProps(new TypedProperties(), tableProps);
+    props.put("unrelated.key", "value");
+
+    assertEquals("overwrite", props.get("strategy"));
+    assertEquals("col1", props.get("field"));
+    assertEquals("value", props.get("unrelated.key"));
+  }
+
+  @Test
+  void testParseRecordMergePropertiesWithNoPrefixedProperties() {
+    TypedProperties tableProps = new TypedProperties();
+
+    TypedProperties props = new TypedProperties();
+    props.put("normal.key", "val");
+    props = ConfigUtils.getMergeProps(props, tableProps);
+
+    assertEquals(1, props.size());
+    assertEquals("val", props.get("normal.key"));
+  }
+
+  @Test
+  void testParseRecordMergePropertiesWithOverwrite() {
+    TypedProperties tableProps = new TypedProperties();
+    tableProps.put(RECORD_MERGE_PROPERTY_PREFIX + "strategy", "overwrite");
+
+    TypedProperties props = new TypedProperties();
+    props.put("strategy", "keep");
+    props = ConfigUtils.getMergeProps(props, tableProps);
+
+    assertEquals(1, props.size());
+    assertEquals("overwrite", props.get("strategy"));
+  }
 }

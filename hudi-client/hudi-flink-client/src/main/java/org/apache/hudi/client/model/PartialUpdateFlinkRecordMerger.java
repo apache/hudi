@@ -86,7 +86,7 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
   @Override
   public String getMergingStrategy() {
-    return CUSTOM_MERGE_STRATEGY_UUID;
+    return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 
   @Override

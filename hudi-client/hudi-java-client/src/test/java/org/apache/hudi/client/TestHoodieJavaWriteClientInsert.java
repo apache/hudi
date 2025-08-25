@@ -23,14 +23,11 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -58,6 +55,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -150,15 +148,9 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     FileFormatUtils fileUtils = getFileUtilsInstance(metaClient);
 
     // Get some records belong to the same partition (2021/09/11)
-    String insertRecordStr1 = "{\"_row_key\":\"1\","
-        + "\"time\":\"2021-09-11T16:16:41.415Z\",\"number\":1}";
-    String insertRecordStr2 = "{\"_row_key\":\"2\","
-        + "\"time\":\"2021-09-11T16:16:41.415Z\",\"number\":2}";
     List<HoodieRecord> records1 = new ArrayList<>();
-    RawTripTestPayload insertRow1 = new RawTripTestPayload(insertRecordStr1);
-    RawTripTestPayload insertRow2 = new RawTripTestPayload(insertRecordStr2);
-    records1.add(new HoodieAvroRecord(new HoodieKey(insertRow1.getRowKey(), insertRow1.getPartitionPath()), insertRow1));
-    records1.add(new HoodieAvroRecord(new HoodieKey(insertRow2.getRowKey(), insertRow2.getPartitionPath()), insertRow2));
+    records1.add(createSimpleRecord("1", "2021-09-11T16:16:41.415Z", 1));
+    records1.add(createSimpleRecord("2", "2021-09-11T16:16:41.415Z", 2));
 
     int startInstant = 1;
     String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
@@ -177,17 +169,11 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
 
-    insertRecordStr1 = "{\"_row_key\":\"1\","
-        + "\"time\":\"2021-09-11T16:39:41.415Z\",\"number\":3}";
-    insertRecordStr2 = "{\"_row_key\":\"2\","
-        + "\"time\":\"2021-09-11T16:39:41.415Z\",\"number\":4}";
-
     List<HoodieRecord> records2 = new ArrayList<>();
-    insertRow1 = new RawTripTestPayload(insertRecordStr1);
-    insertRow2 = new RawTripTestPayload(insertRecordStr2);
     // The recordKey of records2 and records1 are the same, but the values of other fields are different
-    records2.add(new HoodieAvroRecord(new HoodieKey(insertRow1.getRowKey(), insertRow1.getPartitionPath()), insertRow1));
-    records2.add(new HoodieAvroRecord(new HoodieKey(insertRow2.getRowKey(), insertRow2.getPartitionPath()), insertRow2));
+    records2.add(createSimpleRecord("1", "2021-09-11T16:39:41.415Z", 3));
+    records2.add(createSimpleRecord("2", "2021-09-11T16:39:41.415Z", 4));
+
 
     String newCommitTime = makeNewCommitTime(startInstant++, "%09d");
     WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);

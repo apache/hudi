@@ -91,7 +91,7 @@ public class GCSStorageLockClient implements StorageLockClient {
       // This logic can likely be extended to other lock client implementations.
       // Consider creating base class with utilities, incl error handling.
       URI uri = new URI(lockFileUri);
-      this.bucketName = uri.getHost();
+      this.bucketName = uri.getAuthority();
       this.lockFilePath = uri.getPath().replaceFirst("/", "");
       this.gcsClient = gcsClientSupplier.apply(properties);
 

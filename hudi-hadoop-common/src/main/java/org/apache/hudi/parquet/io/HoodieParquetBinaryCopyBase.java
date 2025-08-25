@@ -120,9 +120,16 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   protected MessageType requiredSchema = null;
 
   protected Configuration conf;
+  
+  // Flag to control schema evolution behavior
+  protected Boolean schemaEvolutionEnabled = null;
 
   public HoodieParquetBinaryCopyBase(Configuration conf) {
     this.conf = conf;
+  }
+  
+  public void setSchemaEvolutionEnabled(boolean enabled) {
+    this.schemaEvolutionEnabled = enabled;
   }
 
   protected void initFileWriter(Path outPutFile, CompressionCodecName newCodecName, MessageType schema) {
@@ -188,9 +195,14 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     for (int i = 0; i < columnsInOrder.size(); i++) {
       ColumnChunkMetaData chunk = columnsInOrder.get(i);
       ColumnDescriptor descriptor = descriptorsMap.get(chunk.getPath());
+      if (schemaEvolutionEnabled == null) {
+        throw new HoodieException("The variable 'schemaEvolutionEnabled' is supposed to be set in "
+                + "binaryCopy() before calling this method processBlocksFromReader");
+      }
 
       // resolve the conflict schema between avro parquet write support and spark native parquet write support
-      if (descriptor == null) {
+      // Only attempt legacy conversion if schema evolution is enabled
+      if (descriptor == null && schemaEvolutionEnabled) {
         String[] path = chunk.getPath().toArray();
         path = Arrays.copyOf(path, path.length);
         if (convertLegacy3LevelArray(path) || convertLegacyMap(path)) {
@@ -226,6 +238,14 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       CompressionCodecName newCodecName = this.newCodecName == null ? chunk.getCodec() : this.newCodecName;
 
       if (maskColumns != null && maskColumns.containsKey(chunk.getPath())) {
+        // Check if this is NOT the FILENAME_METADATA_FIELD and schema evolution is disabled
+        if (!chunk.getPath().toDotString().equals(HoodieRecord.FILENAME_METADATA_FIELD)) {
+          if (!schemaEvolutionEnabled) {
+            throw new HoodieException("Column masking for '" + chunk.getPath().toDotString() 
+                + "' requires schema evolution to be enabled. "
+                + "Set 'hoodie.clustering.plan.strategy.binary.copy.schema.evolution.enable' to true.");
+          }
+        }
         // Mask column and compress it again.
         Binary maskValue = maskColumns.get(chunk.getPath());
         if (maskValue != null) {
@@ -261,6 +281,16 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         .stream()
         .filter(c -> !converted.contains(c))
         .collect(Collectors.toList());
+    
+    // If schema evolution is disabled and there are missing columns, throw an exception
+    if (!schemaEvolutionEnabled && !missedColumns.isEmpty()) {
+      String missingColumnsStr = missedColumns.stream()
+          .map(c -> String.join(".", c.getPath()))
+          .collect(Collectors.joining(", "));
+      throw new HoodieException("Schema evolution is disabled but found missing columns in input file: " 
+          + missingColumnsStr + ". All input files must have the same schema when schema evolution is disabled.");
+    }
+    
     for (ColumnDescriptor descriptor : missedColumns) {
       addNullColumn(
           descriptor,
@@ -644,18 +674,32 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   @VisibleForTesting
   public boolean convertLegacy3LevelArray(String[] path) {
     boolean changed = false;
-    for (int i = 0; i < path.length; i++) {
-      try {
-        String[] subPath = Arrays.copyOf(path, i + 1);
-        Type type = this.requiredSchema.getType(subPath);
-        if (type.getOriginalType() == LIST && "bag".equals(path[i + 1])) {
-          // Convert from xxx.bag.array to xxx.list.element
-          path[i + 1] = "list";
-          path[i + 2] = "element";
-          changed = true;
+    
+    // For schema evolution, also check for legacy patterns even if the field doesn't exist in the schema
+    for (int i = 0; i < path.length - 2; i++) {
+      if ("bag".equals(path[i + 1]) && "array_element".equals(path[i + 2])) {
+        // Convert from xxx.bag.array_element to xxx.list.element
+        path[i + 1] = "list";
+        path[i + 2] = "element";
+        changed = true;
+        break;
+      }
+    }
+    
+    if (!changed) {
+      for (int i = 0; i < path.length; i++) {
+        try {
+          String[] subPath = Arrays.copyOf(path, i + 1);
+          Type type = this.requiredSchema.getType(subPath);
+          if (type.getOriginalType() == LIST && i + 1 < path.length && "bag".equals(path[i + 1])) {
+            // Convert from xxx.bag.array to xxx.list.element
+            path[i + 1] = "list";
+            path[i + 2] = "element";
+            changed = true;
+          }
+        } catch (InvalidRecordException e) {
+          LOG.debug("field not found due to schema evolution, nothing need to do");
         }
-      } catch (InvalidRecordException e) {
-        LOG.debug("field not found due to schema evolution, nothing need to do");
       }
     }
     return changed;
