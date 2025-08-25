@@ -107,7 +107,12 @@ public class LockManager implements Serializable, AutoCloseable {
    */
   public void unlock() {
     getLockProvider().unlock();
-    metrics.updateLockHeldTimerMetrics();
+    try {
+      metrics.updateLockHeldTimerMetrics();
+    } catch (HoodieException e) {
+      LOG.error(String.format("Exception encountered when updating lock metrics: %s", e));
+    }
+    metrics.updateLockReleaseSuccessMetric();
     close();
   }
 
