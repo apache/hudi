@@ -17,24 +17,21 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.{HoodieCLIUtils, SparkAdapterSupport}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
-
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util
-import java.util.Collections
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 
 /**
- * Spark SQL procedure to show completed clean operations for a Hudi table.
+ * Spark SQL procedure to show all clean operations for a Hudi table.
  *
- * This procedure displays information about clean operations that have been executed.
- * Clean operations remove old file versions to reclaim storage space and maintain table performance.
+ * This procedure provides a comprehensive view of Hudi clean operations.
+ * It displays completed clean operations with full partition metadata for both completed and pending operations.
  *
  * == Parameters ==
  * - `table`: Required. The name of the Hudi table to query
@@ -45,25 +42,51 @@ import scala.collection.JavaConverters._
  * == Output Schema ==
  * - `clean_time`: Timestamp when the clean operation was performed
  * - `state_transition_time`: Time when the clean transitioned to completed state
+ * - `state`: Operation state (COMPLETED, INFLIGHT, REQUESTED)
  * - `action`: The action type (always 'clean')
  * - `start_clean_time`: When the clean operation started
+ * - `partition_path`: Partition path for the clean operation
+ * - `policy`: Clean policy used (KEEP_LATEST_COMMITS, etc.)
+ * - `delete_path_patterns`: Number of delete path patterns
+ * - `success_delete_files`: Number of successfully deleted files
+ * - `failed_delete_files`: Number of files that failed to delete
+ * - `is_partition_deleted`: Whether the entire partition was deleted
  * - `time_taken_in_millis`: Duration of the clean operation in milliseconds
  * - `total_files_deleted`: Total number of files deleted during the clean
  * - `earliest_commit_to_retain`: The earliest commit that was retained
  * - `last_completed_commit_timestamp`: The last completed commit at clean time
  * - `version`: Version of the clean operation metadata
- * - Additional partition-level metadata columns when using `show_cleans_metadata`
+ * - `total_partitions_to_clean`: Total partitions to clean (for pending operations)
+ * - `total_partitions_to_delete`: Total partitions to delete (for pending operations)
+ * - `extra_metadata`: Additional metadata as JSON string
  *
- * == Error Handling ==
- * - Throws `IllegalArgumentException` for invalid filter expressions
- * - Throws `HoodieException` for table access issues
- * - Returns empty result set if no clean plans match the criteria
+ * == Data Availability by Operation State ==
+ * - **COMPLETED operations**: All execution and partition metadata fields are populated
+ * - **PENDING operations**: Plan fields are populated, execution fields are null (graceful handling)
  *
  * == Filter Support ==
  * The `filter` parameter supports SQL expressions for filtering results.
  *
  * === Common Filter Examples ===
  * {{{
+ * -- Show only completed operations (equivalent to old show_cleans)
+ * CALL show_cleans(
+ *   table => 'my_table',
+ *   filter => "state = 'COMPLETED'"
+ * )
+ *
+ * -- Show only pending operations (equivalent to old show_clean_plans)
+ * CALL show_cleans(
+ *   table => 'my_table',
+ *   filter => "state IN ('REQUESTED', 'INFLIGHT')"
+ * )
+ *
+ * -- Show operations with partition metadata (equivalent to old show_cleans_metadata)
+ * CALL show_cleans(
+ *   table => 'my_table',
+ *   filter => "partition_path IS NOT NULL"
+ * )
+ *
  * -- Show cleans that deleted many files
  * CALL show_cleans(
  *   table => 'my_table',
@@ -88,9 +111,6 @@ import scala.collection.JavaConverters._
  * -- Basic usage: Show last 10 completed cleans
  * CALL show_cleans(table => 'hudi_table_1')
  *
- * -- Show clean operations with partition metadata
- * CALL show_cleans_metadata(table => 'hudi_table_1')
- *
  * -- Include archived clean operations
  * CALL show_cleans(table => 'hudi_table_1', showArchived => true)
  *
@@ -99,13 +119,16 @@ import scala.collection.JavaConverters._
  *   table => 'hudi_table_1',
  *   filter => "clean_time > '20231201000000' AND total_files_deleted > 0"
  * )
+ *
+ * -- Show partition-level clean analysis
+ * CALL show_cleans(
+ *   table => 'hudi_table_1',
+ *   filter => "partition_path LIKE 'year=2023%' AND failed_delete_files = 0"
+ * )
  * }}}
  *
- * @param includePartitionMetadata Whether to include partition-level metadata in output
- * @see [[ShowCleansPlanProcedure]] for information about planned clean operations
- * @see [[HoodieProcedureFilterUtils]] for detailed filter expression syntax
  */
-class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
+class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
@@ -118,18 +141,7 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
   private val OUTPUT_TYPE = new StructType(Array[StructField](
     StructField("clean_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("start_clean_time", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("time_taken_in_millis", DataTypes.LongType, nullable = true, Metadata.empty),
-    StructField("total_files_deleted", DataTypes.IntegerType, nullable = true, Metadata.empty),
-    StructField("earliest_commit_to_retain", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("last_completed_commit_timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("version", DataTypes.IntegerType, nullable = true, Metadata.empty)
-  ))
-
-  private val PARTITION_METADATA_OUTPUT_TYPE = new StructType(Array[StructField](
-    StructField("clean_time", DataTypes.StringType, nullable = true, Metadata.empty),
-    StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("start_clean_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("partition_path", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -139,12 +151,18 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
     StructField("failed_delete_files", DataTypes.IntegerType, nullable = true, Metadata.empty),
     StructField("is_partition_deleted", DataTypes.BooleanType, nullable = true, Metadata.empty),
     StructField("time_taken_in_millis", DataTypes.LongType, nullable = true, Metadata.empty),
-    StructField("total_files_deleted", DataTypes.IntegerType, nullable = true, Metadata.empty)
+    StructField("total_files_deleted", DataTypes.IntegerType, nullable = true, Metadata.empty),
+    StructField("earliest_commit_to_retain", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("last_completed_commit_timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("version", DataTypes.IntegerType, nullable = true, Metadata.empty),
+    StructField("total_partitions_to_clean", DataTypes.IntegerType, nullable = true, Metadata.empty),
+    StructField("total_partitions_to_delete", DataTypes.IntegerType, nullable = true, Metadata.empty),
+    StructField("extra_metadata", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
 
-  def outputType: StructType = if (includePartitionMetadata) PARTITION_METADATA_OUTPUT_TYPE else OUTPUT_TYPE
+  def outputType: StructType = OUTPUT_TYPE
 
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
@@ -166,17 +184,9 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    val activeResults = if (includePartitionMetadata) {
-      getCleansWithPartitionMetadata(metaClient.getActiveTimeline, limit)
-    } else {
-      getCleans(metaClient.getActiveTimeline, limit)
-    }
+    val activeResults = getCombinedCleansWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient)
     val finalResults = if (showArchived) {
-      val archivedResults = if (includePartitionMetadata) {
-        getCleansWithPartitionMetadata(metaClient.getArchivedTimeline, limit)
-      } else {
-        getCleans(metaClient.getArchivedTimeline, limit)
-      }
+      val archivedResults = getCombinedCleansWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient)
       (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
         .take(limit)
@@ -190,87 +200,158 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
     }
   }
 
-  override def build: Procedure = new ShowCleansProcedure(includePartitionMetadata)
+  override def build: Procedure = new ShowCleansProcedure()
 
-  private def getCleansWithPartitionMetadata(timeline: HoodieTimeline,
-                                             limit: Int): Seq[Row] = {
+  private def getCombinedCleansWithPartitionMetadata(timeline: HoodieTimeline, limit: Int, metaClient: HoodieTableMetaClient): Seq[Row] = {
     import scala.collection.JavaConverters._
+    import scala.util.{Failure, Success, Try}
 
-    val (rows: util.ArrayList[Row], cleanInstants: util.ArrayList[HoodieInstant]) = getSortedCleans(timeline)
+    val allCleanInstants = timeline.getCleanerTimeline.getInstants.asScala.toSeq
+      .sortWith((a, b) => a.requestedTime() > b.requestedTime())
+      .take(limit)
 
-    var rowCount = 0
+    val allRows = scala.collection.mutable.ListBuffer[Row]()
 
-    cleanInstants.asScala.takeWhile(_ => rowCount < limit).foreach { cleanInstant =>
-      val cleanMetadata = timeline.readCleanMetadata(cleanInstant)
+    allCleanInstants.foreach { cleanInstant =>
+      if (cleanInstant.getState == HoodieInstant.State.COMPLETED) {
+        Try {
+          val cleanMetadata = timeline.readCleanMetadata(cleanInstant)
 
-      cleanMetadata.getPartitionMetadata.entrySet.asScala.takeWhile(_ => rowCount < limit).foreach { partitionMetadataEntry =>
-        val partitionPath = partitionMetadataEntry.getKey
-        val partitionMetadata = partitionMetadataEntry.getValue
+          cleanMetadata.getPartitionMetadata.entrySet.asScala.foreach { partitionMetadataEntry =>
+            val partitionPath = partitionMetadataEntry.getKey
+            val partitionMetadata = partitionMetadataEntry.getValue
 
-        rows.add(Row(
-          cleanInstant.requestedTime(),
-          cleanInstant.getCompletionTime,
-          cleanInstant.getAction,
-          cleanMetadata.getStartCleanTime,
-          partitionPath,
-          partitionMetadata.getPolicy,
-          partitionMetadata.getDeletePathPatterns.size(),
-          partitionMetadata.getSuccessDeleteFiles.size(),
-          partitionMetadata.getFailedDeleteFiles.size(),
-          partitionMetadata.getIsPartitionDeleted,
-          cleanMetadata.getTimeTakenInMillis,
-          cleanMetadata.getTotalFilesDeleted
-        ))
-        rowCount += 1
+            val row = Row(
+              cleanInstant.requestedTime(),                    // clean_time
+              cleanInstant.getCompletionTime,                  // state_transition_time
+              cleanInstant.getState.name(),                    // state
+              cleanInstant.getAction,                          // action
+              cleanMetadata.getStartCleanTime,                 // start_clean_time
+              partitionPath,                                   // partition_path
+              partitionMetadata.getPolicy,                     // policy
+              partitionMetadata.getDeletePathPatterns.size(), // delete_path_patterns
+              partitionMetadata.getSuccessDeleteFiles.size(), // success_delete_files
+              partitionMetadata.getFailedDeleteFiles.size(),  // failed_delete_files
+              partitionMetadata.getIsPartitionDeleted,         // is_partition_deleted
+              cleanMetadata.getTimeTakenInMillis,              // time_taken_in_millis
+              cleanMetadata.getTotalFilesDeleted,              // total_files_deleted
+              cleanMetadata.getEarliestCommitToRetain,         // earliest_commit_to_retain
+              cleanMetadata.getLastCompletedCommitTimestamp,   // last_completed_commit_timestamp
+              cleanMetadata.getVersion,                        // version
+              null,                                            // total_partitions_to_clean (N/A for completed)
+              null,                                            // total_partitions_to_delete (N/A for completed)
+              if (cleanMetadata.getExtraMetadata != null) cleanMetadata.getExtraMetadata.toString else null // extra_metadata
+            )
+            allRows += row
+          }
+        } match {
+          case Success(_) => // Successfully processed
+          case Failure(exception) =>
+            logWarning(s"Failed to read clean metadata for instant ${cleanInstant.requestedTime()}", exception)
+            allRows += createErrorRowForCompletedWithPartition(cleanInstant)
+        }
+      } else {
+        // Handle inflight/requested clean operations (no partition metadata available)
+        Try {
+          val requestedCleanInstant = metaClient.getInstantGenerator.createNewInstant(
+            HoodieInstant.State.REQUESTED,
+            cleanInstant.getAction,
+            cleanInstant.requestedTime()
+          )
+          val cleanerPlan = timeline.readCleanerPlan(requestedCleanInstant)
+          
+          val planStats = extractCleanPlanStats(cleanerPlan)
+          
+          val row = Row(
+            cleanInstant.requestedTime(),                    // clean_time
+            null,                                            // state_transition_time (N/A for pending)
+            cleanInstant.getState.name(),                    // state
+            cleanInstant.getAction,                          // action
+            null,                                            // start_clean_time (N/A for pending)
+            null,                                            // partition_path (N/A for pending)
+            cleanerPlan.getPolicy,                           // policy
+            null,                                            // delete_path_patterns (N/A for pending)
+            null,                                            // success_delete_files (N/A for pending)
+            null,                                            // failed_delete_files (N/A for pending)
+            null,                                            // is_partition_deleted (N/A for pending)
+            null,                                            // time_taken_in_millis (N/A for pending)
+            null,                                            // total_files_deleted (N/A for pending)
+            planStats.earliestInstantToRetain,               // earliest_commit_to_retain
+            cleanerPlan.getLastCompletedCommitTimestamp,     // last_completed_commit_timestamp
+            cleanerPlan.getVersion,                          // version
+            planStats.totalPartitionsToClean,               // total_partitions_to_clean
+            planStats.totalPartitionsToDelete,              // total_partitions_to_delete
+            planStats.extraMetadata                          // extra_metadata
+          )
+          allRows += row
+        } match {
+          case Success(_) => // Successfully processed
+          case Failure(exception) =>
+            logWarning(s"Failed to read clean plan for instant ${cleanInstant.requestedTime()}", exception)
+            allRows += createErrorRowForPendingWithPartition(cleanInstant)
+        }
       }
     }
 
-    rows.asScala.toList
+    allRows.take(limit).toSeq
+  }
+  
+  private def createErrorRowForCompletedWithPartition(cleanInstant: HoodieInstant): Row = {
+    Row(
+      cleanInstant.requestedTime(),
+      cleanInstant.getCompletionTime,
+      cleanInstant.getState.name(),
+      cleanInstant.getAction,
+      null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
+    )
+  }
+  
+  private def createErrorRowForPendingWithPartition(cleanInstant: HoodieInstant): Row = {
+    Row(
+      cleanInstant.requestedTime(),
+      null,
+      cleanInstant.getState.name(),
+      cleanInstant.getAction,
+      null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
+    )
   }
 
-  private def getSortedCleans(timeline: HoodieTimeline): (util.ArrayList[Row], util.ArrayList[HoodieInstant]) = {
-    val rows = new util.ArrayList[Row]
-    val cleanInstants: util.List[HoodieInstant] = timeline.getCleanerTimeline.filterCompletedInstants
-      .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
-    val sortedCleanInstants = new util.ArrayList[HoodieInstant](cleanInstants)
-    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
-    Collections.sort(sortedCleanInstants, layout.getInstantComparator.requestedTimeOrderedComparator.reversed)
-    (rows, sortedCleanInstants)
+  private def extractCleanPlanStats(cleanerPlan: org.apache.hudi.avro.model.HoodieCleanerPlan): CleanPlanStatistics = {
+    val earliestInstantToRetain = Option(cleanerPlan.getEarliestInstantToRetain)
+      .map(_.getTimestamp)
+      .orNull
+
+    val totalPartitionsToClean = Option(cleanerPlan.getFilePathsToBeDeletedPerPartition)
+      .map(_.size())
+      .getOrElse(0)
+
+    val totalPartitionsToDelete = Option(cleanerPlan.getPartitionsToBeDeleted)
+      .map(_.size())
+      .getOrElse(0)
+
+    val extraMetadata = Option(cleanerPlan.getExtraMetadata)
+      .filter(!_.isEmpty)
+      .map(_.asScala.map { case (k, v) => s"$k=$v" }.mkString(", "))
+      .orNull
+
+    CleanPlanStatistics(
+      earliestInstantToRetain = earliestInstantToRetain,
+      totalPartitionsToClean = totalPartitionsToClean,
+      totalPartitionsToDelete = totalPartitionsToDelete,
+      extraMetadata = extraMetadata
+    )
   }
 
-  private def getCleans(timeline: HoodieTimeline,
-                        limit: Int): Seq[Row] = {
-    val (rows: util.ArrayList[Row], cleanInstants: util.ArrayList[HoodieInstant]) = getSortedCleans(timeline)
-
-    for (i <- 0 until Math.min(cleanInstants.size, limit)) {
-      val cleanInstant = cleanInstants.get(i)
-      val cleanMetadata = timeline.readCleanMetadata(cleanInstant)
-
-      rows.add(Row(
-        cleanInstant.requestedTime(),
-        cleanInstant.getCompletionTime,
-        cleanInstant.getAction,
-        cleanMetadata.getStartCleanTime,
-        cleanMetadata.getTimeTakenInMillis,
-        cleanMetadata.getTotalFilesDeleted,
-        cleanMetadata.getEarliestCommitToRetain,
-        cleanMetadata.getLastCompletedCommitTimestamp,
-        cleanMetadata.getVersion
-      ))
-    }
-
-    rows.asScala.toList
-  }
+  private case class CleanPlanStatistics(
+                                          earliestInstantToRetain: String,
+                                          totalPartitionsToClean: Int,
+                                          totalPartitionsToDelete: Int,
+                                          extraMetadata: String
+                                        )
 }
 
 object ShowCleansProcedure {
   val NAME = "show_cleans"
 
-  def builder: Supplier[ProcedureBuilder] = () => new ShowCleansProcedure(false)
-}
-
-object ShowCleansPartitionMetadataProcedure {
-  val NAME = "show_cleans_metadata"
-
-  def builder: Supplier[ProcedureBuilder] = () => new ShowCleansProcedure(true)
+  def builder: Supplier[ProcedureBuilder] = () => new ShowCleansProcedure()
 }

@@ -56,8 +56,8 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 2)")
           .collect()
 
-        val firstCleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')").collect()
-        require(firstCleanPlans.length >= 1, "Should have at least 1 clean plan after ensuring sufficient commits")
+        val firstCleanPlans = spark.sql(s"call show_cleans(table => '$tableName')").collect()
+        require(firstCleanPlans.length >= 1, "Should have at least 1 clean operation after ensuring sufficient commits")
 
         spark.sql(s"insert into $tableName values(4, 'a4', 40, 4000)")
         spark.sql(s"update $tableName set price = 15 where id = 1")
@@ -68,17 +68,17 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
 
-        val secondCleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')").collect()
-        require(secondCleanPlans.length >= 2, "Should have at least 2 clean plans after second clean")
+        val secondCleanPlans = spark.sql(s"call show_cleans(table => '$tableName')").collect()
+        require(secondCleanPlans.length >= 2, "Should have at least 2 clean operations after second clean")
 
-        val allCleanPlans = spark.sql(s"call show_clean_plans(table => '$tableName')")
+        val allCleanPlans = spark.sql(s"call show_cleans(table => '$tableName')")
         allCleanPlans.show(false)
         val allPlans = allCleanPlans.collect()
 
-        assert(allPlans.length >= 2, "Should have at least 2 clean plans")
+        assert(allPlans.length >= 2, "Should have at least 2 clean operations")
 
         val firstPlan = allPlans.head
-        assert(firstPlan.length >= 4, "Each clean plan should have at least 4 columns (plan_time, earliest_retained_instant, last_completed_commit_time, files_deleted)")
+        assert(firstPlan.length >= 19, "Each clean operation should have 19 columns")
 
         allPlans.foreach { plan =>
           val planTime = plan.getString(0)
@@ -87,7 +87,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         val sortedPlans = secondCleanPlans.sortBy(_.getString(0))
         val actualFirstCleanTime = sortedPlans(0).getString(0)
         val startTimeStr = (actualFirstCleanTime.toLong + 1000).toString
-        val afterStartFilter = spark.sql(s"""call show_clean_plans(table => '$tableName', filter => "plan_time > '$startTimeStr'")""")
+        val afterStartFilter = spark.sql(s"""call show_cleans(table => '$tableName', filter => "clean_time > '$startTimeStr'")""")
         afterStartFilter.show(false)
         val afterStartRows = afterStartFilter.collect()
         assertResult(afterStartRows.length)(1)
@@ -95,7 +95,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test show_cleans procedure") {
+  test("Test show_cleans procedure - schema with partition metadata present") {
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -108,6 +108,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
              | id int,
              | name string,
              | price double,
+             | partition_col string,
              | ts long
              | ) using hudi
              | location '${tmp.getCanonicalPath}'
@@ -116,35 +117,64 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
              |   type = 'cow',
              |   preCombineField = 'ts'
              | )
+             | partitioned by (partition_col)
              |""".stripMargin)
 
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName (id, name, price, partition_col, ts) values(1, 'a1', 10, 'part1', 1000)")
+        spark.sql(s"insert into $tableName (id, name, price, partition_col, ts) values(2, 'a2', 20, 'part2', 2000)")
         spark.sql(s"update $tableName set price = 11 where id = 1")
         spark.sql(s"update $tableName set price = 12 where id = 1")
 
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
 
-        val completedCleans = spark.sql(s"call show_cleans(table => '$tableName')")
-          .collect()
+        val allCleans = spark.sql(s"call show_cleans(table => '$tableName')")
+        allCleans.show(false)
+        val allCleansData = allCleans.collect()
 
-        assertResult(1)(completedCleans.length)
+        assert(allCleansData.length == 1, "Should have at least one clean operation")
 
-        val completedClean = completedCleans(0)
-        assert(completedClean.getString(0) != null) // clean_time
-        assert(completedClean.getString(1) != null) // state_transition_time
-        assert(completedClean.getString(2) == "clean") // action
-        assert(completedClean.getString(3) != null) // start_clean_time
-        assert(completedClean.getLong(4) >= 0) // time_taken_in_millis
-        assert(completedClean.getInt(5) >= 0) // total_files_deleted
-        // earliest_commit_to_retain can be null
-        // last_completed_commit_timestamp can be null
-        // version can be null or integer
+        assert(allCleans.schema.fields.length == 19, "Unified schema should have 19 fields")
+
+        val expectedFields = Seq(
+          "clean_time", "state_transition_time", "state", "action", "start_clean_time",
+          "partition_path", "policy", "delete_path_patterns", "success_delete_files", 
+          "failed_delete_files", "is_partition_deleted", "time_taken_in_millis", 
+          "total_files_deleted", "earliest_commit_to_retain", "last_completed_commit_timestamp",
+          "version", "total_partitions_to_clean", "total_partitions_to_delete", "extra_metadata"
+        )
+        
+        expectedFields.zipWithIndex.foreach { case (expectedField, index) =>
+          assert(allCleans.schema.fields(index).name == expectedField, 
+            s"Field at position $index should be '$expectedField', but was '${allCleans.schema.fields(index).name}'")
+        }
+
+        val completedCleans = allCleansData.filter(_.getString(2) == "COMPLETED")
+        assert(completedCleans.length >= 1, "Should have at least one completed operation")
+
+        completedCleans.foreach { completedClean =>
+          assert(completedClean.getString(0) != null) // clean_time
+          assert(completedClean.getString(1) != null) // state_transition_time  
+          assert(completedClean.getString(2) == "COMPLETED") // state
+          assert(completedClean.getString(3) == "clean") // action
+          assert(completedClean.getString(4) != null) // start_clean_time
+          assert(completedClean.getString(5) != null) // partition_path (should be available for completed)
+          assert(completedClean.getString(6) != null) // policy
+          assert(completedClean.get(7) != null) // delete_path_patterns
+          assert(completedClean.get(8) != null) // success_delete_files
+          assert(completedClean.get(9) != null) // failed_delete_files
+          // is_partition_deleted can be true/false/null
+          assert(completedClean.getLong(11) >= 0) // time_taken_in_millis
+          assert(completedClean.getInt(12) >= 0) // total_files_deleted
+          // Plan-specific fields should be null for completed operations
+          assert(completedClean.get(16) == null) // total_partitions_to_clean
+          assert(completedClean.get(17) == null) // total_partitions_to_delete
+        }
       }
     }
   }
 
-  test("Test show_cleans with partition metadata") {
+  test("Test show_cleans unified schema and graceful null handling") {
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -177,26 +207,63 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
 
-        val cleansMetadata = spark.sql(s"call show_cleans_metadata(table => '$tableName')")
-          .collect()
+        val allCleans = spark.sql(s"call show_cleans(table => '$tableName')")
+        allCleans.show(false)
+        val allCleansData = allCleans.collect()
 
-        assert(cleansMetadata.length >= 0) // Can be 0 if no partitions were cleaned
+        assert(allCleansData.length >= 1, "Should have at least one clean operation")
 
-        if (cleansMetadata.length > 0) {
-          val cleanMetadata = cleansMetadata(0)
-          assert(cleanMetadata.getString(0) != null) // clean_time
-          assert(cleanMetadata.getString(1) != null) // state_transition_time
-          assert(cleanMetadata.getString(2) == "clean") // action
-          assert(cleanMetadata.getString(3) != null) // start_clean_time
-          assert(cleanMetadata.getString(4) != null) // partition_path
-          assert(cleanMetadata.getString(5) != null) // policy
-          assert(cleanMetadata.getInt(6) >= 0) // delete_path_patterns
-          assert(cleanMetadata.getInt(7) >= 0) // success_delete_files
-          assert(cleanMetadata.getInt(8) >= 0) // failed_delete_files
-          // is_partition_deleted can be true/false
-          assert(cleanMetadata.getLong(10) >= 0) // time_taken_in_millis
-          assert(cleanMetadata.getInt(11) >= 0) // total_files_deleted
+        assert(allCleans.schema.fields.length == 19, "show_cleans should have 19 fields")
+
+        val completedCleans = allCleansData.filter(_.getString(2) == "COMPLETED")
+        assert(completedCleans.length >= 1, "Should have at least one completed operation")
+
+        completedCleans.foreach { completedClean =>
+          // Verify completed operations have the right data structure
+          assert(completedClean.getString(0) != null) // clean_time
+          assert(completedClean.getString(1) != null) // state_transition_time  
+          assert(completedClean.getString(2) == "COMPLETED") // state
+          assert(completedClean.getString(3) == "clean") // action
+          assert(completedClean.getString(4) != null) // start_clean_time
+          
+          // For partitioned tables, partition metadata should be available
+          if (completedClean.getString(5) != null) { // partition_path
+            assert(completedClean.getString(6) != null) // policy
+            assert(completedClean.get(7) != null) // delete_path_patterns
+            assert(completedClean.get(8) != null) // success_delete_files  
+            assert(completedClean.get(9) != null) // failed_delete_files
+            // is_partition_deleted can be true/false/null
+          }
+          
+          assert(completedClean.getLong(11) >= 0) // time_taken_in_millis
+          assert(completedClean.getInt(12) >= 0) // total_files_deleted
+          assert(completedClean.getString(13) != null) // earliest_commit_to_retain
+          assert(completedClean.getString(14) != null) // last_completed_commit_timestamp
+          assert(completedClean.getInt(15) >= 1) // version
+          
+          // Plan-specific fields should be null for completed operations
+          assert(completedClean.get(16) == null) // total_partitions_to_clean
+          assert(completedClean.get(17) == null) // total_partitions_to_delete
         }
+
+        val completedOnly = spark.sql(
+          s"""call show_cleans(
+             |  table => '$tableName',
+             |  filter => "state = 'COMPLETED'"
+             |)""".stripMargin)
+        
+        val completedOnlyData = completedOnly.collect()
+        assert(completedOnlyData.length >= 1, "Should have completed operations when filtered")
+        assert(completedOnlyData.forall(_.getString(2) == "COMPLETED"), "All filtered results should be completed")
+
+        val withPartitionData = spark.sql(
+          s"""call show_cleans(
+             |  table => '$tableName',
+             |  filter => "partition_path IS NULL"
+             |)""".stripMargin)
+        
+        val partitionData = withPartitionData.collect()
+        assert(partitionData.length == 0, "No results should have partition data when filtered")
       }
     }
   }
@@ -237,34 +304,21 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
           .collect()
         spark.sql(s"call show_cleans(table => '$tableName', showArchived => false)").show(false)
 
-        val activePlans = spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => false)")
-          .collect()
-        spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => false)").show(false)
-
-        val activeMetadata = spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => false)")
-          .collect()
-        spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => false)").show(false)
-
         // showArchived=true (both active + archived timelines merged)
         val allCleans = spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)")
           .collect()
         spark.sql(s"call show_cleans(table => '$tableName', showArchived => true)").show(false)
 
-        val allPlans = spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => true)")
-          .collect()
-        spark.sql(s"call show_clean_plans(table => '$tableName', showArchived => true)").show(false)
-
-        val allMetadata = spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => true)")
-          .collect()
-        spark.sql(s"call show_cleans_metadata(table => '$tableName', showArchived => true)").show(false)
-
         assert(activeCleans.length >= 1, "Active timeline should have clean instances")
-        assert(activePlans.length >= 1, "Active timeline should have clean plans")
 
         // showArchived=true should include at least the same data as active timeline
         assert(allCleans.length >= activeCleans.length, "Active + Archived should have at least as many instances as active only")
-        assert(allPlans.length >= activePlans.length, "Active + Archived should have at least as many plans as active only")
-        assert(allMetadata.length >= activeMetadata.length, "Active + Archived should have at least as much metadata as active only")
+        
+        // Verify that show_cleans includes both completed and pending operations
+        val completedCleansActive = activeCleans.filter(_.getString(2) == "COMPLETED")
+        val pendingCleansActive = activeCleans.filter(row => Set("REQUESTED", "INFLIGHT").contains(row.getString(2)))
+        assert(completedCleansActive.length + pendingCleansActive.length == activeCleans.length, 
+          "All clean operations should be either completed or pending")
       }
     }
   }
@@ -313,10 +367,10 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         assert(totalCleans.length >= 1)
         assert(totalCleans.length <= 3) // Should not exceed the number of cleans we performed
 
-        val limitedPlans = spark.sql(s"call show_clean_plans(table => '$tableName', limit => 1)")
+        val limitedAllOperations = spark.sql(s"call show_cleans(table => '$tableName', limit => 1)")
           .collect()
 
-        assert(limitedPlans.length <= 1)
+        assert(limitedAllOperations.length <= 1)
       }
     }
   }
@@ -348,16 +402,6 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
           .collect()
 
         assertResult(0)(emptyCleans.length)
-
-        val emptyPlans = spark.sql(s"call show_clean_plans(table => '$tableName')")
-          .collect()
-
-        assertResult(0)(emptyPlans.length)
-
-        val emptyMetadata = spark.sql(s"call show_cleans_metadata(table => '$tableName')")
-          .collect()
-
-        assertResult(0)(emptyMetadata.length)
       }
     }
   }
@@ -371,14 +415,6 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
     intercept[Exception] {
       spark.sql(s"call show_cleans(table => '$nonExistentTable')").collect()
-    }
-
-    intercept[Exception] {
-      spark.sql(s"call show_clean_plans(table => '$nonExistentTable')").collect()
-    }
-
-    intercept[Exception] {
-      spark.sql(s"call show_cleans_metadata(table => '$nonExistentTable')").collect()
     }
   }
 
