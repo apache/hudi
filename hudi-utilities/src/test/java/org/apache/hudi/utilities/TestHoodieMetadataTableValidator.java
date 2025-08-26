@@ -42,12 +42,14 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -980,13 +982,19 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     String partition = "partition10";
     String label = "metadata item";
 
+    TimeGenerator timeGenerator = TimeGenerators
+            .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+                HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
     // Base file list
-    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(5);
+    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(5, timeGenerator);
     List<FileSlice> listMdt = filelistPair.getLeft();
     List<FileSlice> listFs = filelistPair.getRight();
 
     // Size mismatch
-    FileSlice extraFileSlice = generateRandomFileSlice().getLeft();
+    FileSlice extraFileSlice = generateRandomFileSlice(
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator),
+        TimelineUtils.generateInstantTime(true, timeGenerator)).getLeft();
     listFs.add(extraFileSlice);
 
     // Mock the rollback timeline
@@ -995,18 +1003,18 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     doReturn(spyTimeline).when(spyMetaClient).getActiveTimeline();
     HoodieTimeline mockRollbackTimeline = mock(HoodieTimeline.class, RETURNS_DEEP_STUBS);
     doReturn(mockRollbackTimeline).when(spyTimeline).getRollbackTimeline();
-    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "001");
-    HoodieInstant rollbackRequestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, "001");
-    HoodieInstant matchingRollbackInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "002");
-    HoodieInstant matchingRollbackRequestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, "002");
+    HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant rollbackRequestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant matchingRollbackInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant matchingRollbackRequestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
 
     when(mockRollbackTimeline.getInstantsAsStream()).thenReturn(Stream.of(rollbackInstant, matchingRollbackInstant));
     HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
     rollbackPlan.setInstantToRollback(HoodieInstantInfo.newBuilder().setCommitTime("000").setAction("commit").build());
-    doReturn(rollbackPlan).when(spyTimeline).deserializeInstantContent(rollbackRequestedInstant, HoodieRollbackPlan.class);
+    doReturn(rollbackPlan).when(spyTimeline).readInstantContent(rollbackRequestedInstant, HoodieRollbackPlan.class);
     HoodieRollbackPlan matchingRollbackPlan = new HoodieRollbackPlan();
     matchingRollbackPlan.setInstantToRollback(HoodieInstantInfo.newBuilder().setCommitTime(extraFileSlice.getBaseInstantTime()).setAction("commit").build());
-    doReturn(matchingRollbackPlan).when(spyTimeline).deserializeInstantContent(matchingRollbackRequestedInstant, HoodieRollbackPlan.class);
+    doReturn(matchingRollbackPlan).when(spyTimeline).readInstantContent(matchingRollbackRequestedInstant, HoodieRollbackPlan.class);
 
     Exception exception = assertThrows(
         HoodieValidationException.class,
@@ -1019,7 +1027,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
             label, partition, basePath, listFs.size(),
             listMdt.size(), computeDiffSummary(listMdt, listFs, metaClient, logDetailMaxLength)),
         exception.getMessage());
-    verify(spyTimeline, times(2)).deserializeInstantContent(any(), any());
+    verify(spyTimeline, times(2)).readInstantContent(any(), any());
   }
 
   @ParameterizedTest

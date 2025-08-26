@@ -58,7 +58,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
@@ -1529,17 +1528,19 @@ public class HoodieMetadataTableValidator implements Serializable {
       if (!nonActiveInstantTimes.isEmpty()) {
         String maxInstant = nonActiveInstantTimes.stream().max(Comparator.naturalOrder()).orElse(null);
         String minInstant = nonActiveInstantTimes.stream().min(Comparator.naturalOrder()).orElse(null);
-        HoodieArchivedTimeline archivedTimeline = new HoodieArchivedTimeline(metaClient, minInstant, maxInstant, Option.empty());
-        Set<String> archivedInstants = archivedTimeline.getInstantsAsStream()
-            .map(HoodieInstant::requestedTime).collect(Collectors.toSet());
+        Set<String> archivedInstants = metaClient.getArchivedTimeline()
+            .findInstantsInRange(minInstant, maxInstant)
+            .getInstantsAsStream()
+            .map(HoodieInstant::requestedTime)
+            .collect(Collectors.toSet());
         // truncate start instant since range is not
         Set<String> missingCommits = nonActiveInstantTimes.stream().filter(instant -> !archivedInstants.contains(instant)).collect(Collectors.toSet());
         if (!missingCommits.isEmpty()) {
           LOG.warn("File slices in file system belong to missing commits: {}", String.join(",", missingCommits));
           activeTimeline.getRollbackTimeline().getInstantsAsStream().forEach(instant -> {
-            HoodieInstant requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, instant.getCompletionTime());
+            HoodieInstant requestedInstant =  metaClient.getInstantGenerator().getRollbackRequestedInstant(instant);
             try {
-              HoodieRollbackPlan rollbackPlan = activeTimeline.deserializeInstantContent(requestedInstant, HoodieRollbackPlan.class);
+              HoodieRollbackPlan rollbackPlan = activeTimeline.readInstantContent(requestedInstant, HoodieRollbackPlan.class);
               if (missingCommits.contains(rollbackPlan.getInstantToRollback().getCommitTime())) {
                 LOG.warn("Missing commit ({}) is part of rollback plan: {}", rollbackPlan.getInstantToRollback().getCommitTime(), rollbackPlan);
               }
