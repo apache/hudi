@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.keygen.{ComplexAvroKeyGenerator, ComplexKeyGenerator, KeyGenerator}
+import org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 
@@ -189,13 +190,11 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       var compositeRecordKeys: List[String] = List.empty
       val recordKeyOpt = getRecordKeyConfig
       val isComplexRecordKey = {
-        val keyGeneratorClassName = metaClient.getTableConfig.getKeyGeneratorClassName
         val fieldCount = recordKeyOpt.map(recordKeys => recordKeys.length).getOrElse(0)
-        val isUsingComplexKeyGen = isComplexKeyGenerator(keyGeneratorClassName)
         // Consider as complex if:
         // 1. Multiple fields (> 1), OR
-        // 2. Using complex key generator with single field
-        fieldCount > 1 || (isUsingComplexKeyGen && fieldCount == 1)
+        // 2. Using complex key generator with single record key field
+        fieldCount > 1 || isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig)
       }
       recordKeyOpt.foreach { recordKeysArray =>
         // Handle composite record keys
