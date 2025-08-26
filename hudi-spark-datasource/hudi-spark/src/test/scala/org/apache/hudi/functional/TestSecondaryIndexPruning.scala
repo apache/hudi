@@ -1386,7 +1386,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     spark.sql(
       s"""
          |ALTER TABLE $tableName
-         |SET TBLPROPERTIES (hoodie.write.complex.keygen.encode.single.record.key.field.name = 'true')
+         |SET TBLPROPERTIES (hoodie.write.complex.keygen.old.encoding = 'true')
          |""".stripMargin)
     spark.sql(
       s"""|INSERT INTO $tableName(ts, id, rider, driver, fare, city, state) VALUES

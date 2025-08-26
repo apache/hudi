@@ -30,7 +30,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING;
 
 /**
  * Key generator prefixing field names before corresponding record-key parts.
@@ -53,7 +53,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .collect(Collectors.toList());
     this.complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
     this.encodeSingleKeyFieldName = ConfigUtils.getBooleanWithAltKeys(
-        props, COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME);
+        props, COMPLEX_KEYGEN_OLD_ENCODING);
   }
 
   @Override

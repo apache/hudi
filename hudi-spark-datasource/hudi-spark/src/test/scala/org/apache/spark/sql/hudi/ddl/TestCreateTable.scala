@@ -1056,7 +1056,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .option(
-            HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key,
+            HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key,
             encodeSingleKeyFieldName.toString)
           .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .mode(SaveMode.Overwrite)
@@ -1074,7 +1074,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |ALTER TABLE $tableName
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.encode.single.record.key.field.name = '$encodeSingleKeyFieldName')
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.old.encoding = '$encodeSingleKeyFieldName')
              |""".stripMargin)
         // Check the missing properties for spark sql
         val metaClient = createMetaClient(spark, tablePath)

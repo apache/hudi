@@ -258,8 +258,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           "**Note** This is being actively worked on. Please use "
               + "`hoodie.datasource.write.keygenerator.class` instead.");
 
-  public static final ConfigProperty<Boolean> COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME = ConfigProperty
-      .key("hoodie.write.complex.keygen.encode.single.record.key.field.name")
+  public static final ConfigProperty<Boolean> COMPLEX_KEYGEN_OLD_ENCODING = ConfigProperty
+      .key("hoodie.write.complex.keygen.old.encoding")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.1.0")

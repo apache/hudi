@@ -84,7 +84,7 @@ public class TestRowDataKeyGen {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
-    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(), String.valueOf(encodesKeyWithFieldName));
+    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(), String.valueOf(encodesKeyWithFieldName));
     RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);

@@ -3362,7 +3362,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              |ALTER TABLE $targetTable
-             |SET TBLPROPERTIES (hoodie.write.complex.keygen.encode.single.record.key.field.name = 'true')
+             |SET TBLPROPERTIES (hoodie.write.complex.keygen.old.encoding = 'true')
              |""".stripMargin)
         spark.sql("set spark.sql.shuffle.partitions = 11")
         spark.sql(

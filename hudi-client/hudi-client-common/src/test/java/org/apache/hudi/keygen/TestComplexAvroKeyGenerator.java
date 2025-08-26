@@ -42,7 +42,7 @@ public class TestComplexAvroKeyGenerator {
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
     if (setEncodeSingleKeyFieldNameConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(),
+          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
           String.valueOf(encodeSingleKeyFieldName));
     }
     ComplexAvroKeyGenerator compositeKeyGenerator = new ComplexAvroKeyGenerator(properties);
@@ -69,7 +69,7 @@ public class TestComplexAvroKeyGenerator {
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
     if (setEncodeSingleKeyFieldNameConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(),
+          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
           String.valueOf(encodeSingleKeyFieldName));
     }
     ComplexAvroKeyGenerator compositeKeyGenerator = new ComplexAvroKeyGenerator(properties);
@@ -95,7 +95,7 @@ public class TestComplexAvroKeyGenerator {
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
     if (setEncodeSingleKeyFieldNameConfig) {
       properties.setProperty(
-          HoodieWriteConfig.COMPLEX_KEYGEN_ENCODE_SINGLE_RECORD_KEY_FIELD_NAME.key(),
+          HoodieWriteConfig.COMPLEX_KEYGEN_OLD_ENCODING.key(),
           String.valueOf(encodeSingleKeyFieldName));
     }
     ComplexAvroKeyGenerator compositeKeyGenerator = new ComplexAvroKeyGenerator(properties);
