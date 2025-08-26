@@ -511,6 +511,50 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertTrue(validator.getThrowables().isEmpty());
   }
 
+  @Test
+  void testAdditionalEmptyPartitionInFileSystem() throws IOException {
+    String partition1 = "PARTITION1";
+    String partition2 = "PARTITION2";
+    // create a new partition which exists only in FS based listing. mimicing a scenario where new partition was added by a commit which failed eventually.
+    // so empty dir exists w/o any valid data. In this case, FS based listing will list this additional partiton, while MDT may not list it.
+    String partition3 = "PARTITION3";
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieStorage storage = mock(HoodieStorage.class);
+    when(metaClient.getStorage()).thenReturn(storage);
+    when(storage.exists(new StoragePath(basePath + "/" + partition1))).thenReturn(true);
+    when(storage.exists(new StoragePath(basePath + "/" + partition2))).thenReturn(true);
+    // mock partitions 1-3 to have at least one file
+    mockPartitionWithFiles(Arrays.asList(partition1, partition2), storage);
+    // mock that partition4 only has the partition marker file
+    StoragePathInfo storagePathInfo = mock(StoragePathInfo.class);
+    when(storagePathInfo.isFile()).thenReturn(true);
+    when(storagePathInfo.getPath()).thenReturn(new StoragePath(basePath, partition3 + "/.hoodie_partition_metadata"));
+    when(storage.listFiles(new StoragePath(basePath, partition3))).thenReturn(Collections.singletonList(storagePathInfo));
+
+    // mock list of partitions to return
+    // - FS listing to have one additonal partition which is empty.
+    List<String> mdtPartitions = Arrays.asList(partition1, partition2);
+    validator.setMetadataPartitionsToReturn(mdtPartitions);
+    List<String> fsPartitions = Arrays.asList(partition1, partition2, partition3);
+    validator.setFsPartitionsToReturn(fsPartitions);
+
+    // mock completed timeline.
+    HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
+    when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
+    when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
+
+    // validate that all 3 partitions are returned
+    assertEquals(mdtPartitions, validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testAdditionalPartitionsinMDT(boolean testFailureCase) throws IOException, InterruptedException {
@@ -546,7 +590,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     when(storage.exists(new StoragePath(basePath + "/" + partition2))).thenReturn(true);
     when(storage.exists(new StoragePath(basePath + "/" + partition3))).thenReturn(true);
 
-    // mock list of partitions to return from MDT to have 1 additional partition compared to FS based listing.
+    // mock list of partitions to return
+    // - MDT to have 1 additional partition compared to FS based listing.
+    // - FS listing to have one additonal partition which is empty.
     List<String> mdtPartitions = Arrays.asList(partition1, partition2, partition3);
     validator.setMetadataPartitionsToReturn(mdtPartitions);
     List<String> fsPartitions = Arrays.asList(partition1, partition2);
@@ -1487,7 +1533,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     for (String partition : mdtPartitions) {
       when(fs.exists(new StoragePath(basePath + "/" + partition))).thenReturn(true);
     }
-    
+    mockPartitionWithFiles(fsPartitions, fs);
+
     // Mock timeline
     HoodieTimeline commitsTimeline = mock(HoodieTimeline.class);
     HoodieTimeline completedTimeline = mock(HoodieTimeline.class);
@@ -1497,7 +1544,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // Setup validator with test data
     validator.setMetadataPartitionsToReturn(mdtPartitions);
     validator.setFsPartitionsToReturn(fsPartitions);
-    
+
     // Test validation with truncation
     HoodieValidationException exception = assertThrows(HoodieValidationException.class, () -> {
       validator.validatePartitions(engineContext, new StoragePath(basePath), metaClient);
@@ -1573,5 +1620,14 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         fsFileSlices.size())));
     assertTrue(errorMsg.contains(String.format("MDT-based listing (%d file slices)", 
         mdtFileSlices.size())));
+  }
+
+  private void mockPartitionWithFiles(List<String> partition1, HoodieStorage storage) throws IOException {
+    for (String partition : partition1) {
+      StoragePathInfo storagePathInfo = mock(StoragePathInfo.class);
+      when(storagePathInfo.getPath()).thenReturn(new StoragePath(basePath + "/" + partition + "/001.parquet"));
+      when(storagePathInfo.isFile()).thenReturn(true);
+      when(storage.listFiles(new StoragePath(basePath + "/" + partition))).thenReturn(Collections.singletonList(storagePathInfo));
+    }
   }
 }
