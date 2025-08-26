@@ -44,7 +44,7 @@ public class FlinkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return HoodieFlinkTable.create(config, context);
+    return addTxnManager(HoodieFlinkTable.create(config, context));
   }
 
   @Override

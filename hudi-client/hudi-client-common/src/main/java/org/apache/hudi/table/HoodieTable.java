@@ -160,8 +160,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return txnManager;
   }
 
-  public void setTxnManager(TransactionManager txnManager) {
+  public HoodieTable setTxnManager(TransactionManager txnManager) {
     this.txnManager = txnManager;
+    return this;
   }
 
   private TransactionManager txnManager;

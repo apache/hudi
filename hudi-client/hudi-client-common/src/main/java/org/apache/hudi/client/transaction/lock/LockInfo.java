@@ -23,9 +23,11 @@ import org.apache.hudi.common.util.JsonUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class LockInfo {
+public class LockInfo implements Serializable {
+  // FIXME-vc: without serializable, these fail: TestAlterTable, ..
   private String lockCreateTime;
   private String lockThreadName;
   private ArrayList<String> lockStacksInfo;

@@ -44,7 +44,7 @@ public class JavaUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return HoodieJavaTable.create(config, context);
+    return addTxnManager(HoodieJavaTable.create(config, context));
   }
 
   @Override
