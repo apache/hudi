@@ -62,12 +62,12 @@ public class HoodieCreateHandle<T, I, K, O> extends AbstractCreateHandle<T, I, K
                             TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, preserveMetadata);
     this.logger = LoggerFactory.getLogger(HoodieCreateHandle.class);
+    createPartitionMetadataAndMarkerFile();
     try {
       this.fileWriter = initializeFileWriter();
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
-    createPartitionMetadataAndMarkerFile();
     logger.info("New CreateHandle for partition {} with fileId {}", partitionPath, fileId);
   }
 
