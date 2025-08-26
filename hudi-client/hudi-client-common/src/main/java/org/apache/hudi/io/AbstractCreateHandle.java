@@ -47,7 +47,7 @@ import java.util.Map;
 import java.util.Properties;
 
 public abstract class AbstractCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
-  protected Logger logger;
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractCreateHandle.class);
 
   protected HoodieFileWriter fileWriter;
   protected final StoragePath path;
@@ -62,7 +62,6 @@ public abstract class AbstractCreateHandle<T, I, K, O> extends HoodieWriteHandle
                               TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
         taskContextSupplier, preserveMetadata);
-    this.logger = LoggerFactory.getLogger(AbstractCreateHandle.class);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     writeStatus.setStat(new HoodieWriteStat());
@@ -121,7 +120,7 @@ public abstract class AbstractCreateHandle<T, I, K, O> extends HoodieWriteHandle
       // Not throwing exception from here, since we don't want to fail the entire job
       // for a single record
       writeStatus.markFailure(record, t, recordMetadata);
-      logger.error("Error writing record " + record, t);
+      LOG.error("Error writing record " + record, t);
     }
   }
 
@@ -178,7 +177,7 @@ public abstract class AbstractCreateHandle<T, I, K, O> extends HoodieWriteHandle
    */
   @Override
   public List<WriteStatus> close() {
-    logger.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
       if (isClosed()) {
         // Handle has already been closed
@@ -194,7 +193,7 @@ public abstract class AbstractCreateHandle<T, I, K, O> extends HoodieWriteHandle
 
       setupWriteStatus();
 
-      logger.info("CreateHandle for partitionPath {} fileID {}, took {} ms.",
+      LOG.info("CreateHandle for partitionPath {} fileID {}, took {} ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
           writeStatus.getStat().getRuntimeStats().getTotalCreateTime());
 

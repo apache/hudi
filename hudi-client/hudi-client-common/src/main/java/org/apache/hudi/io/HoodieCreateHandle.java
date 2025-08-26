@@ -29,6 +29,7 @@ import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -38,6 +39,8 @@ import java.util.Map;
 
 @NotThreadSafe
 public class HoodieCreateHandle<T, I, K, O> extends AbstractCreateHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCreateHandle.class);
+
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
@@ -61,14 +64,13 @@ public class HoodieCreateHandle<T, I, K, O> extends AbstractCreateHandle<T, I, K
                             String partitionPath, String fileId, Option<Schema> overriddenSchema,
                             TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier, preserveMetadata);
-    this.logger = LoggerFactory.getLogger(HoodieCreateHandle.class);
     createPartitionMetadataAndMarkerFile();
     try {
       this.fileWriter = initializeFileWriter();
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
-    logger.info("New CreateHandle for partition {} with fileId {}", partitionPath, fileId);
+    LOG.info("New CreateHandle for partition {} with fileId {}", partitionPath, fileId);
   }
 
   @VisibleForTesting
