@@ -18,11 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -37,12 +38,10 @@ public class TestFileWriter implements HoodieFileWriter {
 
   public TestFileWriter(StoragePath filePath, HoodieStorage storage, boolean failOnInitialization, boolean failOnWrite) throws IOException {
     this.failOnWrite = failOnWrite;
-    
+    storage.create(filePath, false);
     if (failOnInitialization) {
       throw new IOException("Simulated file writer initialization failure");
     }
-
-    storage.create(filePath, false);
   }
 
   @Override

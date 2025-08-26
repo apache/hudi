@@ -327,17 +327,17 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
     HoodieStorage hoodieStorage = metaClient.getStorage();
 
-    // Verify no partition meta path
+    // Verify partition meta path
     validatePartitionMetaPathExistence(hoodieStorage, true);
 
-    // Verify that no marker file exists in the file system
+    // Verify marker file has been created in the file system
     String expectedBaseFileName = getExpectedBaseFileName();
     validateMarkerFileExistence(hoodieStorage, expectedBaseFileName, true);
 
     // Verify the actual file was created by the TestFileWriter during initialization
     StoragePath partitionPath = new StoragePath(basePath, TEST_PARTITION_PATH);
     StoragePath expectedFilePath = new StoragePath(partitionPath, expectedBaseFileName);
-    assertFalse(hoodieStorage.exists(expectedFilePath), "File should have been created during TestFileWriter initialization");
+    assertTrue(hoodieStorage.exists(expectedFilePath), "File should have been created during TestFileWriter initialization");
   }
 
   @Test
