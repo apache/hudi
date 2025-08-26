@@ -28,9 +28,7 @@ import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.metrics.Metrics;
 
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
-import com.codahale.metrics.MetricRegistry;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -247,7 +245,7 @@ public class TestHoodieLockMetrics {
     // Get the metrics registry to verify counter values
     Metrics metrics = Metrics.getInstance(metricsConfig, storage);
     MetricRegistry registry = metrics.getRegistry();
-    String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_INTERRUPTED;
+    String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_INTERRUPTED_COUNTER_NAME;
 
     // Test that the interrupted metric can be called
     assertDoesNotThrow(lockMetrics::updateLockInterruptedMetric, 
@@ -296,7 +294,7 @@ public class TestHoodieLockMetrics {
     // Get the metrics registry to verify gauge exists
     Metrics metrics = Metrics.getInstance(metricsConfig, storage);
     MetricRegistry registry = metrics.getRegistry();
-    String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_EXPIRATION_DEADLINE;
+    String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_EXPIRATION_DEADLINE_COUNTER_NAME;
 
     // Verify the gauge exists
     Gauge<?> deadlineGaugeRaw = registry.getGauges().get(metricName);
@@ -320,7 +318,7 @@ public class TestHoodieLockMetrics {
     // Get the metrics registry to verify counter values
     Metrics metrics = Metrics.getInstance(metricsConfig, storage);
     MetricRegistry registry = metrics.getRegistry();
-    String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_DANGLING;
+    String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_DANGLING_COUNTER_NAME;
 
     // Test that the dangling metric can be called
     assertDoesNotThrow(lockMetrics::updateLockDanglingMetric, 

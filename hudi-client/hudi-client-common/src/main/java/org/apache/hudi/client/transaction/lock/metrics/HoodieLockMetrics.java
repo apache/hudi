@@ -83,13 +83,13 @@ public class HoodieLockMetrics {
       successfulLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_SUCCESS_COUNTER_NAME));
       failedLockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_FAILURES_COUNTER_NAME));
       lockReleaseSuccess = registry.counter(getMetricsName(LOCK_RELEASE_SUCCESS_COUNTER_NAME));
-      lockAcquiredByOthersError = registry.counter(getMetricsName(LOCK_ACQUIRED_BY_OTHERS_ERROR));
-      lockStateUnknown = registry.counter(getMetricsName(LOCK_STATE_UNKNOWN));
-      lockAcquirePreconditionFailure = registry.counter(getMetricsName(LOCK_ACQUIRE_PRECONDITION_FAILURE));
-      lockProviderFatalError = registry.counter(getMetricsName(LOCK_PROVIDER_FATAL_ERROR));
-      lockReleaseFailure = registry.counter(getMetricsName(LOCK_RELEASE_FAILURE));
-      lockDangling = registry.counter(getMetricsName(LOCK_DANGLING));
-      lockInterrupted = registry.counter(getMetricsName(LOCK_INTERRUPTED));
+      lockAcquiredByOthersError = registry.counter(getMetricsName(LOCK_ACQUIRED_BY_OTHERS_ERROR_COUNTER_NAME));
+      lockStateUnknown = registry.counter(getMetricsName(LOCK_STATE_UNKNOWN_COUNTER_NAME));
+      lockAcquirePreconditionFailure = registry.counter(getMetricsName(LOCK_ACQUIRE_PRECONDITION_FAILURE_COUNTER_NAME));
+      lockProviderFatalError = registry.counter(getMetricsName(LOCK_PROVIDER_FATAL_ERROR_COUNTER_NAME));
+      lockReleaseFailure = registry.counter(getMetricsName(LOCK_RELEASE_FAILURE_COUNTER_NAME));
+      lockDangling = registry.counter(getMetricsName(LOCK_DANGLING_COUNTER_NAME));
+      lockInterrupted = registry.counter(getMetricsName(LOCK_INTERRUPTED_COUNTER_NAME));
       lockDuration = createTimerForMetrics(registry, LOCK_ACQUIRE_DURATION_TIMER_NAME);
       lockApiRequestDuration = createTimerForMetrics(registry, LOCK_REQUEST_LATENCY_TIMER_NAME);
     }
@@ -188,7 +188,7 @@ public class HoodieLockMetrics {
 
   public void updateLockExpirationDeadlineMetric(int deadlineMs) {
     if (isMetricsEnabled) {
-      metrics.registerGauge(getMetricsName(LOCK_EXPIRATION_DEADLINE), deadlineMs >= 0 ? (long)deadlineMs : 0);
+      metrics.registerGauge(getMetricsName(LOCK_EXPIRATION_DEADLINE_COUNTER_NAME), deadlineMs >= 0 ? (long)deadlineMs : 0);
     }
   }
 
