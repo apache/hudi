@@ -25,6 +25,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestHoodieSyncTool extends HoodieCommonTestHarness {
@@ -32,7 +33,7 @@ class TestHoodieSyncTool extends HoodieCommonTestHarness {
   void testBuildMetaClient() throws Exception {
     initMetaClient();
     TypedProperties properties = new TypedProperties();
-    properties.put("hoodie.datasource.meta.sync.base.path", metaClient.getBasePath().toString());
+    properties.put(META_SYNC_BASE_PATH_KEY, metaClient.getBasePath().toString());
     HoodieSyncConfig syncConfig = new HoodieSyncConfig(properties, new Configuration());
     HoodieTableMetaClient actual = HoodieSyncTool.buildMetaClient(syncConfig);
     assertEquals(actual.getBasePath(), metaClient.getBasePath());

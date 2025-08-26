@@ -20,7 +20,7 @@ package org.apache.hudi.config.metrics;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.config.metrics.HoodieMetricsConfig.META_SYNC_BASE_PATH_KEY;
+import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 

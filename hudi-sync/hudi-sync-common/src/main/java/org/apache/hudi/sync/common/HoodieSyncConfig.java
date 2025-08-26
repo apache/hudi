@@ -46,6 +46,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
+import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
@@ -53,7 +54,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIO
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
-import static org.apache.hudi.config.metrics.HoodieMetricsConfig.META_SYNC_BASE_PATH_KEY;
 
 /**
  * Configs needed to sync data into external meta stores, catalogs, etc.

@@ -41,6 +41,8 @@ import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
+
 /**
  * Fetch the configurations used by the Metrics system.
  */
@@ -52,7 +54,6 @@ import java.util.stream.Collectors;
 public class HoodieMetricsConfig extends HoodieConfig {
 
   public static final String METRIC_PREFIX = "hoodie.metrics";
-  public static final String META_SYNC_BASE_PATH_KEY = "hoodie.datasource.meta.sync.base.path";
 
   public static final ConfigProperty<Boolean> TURN_METRICS_ON = ConfigProperty
       .key(METRIC_PREFIX + ".on")
