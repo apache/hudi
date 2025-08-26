@@ -146,12 +146,6 @@ public class FlinkFileGroupReaderBasedMergeAndReplaceHandle<T, I, K, O>
   }
 
   @Override
-  protected void setWriteStatusPath() {
-    // should still report the old file path.
-    writeStatus.getStat().setPath(new StoragePath(config.getBasePath()), oldFilePath);
-  }
-
-  @Override
   boolean needsUpdateLocation() {
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.
@@ -168,12 +162,6 @@ public class FlinkFileGroupReaderBasedMergeAndReplaceHandle<T, I, K, O>
       storage.deleteFile(oldFilePath);
     } catch (IOException e) {
       throw new HoodieIOException("Error while cleaning the old base file: " + oldFilePath, e);
-    }
-    try {
-      storage.rename(newFilePath, oldFilePath);
-    } catch (IOException e) {
-      throw new HoodieIOException("Error while renaming the temporary rollover file: "
-          + newFilePath + " to old base file name: " + oldFilePath, e);
     }
   }
 
@@ -212,6 +200,6 @@ public class FlinkFileGroupReaderBasedMergeAndReplaceHandle<T, I, K, O>
 
   @Override
   public StoragePath getWritePath() {
-    return oldFilePath;
+    return newFilePath;
   }
 }

@@ -47,8 +47,8 @@ import java.util.List;
  * when the data bucket is written using multiple mini-batches.
  *
  * <p>For the incremental data buffer, it initializes and sets up the next file path to write,
- * then closes the file and rename to the old file name,
- * behaves like the new data buffer are appended to the old file.
+ * then closes the file and rename to the old file name, behaves like the new data buffer is
+ * appended to the old file.
  */
 public class FlinkMergeAndReplaceHandle<T, I, K, O>
     extends HoodieWriteMergeHandle<T, I, K, O>
@@ -95,7 +95,7 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
     final StoragePath path = makeNewFilePath(partitionPath, lastDataFileName);
     try {
       if (storage.exists(path)) {
-        LOG.info("Deleting invalid MERGE and REPLACE base file due to task retry: " + lastDataFileName);
+        LOG.info("Deleting invalid MERGE and REPLACE base file due to task retry: {}", lastDataFileName);
         storage.deleteFile(path);
       }
     } catch (IOException e) {
@@ -113,10 +113,12 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
   protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
     // old and new file name expects to be the same.
     if (!FSUtils.getCommitTime(oldFileName).equals(instantTime)) {
-      LOG.warn("MERGE and REPLACE handle expect the same name for old and new files,\n"
-          + "while got new file: " + newFileName + " with old file: " + oldFileName + ",\n"
-          + "this rarely happens when the checkpoint success event was not received yet\n"
-          + "but the write task flush with new instant time, which does not break the UPSERT semantics");
+      LOG.warn(
+          "MERGE and REPLACE handle expect the same name for old and new files, "
+              +  "while got new file: {} with old file: {}, this rarely happens when "
+              + "the checkpoint success event was not received yet but the write task "
+              + "flush with new instant time, which does not break the UPSERT semantics",
+          newFileName, oldFileName);
       shouldReplace = false;
     }
     super.makeOldAndNewFilePaths(partitionPath, oldFileName, newFileName);
@@ -126,8 +128,7 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
         StoragePath oldPath = newFilePath;
         newFileName = newFileNameWithRollover(rollNumber++);
         newFilePath = makeNewFilePath(partitionPath, newFileName);
-        LOG.warn("Duplicate write for MERGE and REPLACE handle with path: " + oldPath
-            + ", rolls over to new path: " + newFilePath);
+        LOG.warn("Duplicate write for MERGE and REPLACE handle with path: {}, rolls over to new path: {}", oldPath, newFilePath);
       }
     } catch (IOException e) {
       throw new HoodieException("Checking existing path for merge and replace handle error: " + newFilePath, e);
@@ -151,12 +152,6 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
   }
 
   @Override
-  protected void setWriteStatusPath() {
-    // should still report the old file path.
-    writeStatus.getStat().setPath(new StoragePath(config.getBasePath()), oldFilePath);
-  }
-
-  @Override
   boolean needsUpdateLocation() {
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.
@@ -173,12 +168,6 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
       storage.deleteFile(oldFilePath);
     } catch (IOException e) {
       throw new HoodieIOException("Error while cleaning the old base file: " + oldFilePath, e);
-    }
-    try {
-      storage.rename(newFilePath, oldFilePath);
-    } catch (IOException e) {
-      throw new HoodieIOException("Error while renaming the temporary rollover file: "
-          + newFilePath + " to old base file name: " + oldFilePath, e);
     }
   }
 
@@ -217,6 +206,6 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
 
   @Override
   public StoragePath getWritePath() {
-    return oldFilePath;
+    return newFilePath;
   }
 }
