@@ -165,7 +165,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public RemoteHoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline timeline, TimelineServiceClient timelineServiceClient, FileSystemViewStorageConfig viewConf) {
     this.basePath = metaClient.getBasePath().toString();
     this.metaClient = metaClient;
-    this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    this.timeline = timeline;
     this.timelineServiceClient = timelineServiceClient;
     if (viewConf.isRemoteInitEnabled()) {
       initialiseTimelineInRemoteView(timeline);

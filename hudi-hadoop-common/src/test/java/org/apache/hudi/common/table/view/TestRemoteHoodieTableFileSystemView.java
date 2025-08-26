@@ -85,11 +85,17 @@ class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSystemView 
     FileSystemViewStorageConfig config = FileSystemViewStorageConfig.newBuilder()
         .withRemoteInitTimeline(enableRemoteInitTimeline)
         .build();
-    when(timelineServiceClient.makeRequest(any())).thenReturn(new TimelineServiceClientBase.Response(
-        new ByteArrayInputStream(OBJECT_MAPPER.writeValueAsString("timeline-hash").getBytes(StandardCharsets.UTF_8))));
-    when(timelineServiceClient.makeRequest(any())).thenReturn(new TimelineServiceClientBase.Response(
-        new ByteArrayInputStream(OBJECT_MAPPER.writeValueAsString("true").getBytes(StandardCharsets.UTF_8))));
-    RemoteHoodieTableFileSystemView view = new RemoteHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline(), timelineServiceClient, config);
+    when(timelineServiceClient.makeRequest(any()))
+        .thenReturn(new TimelineServiceClientBase.Response(
+            new ByteArrayInputStream(
+                OBJECT_MAPPER.writeValueAsString("timeline-hash")
+                    .getBytes(StandardCharsets.UTF_8))))
+        .thenReturn(new TimelineServiceClientBase.Response(
+            new ByteArrayInputStream(
+                OBJECT_MAPPER.writeValueAsString("true")
+                    .getBytes(StandardCharsets.UTF_8))));
+    RemoteHoodieTableFileSystemView view = new RemoteHoodieTableFileSystemView(
+        metaClient, metaClient.getActiveTimeline(), timelineServiceClient, config);
     String expectedBody = OBJECT_MAPPER.writeValueAsString(TimelineDTO.fromTimeline(metaClient.getActiveTimeline()));
     if (enableRemoteInitTimeline) {
       verify(timelineServiceClient, times(1)).makeRequest(argThat(
