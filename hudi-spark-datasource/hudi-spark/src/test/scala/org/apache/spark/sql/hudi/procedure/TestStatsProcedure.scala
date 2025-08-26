@@ -19,8 +19,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation}
-
 class TestStatsProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call stats_wa Procedure") {
     withTempDir { tmp =>
@@ -81,10 +79,8 @@ class TestStatsProcedure extends HoodieSparkProcedureTestBase {
            | )
        """.stripMargin)
       // insert data to table
-      disableComplexKeygenValidation(spark, tableName)
       spark.sql(s"insert into $tableName select 1, 10, 'a1', 1000")
       spark.sql(s"insert into $tableName select 2, 20, 'a2', 1500")
-      enableComplexKeygenValidation(spark, tableName)
 
       // Check required fields
       checkExceptionContain(s"""call stats_file_sizes(limit => 10)""")(

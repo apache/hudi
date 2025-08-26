@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation}
-
 class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_fsview_all Procedure") {
     withTempDir { tmp =>
@@ -120,10 +118,8 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            | )
        """.stripMargin)
       // insert data to table
-      disableComplexKeygenValidation(spark, tableName)
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 'f11', 'f21', 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 'f12', 'f22', 1500")
-      enableComplexKeygenValidation(spark, tableName)
 
       // Check required fields
       checkExceptionContain(s"""call show_fsview_all(limit => 10)""")(
@@ -244,13 +240,11 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
         result1.length
       }
 
-      disableComplexKeygenValidation(spark, tableName)
       spark.sql(s"insert into $tableName select 1, 'a1', 1001, 'd1', 'h1'")
       spark.sql(s"insert into $tableName select 1, 'a2', 1002, 'd1', 'h1'")
       spark.sql(s"insert into $tableName select 2, 'a3', 1003, 'd1', 'h2'")
       spark.sql(s"insert into $tableName select 3, 'a4', 1004, 'd1', 'h2'")
       spark.sql(s"insert into $tableName select 4, 'a5', 1005, 'd2', 'h1'")
-      enableComplexKeygenValidation(spark, tableName)
 
       val result2 = spark.sql(
         s"call show_fsview_latest(table => '$tableName')").collect()

@@ -22,7 +22,6 @@ package org.apache.spark.sql.hudi.ddl
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation}
 
 class TestShowPartitions extends HoodieSparkSqlTestBase {
 
@@ -123,7 +122,6 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
     // Empty partitions
     checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
 
-    disableComplexKeygenValidation(spark, tableName)
     // Insert into dynamic partition
     spark.sql(
       s"""
@@ -138,8 +136,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
          |   (7, 'a6', 10, 1000, '2022', null, null),
          |   (8, 'a6', 10, 1000, null, '01', null),
          |   (9, 'a6', 10, 1000, null, null, '01')
-      """.stripMargin)
-    enableComplexKeygenValidation(spark, tableName)
+        """.stripMargin)
 
     // check all partitions
     checkAnswer(s"show partitions $tableName")(
@@ -199,9 +196,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
           spark.sql(s"alter table $tableName drop partition(year='2023', month='06', day='06')")
           checkAnswer(s"show partitions $tableName")(Seq.empty: _*)
           // rewrite data to the dropped partition
-          disableComplexKeygenValidation(spark, tableName)
           spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, '2023', '06', '06')")
-          enableComplexKeygenValidation(spark, tableName)
           checkAnswer(s"show partitions $tableName")(
             Seq("year=2023/month=06/day=06")
           )
@@ -230,7 +225,6 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
            | )
          """.stripMargin)
 
-      disableComplexKeygenValidation(spark, tableName)
       // Insert into dynamic partition
       spark.sql(
         s"""
@@ -239,7 +233,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
            |   (1, 'a1', 10, 1000, '2023', '12', '01'),
            |   (2, 'a2', 10, 1000, '2023', '12', '02'),
            |   (3, 'a3', 10, 1000, '2023', '12', '03')
-      """.stripMargin)
+        """.stripMargin)
       checkAnswer(s"show partitions $tableName")(
         Seq("year=2023/month=12/day=01"),
         Seq("year=2023/month=12/day=02"),
@@ -253,7 +247,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
            | values
            |   (4, 'a4', 10, 1000, '2023', '12', '01'),
            |   (2, 'a2', 10, 1000, '2023', '12', '04')
-      """.stripMargin)
+        """.stripMargin)
       checkAnswer(s"show partitions $tableName")(
         Seq("year=2023/month=12/day=01"),
         Seq("year=2023/month=12/day=04")

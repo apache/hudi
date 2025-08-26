@@ -36,10 +36,10 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{arrays_zip, col, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.disableComplexKeygenValidation
 import org.apache.spark.sql.types.{DoubleType, FloatType, IntegerType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.assertEquals
 
+import scala.Seq
 import scala.collection.JavaConverters._
 
 class TestSpark3DDL extends HoodieSparkSqlTestBase {
@@ -1174,7 +1174,6 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
              | orderingFields = 'ts'
              |)
              |partitioned by (region, dt)""".stripMargin)
-        disableComplexKeygenValidation(spark, tableName)
 
         withSQLConf("hoodie.datasource.read.extract.partition.values.from.path" -> "true",
           "hoodie.schema.on.read.enable" -> "true") {
