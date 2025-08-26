@@ -1016,19 +1016,16 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     String partition = "partition10";
     String label = "metadata item";
 
-    TimeGenerator timeGenerator = TimeGenerators
-            .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
-                HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
     // Base file list
-    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(5, timeGenerator);
+    Pair<List<FileSlice>, List<FileSlice>> filelistPair = generateTwoEqualFileSliceList(5);
     List<FileSlice> listMdt = filelistPair.getLeft();
     List<FileSlice> listFs = filelistPair.getRight();
 
     // Size mismatch
     FileSlice extraFileSlice = generateRandomFileSlice(
-        TimelineUtils.generateInstantTime(true, timeGenerator),
-        TimelineUtils.generateInstantTime(true, timeGenerator),
-        TimelineUtils.generateInstantTime(true, timeGenerator)).getLeft();
+        WriteClientTestUtils.createNewInstantTime(),
+        WriteClientTestUtils.createNewInstantTime(),
+        WriteClientTestUtils.createNewInstantTime()).getLeft();
     listFs.add(extraFileSlice);
 
     // Mock the rollback timeline

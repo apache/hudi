@@ -25,6 +25,7 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -280,6 +281,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
             .withParallelism(2, 2).forTable("test-trip-table").build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    // FIXME-vc: hacky.
+    table.setTxnManager(new TransactionManager(cfg, metaClient.getStorage()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
     int result = archiver.archiveIfRequired(context);
     assertEquals(0, result);
@@ -847,6 +850,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     IntStream.range(0, 2).forEach(index -> {
       completableFutureList.add(CompletableFuture.supplyAsync(() -> {
         HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+        // FIXME-vc: hacky.
+        table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
         try {
           // wait until 4 commits are available so that archival thread will have something to archive.
           countDownLatch.await(30, TimeUnit.SECONDS);
@@ -979,6 +984,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieTestDataGenerator.createCommitFile(basePath, "104", storageConf);
     HoodieTestDataGenerator.createCommitFile(basePath, "105", storageConf);
     HoodieTable table = HoodieSparkTable.create(cfg, context);
+    // FIXME-vc: hacky.
+    table.setTxnManager(new TransactionManager(cfg, metaClient.getStorage()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
 
     if (enableMetadataTable) {
@@ -1189,6 +1196,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
 
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    // FIXME-vc: hacky.
+    table.setTxnManager(new TransactionManager(cfg, metaClient.getStorage()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
     archiver.archiveIfRequired(context);
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
@@ -1433,6 +1442,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
 
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    // FIXME-vc: hacky.
+    table.setTxnManager(new TransactionManager(cfg, metaClient.getStorage()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
 
     archiver.archiveIfRequired(context);
@@ -1675,6 +1686,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // Run archival
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    // FIXME-vc: hacky.
+    table.setTxnManager(new TransactionManager(cfg, metaClient.getStorage()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
     archiver.archiveIfRequired(context);
     expectedInstants.remove("1000");
@@ -1728,6 +1741,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
 
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    // FIXME-vc: hacky.
+    table.setTxnManager(new TransactionManager(cfg, metaClient.getStorage()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
 
     HoodieTimeline timeline = metaClient.reloadActiveTimeline();
@@ -1887,6 +1902,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       testTable.doWriteOperation("10" + i, WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), 1);
     }
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    // FIXME-vc: hacky.
+    table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getWriteTimeline();
@@ -1903,6 +1920,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     // Re-running archival again should archive and delete the 101.commit, 102.commit, and 103.commit instant files
     table.getMetaClient().reloadActiveTimeline();
     table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    // FIXME-vc: hacky
+    table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
     archiver = new TimelineArchiverV2(writeConfig, table);
     assertTrue(archiver.archiveIfRequired(context) > 0);
     timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();
@@ -1930,6 +1949,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         : metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> originalCommits = timeline.getInstants();
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    // FIXME-vc: hacky
+    table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
     archiver.archiveIfRequired(context);
     timeline = includeIncompleteInstants

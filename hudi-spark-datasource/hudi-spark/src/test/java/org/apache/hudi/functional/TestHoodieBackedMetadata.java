@@ -2251,7 +2251,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       Future future = executors.submit(() -> {
         List<HoodieRecord> records = dataGen.generateInsertsForPartition(newCommitTime, 100, dataGen.getPartitionPaths()[index]);
         SparkRDDWriteClient localWriteClient = writeClients[index];
-        WriteClientTestUtils.startCommitWithTime(writeClient, newCommitTime);
+        WriteClientTestUtils.startCommitWithTime(localWriteClient, newCommitTime);
         List<WriteStatus> writeStatuses = localWriteClient.insert(jsc.parallelize(records, 1), newCommitTime).collect();
         assertNoWriteErrors(writeStatuses);
         localWriteClient.commit(newCommitTime, jsc.parallelize(writeStatuses));
