@@ -2017,7 +2017,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
             metaClient.getActiveTimeline.getLastClusteringInstant.get)
         }
         if (firstClusteringState == HoodieInstant.State.REQUESTED.name()) {
-          val table = HoodieSparkTable.create(writeConfig, context)
+          val table = getHoodieTable(metaClient, writeConfig)
           val client = new SparkRDDWriteClient(context, writeConfig)
           try {
             table.rollbackInflightClustering(

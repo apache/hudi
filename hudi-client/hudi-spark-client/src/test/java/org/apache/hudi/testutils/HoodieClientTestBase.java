@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
@@ -81,6 +82,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
 
   public HoodieSparkTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
+    table.setTxnManager(new TransactionManager(config, metaClient.getStorage()));
     ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
   }
