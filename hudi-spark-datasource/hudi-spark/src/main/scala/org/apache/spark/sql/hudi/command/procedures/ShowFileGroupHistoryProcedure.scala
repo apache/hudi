@@ -31,12 +31,13 @@ import scala.collection.JavaConverters._
 class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.required(1, "file_group_id", DataTypes.StringType),
-    ProcedureParameter.optional(2, "partition", DataTypes.StringType),
-    ProcedureParameter.optional(3, "showArchived", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(4, "limit", DataTypes.IntegerType, 20),
-    ProcedureParameter.optional(5, "filter", DataTypes.StringType, "")
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.required(2, "file_group_id", DataTypes.StringType),
+    ProcedureParameter.optional(3, "partition", DataTypes.StringType),
+    ProcedureParameter.optional(4, "showArchived", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 20),
+    ProcedureParameter.optional(6, "filter", DataTypes.StringType, "")
   )
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -46,12 +47,13 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val tableName = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val fileGroupId = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
-    val partition = getArgValueOrDefault(args, PARAMETERS(2)).asInstanceOf[Option[String]]
-    val showArchived = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
-    val limit = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Int]
-    val filter = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val fileGroupId = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
+    val partition = getArgValueOrDefault(args, PARAMETERS(3)).asInstanceOf[Option[String]]
+    val showArchived = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Boolean]
+    val limit = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Int]
+    val filter = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
 
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
@@ -61,7 +63,7 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
       }
     }
 
-    val basePath = getBasePath(Option(tableName), Option.empty)
+    val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
     val fileGroupHistory = collectFileGroupHistory(metaClient, fileGroupId, partition, showArchived, limit)
