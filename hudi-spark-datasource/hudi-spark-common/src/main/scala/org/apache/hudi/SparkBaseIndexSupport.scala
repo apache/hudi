@@ -23,7 +23,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.keygen.{ComplexAvroKeyGenerator, ComplexKeyGenerator, KeyGenerator}
+import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
@@ -156,21 +156,6 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
         mode == HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY
       case None =>
         fileIndex.getFileSlicesCount * queryReferencedColumns.length < inMemoryProjectionThreshold
-    }
-  }
-
-  /**
-   * Checks if the given key generator class name corresponds to a complex key generator.
-   */
-  private def isComplexKeyGenerator(keyGeneratorClassName: String): Boolean = {
-    if (keyGeneratorClassName == null) {
-      false
-    } else {
-      val complexKeyGenerators = Set(
-        classOf[ComplexKeyGenerator].getCanonicalName,
-        classOf[ComplexAvroKeyGenerator].getCanonicalName
-      )
-      complexKeyGenerators.contains(keyGeneratorClassName)
     }
   }
 
