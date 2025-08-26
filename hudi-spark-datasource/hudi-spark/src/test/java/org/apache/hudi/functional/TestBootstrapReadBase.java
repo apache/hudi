@@ -104,8 +104,6 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
         options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName());
       } else {
         options.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), ComplexKeyGenerator.class.getName());
-        // Disable complex key generator validation so that the writer can succeed
-        options.put(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false");
       }
     }
     options.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
