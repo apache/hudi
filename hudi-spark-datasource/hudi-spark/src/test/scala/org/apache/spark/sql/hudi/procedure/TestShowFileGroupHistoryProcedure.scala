@@ -68,11 +68,10 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(historyResult.length == 2, "Should show 2 history entries for file group")
 
       val headRow = historyResult.head
-      assert(headRow.length == 25, "Should have 25 columns in result")
+      assert(headRow.length == 27, "Should have 27 columns in result")
       assert(headRow.getString(2).equals("commit"), "Action should be commit here")
-      assert(headRow.getString(6) == fileGroupId, "File group ID should match")
-      assert(headRow.getString(8) == "INSERT", "Operation type should be INSERT here")
-      assert(headRow.getLong(9) == 2, "Small file handling logic coming into play, should have 2 files here")
+      assert(headRow.getString(7) == "INSERT", "Operation type should be INSERT here")
+      assert(headRow.getLong(8) == 2, "Small file handling logic coming into play, should have 2 files here")
     }
   }
 
@@ -195,7 +194,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(unlimitedHistory.length >= limitedHistory.length,
         "Higher limit should return >= results")
 
-      val operationTypes = unlimitedHistory.map(_.getString(8)).distinct
+      val operationTypes = unlimitedHistory.map(_.getString(7)).distinct
       assert(operationTypes.length == 2, "Should have INSERT and UPDATE types")
 
       val hasInsertOrUpdate = operationTypes.exists(op =>
@@ -252,8 +251,6 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
         historyBeforeCleanDf.show(false)
 
-        val historyBeforeClean = historyBeforeCleanDf.collect()
-
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 2)").collect()
 
         val historyAfterCleanDf = spark.sql(
@@ -265,17 +262,20 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
         historyAfterCleanDf.show(false)
         val historyAfterClean = historyAfterCleanDf.collect()
-        assert(historyAfterClean.length == historyBeforeClean.length + 1, s"Should have history entries, got ${historyAfterClean.length}")
 
         val actionTypes = historyAfterClean.map(_.getString(2)).distinct.filter(_ != null)
-
         val hasCommitActions = actionTypes.exists(_.contains("commit"))
-        val hasCleanActions = actionTypes.exists(_.contains("clean"))
+
         assert(hasCommitActions, s"Should have commit actions, got: ${actionTypes.mkString(", ")}")
-        assert(hasCleanActions, s"Should have clean actions, got: ${actionTypes.mkString(", ")}")
-        historyAfterClean.foreach { row =>
-          val delete_action = row.getString(17)
-          assert(delete_action.equals("clean"), s"Delete action should be 'clean', got: $delete_action")
+
+        val deletedEntries = historyAfterClean.filter(_.getBoolean(15))
+        val nonDeletedEntries = historyAfterClean.filter(!_.getBoolean(15))
+
+        assert(nonDeletedEntries.length == 2, s"Should have at least 2 non-deleted entries, got ${nonDeletedEntries.length}")
+
+        deletedEntries.foreach { row =>
+          val deleteAction = row.getString(16)
+          assert(deleteAction == "clean", s"Delete action should be 'clean', got: $deleteAction")
         }
       }
     }
@@ -402,7 +402,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
       assert(insertOnlyHistory.length == 1, "Should find exactly 1 INSERT operation")
       insertOnlyHistory.foreach { row =>
-        assert(row.getString(8) == "INSERT", s"All entries should be INSERT operations, got: ${row.getString(8)}")
+        assert(row.getString(7) == "INSERT", s"All entries should be INSERT operations, got: ${row.getString(7)}")
       }
 
       val allHistory = spark.sql(
@@ -413,6 +413,93 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
       assert(allHistory.length >= commitOnlyHistory.length, "Unfiltered results should have >= filtered results")
       assert(allHistory.length >= insertOnlyHistory.length, "Unfiltered results should have >= filtered results")
+    }
+  }
+
+  test("Test show_file_group_history - MOR table compaction operations") {
+    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.schedule.inline" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tableLocation = tmp.getCanonicalPath
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
+
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | ts long
+             |) using hudi
+             | location '$tableLocation'
+             | tblproperties (
+             | primaryKey = 'id',
+             | type = 'mor',
+             | preCombineField = 'ts',
+             | 'hoodie.parquet.max.file.size' = '1024'
+             |)
+             |""".stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'name1', 10.0, 1001)")
+        spark.sql(s"insert into $tableName values(2, 'name2', 20.0, 1002)")
+
+        val fileInfo = spark.sql(s"select _hoodie_file_name from $tableName where id = 1 limit 1").collect()
+        val fileName = fileInfo.head.getString(0)
+        val fileGroupId = fileName.split("_")(0)
+
+        spark.sql(s"update $tableName set price = 15.0, ts = 2001 where id = 1")
+        spark.sql(s"update $tableName set price = 25.0, ts = 2002 where id = 2")
+        spark.sql(s"update $tableName set price = 18.0, ts = 3001 where id = 1")
+
+        val historyBeforeCompactionDf = spark.sql(
+          s"""call show_file_group_history(
+             | table => '$tableName',
+             | file_group_id => '$fileGroupId',
+             | limit => 25
+             |)""".stripMargin)
+
+        historyBeforeCompactionDf.show(false)
+
+        val historyBeforeCompaction = historyBeforeCompactionDf.collect()
+
+        assert(historyBeforeCompaction.length == 3, s"Should have one base file and two updates on record key for id = 1, got ${historyBeforeCompaction.length}")
+
+        spark.sql(s"call run_compaction(op => 'schedule', table => '$tableName')").collect()
+        val compactionResult = spark.sql(s"call show_compaction(table => '$tableName')").collect()
+        val compactionInstant = compactionResult.head.getString(0)
+
+        spark.sql(s"call run_compaction(op => 'run', table => '$tableName', timestamp => $compactionInstant)").collect()
+
+        val historyAfterCompactionDf = spark.sql(
+          s"""call show_file_group_history(
+             | table => '$tableName',
+             | file_group_id => '$fileGroupId',
+             | limit => 25
+             |)""".stripMargin)
+
+        historyAfterCompactionDf.show(false)
+
+        val historyAfterCompaction = historyAfterCompactionDf.collect()
+
+        assert(historyAfterCompaction.length >= historyBeforeCompaction.length,
+          s"Should have at least same number of entries after compaction")
+
+        val actionTypes = historyAfterCompaction.map(_.getString(2)).distinct.filter(_ != null)
+        val hasCommitActions = actionTypes.exists(_.contains("commit"))
+        val hasDeltaCommitActions = actionTypes.exists(_.contains("deltacommit"))
+
+        assert(hasCommitActions && hasDeltaCommitActions, s"Should have commit/deltacommit actions, got: ${actionTypes.mkString(", ")}")
+
+        val oldBaseFileEntries = historyAfterCompaction.filter { row =>
+          val instant = row.getString(0)
+          instant != compactionInstant
+        }
+
+        assert(oldBaseFileEntries.length > 0, "Should have old file entries in history")
+        assert(oldBaseFileEntries.last.getString(19).equals("compaction"), s"replace_action should be compaction, got: ${oldBaseFileEntries.last.getString(19)}")
+      }
     }
   }
 
@@ -457,7 +544,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
       assert(writesFilterHistory.length >= 1, "Should find entries with writes > 0")
       writesFilterHistory.foreach { row =>
-        assert(row.getLong(9) > 0, s"All entries should have num_writes > 0, got: ${row.getLong(9)}")
+        assert(row.getLong(8) > 0, s"All entries should have num_writes > 0, got: ${row.getLong(9)}")
       }
 
       val complexFilterHistory = spark.sql(
@@ -470,7 +557,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       assert(complexFilterHistory.length >= 1, "Should find entries matching complex filter")
       complexFilterHistory.foreach { row =>
         assert(row.getString(2) == "commit", s"Action should be commit, got: ${row.getString(2)}")
-        assert(row.getLong(9) > 0, s"num_writes should be > 0, got: ${row.getLong(9)}")
+        assert(row.getLong(8) > 0, s"num_writes should be > 0, got: ${row.getLong(9)}")
         assert(row.getString(4) == "COMPLETED", s"State should be COMPLETED, got: ${row.getString(4)}")
       }
 
@@ -483,9 +570,96 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
       assert(fileSizeFilterHistory.length >= 1, "Should find entries with file size > 0")
       fileSizeFilterHistory.foreach { row =>
-        assert(row.getLong(13) > 0, s"file_size_bytes should be > 0, got: ${row.getLong(13)}")
-        assert(row.getLong(14) > 0, s"total_write_bytes should be > 0, got: ${row.getLong(14)}")
+        assert(row.getLong(12) > 0, s"file_size_bytes should be > 0, got: ${row.getLong(12)}")
+        assert(row.getLong(13) > 0, s"total_write_bytes should be > 0, got: ${row.getLong(13)}")
       }
+    }
+  }
+
+  test("Test show_file_group_history - clustering operations") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      if (HoodieSparkUtils.isSpark3_4) {
+        spark.sql("set spark.sql.defaultColumn.enabled = false")
+      }
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           | id int,
+           | name string,
+           | price double,
+           | ts long,
+           | partition long
+           |) using hudi
+           | options (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  orderingFields = 'ts'
+           | )
+           | partitioned by(partition)
+           | location '$basePath'
+           | tblproperties (
+           |  'hoodie.parquet.max.file.size' = '1024',
+           |  'hoodie.parquet.small.file.limit' = '512'
+           | )
+           |""".stripMargin)
+
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10.0, 1000, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10.0, 1001, 1001)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10.0, 1002, 1002)")
+
+      val fileInfo = spark.sql(s"select _hoodie_file_name from $tableName where partition = 1000 limit 1").collect()
+      val fileName = fileInfo.head.getString(0)
+      val fileGroupId = fileName.split("_")(0)
+
+      val historyBeforeClusteringDf = spark.sql(
+        s"""call show_file_group_history(
+           | table => '$tableName',
+           | file_group_id => '$fileGroupId',
+           | limit => 25
+           |)""".stripMargin)
+
+      historyBeforeClusteringDf.show(false)
+
+      val client = org.apache.hudi.HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+      client.scheduleClustering(org.apache.hudi.common.util.Option.empty()).get()
+
+      spark.sql(s"insert into $tableName values(4, 'a4', 10.0, 1003, 1003)")
+      client.scheduleClustering(org.apache.hudi.common.util.Option.empty()).get()
+
+      spark.sql(s"call run_clustering(table => '$tableName', order => 'partition', show_involved_partition => true)")
+
+      val originalHistoryAfterClusteringDf = spark.sql(
+        s"""call show_file_group_history(
+           | table => '$tableName',
+           | file_group_id => '$fileGroupId',
+           | limit => 25
+           |)""".stripMargin)
+      originalHistoryAfterClusteringDf.show(false)
+      val originalHistoryAfterClustering = originalHistoryAfterClusteringDf.collect()
+
+      val currentFileGroups = spark.sql(s"select distinct _hoodie_file_name from $tableName").collect()
+
+      currentFileGroups.foreach { row =>
+        val currentFileName = row.getString(0)
+        val currentFileGroupId = currentFileName.split("_")(0)
+
+        val currentHistoryDf = spark.sql(
+          s"""call show_file_group_history(
+             | table => '$tableName',
+             | file_group_id => '$currentFileGroupId',
+             | limit => 25
+             |)""".stripMargin)
+
+        currentHistoryDf.show(false)
+        assert(currentHistoryDf.collect().head.getString(2).equals("replacecommit"), s"Should have replacecommit action for file group $currentFileGroupId")
+      }
+      assert(originalHistoryAfterClustering.head.getString(19).equals("clustering"), s"replace_action should be clustering, got: ${originalHistoryAfterClustering.head.getString(19)}")
     }
   }
 }

@@ -81,20 +81,17 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
                                        limit: Int): Seq[Row] = {
 
     import ShowFileHistoryProcedureUtils._
-    import FileHistoryType._
 
     val activeEntries = new util.ArrayList[HistoryEntry]()
     val activeTimeline = metaClient.getActiveTimeline
-    ShowFileHistoryProcedureUtils.processTimeline(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit, FILE_GROUP)
-    ShowFileHistoryProcedureUtils.processCleanAndRollbackOperations(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit, FILE_GROUP)
+    ShowFileHistoryProcedureUtils.processTimeline(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit)
 
     val archivedEntries = new util.ArrayList[HistoryEntry]()
     if (showArchived) {
       try {
         val archivedTimeline = metaClient.getArchivedTimeline.reload()
         archivedTimeline.loadCompletedInstantDetailsInMemory()
-        ShowFileHistoryProcedureUtils.processTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit, FILE_GROUP)
-        ShowFileHistoryProcedureUtils.processCleanAndRollbackOperations(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit, FILE_GROUP)
+        ShowFileHistoryProcedureUtils.processTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit)
       } catch {
         case e: Exception =>
           log.warn(s"Failed to process archived timeline: ${e.getMessage}")
@@ -106,10 +103,14 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
       .sortBy(_.instantTime)(Ordering[String].reverse)
       .take(limit)
 
-    val deletionInfo = ShowFileHistoryProcedureUtils.checkForDeletions(metaClient, fileGroupId, partition, showArchived, FILE_GROUP)
+    val (deletionInfo, replacementInfo) = ShowFileHistoryProcedureUtils.checkForDeletionsAndReplacements(metaClient, fileGroupId, partition, showArchived)
 
     sortedEntries.map { entry =>
-      val deletion = deletionInfo.get(entry.fileGroupId)
+      val deletion = deletionInfo.get(entry.fileName)
+      val replacement = replacementInfo.get(entry.fileName).orElse {
+        val fileId = entry.fileName.split("_").headOption.getOrElse("")
+        replacementInfo.get(fileId)
+      }
       Row(
         entry.instantTime,
         entry.completionTime,
@@ -117,7 +118,6 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
         entry.timelineType,
         entry.state,
         entry.partitionPath,
-        entry.fileGroupId,
         entry.fileName,
         entry.operationType,
         entry.numWrites,
@@ -130,6 +130,9 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
         deletion.isDefined,
         deletion.map(_.action).orNull,
         deletion.map(_.instant).orNull,
+        replacement.isDefined,
+        replacement.map(_.action).orNull,
+        replacement.map(_.instant).orNull,
         entry.totalWriteErrors,
         entry.totalScanTimeMs,
         entry.totalUpsertTimeMs,
