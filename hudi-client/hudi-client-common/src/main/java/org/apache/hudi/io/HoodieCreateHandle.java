@@ -38,7 +38,7 @@ import java.io.IOException;
 import java.util.Map;
 
 @NotThreadSafe
-public class HoodieCreateHandle<T, I, K, O> extends AbstractCreateHandle<T, I, K, O> {
+public class HoodieCreateHandle<T, I, K, O> extends BaseCreateHandle<T, I, K, O> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCreateHandle.class);
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,

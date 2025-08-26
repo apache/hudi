@@ -46,8 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-public abstract class AbstractCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractCreateHandle.class);
+public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(BaseCreateHandle.class);
 
   protected HoodieFileWriter fileWriter;
   protected final StoragePath path;
@@ -57,9 +57,9 @@ public abstract class AbstractCreateHandle<T, I, K, O> extends HoodieWriteHandle
   protected Map<String, HoodieRecord<T>> recordMap;
   protected boolean useWriterSchema = false;
 
-  public AbstractCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                              String partitionPath, String fileId, Option<Schema> overriddenSchema,
-                              TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
+  public BaseCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                          String partitionPath, String fileId, Option<Schema> overriddenSchema,
+                          TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, overriddenSchema,
         taskContextSupplier, preserveMetadata);
     writeStatus.setFileId(fileId);
