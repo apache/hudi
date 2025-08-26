@@ -150,11 +150,12 @@ public class TransactionManager implements Serializable, AutoCloseable {
 
   private void acquireLock() {
     if (hasLock) {
-      LOG.info("Lock already acquired, skipping lock acquisition.");
+      LOG.info("{}: Lock already acquired, skipping lock acquisition.", this);
       return;
     }
     lockManager.lock();
     hasLock = true;
+    LOG.info("{}: Lock acquired for action instant {}", this, changeActionInstant);
   }
 
   private void releaseLock() {
@@ -162,8 +163,9 @@ public class TransactionManager implements Serializable, AutoCloseable {
       // set the boolean first (reverse of above); to be in a safe critical section.
       hasLock = false;
       lockManager.unlock();
+      LOG.info("{}: Lock released for action instant {}", this, changeActionInstant);
     } else {
-      LOG.info("No lock acquired before, skipping lock release.");
+      LOG.info("{}: No lock acquired before, skipping lock release.", this);
     }
   }
 
