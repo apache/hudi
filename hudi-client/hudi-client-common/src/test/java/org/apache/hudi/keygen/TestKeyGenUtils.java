@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
