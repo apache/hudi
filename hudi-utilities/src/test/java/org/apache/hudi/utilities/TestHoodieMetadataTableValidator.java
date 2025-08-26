@@ -1072,11 +1072,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
           String.format(
               "Validation of %s for partition %s failed for table: %s. "
                   + "Number of file slices based on the file system does not match that based on the "
-                  + "metadata table. File system-based listing (%s file slices): %s; "
-                  + "MDT-based listing (%s file slices): %s.",
-              label, partition, basePath, listFs.size(),
-              toStringWithThreshold(listFs, logDetailMaxLength),
-              listMdt.size(), toStringWithThreshold(listMdt, logDetailMaxLength)),
+                  + "metadata table. File system-based listing: %d & MDT-based listing: %d. %s",
+              label, partition, basePath, listFs.size(), listMdt.size(),
+              computeDiffSummary(listMdt, listFs, metaClient, logDetailMaxLength)),
           exception.getMessage());
       listFs.remove(listFs.size() - 1);
       // Item mismatch
