@@ -1260,6 +1260,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Simulate aggressive cleaning
         metaClient.reloadActiveTimeline();
         HoodieTable table = HoodieSparkTable.create(writeConfig2, context, metaClient);
+        table.setTxnManager(client2.getTransactionManager());
         table.clean(context, WriteClientTestUtils.createNewInstantTime()); // clean old file slices
 
         // Signal Writer 1 to complete its update
