@@ -1050,7 +1050,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
           .option(URL_ENCODE_PARTITIONING.key, "true")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -1081,7 +1081,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
-        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+        assertResult("ts")(properties(ORDERING_FIELDS.key))
 
         val query = s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id"
 
@@ -1148,7 +1148,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         .option(HoodieWriteConfig.TBL_NAME.key, tableName)
         .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
         .option(RECORDKEY_FIELD.key, "id,name")
-        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(ORDERING_FIELDS.key, "ts")
         .option(PARTITIONPATH_FIELD.key, "day,hh")
         .option(URL_ENCODE_PARTITIONING.key, "true")
         .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -1171,7 +1171,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
       assertResult("id,name")(properties(HoodieTableConfig.RECORDKEY_FIELDS.key))
       assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
-      assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+      assertResult("ts")(properties(ORDERING_FIELDS.key))
 
       val query = s"select _hoodie_record_key, _hoodie_partition_path, id, name, value, ts, day, hh from $tableName order by id"
 
