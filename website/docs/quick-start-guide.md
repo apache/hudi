@@ -313,7 +313,7 @@ the INSERT statement:
 
 ```sql
 -- bulk_insert using INSERT_INTO 
-SET hoodie.spark.sql.insert.into.operation = 'bulk_insert' 
+SET hoodie.spark.sql.insert.into.operation = bulk_insert; 
 ```
 
 </TabItem>
