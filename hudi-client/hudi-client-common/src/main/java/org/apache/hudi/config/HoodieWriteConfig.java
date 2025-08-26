@@ -262,7 +262,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.complex.keygen.encode.single.record.key.field.name")
       .defaultValue(true)
       .markAdvanced()
-      .sinceVersion("0.14.2,0.15.1,1.0.3,1.1.0")
+      .sinceVersion("1.1.0")
+      .supportedVersions("0.14.2", "0.15.1", "1.0.3")
       .withDocumentation("If set to true, the record key field name is encoded and prepended "
           + "in the case where a single record key field is used in the complex key generator, "
           + "i.e., record keys stored in _hoodie_record_key meta field is in the format of "
@@ -276,7 +277,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.complex.keygen.validation.enable")
       .defaultValue(true)
       .markAdvanced()
-      .sinceVersion("0.14.2,0.15.1,1.0.3,1.1.0")
+      .sinceVersion("1.1.0")
+      .supportedVersions("0.14.2", "0.15.1", "1.0.3")
       .withDocumentation("If set to true, the writer enables the validation on whether the table "
           + "uses the complex key generator with a single record key field, which can be affected "
           + "by a breaking change in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases, causing key "
