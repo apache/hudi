@@ -80,7 +80,6 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -131,7 +130,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieWriteClient.class);
-  private static final String SPARK_COMPLEX_KEYGEN_CLASS_NAME = "org.apache.hudi.keygen.ComplexKeyGenerator";
 
   private final transient HoodieIndex<?, ?> index;
   private final SupportsUpgradeDowngrade upgradeDowngradeHelper;
@@ -1697,10 +1695,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   private void validateComplexKeygen(HoodieTableMetaClient metaClient) {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    String keyGeneratorClassName = tableConfig.getKeyGeneratorClassName();
     Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
-    if ((SPARK_COMPLEX_KEYGEN_CLASS_NAME.equals(keyGeneratorClassName)
-        || ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClassName))
+    if (KeyGeneratorType.isComplexKeyGenerator(tableConfig)
         && recordKeyFields.isPresent() && recordKeyFields.get().length == 1) {
       throw new HoodieException("This table uses the complex key generator with a single record "
           + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
