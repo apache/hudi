@@ -46,6 +46,7 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -114,6 +115,7 @@ import java.util.function.BiFunction;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1011,12 +1013,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   @VisibleForTesting
   String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
-    if (config.enableComplexKeygenValidation()) {
-      validateComplexKeygen(metaClient);
-    }
     if (needsUpgrade(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
+    }
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE) && config.enableComplexKeygenValidation()) {
+      validateComplexKeygen(tableConfig);
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
@@ -1693,11 +1696,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     });
   }
 
-  private void validateComplexKeygen(HoodieTableMetaClient metaClient) {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
-    if (KeyGeneratorType.isComplexKeyGenerator(tableConfig)
-        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1) {
+  private void validateComplexKeygen(HoodieTableConfig tableConfig) {
+    if (isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
       throw new HoodieException("This table uses the complex key generator with a single record "
           + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
           + "release before, the table may potentially contain duplicates due to a breaking "

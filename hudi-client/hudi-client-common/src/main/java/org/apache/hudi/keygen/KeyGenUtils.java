@@ -21,6 +21,7 @@ package org.apache.hudi.keygen;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -331,5 +332,11 @@ public class KeyGenUtils {
     return !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
         || props.getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).equals(StringUtils.EMPTY_STRING);
     // spark-sql sets record key config to empty string for update, and couple of other statements.
+  }
+
+  public static boolean isComplexKeyGeneratorWithSingleRecordKeyField(HoodieTableConfig tableConfig) {
+    Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
+    return KeyGeneratorType.isComplexKeyGenerator(tableConfig)
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
   }
 }
