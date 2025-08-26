@@ -34,7 +34,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 20),
     ProcedureParameter.optional(3, "show_involved_partition", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(4, "filter", DataTypes.StringType, ""),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

@@ -138,14 +138,14 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
         val expectedFields = Seq(
           "clean_time", "state_transition_time", "state", "action", "start_clean_time",
-          "partition_path", "policy", "delete_path_patterns", "success_delete_files", 
-          "failed_delete_files", "is_partition_deleted", "time_taken_in_millis", 
+          "partition_path", "policy", "delete_path_patterns", "success_delete_files",
+          "failed_delete_files", "is_partition_deleted", "time_taken_in_millis",
           "total_files_deleted", "earliest_commit_to_retain", "last_completed_commit_timestamp",
           "version", "total_partitions_to_clean", "total_partitions_to_delete", "extra_metadata"
         )
-        
+
         expectedFields.zipWithIndex.foreach { case (expectedField, index) =>
-          assert(allCleans.schema.fields(index).name == expectedField, 
+          assert(allCleans.schema.fields(index).name == expectedField,
             s"Field at position $index should be '$expectedField', but was '${allCleans.schema.fields(index).name}'")
         }
 
@@ -154,7 +154,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
         completedCleans.foreach { completedClean =>
           assert(completedClean.getString(0) != null) // clean_time
-          assert(completedClean.getString(1) != null) // state_transition_time  
+          assert(completedClean.getString(1) != null) // state_transition_time
           assert(completedClean.getString(2) == "COMPLETED") // state
           assert(completedClean.getString(3) == "clean") // action
           assert(completedClean.getString(4) != null) // start_clean_time
@@ -219,29 +219,28 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         assert(completedCleans.length >= 1, "Should have at least one completed operation")
 
         completedCleans.foreach { completedClean =>
-          // Verify completed operations have the right data structure
           assert(completedClean.getString(0) != null) // clean_time
-          assert(completedClean.getString(1) != null) // state_transition_time  
+          assert(completedClean.getString(1) != null) // state_transition_time
           assert(completedClean.getString(2) == "COMPLETED") // state
           assert(completedClean.getString(3) == "clean") // action
           assert(completedClean.getString(4) != null) // start_clean_time
-          
+
           // For partitioned tables, partition metadata should be available
           if (completedClean.getString(5) != null) { // partition_path
             assert(completedClean.getString(6) != null) // policy
             assert(completedClean.get(7) != null) // delete_path_patterns
-            assert(completedClean.get(8) != null) // success_delete_files  
+            assert(completedClean.get(8) != null) // success_delete_files
             assert(completedClean.get(9) != null) // failed_delete_files
             // is_partition_deleted can be true/false/null
           }
-          
+
           assert(completedClean.getLong(11) >= 0) // time_taken_in_millis
           assert(completedClean.getInt(12) >= 0) // total_files_deleted
           assert(completedClean.getString(13) != null) // earliest_commit_to_retain
           assert(completedClean.getString(14) != null) // last_completed_commit_timestamp
           assert(completedClean.getInt(15) >= 1) // version
-          
-          // Plan-specific fields should be null for completed operations
+
+          // plan specific fields should be null for completed operations
           assert(completedClean.get(16) == null) // total_partitions_to_clean
           assert(completedClean.get(17) == null) // total_partitions_to_delete
         }
@@ -251,7 +250,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
              |  table => '$tableName',
              |  filter => "state = 'COMPLETED'"
              |)""".stripMargin)
-        
+
         val completedOnlyData = completedOnly.collect()
         assert(completedOnlyData.length >= 1, "Should have completed operations when filtered")
         assert(completedOnlyData.forall(_.getString(2) == "COMPLETED"), "All filtered results should be completed")
@@ -261,7 +260,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
              |  table => '$tableName',
              |  filter => "partition_path IS NULL"
              |)""".stripMargin)
-        
+
         val partitionData = withPartitionData.collect()
         assert(partitionData.length == 0, "No results should have partition data when filtered")
       }
@@ -313,11 +312,11 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
         // showArchived=true should include at least the same data as active timeline
         assert(allCleans.length >= activeCleans.length, "Active + Archived should have at least as many instances as active only")
-        
-        // Verify that show_cleans includes both completed and pending operations
+
+        // verify that show_cleans includes both completed and pending operations
         val completedCleansActive = activeCleans.filter(_.getString(2) == "COMPLETED")
         val pendingCleansActive = activeCleans.filter(row => Set("REQUESTED", "INFLIGHT").contains(row.getString(2)))
-        assert(completedCleansActive.length + pendingCleansActive.length == activeCleans.length, 
+        assert(completedCleansActive.length + pendingCleansActive.length == activeCleans.length,
           "All clean operations should be either completed or pending")
       }
     }

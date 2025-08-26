@@ -17,14 +17,16 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 /**
@@ -222,24 +224,24 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
             val partitionMetadata = partitionMetadataEntry.getValue
 
             val row = Row(
-              cleanInstant.requestedTime(),                    // clean_time
-              cleanInstant.getCompletionTime,                  // state_transition_time
-              cleanInstant.getState.name(),                    // state
-              cleanInstant.getAction,                          // action
-              cleanMetadata.getStartCleanTime,                 // start_clean_time
-              partitionPath,                                   // partition_path
-              partitionMetadata.getPolicy,                     // policy
+              cleanInstant.requestedTime(), // clean_time
+              cleanInstant.getCompletionTime, // state_transition_time
+              cleanInstant.getState.name(), // state
+              cleanInstant.getAction, // action
+              cleanMetadata.getStartCleanTime, // start_clean_time
+              partitionPath, // partition_path
+              partitionMetadata.getPolicy, // policy
               partitionMetadata.getDeletePathPatterns.size(), // delete_path_patterns
               partitionMetadata.getSuccessDeleteFiles.size(), // success_delete_files
-              partitionMetadata.getFailedDeleteFiles.size(),  // failed_delete_files
-              partitionMetadata.getIsPartitionDeleted,         // is_partition_deleted
-              cleanMetadata.getTimeTakenInMillis,              // time_taken_in_millis
-              cleanMetadata.getTotalFilesDeleted,              // total_files_deleted
-              cleanMetadata.getEarliestCommitToRetain,         // earliest_commit_to_retain
-              cleanMetadata.getLastCompletedCommitTimestamp,   // last_completed_commit_timestamp
-              cleanMetadata.getVersion,                        // version
-              null,                                            // total_partitions_to_clean (N/A for completed)
-              null,                                            // total_partitions_to_delete (N/A for completed)
+              partitionMetadata.getFailedDeleteFiles.size(), // failed_delete_files
+              partitionMetadata.getIsPartitionDeleted, // is_partition_deleted
+              cleanMetadata.getTimeTakenInMillis, // time_taken_in_millis
+              cleanMetadata.getTotalFilesDeleted, // total_files_deleted
+              cleanMetadata.getEarliestCommitToRetain, // earliest_commit_to_retain
+              cleanMetadata.getLastCompletedCommitTimestamp, // last_completed_commit_timestamp
+              cleanMetadata.getVersion, // version
+              null, // total_partitions_to_clean (N/A for completed)
+              null, // total_partitions_to_delete (N/A for completed)
               if (cleanMetadata.getExtraMetadata != null) cleanMetadata.getExtraMetadata.toString else null // extra_metadata
             )
             allRows += row
@@ -259,29 +261,29 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
             cleanInstant.requestedTime()
           )
           val cleanerPlan = timeline.readCleanerPlan(requestedCleanInstant)
-          
+
           val planStats = extractCleanPlanStats(cleanerPlan)
-          
+
           val row = Row(
-            cleanInstant.requestedTime(),                    // clean_time
-            null,                                            // state_transition_time (N/A for pending)
-            cleanInstant.getState.name(),                    // state
-            cleanInstant.getAction,                          // action
-            null,                                            // start_clean_time (N/A for pending)
-            null,                                            // partition_path (N/A for pending)
-            cleanerPlan.getPolicy,                           // policy
-            null,                                            // delete_path_patterns (N/A for pending)
-            null,                                            // success_delete_files (N/A for pending)
-            null,                                            // failed_delete_files (N/A for pending)
-            null,                                            // is_partition_deleted (N/A for pending)
-            null,                                            // time_taken_in_millis (N/A for pending)
-            null,                                            // total_files_deleted (N/A for pending)
-            planStats.earliestInstantToRetain,               // earliest_commit_to_retain
-            cleanerPlan.getLastCompletedCommitTimestamp,     // last_completed_commit_timestamp
-            cleanerPlan.getVersion,                          // version
-            planStats.totalPartitionsToClean,               // total_partitions_to_clean
-            planStats.totalPartitionsToDelete,              // total_partitions_to_delete
-            planStats.extraMetadata                          // extra_metadata
+            cleanInstant.requestedTime(), // clean_time
+            null, // state_transition_time (N/A for pending)
+            cleanInstant.getState.name(), // state
+            cleanInstant.getAction, // action
+            null, // start_clean_time (N/A for pending)
+            null, // partition_path (N/A for pending)
+            cleanerPlan.getPolicy, // policy
+            null, // delete_path_patterns (N/A for pending)
+            null, // success_delete_files (N/A for pending)
+            null, // failed_delete_files (N/A for pending)
+            null, // is_partition_deleted (N/A for pending)
+            null, // time_taken_in_millis (N/A for pending)
+            null, // total_files_deleted (N/A for pending)
+            planStats.earliestInstantToRetain, // earliest_commit_to_retain
+            cleanerPlan.getLastCompletedCommitTimestamp, // last_completed_commit_timestamp
+            cleanerPlan.getVersion, // version
+            planStats.totalPartitionsToClean, // total_partitions_to_clean
+            planStats.totalPartitionsToDelete, // total_partitions_to_delete
+            planStats.extraMetadata // extra_metadata
           )
           allRows += row
         } match {
@@ -295,7 +297,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
 
     allRows.take(limit).toSeq
   }
-  
+
   private def createErrorRowForCompletedWithPartition(cleanInstant: HoodieInstant): Row = {
     Row(
       cleanInstant.requestedTime(),
@@ -305,7 +307,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
       null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
     )
   }
-  
+
   private def createErrorRowForPendingWithPartition(cleanInstant: HoodieInstant): Row = {
     Row(
       cleanInstant.requestedTime(),
