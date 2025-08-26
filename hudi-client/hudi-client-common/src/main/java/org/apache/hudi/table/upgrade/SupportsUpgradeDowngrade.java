@@ -20,6 +20,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -44,4 +45,9 @@ public interface SupportsUpgradeDowngrade extends Serializable {
   String getPartitionColumns(HoodieWriteConfig config);
 
   BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context);
+
+  default HoodieTable addTxnManager(HoodieTable table) {
+    //FIXME-vc: this is a bit hacky
+    return table.setTxnManager(new TransactionManager(table.getConfig(), table.getStorage()));
+  }
 }

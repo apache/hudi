@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table;
 
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieTableType;
