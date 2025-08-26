@@ -19,6 +19,7 @@
 package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.client.transaction.lock.LockManager;
+import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -26,11 +27,13 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.curator.test.TestingServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
@@ -40,6 +43,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestLockManager extends HoodieCommonTestHarness {
 
@@ -116,6 +121,48 @@ public class TestLockManager extends HoodieCommonTestHarness {
             .withZkBasePath(ZK_BASE_PATH)
             .withZkLockKey(KEY)
             .withZkQuorum(server.getConnectString())
+            .build())
+        .build();
+  }
+
+  @Test
+  void testLockManagerTriesMetricsConstructorFirst() {
+    HoodieWriteConfig writeConfig = getStorageBasedLockWriteConfig();
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getStorage());
+
+    // The getLockProvider() call should fail due to invalid scheme in basePath, 
+    // but this validates that we successfully found and tried the metrics constructor
+    // (rather than falling back to the standard constructor due to reflection issues)
+    HoodieException exception = assertThrows(HoodieException.class, lockManager::getLockProvider,
+        "StorageBasedLockProvider should fail with HoodieLockException due to invalid scheme, but this confirms metrics constructor was found");
+    
+    // Assert that the exception message references the scheme failure, confirming we got to the 
+    // StorageBasedLockProvider instantiation (not a reflection failure)
+    assertTrue(exception.getCause().getCause().getCause().getMessage().startsWith("Unsupported scheme"),
+        "Exception should mention scheme failure, confirming metrics constructor was successfully found and used");
+
+    lockManager.close();
+  }
+
+  @Test
+  void testLockManagerFallbackToStandardConstructor() {
+    // Use ZookeeperBasedLockProvider which doesn't have the metrics constructor
+    HoodieWriteConfig writeConfig = getSingleWriterWriteConfig();
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getStorage());
+
+    // Get the lock provider to trigger instantiation and fallback
+    assertDoesNotThrow(() -> {
+      lockManager.getLockProvider();
+    });
+
+    lockManager.close();
+  }
+
+  private HoodieWriteConfig getStorageBasedLockWriteConfig() {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(StorageBasedLockProvider.class)
             .build())
         .build();
   }
