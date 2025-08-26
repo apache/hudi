@@ -20,9 +20,11 @@
 package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import com.linkedin.mxe.MetadataChangeProposal;
@@ -51,8 +53,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_SYNC_SUPPRESS_EXCEPTIONS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -345,16 +350,43 @@ public class TestDataHubSyncClient {
 
   @Test
   public void testTableAndDatabaseName() {
+    String dbName = "test_db1";
+    String tableName = "test_table1";
+    setAndAssertDbAndTableName(DataHubSyncConfig.META_SYNC_DATAHUB_DATABASE_NAME.key(), dbName, DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME.key(), tableName);
+
+    dbName = "test_db2";
+    tableName = "test_table2";
+    setAndAssertDbAndTableName(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), dbName, DataHubSyncConfig.META_SYNC_TABLE_NAME.key(), tableName);
+
+    dbName = "test_db3";
+    tableName = "test_table3";
+    setAndAssertDbAndTableName(HoodieTableConfig.DATABASE_NAME.key(), dbName, HOODIE_TABLE_NAME_KEY, tableName);
+
+    dbName = "test_db4";
+    tableName = "test_table4";
+    setAndAssertDbAndTableName(HoodieTableConfig.DATABASE_NAME.key(), dbName, HOODIE_WRITE_TABLE_NAME_KEY, tableName);
+
+    // not setting any properties
     Properties props = new Properties();
     props.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());
-    props.put("hoodie.meta.sync.datahub.database.name", DATABASE_NAME);
-    props.put("hoodie.meta.sync.datahub.table.name", TABLE_NAME);
+    DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
+    DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
+
+    Assertions.assertEquals(HoodieSyncConfig.META_SYNC_DATABASE_NAME.defaultValue(), dhClient.getDatabaseName());
+    Assertions.assertEquals(META_SYNC_TABLE_NAME.defaultValue(), dhClient.getTableName());
+  }
+
+  private void setAndAssertDbAndTableName(String dbNameKey, String dbNameValue, String tableNameKey, String tableNameValue) {
+    Properties props = new Properties();
+    props.put(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), DummyPartitionValueExtractor.class.getName());
+    props.put(dbNameKey, dbNameValue);
+    props.put(tableNameKey, tableNameValue);
 
     DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
     DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
 
-    Assertions.assertEquals(DATABASE_NAME, dhClient.getDatabaseName());
-    Assertions.assertEquals(TABLE_NAME, dhClient.getTableName());
+    Assertions.assertEquals(dbNameValue, dhClient.getDatabaseName());
+    Assertions.assertEquals(tableNameValue, dhClient.getTableName());
   }
 
 }

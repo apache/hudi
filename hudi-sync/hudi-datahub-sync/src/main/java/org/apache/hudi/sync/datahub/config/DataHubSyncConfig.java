@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
@@ -36,6 +37,9 @@ import javax.annotation.concurrent.Immutable;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_DATAHUB_ENV;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME;
 
@@ -118,12 +122,17 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATABASE_NAME = ConfigProperty
       .key("hoodie.meta.sync.datahub.database.name")
       .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_DATABASE_NAME.key()))
+          .or(() -> Option.of(cfg.getStringOrDefault(DATABASE_NAME, META_SYNC_DATABASE_NAME.defaultValue()))))
       .markAdvanced()
       .withDocumentation("The name of the destination database that we should sync the hudi table to.");
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_TABLE_NAME = ConfigProperty
       .key("hoodie.meta.sync.datahub.table.name")
       .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_TABLE_NAME.key()))
+          .or(() -> Option.ofNullable(cfg.getString(HOODIE_TABLE_NAME_KEY)))
+          .or(() -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))))
       .markAdvanced()
       .withDocumentation("The name of the destination table that we should sync the hudi table to.");
 

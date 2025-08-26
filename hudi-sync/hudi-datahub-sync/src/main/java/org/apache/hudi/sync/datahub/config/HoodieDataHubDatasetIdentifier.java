@@ -29,8 +29,6 @@ import io.datahubproject.models.util.DatabaseKey;
 
 import java.util.Properties;
 
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATABASE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATAPLATFORM_NAME;
@@ -71,8 +69,8 @@ public class HoodieDataHubDatasetIdentifier {
         this.dataPlatformUrn,
         Option.ofNullable(config.getString(META_SYNC_DATAHUB_DATAPLATFORM_INSTANCE_NAME))
     );
-    this.databaseName = config.getStringOrDefault(META_SYNC_DATAHUB_DATABASE_NAME, config.getString(META_SYNC_DATABASE_NAME));
-    this.tableName = config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME,config.getString(META_SYNC_TABLE_NAME));
+    this.databaseName = config.getStringOrDefault(META_SYNC_DATAHUB_DATABASE_NAME, META_SYNC_DATAHUB_DATABASE_NAME.getInferFunction().get().apply(config).get());
+    this.tableName = config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME, META_SYNC_DATAHUB_TABLE_NAME.getInferFunction().get().apply(config).get());
     this.datasetUrn = new DatasetUrn(
             this.dataPlatformUrn,
             createDatasetName(this.dataPlatformInstance, this.databaseName, this.tableName),

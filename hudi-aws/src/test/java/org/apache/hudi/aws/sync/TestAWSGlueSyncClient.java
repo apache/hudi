@@ -19,6 +19,8 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.aws.testutils.GlueTestUtil;
+import org.apache.hudi.config.GlueCatalogSyncClientConfig;
+import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 
 import org.apache.parquet.schema.MessageType;
@@ -49,15 +51,21 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -115,7 +123,7 @@ class TestAWSGlueSyncClient {
     GetTableRequest getTableRequestForTable = GetTableRequest.builder().databaseName(databaseName).name(tableName).build();
     // Mock methods
     CompletableFuture<GetTableResponse> tableResponseFuture = CompletableFuture.completedFuture(tableResponse);
-    CompletableFuture<GetTableResponse> mockTableNotFoundResponse = Mockito.mock(CompletableFuture.class);
+    CompletableFuture<GetTableResponse> mockTableNotFoundResponse = mock(CompletableFuture.class);
     ExecutionException executionException = new ExecutionException("failed to get table", EntityNotFoundException.builder().build());
     Mockito.when(mockTableNotFoundResponse.get()).thenThrow(executionException);
 
@@ -247,7 +255,7 @@ class TestAWSGlueSyncClient {
     HashMap<String, String> newTableProperties = new HashMap<>();
     newTableProperties.put("last_commit_time_sync", "100");
 
-    CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = Mockito.mock(CompletableFuture.class);
+    CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = mock(CompletableFuture.class);
     Mockito.when(mockUpdateTableResponse.get()).thenReturn(UpdateTableResponse.builder().build());
     Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponseFuture);
     Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(mockUpdateTableResponse);
@@ -263,6 +271,44 @@ class TestAWSGlueSyncClient {
   void testTableAndDatabaseName() {
     assertEquals(GlueTestUtil.DB_NAME, awsGlueSyncClient.getDatabaseName());
     assertEquals(GlueTestUtil.TABLE_NAME, awsGlueSyncClient.getTableName());
+
+    String dbName = "test_db1";
+    String tableName = "test_table1";
+    Properties properties = new Properties();
+    properties.setProperty(GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME.key(), dbName);
+    properties.setProperty(GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME.key(), tableName);
+
+    HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
+    assertEquals(tableName, awsGlueSyncClient.getTableName());
+
+    dbName = "test_db2";
+    tableName = "test_table2";
+    properties = new Properties();
+    properties.setProperty(META_SYNC_DATABASE_NAME.key(), dbName);
+    properties.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
+
+    hiveSyncConfig = new HiveSyncConfig(properties);
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
+    assertEquals(tableName, awsGlueSyncClient.getTableName());
+
+    dbName = "test_db3";
+    tableName = "test_table3";
+    properties = new Properties();
+    properties.setProperty(DATABASE_NAME.key(), dbName);
+    properties.setProperty(HOODIE_TABLE_NAME_KEY, tableName);
+
+    hiveSyncConfig = new HiveSyncConfig(properties);
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
+    assertEquals(tableName, awsGlueSyncClient.getTableName());
+
+    hiveSyncConfig = new HiveSyncConfig(new Properties());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    assertEquals(META_SYNC_DATABASE_NAME.defaultValue(), awsGlueSyncClient.getDatabaseName());
+    assertEquals(META_SYNC_TABLE_NAME.defaultValue(), awsGlueSyncClient.getTableName());
   }
 
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {
