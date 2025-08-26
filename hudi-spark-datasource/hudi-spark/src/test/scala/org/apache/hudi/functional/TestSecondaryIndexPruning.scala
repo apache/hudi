@@ -45,7 +45,6 @@ import org.apache.hudi.util.{JavaConversions, JFunction}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.disableComplexKeygenValidation
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -1382,12 +1381,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql("set spark.sql.defaultColumn.enabled=false")
     }
 
-    disableComplexKeygenValidation(spark, tableName)
-    spark.sql(
-      s"""
-         |ALTER TABLE $tableName
-         |SET TBLPROPERTIES (hoodie.write.complex.keygen.old.encoding = 'true')
-         |""".stripMargin)
     spark.sql(
       s"""|INSERT INTO $tableName(ts, id, rider, driver, fare, city, state) VALUES
           |    (1695159649,'trip1','rider-A','driver-K',19.10,'san_francisco','california'),
@@ -1424,6 +1417,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     )
     verifyQueryPredicate(hudiOpts, "rider")
 
+    // delete one of those records
     spark.sql(s"delete from $tableName where id = 'trip4'")
     checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName where rider = 'rider-E'")(
       Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas")

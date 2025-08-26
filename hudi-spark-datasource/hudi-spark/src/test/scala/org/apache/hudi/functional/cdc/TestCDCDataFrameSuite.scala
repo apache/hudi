@@ -786,8 +786,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName + loggingMode.name())
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
-        // Disable complex key generator validation so that the writer can succeed
-        .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
         .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
         .option("hoodie.table.cdc.enabled", "true")
@@ -809,8 +807,6 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName + loggingMode.name())
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
-        // Disable complex key generator validation so that the writer can succeed
-        .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
         .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
         .option("hoodie.table.cdc.enabled", "true")

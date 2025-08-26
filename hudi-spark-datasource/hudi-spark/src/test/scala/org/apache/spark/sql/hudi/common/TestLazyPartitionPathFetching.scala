@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation}
-
 class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
 
   test("Test querying with string column + partition pruning") {
@@ -108,11 +106,9 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            | )
            | PARTITIONED BY (country, date_par)
          """.stripMargin)
-      disableComplexKeygenValidation(spark, tableName)
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 'ID', date '2023-02-27')")
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 'ID', date '2023-02-28')")
       spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 'ID', date '2023-03-01')")
-      enableComplexKeygenValidation(spark, tableName)
 
       // for lazy fetching partition path & file slice to be enabled, filter must be applied on all partitions
       checkAnswer(s"select id, name, price, ts from $tableName " +

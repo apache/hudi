@@ -614,7 +614,6 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
             s"${tmp.getCanonicalPath}/$targetTable"
           )
 
-          HoodieSparkSqlTestBase.disableComplexKeygenValidation(spark, targetTable)
           // Insert sample data into target table
           spark.sql(
             s"""

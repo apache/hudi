@@ -30,7 +30,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.avro.Schema
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, enableComplexKeygenValidation, getLastCleanMetadata}
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -309,8 +309,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          // Disable complex key generator validation so that the writer can succeed
-          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -336,8 +334,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
-          // Disable complex key generator validation so that the writer can succeed
-          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Append)
@@ -393,8 +389,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
-          // Disable complex key generator validation so that the writer can succeed
-          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Overwrite)
@@ -420,8 +414,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
-          // Disable complex key generator validation so that the writer can succeed
-          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .mode(SaveMode.Append)
@@ -431,9 +423,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
         ensureLastCommitIncludesProperSchema(tablePath, schemaFields)
 
-        disableComplexKeygenValidation(spark, tableName)
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
-        enableComplexKeygenValidation(spark, tableName)
 
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
@@ -449,10 +439,8 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         })
         assertTrue(totalDeletedFiles > 0)
 
-        disableComplexKeygenValidation(spark, tableName)
         // insert data
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
-        enableComplexKeygenValidation(spark, tableName)
 
         checkAnswer(s"select id, name, ts, year, month, day from $tableName")(
           Seq(2, "l4", "v1", "2021", "10", "02")
