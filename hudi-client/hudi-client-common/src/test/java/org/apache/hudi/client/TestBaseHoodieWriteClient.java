@@ -135,17 +135,22 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         Arguments.of(true, false)
     );
 
+    List<Integer> tableVersionOptions = Arrays.asList(8, 9);
+
     arguments.addAll(Stream.of("org.apache.hudi.keygen.ComplexAvroKeyGenerator",
             "org.apache.hudi.keygen.ComplexKeyGenerator")
         .flatMap(keyGenClass -> keyAndPartitionFieldOptions.stream()
             .flatMap(keyAndPartitionField -> booleanOptions.stream()
-                .map(booleans -> Arguments.of(
-                    keyGenClass,
-                    keyAndPartitionField.get()[0],
-                    keyAndPartitionField.get()[1],
-                    booleans.get()[0],
-                    booleans.get()[1]
-                ))
+                .flatMap(booleans -> tableVersionOptions.stream()
+                    .map(tableVersion -> Arguments.of(
+                        keyGenClass,
+                        keyAndPartitionField.get()[0],
+                        keyAndPartitionField.get()[1],
+                        booleans.get()[0],
+                        booleans.get()[1],
+                        tableVersion
+                    ))
+                )
             ))
         .collect(Collectors.toList()));
     arguments.addAll(Stream.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator",
@@ -153,37 +158,46 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
             "org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator",
             "org.apache.hudi.keygen.TimestampBasedKeyGenerator")
         .flatMap(keyGenClass -> booleanOptions.stream()
-            .map(booleans -> Arguments.of(
-                keyGenClass,
-                "r1",
-                "p1",
-                booleans.get()[0],
-                booleans.get()[1]
-            ))
+            .flatMap(booleans -> tableVersionOptions.stream()
+                .map(tableVersion -> Arguments.of(
+                    keyGenClass,
+                    "r1",
+                    "p1",
+                    booleans.get()[0],
+                    booleans.get()[1],
+                    tableVersion
+                ))
+            )
         )
         .collect(Collectors.toList()));
     arguments.addAll(Stream.of("org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator",
             "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         .flatMap(keyGenClass -> booleanOptions.stream()
-            .map(booleans -> Arguments.of(
-                keyGenClass,
-                "r1",
-                "",
-                booleans.get()[0],
-                booleans.get()[1]
-            ))
+            .flatMap(booleans -> tableVersionOptions.stream()
+                .map(tableVersion -> Arguments.of(
+                    keyGenClass,
+                    "r1",
+                    "",
+                    booleans.get()[0],
+                    booleans.get()[1],
+                    tableVersion
+                ))
+            )
         )
         .collect(Collectors.toList()));
     arguments.addAll(Stream.of("org.apache.hudi.keygen.CustomAvroKeyGenerator",
             "org.apache.hudi.keygen.CustomKeyGenerator")
         .flatMap(keyGenClass -> booleanOptions.stream()
-            .map(booleans -> Arguments.of(
-                keyGenClass,
-                "r1",
-                "p1:SIMPLE",
-                booleans.get()[0],
-                booleans.get()[1]
-            ))
+            .flatMap(booleans -> tableVersionOptions.stream()
+                .map(tableVersion -> Arguments.of(
+                    keyGenClass,
+                    "r1",
+                    "p1:SIMPLE",
+                    booleans.get()[0],
+                    booleans.get()[1],
+                    tableVersion
+                ))
+            )
         )
         .collect(Collectors.toList()));
 
@@ -196,7 +210,8 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
                                                         String recordKeyFields,
                                                         String partitionPathFields,
                                                         boolean setComplexKeyGeneratorValidationConfig,
-                                                        boolean enableComplexKeyGeneratorValidation) throws IOException {
+                                                        boolean enableComplexKeyGeneratorValidation,
+                                                        int tableVersion) throws IOException {
     if (basePath == null) {
       initPath();
     }
@@ -204,10 +219,12 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     tableProperties.put(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), keyGeneratorClass);
     tableProperties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), recordKeyFields);
     tableProperties.put(HoodieTableConfig.PARTITION_FIELDS.key(), partitionPathFields);
+    tableProperties.put(HoodieTableConfig.VERSION.key(), String.valueOf(tableVersion));
     Properties writeProperties = new Properties();
     writeProperties.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), keyGeneratorClass);
     writeProperties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFields);
     writeProperties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionPathFields);
+    writeProperties.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion));
     if (setComplexKeyGeneratorValidationConfig) {
       writeProperties.put(
           HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), enableComplexKeyGeneratorValidation);
@@ -221,7 +238,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfigBuilder.build(), table, Option.empty(), tableServiceClient);
 
-    if (enableComplexKeyGeneratorValidation
+    if (tableVersion <= 8 && enableComplexKeyGeneratorValidation
         && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
         && recordKeyFields.split(",").length == 1) {
