@@ -26,6 +26,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,10 +42,12 @@ public class TestPartitionAwareClusteringPlanStrategy {
   HoodieTable table;
   @Mock
   HoodieEngineContext context;
+  
   HoodieWriteConfig hoodieWriteConfig;
 
   @BeforeEach
   public void setUp() {
+    MockitoAnnotations.openMocks(this);
     Properties props = new Properties();
     props.setProperty("hoodie.clustering.plan.strategy.partition.regex.pattern", "2021072.*");
     this.hoodieWriteConfig = HoodieWriteConfig
@@ -86,4 +89,5 @@ public class TestPartitionAwareClusteringPlanStrategy {
       return null;
     }
   }
+
 }

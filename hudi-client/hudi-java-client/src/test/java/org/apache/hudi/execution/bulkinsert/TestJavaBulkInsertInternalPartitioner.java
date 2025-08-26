@@ -20,7 +20,6 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -78,7 +77,7 @@ public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestH
   private Comparator<HoodieRecord> getCustomColumnComparator(Schema schema, String[] sortColumns) {
     return Comparator.comparing(record ->
         FlatLists.ofComparableArray(
-            HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)record, sortColumns, schema, false)));
+            HoodieAvroUtils.getRecordColumnValues(record, sortColumns, schema, false)));
   }
 
   private void verifyRecordAscendingOrder(List<HoodieRecord> records,

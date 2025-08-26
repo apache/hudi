@@ -39,7 +39,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.testutils.RawTripTestPayload;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -77,6 +77,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_PARALLELISM_VALUE;
 import static org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor.LATEST_ROLLBACK_PLAN_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -183,8 +184,8 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
     assertEquals(0, partBFiles.length);
     assertEquals(1, partAFiles.length);
-    assertEquals(2, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
-    assertEquals(1, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
+    assertEquals(3, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
+    assertEquals(0, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
   }
 
   @Test
@@ -316,11 +317,9 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     initMetaClient(tableType, props);
     String partition = "partA";
     HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(
-        metaClient, addMetadataFields(RawTripTestPayload.JSON_DATA_SCHEMA));
+        metaClient, addMetadataFields(HoodieTestUtils.SIMPLE_RECORD_SCHEMA));
     String fileId = UUID.randomUUID().toString();
-    HoodieRecord tripRecord = new RawTripTestPayload(
-        "{\"_row_key\":\"key1\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}")
-        .toHoodieRecord();
+    HoodieRecord tripRecord = createSimpleRecord("key1", "2016-01-31T03:16:41.415Z", 123);
     String instantTime1 = "001";
     testTable.forCommit(instantTime1);
     StoragePath baseFilePath = testTable.withInserts(partition, fileId, Collections.singletonList(tripRecord));

@@ -1847,6 +1847,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieClusteringConfig.ROLLBACK_PENDING_CLUSTERING_ON_CONFLICT);
   }
 
+  public boolean isBinaryCopySchemaEvolutionEnabled() {
+    return getBooleanOrDefault(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
+  }
+
   public int getInlineClusterMaxCommits() {
     return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS);
   }
@@ -3676,5 +3680,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
     }
+  }
+
+  public boolean isFileGroupReaderBasedMergeHandle() {
+    return isFileGroupReaderBasedMergeHandle(props);
+  }
+
+  public static boolean isFileGroupReaderBasedMergeHandle(TypedProperties props) {
+    return ReflectionUtils.isSubClass(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, true), FileGroupReaderBasedMergeHandle.class);
   }
 }
