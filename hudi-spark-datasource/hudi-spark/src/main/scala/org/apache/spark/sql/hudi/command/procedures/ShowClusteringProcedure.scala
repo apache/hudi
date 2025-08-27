@@ -292,18 +292,12 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
       )
     }.toMap
 
-    val extraMetadata = Option(clusteringPlan.getExtraMetadata)
-      .filter(!_.isEmpty)
-      .map(_.asScala.map { case (k, v) => s"$k=$v" }.mkString(", "))
-      .orNull
-
     ClusteringPlanStatistics(
       totalInputGroups = totalInputGroups,
       totalInputFiles = totalInputFiles,
       totalOutputGroups = totalOutputGroups,
       involvedPartitions = involvedPartitions,
-      partitionStats = partitionStats,
-      extraMetadata = extraMetadata
+      partitionStats = partitionStats
     )
   }
 
@@ -312,8 +306,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
                                                totalInputFiles: Int,
                                                totalOutputGroups: Int,
                                                involvedPartitions: Set[String],
-                                               partitionStats: Map[String, ClusteringPartitionStats],
-                                               extraMetadata: String
+                                               partitionStats: Map[String, ClusteringPartitionStats]
                                              )
 
   private case class ClusteringPartitionStats(

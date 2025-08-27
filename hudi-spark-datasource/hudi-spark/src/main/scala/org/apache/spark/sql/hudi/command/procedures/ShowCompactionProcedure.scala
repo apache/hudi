@@ -261,20 +261,13 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
       .getOrElse(Seq.empty)
 
     val involvedPartitions = operations.map(_.getPartitionPath).toSet
-    val extraMetadata = Option(compactionPlan.getExtraMetadata)
-      .filter(!_.isEmpty)
-      .map(_.asScala.map { case (k, v) => s"$k=$v" }.mkString(", "))
-      .orNull
 
     CompactionPlanStatistics(
-      involvedPartitions = involvedPartitions,
-      extraMetadata = extraMetadata
+      involvedPartitions = involvedPartitions
     )
   }
 
-  private case class CompactionPlanStatistics(involvedPartitions: Set[String],
-                                              extraMetadata: String
-                                             )
+  private case class CompactionPlanStatistics(involvedPartitions: Set[String])
 
   private def createErrorRowForCompletedWithPartition(instant: HoodieInstant): Row = {
     Row(
