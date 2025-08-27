@@ -153,13 +153,7 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
     val showArchived = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
     val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
@@ -182,11 +176,7 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
     } else {
       activeResults
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(finalResults, filter, outputType, sparkSession)
-    } else {
-      finalResults
-    }
+    applyFilter(finalResults, filter, outputType)
   }
 
   override def build: Procedure = new ShowCleansProcedure(includePartitionMetadata)

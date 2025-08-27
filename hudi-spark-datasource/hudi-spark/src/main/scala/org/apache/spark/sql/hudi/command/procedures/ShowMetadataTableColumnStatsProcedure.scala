@@ -74,13 +74,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val targetColumnsSeq = targetColumns.split(",").toSeq
     val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val basePath = getBasePath(table, path)
     val metadataConfig = HoodieMetadataConfig.newBuilder
       .enable(true)
@@ -117,11 +111,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
       }
 
     val results = rows.toList.sortBy(r => r.getString(1))
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   private def getColumnStatsValue(stats_value: Any): String = {

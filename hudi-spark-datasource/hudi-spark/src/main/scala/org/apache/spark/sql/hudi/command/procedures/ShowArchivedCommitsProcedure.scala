@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout, TimelineUtils}
 import org.apache.hudi.common.util.StringUtils
 
@@ -87,13 +86,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     var endTs = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
     val filter = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
 
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
@@ -116,11 +109,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
       // clear the instant details from memory after printing to reduce usage
       archivedTimeline.clearInstantDetailsFromMemory(startTs, endTs)
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowArchivedCommitsProcedure(includeExtraMetadata)

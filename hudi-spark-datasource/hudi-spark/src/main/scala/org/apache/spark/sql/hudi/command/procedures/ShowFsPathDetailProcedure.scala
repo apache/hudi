@@ -59,13 +59,7 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
     val limit = getArgValueOrDefault(args, PARAMETERS(3))
     val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
 
     val path: Path = new Path(srcPath)
     val fs = HadoopFSUtils.getFs(path, jsc.hadoopConfiguration())
@@ -96,11 +90,7 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
         df.orderBy(df("file_num").desc).collect()
       }
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   def getFileSize(size: Long): String = {

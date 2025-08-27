@@ -50,13 +50,7 @@ class ShowTablePropertiesProcedure() extends BaseProcedure with ProcedureBuilder
     val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
     val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val tableProps = metaClient.getTableConfig.getProps
@@ -64,11 +58,7 @@ class ShowTablePropertiesProcedure() extends BaseProcedure with ProcedureBuilder
     val rows = new util.ArrayList[Row]
     tableProps.asScala.foreach(p => rows.add(Row(p._1, p._2)))
     val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowTablePropertiesProcedure()

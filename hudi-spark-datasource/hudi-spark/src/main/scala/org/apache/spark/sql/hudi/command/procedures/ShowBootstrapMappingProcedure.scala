@@ -66,13 +66,7 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     val desc = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[Boolean]
     val filter = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
@@ -107,11 +101,7 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     } else {
       df.orderBy(df(sortBy).asc).limit(limit).collect()
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   private def createBootstrapIndexReader(metaClient: HoodieTableMetaClient) = {

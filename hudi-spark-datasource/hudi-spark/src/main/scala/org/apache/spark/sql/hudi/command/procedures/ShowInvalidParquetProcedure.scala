@@ -64,13 +64,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val instants = getArgValueOrDefault(args, PARAMETERS(5)).map(_.toString).getOrElse("")
     val filter = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())
     val storage = new HoodieHadoopStorage(srcPath, storageConf)
     val metadataConfig = HoodieMetadataConfig.newBuilder.enable(false).build
@@ -118,11 +112,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
       } else {
         parquetRdd.collect().toSeq
       }
-      if (filter != null && filter.trim.nonEmpty) {
-        HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-      } else {
-        results
-      }
+      applyFilter(results, filter, outputType)
     }
   }
 

@@ -238,13 +238,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     } else {
       getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[String]
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val basePath = getBasePath(table, path)
     val metaClient = createMetaClient(jsc, basePath)
     val fsView = buildFileSystemView(basePath, metaClient, globRegex, maxInstant, includeMax, includeInflight, excludeCompaction)
@@ -267,11 +261,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       showAllFileSlices(fsView)
     }
     val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowFileSystemViewProcedure(showLatest)

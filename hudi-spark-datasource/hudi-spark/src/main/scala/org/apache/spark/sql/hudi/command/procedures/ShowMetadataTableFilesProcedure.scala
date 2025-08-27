@@ -59,13 +59,7 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     val limit = getArgValueOrDefault(args, PARAMETERS(3))
     val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val basePath = getBasePath(table, path)
     val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
@@ -93,11 +87,7 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     } else {
       rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowMetadataTableFilesProcedure()

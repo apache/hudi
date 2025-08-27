@@ -60,13 +60,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
     val filter = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val basePath = getBasePath(table, path)
     val storage = createMetaClient(jsc, basePath).getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
@@ -138,11 +132,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
         }
     }
     val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowHoodieLogFileMetadataProcedure

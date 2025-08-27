@@ -56,13 +56,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
     val path = getArgValueOrDefault(args, PARAMETERS(1))
     val filter = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val basePath = getBasePath(table, path)
     val storage = new HoodieHadoopStorage(basePath, spark.sessionState.newHadoopConf())
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
@@ -81,11 +75,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
         rows.add(Row(p))
     })
     val results = rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowMetadataTablePartitionsProcedure()

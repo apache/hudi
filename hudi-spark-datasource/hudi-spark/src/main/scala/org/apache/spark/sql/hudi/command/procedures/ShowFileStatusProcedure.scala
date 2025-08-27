@@ -76,13 +76,7 @@ class ShowFileStatusProcedure extends BaseProcedure
     val fileName = getArgValueOrDefault(args, PARAMETERS(3))
     val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, tableName.asInstanceOf[Option[String]])
@@ -111,11 +105,7 @@ class ShowFileStatusProcedure extends BaseProcedure
         .map(f => Seq(Row(FileStatus.EXIST.toString, DEFAULT_VALUE, DEFAULT_VALUE, TimelineType.ACTIVE.toString, f.getPath.toUri.getPath)))
         .getOrElse(Seq(Row(FileStatus.UNKNOWN.toString, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE, DEFAULT_VALUE)))
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   private def isDeleted(metaClient: HoodieTableMetaClient, partition: Option[String], fileName: String): Option[FileStatusInfo] = {

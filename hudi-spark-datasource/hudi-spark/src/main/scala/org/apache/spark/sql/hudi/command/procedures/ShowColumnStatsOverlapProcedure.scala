@@ -103,13 +103,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val partitionsSeq = partitions.split(",").filter(_.nonEmpty).toSeq
     val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
 
     val targetColumnsSeq = getTargetColumnsSeq(args)
     val basePath = getBasePath(tableName, tablePath)
@@ -117,7 +111,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     val metaClient = createMetaClient(jsc, basePath)
     val schema = getSchema(metaClient)
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
-    val fsView = buildFileSystemView(tableName, tablePath)
+    val fsView = buildFileSystemView(basePath)
     val engineCtx = new HoodieSparkEngineContext(jsc)
     val metaTable = metaClient.getTableFormat.getMetadataFactory.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
     val allFileSlices = getAllFileSlices(partitionsSeq, metaTable, fsView)
@@ -136,15 +130,11 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
 
     // The returned results are sorted by column name and average value
     val results = rows.asScala.toList.sortBy(row => (row.getString(1), row.getDouble(2)))
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   private def getTargetColumnsSeq(args: ProcedureArgs): Seq[String] = {
-    val targetColumns = getArgValueOrDefault(args, PARAMETERS(2)).getOrElse("").toString
+    val targetColumns = getArgValueOrDefault(args, PARAMETERS(3)).getOrElse("").toString
     if (targetColumns != "") {
       targetColumns.split(",").toSeq
     } else {
@@ -269,8 +259,7 @@ class ShowColumnStatsOverlapProcedure extends BaseProcedure with ProcedureBuilde
     values(index)
   }
 
-  def buildFileSystemView(tableName: Option[Any], tablePath: Option[Any]): HoodieTableFileSystemView = {
-    val basePath = getBasePath(tableName, tablePath)
+  def buildFileSystemView(basePath: String): HoodieTableFileSystemView = {
     val metaClient = createMetaClient(jsc, basePath)
     val storage = metaClient.getStorage
     val globPath = s"$basePath/**"

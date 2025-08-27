@@ -48,13 +48,7 @@ class ShowBootstrapPartitionsProcedure extends BaseProcedure with ProcedureBuild
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
     val filter = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
@@ -62,11 +56,7 @@ class ShowBootstrapPartitionsProcedure extends BaseProcedure with ProcedureBuild
     val indexedPartitions = indexReader.getIndexedPartitionPaths
 
     val results = indexedPartitions.stream().toArray.map(r => Row(r)).toList
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
-    }
+    applyFilter(results, filter, outputType)
   }
 
   private def createBootstrapIndexReader(metaClient: HoodieTableMetaClient) = {
