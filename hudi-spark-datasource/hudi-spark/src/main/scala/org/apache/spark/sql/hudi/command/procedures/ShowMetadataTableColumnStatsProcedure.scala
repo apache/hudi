@@ -149,3 +149,4 @@ object ShowMetadataTableColumnStatsProcedure {
     override def get() = new ShowMetadataTableColumnStatsProcedure()
   }
 }
+

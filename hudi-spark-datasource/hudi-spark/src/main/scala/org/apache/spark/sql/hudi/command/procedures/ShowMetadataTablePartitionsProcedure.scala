@@ -67,7 +67,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
 
     val rows = new util.ArrayList[Row]
     partitions.stream.iterator().asScala.foreach((p: String) => {
-      rows.add(Row(p))
+       rows.add(Row(p))
     })
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }
