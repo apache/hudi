@@ -50,10 +50,10 @@ public class CustomPayload implements HoodieRecordPayload<CustomPayload> {
       // If the timestamps are the same, we do not update
       return handleDeleteRecord(currentValue);
     } else if (olderTimestamp < newerTimestamp) {
-      // Custom merger chooses record with lower ordering value
+      // Custom payload chooses record with lower ordering value
       return handleDeleteRecord(currentValue);
     } else {
-      // Custom merger chooses record with lower ordering value
+      // Custom payload chooses record with lower ordering value
       return handleDeleteRecord(record);
     }
   }
