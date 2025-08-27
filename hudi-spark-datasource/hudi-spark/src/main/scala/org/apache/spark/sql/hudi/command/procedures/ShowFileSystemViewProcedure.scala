@@ -64,7 +64,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       // Keep it for compatibility with older version, `path_regex` can replace it
       ProcedureParameter.optional(7, "partition_path", DataTypes.StringType, ALL_PARTITIONS),
       ProcedureParameter.optional(8, "merge", DataTypes.BooleanType, true)
-    )
+  )
 
   private val OUTPUT_TYPE_LATEST: StructType = StructType(Array[StructField](
     StructField("partition", DataTypes.StringType, nullable = true, Metadata.empty),

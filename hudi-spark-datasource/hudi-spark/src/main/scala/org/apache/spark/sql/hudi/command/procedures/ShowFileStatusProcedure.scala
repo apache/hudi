@@ -240,3 +240,4 @@ object TimelineType extends Enumeration {
 }
 
 case class FileStatusInfo(status: String, action: String, instant: String, timeline: String, fullPath: String)
+
