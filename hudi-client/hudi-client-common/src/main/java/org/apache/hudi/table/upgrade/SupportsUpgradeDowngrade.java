@@ -47,7 +47,6 @@ public interface SupportsUpgradeDowngrade extends Serializable {
   BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context);
 
   default HoodieTable addTxnManager(HoodieTable table) {
-    //FIXME-vc: this is a bit hacky
     return table.setTxnManager(new TransactionManager(table.getConfig(), table.getStorage()));
   }
 }

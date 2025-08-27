@@ -123,7 +123,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
   }
 
   public void beginStateChange(Option<HoodieInstant> changeActionInstant,
-                                            Option<HoodieInstant> lastCompletedActionInstant) {
+                               Option<HoodieInstant> lastCompletedActionInstant) {
     if (isLockRequired) {
       LOG.info("State change starting for {} with latest completed action instant {}",
           changeActionInstant, lastCompletedActionInstant);

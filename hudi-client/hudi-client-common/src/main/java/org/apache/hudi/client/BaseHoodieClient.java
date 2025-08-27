@@ -28,7 +28,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -281,15 +280,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * @param columnsToIndex list of columns to index.
    */
   protected abstract void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex);
-
-  protected void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
-    this.txnManager.beginStateChange(ownerInstant, Option.empty());
-    try {
-      r.run();
-    } finally {
-      this.txnManager.endStateChange(ownerInstant);
-    }
-  }
 
   public TransactionManager getTransactionManager() {
     return txnManager;
