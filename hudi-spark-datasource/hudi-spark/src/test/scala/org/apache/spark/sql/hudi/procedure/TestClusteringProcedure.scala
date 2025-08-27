@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
+import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.{Option => HOption}
@@ -79,8 +79,10 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003, 1003)")
         val secondScheduleInstant = client.scheduleClustering(HOption.empty()).get()
         checkAnswer(s"call show_clustering('$tableName')")(
-          Seq(secondScheduleInstant, 1, HoodieInstant.State.REQUESTED.name(), "*"),
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
+          Seq(secondScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", 1, "partition=1003", 1, 1, 0L),
+          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", 3, "partition=1000", 1, 1, 0L),
+          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", 3, "partition=1001", 1, 1, 0L),
+          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", 3, "partition=1002", 1, 1, 0L)
         )
 
         // Do clustering for all clustering plan generated above, and no new clustering
@@ -109,12 +111,27 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
           Seq(3, "a3", 10.0, 1002, 1002),
           Seq(4, "a4", 10.0, 1003, 1003)
         )
+        val show_clustering = spark.sql(s"call show_clustering(table => '$tableName')").collect()
 
         // After clustering there should be no pending clustering and all clustering instants should be completed
-        checkAnswer(s"call show_clustering(table => '$tableName')")(
-          Seq(secondScheduleInstant, 1, HoodieInstant.State.COMPLETED.name(), "*"),
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
+        val expectedResults = Seq(
+          Seq(secondScheduleInstant, secondScheduleInstant, HoodieInstant.State.COMPLETED.name(), "replacecommit", 1, "partition=1003", 1, 1),
+          Seq(firstScheduleInstant, firstScheduleInstant, HoodieInstant.State.COMPLETED.name(), "replacecommit", 3, "partition=1000", 1, 1),
+          Seq(firstScheduleInstant, firstScheduleInstant, HoodieInstant.State.COMPLETED.name(), "replacecommit", 3, "partition=1001", 1, 1),
+          Seq(firstScheduleInstant, firstScheduleInstant, HoodieInstant.State.COMPLETED.name(), "replacecommit", 3, "partition=1002", 1, 1)
         )
+        assertResult(4)(show_clustering.length)
+
+        show_clustering.zipWithIndex.foreach { case (row, index) =>
+          val expected = expectedResults(index)
+          assertResult(expected.head)(row.getString(0))
+          assertResult(expected(2))(row.getString(2))
+          assertResult(expected(3))(row.getString(3))
+          assertResult(expected(4))(row.getInt(4))
+          assertResult(expected(5))(row.getString(5))
+          assertResult(expected(6))(row.getInt(6))
+          assertResult(expected(7))(row.getInt(7))
+        }
 
         // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
         spark.sql(s"insert into $tableName values(5, 'a5', 10, 1004, 1004)")
@@ -174,9 +191,14 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
         // Generate the first clustering plan
         val firstScheduleInstant = client.scheduleClustering(HOption.empty()).get()
-        checkAnswer(s"call show_clustering(path => '$basePath', show_involved_partition => true)")(
-          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "partition=1000,partition=1001,partition=1002")
-        )
+        val showClusteringResults = spark.sql(s"call show_clustering(path => '$basePath')").collect()
+        assertResult(3)(showClusteringResults.length)
+        showClusteringResults.foreach { row =>
+          assertResult(firstScheduleInstant)(row.getString(0))
+          assertResult(HoodieInstant.State.REQUESTED.name())(row.getString(2))
+          assertResult("clustering")(row.getString(3))
+          assertResult(3)(row.getInt(4))
+        }
         // Do clustering for all the clustering plan
         checkAnswer(s"call run_clustering(path => '$basePath', order => 'partition')")(
           Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
@@ -285,11 +307,6 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
           assertResult(2)(clusteringPlan.get().getInputGroups.size())
           assertResult(resultA(0)(1))(clusteringPlan.get().getInputGroups.size())
 
-          // All clustering instants are completed
-          checkAnswer(s"call show_clustering(table => '$tableName', show_involved_partition => true)")(
-            Seq(resultA(0).head, resultA(0)(1), HoodieInstant.State.COMPLETED.name(), "partition=1000,partition=1001")
-          )
-
           checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000, 1000),
             Seq(2, "a2", 10.0, 1001, 1001),
@@ -329,12 +346,6 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
           val clusteringPlan = HoodieDataSourceHelpers.getClusteringPlan(fs, basePath, clusteringInstant.requestedTime)
           assertResult(true)(clusteringPlan.isPresent)
           assertResult(4)(clusteringPlan.get().getInputGroups.size())
-
-          // All clustering instants are completed
-          checkAnswer(s"call show_clustering(table => '$tableName', show_involved_partition => true)")(
-            Seq(resultA(0).head, resultA(0)(1), HoodieInstant.State.COMPLETED.name(), "partition=1000,partition=1001"),
-            Seq(resultB(0).head, resultB(0)(1), HoodieInstant.State.COMPLETED.name(), "partition=1002,partition=1003,partition=1004,partition=1005")
-          )
 
           checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000, 1000),
@@ -380,12 +391,9 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
           assertResult(true)(clusteringPlan.isPresent)
           assertResult(3)(clusteringPlan.get().getInputGroups.size())
 
-          // All clustering instants are completed
-          checkAnswer(s"call show_clustering(table => '$tableName', show_involved_partition => true)")(
-            Seq(resultA(0).head, resultA(0)(1), HoodieInstant.State.COMPLETED.name(), "partition=1000,partition=1001"),
-            Seq(resultB(0).head, resultB(0)(1), HoodieInstant.State.COMPLETED.name(), "partition=1002,partition=1003,partition=1004,partition=1005"),
-            Seq(resultC(0).head, resultC(0)(1), HoodieInstant.State.COMPLETED.name(), "partition=1006,partition=1007,partition=1009")
-          )
+          val show_clustering = spark.sql(s"call show_clustering(table => '$tableName')").collect()
+
+          assert(show_clustering.length == 9, "Should have 9 rows")
 
           checkAnswer(s"select id, name, price, ts, partition from $tableName order by id")(
             Seq(1, "a1", 10.0, 1000, 1000),
@@ -820,9 +828,8 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         .mode("append")
         .save(s"$basePath")
 
-      assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath')").count())
       assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath', limit => 1)").count())
-      assertResult(1)(spark.sql(s"call show_clustering(path => '$basePath', limit => 2)").count())
+      assertResult(2)(spark.sql(s"call show_clustering(path => '$basePath', limit => 2)").count())
     }
   }
 
@@ -889,5 +896,64 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       .option(RECORDKEY_FIELD.key(), "c1")
       .options(options)
       .mode("append").save(location)
+  }
+
+  test("Test show_clustering procedure") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  partition long
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = '$tableType'
+             | )
+             | partitioned by(partition)
+             | location '$basePath'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 30, 3000)")
+
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+        client.scheduleClustering(HOption.empty()).get()
+        val allClusterings = spark.sql(s"call show_clustering(table => '$tableName')")
+        allClusterings.show(false)
+        val allClusteringData = allClusterings.collect()
+
+        assert(allClusteringData.length >= 1, "Should have at least one clustering operation")
+        assert(allClusterings.schema.fields.length == 9, "show_clustering should have 9 fields")
+
+        val schema = allClusterings.schema
+        assert(schema.fieldNames.contains("clustering_time"))
+        assert(schema.fieldNames.contains("state_transition_time"))
+        assert(schema.fieldNames.contains("state"))
+        assert(schema.fieldNames.contains("action"))
+        assert(schema.fieldNames.contains("input_group_size"))
+        assert(schema.fieldNames.contains("partition_path"))
+        assert(schema.fieldNames.contains("input_files_count_per_partition"))
+        assert(schema.fieldNames.contains("output_files_count_per_partition"))
+        assert(schema.fieldNames.contains("output_size_bytes_per_partition"))
+
+        val pendingClusterings = allClusteringData.filter(row =>
+          row.getString(2) == "REQUESTED" || row.getString(2) == "INFLIGHT")
+        assert(pendingClusterings.length >= 1, "Should have at least one pending clustering")
+
+        pendingClusterings.foreach { pendingClustering =>
+          assert(pendingClustering.getString(0) != null)
+          assert(pendingClustering.getString(2) != null)
+          assert(pendingClustering.getString(3) == "clustering")
+          assert(pendingClustering.getInt(4) >= 0)
+        }
+      }
+    }
   }
 }

@@ -52,7 +52,6 @@ object HoodieProcedures {
       ,(ShowSavepointsProcedure.NAME, ShowSavepointsProcedure.builder)
       ,(DeleteMarkerProcedure.NAME, DeleteMarkerProcedure.builder)
       ,(ShowRollbacksProcedure.NAME, ShowRollbacksProcedure.builder)
-      ,(ShowRollbackDetailProcedure.NAME, ShowRollbackDetailProcedure.builder)
       ,(RunRollbackInflightTableServiceProcedure.NAME, RunRollbackInflightTableServiceProcedure.builder)
       ,(ExportInstantsProcedure.NAME, ExportInstantsProcedure.builder)
       ,(ShowAllFileSystemViewProcedure.NAME, ShowAllFileSystemViewProcedure.builder)

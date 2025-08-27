@@ -72,10 +72,23 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
       assertResult(1)(resultA.length)
       assertResult(1)(resultB.length)
       val showCompactionSql: String = s"call show_compaction(table => '$tableName', limit => 10)"
-      checkAnswer(showCompactionSql)(
-        resultA(0),
-        resultB(0)
-      )
+      val showCompactionResultsDf = spark.sql(showCompactionSql)
+      showCompactionResultsDf.show(false)
+      val showCompactionResults = showCompactionResultsDf.collect()
+      assertResult(2)(showCompactionResults.length)
+
+      val firstResult = showCompactionResults.find(_.getString(0) == resultA(0).head).get
+      val secondResult = showCompactionResults.find(_.getString(0) == resultB(0).head).get
+
+      assertResult(resultA(0).head)(firstResult.getString(0))
+      assertResult(resultA(0)(1))(firstResult.getInt(4))
+      assertResult(resultA(0)(2))(firstResult.getString(2))
+      assertResult("compaction")(firstResult.getString(3))
+
+      assertResult(resultB(0).head)(secondResult.getString(0))
+      assertResult(resultB(0)(1))(secondResult.getInt(4))
+      assertResult(resultB(0)(2))(secondResult.getString(2))
+      assertResult("compaction")(secondResult.getString(3))
 
       val compactionRows = spark.sql(showCompactionSql).collect()
       val timestamps = compactionRows.map(_.getString(0)).sorted
@@ -96,7 +109,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
       // can only see the first scheduled compaction instant
       val resultC = spark.sql(s"call show_compaction('$tableName')")
         .collect()
-        .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2)))
+        .map(row => Seq(row.getString(0), row.getInt(4), row.getString(2)))
       assertResult(2)(resultC.length)
 
       checkAnswer(s"call run_compaction(op => 'run', table => '$tableName', timestamp => ${timestamps(0)})")(
@@ -164,10 +177,21 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
       assertResult(1)(resultA.length)
       assertResult(1)(resultB.length)
-      checkAnswer(s"call show_compaction(path => '${tmp.getCanonicalPath}')")(
-        resultA(0),
-        resultB(0)
-      )
+      val showCompactionResults = spark.sql(s"call show_compaction(path => '${tmp.getCanonicalPath}')").collect()
+      assertResult(2)(showCompactionResults.length)
+
+      val firstResult = showCompactionResults.find(_.getString(0) == resultA(0).head).get
+      val secondResult = showCompactionResults.find(_.getString(0) == resultB(0).head).get
+
+      assertResult(resultA(0).head)(firstResult.getString(0))
+      assertResult(resultA(0)(1))(firstResult.getInt(4))
+      assertResult(resultA(0)(2))(firstResult.getString(2))
+      assertResult("compaction")(firstResult.getString(3))
+
+      assertResult(resultB(0).head)(secondResult.getString(0))
+      assertResult(resultB(0)(1))(secondResult.getInt(4))
+      assertResult(resultB(0)(2))(secondResult.getString(2))
+      assertResult("compaction")(secondResult.getString(3))
 
       // Run compaction for all the scheduled compaction
       checkAnswer(s"call run_compaction(op => 'run', path => '${tmp.getCanonicalPath}')")(
@@ -379,6 +403,65 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
         metaClient.reloadActiveTimeline();
         assert(1 == metaClient.getActiveTimeline.filterPendingCompactionTimeline().getInstants.size())
+      }
+    }
+  }
+
+  test("Test show_compaction procedure") {
+    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | ts long
+             | ) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   type = 'mor',
+             |   preCombineField = 'ts'
+             | )
+             |""".stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"update $tableName set price = 11 where id = 1")
+        spark.sql(s"update $tableName set price = 12 where id = 1")
+
+        spark.sql(s"call run_compaction(table => '$tableName', op => 'schedule')")
+
+        val allCompactions = spark.sql(s"call show_compaction(table => '$tableName')")
+        allCompactions.show(false)
+        val allCompactionData = allCompactions.collect()
+
+        assert(allCompactionData.length >= 1, "Should have at least one compaction operation")
+        assert(allCompactions.schema.fields.length == 10, "show_compaction should have 10 fields")
+
+        val schema = allCompactions.schema
+        assert(schema.fieldNames.contains("compaction_time"))
+        assert(schema.fieldNames.contains("state_transition_time"))
+        assert(schema.fieldNames.contains("state"))
+        assert(schema.fieldNames.contains("action"))
+        assert(schema.fieldNames.contains("operation_size"))
+        assert(schema.fieldNames.contains("partition_path"))
+        assert(schema.fieldNames.contains("total_log_files_per_partition"))
+        assert(schema.fieldNames.contains("total_updated_records_compacted_per_partition"))
+        assert(schema.fieldNames.contains("total_log_size_compacted_per_partition"))
+        assert(schema.fieldNames.contains("total_write_bytes_per_partition"))
+
+        val pendingCompactions = allCompactionData.filter(row =>
+          row.getString(2) == "REQUESTED" || row.getString(2) == "INFLIGHT")
+        assert(pendingCompactions.length >= 1, "Should have at least one pending compaction")
+
+        pendingCompactions.foreach { pendingCompaction =>
+          assert(pendingCompaction.getString(0) != null)
+          assert(pendingCompaction.getString(2) != null)
+          assert(pendingCompaction.getString(3) == "compaction")
+          assert(pendingCompaction.getInt(4) >= 0)
+        }
       }
     }
   }
