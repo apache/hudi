@@ -63,7 +63,6 @@ import scala.collection.JavaConverters._
  * - `version`: Version of the clean operation metadata
  * - `total_partitions_to_clean`: Total partitions to clean (for pending operations)
  * - `total_partitions_to_delete`: Total partitions to delete (for pending operations)
- * - `extra_metadata`: Additional metadata as JSON string
  *
  * == Data Availability by Operation State ==
  * - **COMPLETED operations**: All execution and partition metadata fields are populated
@@ -176,8 +175,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
     StructField("last_completed_commit_timestamp", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("version", DataTypes.IntegerType, nullable = true, Metadata.empty),
     StructField("total_partitions_to_clean", DataTypes.IntegerType, nullable = true, Metadata.empty),
-    StructField("total_partitions_to_delete", DataTypes.IntegerType, nullable = true, Metadata.empty),
-    StructField("extra_metadata", DataTypes.StringType, nullable = true, Metadata.empty)
+    StructField("total_partitions_to_delete", DataTypes.IntegerType, nullable = true, Metadata.empty)
   ))
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -270,8 +268,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
               cleanMetadata.getLastCompletedCommitTimestamp,
               cleanMetadata.getVersion,
               null,
-              null,
-              if (cleanMetadata.getExtraMetadata != null) cleanMetadata.getExtraMetadata.toString else null
+              null
             )
             allRows += row
           }
@@ -316,8 +313,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
               cleanerPlan.getLastCompletedCommitTimestamp,
               cleanerPlan.getVersion,
               planStats.totalPartitionsToClean,
-              planStats.totalPartitionsToDelete,
-              planStats.extraMetadata
+              planStats.totalPartitionsToDelete
             )
             allRows += row
           }
@@ -370,17 +366,11 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
       .map(_.keySet().asScala.toSet)
       .getOrElse(Set.empty[String])
 
-    val extraMetadata = Option(cleanerPlan.getExtraMetadata)
-      .filter(!_.isEmpty)
-      .map(_.asScala.map { case (k, v) => s"$k=$v" }.mkString(", "))
-      .orNull
-
     CleanPlanStatistics(
       earliestInstantToRetain = earliestInstantToRetain,
       totalPartitionsToClean = totalPartitionsToClean,
       totalPartitionsToDelete = totalPartitionsToDelete,
-      involvedPartitions = involvedPartitions,
-      extraMetadata = extraMetadata
+      involvedPartitions = involvedPartitions
     )
   }
 
@@ -388,8 +378,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
                                           earliestInstantToRetain: String,
                                           totalPartitionsToClean: Int,
                                           totalPartitionsToDelete: Int,
-                                          involvedPartitions: Set[String],
-                                          extraMetadata: String
+                                          involvedPartitions: Set[String]
                                         )
 }
 

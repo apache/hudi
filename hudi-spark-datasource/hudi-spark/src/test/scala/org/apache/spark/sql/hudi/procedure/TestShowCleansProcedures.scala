@@ -78,7 +78,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
         assert(allPlans.length >= 2, "Should have at least 2 clean operations")
 
         val firstPlan = allPlans.head
-        assert(firstPlan.length >= 19, "Each clean operation should have 19 columns")
+        assert(firstPlan.length >= 18, "Each clean operation should have 18 columns")
 
         allPlans.foreach { plan =>
           val planTime = plan.getString(0)
@@ -134,14 +134,14 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
         assert(allCleansData.length == 1, "Should have at least one clean operation")
 
-        assert(allCleans.schema.fields.length == 19, "Unified schema should have 19 fields")
+        assert(allCleans.schema.fields.length == 18, "Unified schema should have 18 fields")
 
         val expectedFields = Seq(
           "clean_time", "state_transition_time", "state", "action", "start_clean_time",
           "partition_path", "policy", "delete_path_patterns", "success_delete_files",
           "failed_delete_files", "is_partition_deleted", "time_taken_in_millis",
           "total_files_deleted", "earliest_commit_to_retain", "last_completed_commit_timestamp",
-          "version", "total_partitions_to_clean", "total_partitions_to_delete", "extra_metadata"
+          "version", "total_partitions_to_clean", "total_partitions_to_delete"
         )
 
         expectedFields.zipWithIndex.foreach { case (expectedField, index) =>
@@ -213,7 +213,7 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
 
         assert(allCleansData.length >= 1, "Should have at least one clean operation")
 
-        assert(allCleans.schema.fields.length == 19, "show_cleans should have 19 fields")
+        assert(allCleans.schema.fields.length == 18, "show_cleans should have 18 fields")
 
         val completedCleans = allCleansData.filter(_.getString(2) == "COMPLETED")
         assert(completedCleans.length >= 1, "Should have at least one completed operation")
