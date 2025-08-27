@@ -124,14 +124,17 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     this.config = new HiveSyncConfig(props, hadoopConfForSync);
     HoodieTableMetaClient metaClient = metaClientOption.orElseGet(() -> buildMetaClient(config));
     initSyncClient(config, metaClient);
+    // initSyncClient leaves syncClient as null
+    if (!Objects.isNull(this.syncClient)) {
+      this.tableName = this.syncClient.getTableName();
+      this.databaseName = this.syncClient.getDatabaseName();
+    }
     initTableNameVars(config);
   }
 
   protected void initSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
     try {
       this.syncClient = new HoodieHiveSyncClient(config, metaClient);
-      this.tableName = this.syncClient.getTableName();
-      this.databaseName = this.syncClient.getDatabaseName();
     } catch (RuntimeException e) {
       if (config.getBoolean(HIVE_IGNORE_EXCEPTIONS)) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
@@ -160,6 +163,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           throw new InvalidTableException(syncClient.getBasePath());
       }
     }
+  }
+
+  public String getTableName() {
+    return this.tableName;
+  }
+
+  public String getDatabaseName() {
+    return this.databaseName;
   }
 
   @Override

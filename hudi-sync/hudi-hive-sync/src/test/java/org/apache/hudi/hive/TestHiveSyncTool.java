@@ -116,6 +116,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2017,6 +2018,28 @@ public class TestHiveSyncTool {
     assertEquals(getLastCommitCompletionTimeSynced(), hiveClient.getLastCommitCompletionTimeSynced(tableName).get());
     assertEquals(commitTime5, hiveClient.getLastCommitTimeSynced(tableName).get());
     assertEquals(3, hiveClient.getAllPartitions(tableName).size());
+  }
+
+  @Test
+  public void testDatabaseAndTableName() {
+    reInitHiveSyncClient();
+
+    assertEquals(HiveTestUtil.DB_NAME, hiveSyncTool.getDatabaseName());
+    assertEquals(HiveTestUtil.TABLE_NAME, hiveSyncTool.getTableName());
+
+    String updatedDb = "updated_db";
+    String updatedTable = "updated_table";
+
+    hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), updatedDb);
+    hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), updatedTable);
+
+    reInitHiveSyncClient();
+
+    assertEquals(updatedDb, hiveSyncTool.getDatabaseName(), "Database name should match the updated value");
+    assertEquals(updatedTable, hiveSyncTool.getTableName(), "Table name should match the updated value");
+
+    assertEquals(updatedDb, hiveClient.getDatabaseName(), "Database name in sync client should match");
+    assertEquals(updatedTable, hiveClient.getTableName(), "Table name in sync client should match");
   }
 
   private void reSyncHiveTable() {
