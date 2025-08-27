@@ -41,6 +41,8 @@ import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
+
 /**
  * Fetch the configurations used by the Metrics system.
  */
@@ -168,7 +170,13 @@ public class HoodieMetricsConfig extends HoodieConfig {
    * base properties.
    */
   public String getBasePath() {
-    return getString(HoodieCommonConfig.BASE_PATH);
+    // First search default base path key.
+    String basePathKey = getString(HoodieCommonConfig.BASE_PATH);
+    // This works when initialized in a meta-sync tool.
+    if (basePathKey == null) {
+      return getString(META_SYNC_BASE_PATH_KEY);
+    }
+    return basePathKey;
   }
 
   /**

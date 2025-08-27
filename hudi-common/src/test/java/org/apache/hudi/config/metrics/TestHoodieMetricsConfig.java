@@ -16,26 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sync.common;
+package org.apache.hudi.config.metrics;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
-class TestHoodieSyncTool extends HoodieCommonTestHarness {
+class TestHoodieMetricsConfig {
   @Test
-  void testBuildMetaClient() throws Exception {
-    initMetaClient();
-    TypedProperties properties = new TypedProperties();
-    properties.put(META_SYNC_BASE_PATH_KEY, metaClient.getBasePath().toString());
-    HoodieSyncConfig syncConfig = new HoodieSyncConfig(properties, new Configuration());
-    HoodieTableMetaClient actual = HoodieSyncTool.buildMetaClient(syncConfig);
-    assertEquals(actual.getBasePath(), metaClient.getBasePath());
+  void testReturnsBasePathWhenSetViaBuilder() {
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder()
+        .withPath("primary/base/path")
+        .build();
+    assertEquals("primary/base/path", config.getBasePath());
+  }
+
+  @Test
+  void testReturnsMetaSyncPathWhenBasePathIsNotSet() {
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder().build();
+    config.setValue(META_SYNC_BASE_PATH_KEY, "base/path/set/during/sync");
+    assertEquals("base/path/set/during/sync", config.getBasePath());
+  }
+
+  @Test
+  void testReturnsNullWhenNeitherBasePathNorMetaSyncIsSet() {
+    HoodieMetricsConfig config = HoodieMetricsConfig.newBuilder().build();
+    assertNull(config.getBasePath());
   }
 }
