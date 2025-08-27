@@ -25,10 +25,9 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex.IndexType
 
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.Row
 
 abstract class BaseProcedure extends Procedure {
   val spark: SparkSession = SparkSession.active
