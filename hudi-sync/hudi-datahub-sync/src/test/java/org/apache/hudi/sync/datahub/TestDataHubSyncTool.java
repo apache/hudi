@@ -30,6 +30,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -57,7 +58,7 @@ class TestDataHubSyncTool extends HoodieCommonTestHarness {
   void validatePropsConstructor() throws Exception {
     initMetaClient();
     TypedProperties typedProperties = new TypedProperties();
-    typedProperties.setProperty("hoodie.datasource.meta.sync.base.path", metaClient.getBasePath().toString());
+    typedProperties.setProperty(META_SYNC_BASE_PATH_KEY, metaClient.getBasePath().toString());
     assertDoesNotThrow(() -> {
       HoodieSyncTool syncTool = new DataHubSyncTool(typedProperties);
       syncTool.close();
