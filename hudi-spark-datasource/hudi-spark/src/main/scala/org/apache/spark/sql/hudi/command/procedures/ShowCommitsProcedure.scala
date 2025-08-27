@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineLayout}
 
 import org.apache.spark.sql.Row
@@ -32,10 +33,8 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
   var sortByFieldParameter: ProcedureParameter = _
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType),
-    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(3, "filter", DataTypes.StringType, "")
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -78,31 +77,18 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
-    val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
-    val filter = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
+    val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
-    val basePath = getBasePath(tableName, tablePath)
+    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
+    val basePath = hoodieCatalogTable.tableLocation
     val metaClient = createMetaClient(jsc, basePath)
 
     val activeTimeline = metaClient.getActiveTimeline
-    val results = if (includeExtraMetadata) {
+    if (includeExtraMetadata) {
       getCommitsWithMetadata(activeTimeline, limit)
     } else {
       getCommits(activeTimeline, limit)
-    }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
     }
   }
 
@@ -176,5 +162,4 @@ object ShowCommitsMetadataProcedure {
     override def get() = new ShowCommitsProcedure(true)
   }
 }
-
 

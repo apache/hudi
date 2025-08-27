@@ -41,8 +41,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 100),
     ProcedureParameter.optional(3, "needDelete", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "partitions", DataTypes.StringType, ""),
-    ProcedureParameter.optional(5, "instants", DataTypes.StringType, ""),
-    ProcedureParameter.optional(6, "filter", DataTypes.StringType, "")
+    ProcedureParameter.optional(5, "instants", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -62,15 +61,6 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val needDelete = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Boolean]
     val partitions = getArgValueOrDefault(args, PARAMETERS(4)).map(_.toString).getOrElse("")
     val instants = getArgValueOrDefault(args, PARAMETERS(5)).map(_.toString).getOrElse("")
-    val filter = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
-
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
 
     val storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())
     val storage = new HoodieHadoopStorage(srcPath, storageConf)
@@ -83,7 +73,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
       HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
     }).toList
 
-    val results = if (fileStatus.isEmpty) {
+    if (fileStatus.isEmpty) {
       Seq.empty
     } else {
       val parquetRdd = jsc.parallelize(fileStatus, Math.min(fileStatus.size, parallelism)).filter(fileStatus => {
@@ -115,15 +105,10 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
       }).map(status => Row(status.getPath.toString))
 
       if (limit.isDefined) {
-        parquetRdd.take(limit.get.asInstanceOf[Int]).toSeq
+        parquetRdd.take(limit.get.asInstanceOf[Int])
       } else {
-        parquetRdd.collect().toSeq
+        parquetRdd.collect()
       }
-    }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
     }
   }
 

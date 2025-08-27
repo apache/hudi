@@ -35,11 +35,9 @@ import scala.collection.JavaConverters._
 
 class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType),
-    ProcedureParameter.optional(2, "partition", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 100),
-    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "partition", DataTypes.StringType, ""),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 100)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -54,24 +52,15 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
-    val path = getArgValueOrDefault(args, PARAMETERS(1))
-    val partition = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(3))
-    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
+    val partition = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    val limit = getArgValueOrDefault(args, PARAMETERS(2))
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
-    val basePath = getBasePath(table, path)
+    val basePath = getBasePath(table)
     val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metaReader = new HoodieBackedTableMetadata(
       new HoodieLocalEngineContext(metaClient.getStorageConf), metaClient.getStorage, config, basePath)
-    if (!metaReader.enabled) {
+    if (!metaReader.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
 
@@ -88,16 +77,12 @@ class ShowMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuil
     statuses.asScala.sortBy(p => p.getPath.getName).foreach((f: StoragePathInfo) => {
       rows.add(Row(f.getPath.getName))
     })
-    val results = if (limit.isDefined) {
+    if (limit.isDefined) {
       rows.stream().limit(limit.get.asInstanceOf[Int]).toArray().map(r => r.asInstanceOf[Row]).toList
     } else {
       rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
-    }
+
   }
 
   override def build: Procedure = new ShowMetadataTableFilesProcedure()

@@ -31,8 +31,7 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
     ProcedureParameter.required(0, "path", DataTypes.StringType),
     ProcedureParameter.optional(1, "is_sub", DataTypes.BooleanType, false),
     ProcedureParameter.optional(2, "sort", DataTypes.BooleanType, true),
-    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 100),
-    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
+    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 100)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -57,15 +56,6 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
     val isSub = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val sort = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
     val limit = getArgValueOrDefault(args, PARAMETERS(3))
-    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
-
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
 
     val path: Path = new Path(srcPath)
     val fs = HadoopFSUtils.getFs(path, jsc.hadoopConfiguration())
@@ -83,7 +73,7 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
     }
 
     val df = spark.sqlContext.createDataFrame(rows, OUTPUT_TYPE)
-    val results = if (sort) {
+    if (sort) {
       if (limit.isDefined) {
         df.orderBy(df("storage_size").desc).limit(limit.get.asInstanceOf[Int]).collect()
       } else {
@@ -95,11 +85,6 @@ class ShowFsPathDetailProcedure extends BaseProcedure with ProcedureBuilder {
       } else {
         df.orderBy(df("file_num").desc).collect()
       }
-    }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
     }
   }
 
@@ -132,6 +117,5 @@ object ShowFsPathDetailProcedure {
     override def get(): ProcedureBuilder = new ShowFsPathDetailProcedure()
   }
 }
-
 
 

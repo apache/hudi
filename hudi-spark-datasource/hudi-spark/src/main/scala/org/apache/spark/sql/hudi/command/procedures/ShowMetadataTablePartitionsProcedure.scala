@@ -36,9 +36,7 @@ import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType),
-    ProcedureParameter.optional(2, "filter", DataTypes.StringType, "")
+    ProcedureParameter.required(0, "table", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -53,21 +51,12 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
     super.checkArgs(PARAMETERS, args)
 
     val table = getArgValueOrDefault(args, PARAMETERS(0))
-    val path = getArgValueOrDefault(args, PARAMETERS(1))
-    val filter = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
-    val basePath = getBasePath(table, path)
+    val basePath = getBasePath(table)
     val storage = new HoodieHadoopStorage(basePath, spark.sessionState.newHadoopConf())
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), storage, config, basePath)
-    if (!metadata.enabled) {
+    if (!metadata.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
 
@@ -80,12 +69,7 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
     partitions.stream.iterator().asScala.foreach((p: String) => {
       rows.add(Row(p))
     })
-    val results = rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
-    } else {
-      results
-    }
+    rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
   override def build: Procedure = new ShowMetadataTablePartitionsProcedure()

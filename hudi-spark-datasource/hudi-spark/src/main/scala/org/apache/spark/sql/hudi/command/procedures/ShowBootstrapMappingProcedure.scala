@@ -32,14 +32,12 @@ import scala.collection.JavaConverters._
 
 class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.optional(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "path", DataTypes.StringType),
-    ProcedureParameter.optional(2, "partition_path", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "file_ids", DataTypes.StringType, ""),
-    ProcedureParameter.optional(4, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(5, "sort_by", DataTypes.StringType, "partition"),
-    ProcedureParameter.optional(6, "desc", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(7, "filter", DataTypes.StringType, "")
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "partition_path", DataTypes.StringType, ""),
+    ProcedureParameter.optional(2, "file_ids", DataTypes.StringType, ""),
+    ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(4, "sort_by", DataTypes.StringType, "partition"),
+    ProcedureParameter.optional(5, "desc", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -58,22 +56,13 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
-    val partitionPath = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
-    val fileIds = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Int]
-    val sortBy = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
-    val desc = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[Boolean]
-    val filter = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
+    val partitionPath = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[String]
+    val fileIds = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
+    val limit = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[Int]
+    val sortBy = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
+    val desc = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Boolean]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
-    val basePath: String = getBasePath(tableName, tablePath)
+    val basePath: String = getBasePath(tableName)
     val metaClient = createMetaClient(jsc, basePath)
 
     if (partitionPath.isEmpty && fileIds.nonEmpty) throw new IllegalStateException("PartitionPath is mandatory when passing fileIds.")
@@ -101,15 +90,10 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
 
     val df = spark.createDataFrame(rows, OUTPUT_TYPE)
 
-    val results = if (desc) {
+    if (desc) {
       df.orderBy(df(sortBy).desc).limit(limit).collect()
     } else {
       df.orderBy(df(sortBy).asc).limit(limit).collect()
-    }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
-    } else {
-      results
     }
   }
 
