@@ -39,13 +39,15 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
   private val ALL_PARTITIONS = "ALL_PARTITIONS"
 
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
-    ProcedureParameter.optional(2, "include_max", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "include_in_flight", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(4, "exclude_compaction", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(6, "path_regex", DataTypes.StringType, ALL_PARTITIONS)
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "max_instant", DataTypes.StringType, ""),
+    ProcedureParameter.optional(3, "include_max", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(4, "include_in_flight", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(5, "exclude_compaction", DataTypes.BooleanType, false),
+    ProcedureParameter.optional(6, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(7, "path_regex", DataTypes.StringType, ALL_PARTITIONS),
+    ProcedureParameter.optional(8, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE_ALL: StructType = StructType(Array[StructField](
@@ -62,8 +64,8 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
   private val PARAMETERS_LATEST: Array[ProcedureParameter] =
     PARAMETERS_ALL ++ Array[ProcedureParameter](
       // Keep it for compatibility with older version, `path_regex` can replace it
-      ProcedureParameter.optional(7, "partition_path", DataTypes.StringType, ALL_PARTITIONS),
-      ProcedureParameter.optional(8, "merge", DataTypes.BooleanType, true)
+      ProcedureParameter.optional(9, "partition_path", DataTypes.StringType, ALL_PARTITIONS),
+      ProcedureParameter.optional(10, "merge", DataTypes.BooleanType, true)
   )
 
   private val OUTPUT_TYPE_LATEST: StructType = StructType(Array[StructField](
@@ -215,30 +217,39 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(parameters, args)
     val table = getArgValueOrDefault(args, parameters(0))
-    val maxInstant = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[String]
-    val includeMax = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[Boolean]
-    val includeInflight = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Boolean]
-    val excludeCompaction = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[Boolean]
-    val limit = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[Int]
+    val path = getArgValueOrDefault(args, parameters(1))
+    val maxInstant = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
+    val includeMax = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Boolean]
+    val includeInflight = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[Boolean]
+    val excludeCompaction = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[Boolean]
+    val limit = getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[Int]
+    val filter = getArgValueOrDefault(args, parameters(8)).get.asInstanceOf[String]
     val globRegex = if (showLatest) {
-      val isPathRegexDefined = isArgDefined(args, parameters(6))
-      val isPartitionPathDefined = isArgDefined(args, parameters(7))
+      val isPathRegexDefined = isArgDefined(args, parameters(7))
+      val isPartitionPathDefined = isArgDefined(args, parameters(9))
       if (isPathRegexDefined && isPartitionPathDefined) {
         throw new HoodieException("path_regex and partition_path cannot be used together")
       }
       if (isPathRegexDefined) {
-        getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[String]
-      } else {
         getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[String]
+      } else {
+        getArgValueOrDefault(args, parameters(9)).get.asInstanceOf[String]
       }
     } else {
-      getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[String]
+      getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[String]
     }
-    val basePath = getBasePath(table)
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+    val basePath = getBasePath(table, path)
     val metaClient = createMetaClient(jsc, basePath)
     val fsView = buildFileSystemView(basePath, metaClient, globRegex, maxInstant, includeMax, includeInflight, excludeCompaction)
     val rows = if (showLatest) {
-      val merge = getArgValueOrDefault(args, parameters(8)).get.asInstanceOf[Boolean]
+      val merge = getArgValueOrDefault(args, parameters(10)).get.asInstanceOf[Boolean]
       val maxInstantForMerge = if (merge && maxInstant.isEmpty) {
         val lastInstant = metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant()
         if (lastInstant.isPresent) {
@@ -255,7 +266,12 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     } else {
       showAllFileSlices(fsView)
     }
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, outputType, sparkSession)
+    } else {
+      results
+    }
   }
 
   override def build: Procedure = new ShowFileSystemViewProcedure(showLatest)

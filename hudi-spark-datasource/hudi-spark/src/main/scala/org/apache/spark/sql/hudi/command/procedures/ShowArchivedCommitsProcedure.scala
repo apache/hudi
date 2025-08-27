@@ -33,10 +33,12 @@ import scala.collection.JavaConverters._
 
 class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(2, "start_ts", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "end_ts", DataTypes.StringType, "")
+    ProcedureParameter.optional(0, "table", DataTypes.StringType),
+    ProcedureParameter.optional(1, "path", DataTypes.StringType),
+    ProcedureParameter.optional(2, "limit", DataTypes.IntegerType, 10),
+    ProcedureParameter.optional(3, "start_ts", DataTypes.StringType, ""),
+    ProcedureParameter.optional(4, "end_ts", DataTypes.StringType, ""),
+    ProcedureParameter.optional(5, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -78,13 +80,22 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
   override def call(args: ProcedureArgs): Seq[Row] = {
     super.checkArgs(PARAMETERS, args)
 
-    val table = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
-    var startTs = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
-    var endTs = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    val tableName = getArgValueOrDefault(args, PARAMETERS(0))
+    val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
+    var startTs = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    var endTs = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
+    val filter = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
 
-    val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
-    val basePath = hoodieCatalogTable.tableLocation
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.validateFilterExpression(filter, OUTPUT_TYPE, sparkSession) match {
+        case Left(errorMessage) =>
+          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
+        case Right(_) => // Validation passed, continue
+      }
+    }
+
+    val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
     // start time for commits, default: now - 10 days
@@ -93,7 +104,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     if (StringUtils.isNullOrEmpty(endTs)) endTs = getTimeDaysAgo(1)
 
     val archivedTimeline = metaClient.getArchivedTimeline
-    try {
+    val results = try {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs)
       val timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs).asInstanceOf[HoodieTimeline]
       if (includeExtraMetadata) {
@@ -104,6 +115,11 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     } finally {
       // clear the instant details from memory after printing to reduce usage
       archivedTimeline.clearInstantDetailsFromMemory(startTs, endTs)
+    }
+    if (filter != null && filter.trim.nonEmpty) {
+      HoodieProcedureFilterUtils.evaluateFilter(results, filter, OUTPUT_TYPE, sparkSession)
+    } else {
+      results
     }
   }
 
