@@ -1006,8 +1006,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   @VisibleForTesting
   String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
     if (needsUpgrade(metaClient)) {
-      // unclear what instant to use, since upgrade does have a given instant.
-      executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
+      txnManager.executeStateChangeWithInstant((ignored) -> {
+        // unclear what instant to use, since upgrade does have a given instant.
+        tryUpgrade(metaClient, Option.empty());
+        return null;
+      });
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
@@ -1316,10 +1319,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (!requiresInitTable) {
       return;
     }
-    executeUsingTxnManager(ownerInstant, () -> {
+
+    txnManager.executeStateChangeWithInstant(ownerInstant.map(HoodieInstant::requestedTime), (ignored) -> {
       tryUpgrade(metaClient, instantTime);
       // TODO: this also does MT table management..
       initMetadataTable(instantTime, metaClient);
+      return null;
     });
   }
 
