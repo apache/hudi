@@ -320,3 +320,4 @@ object ShowColumnStatsOverlapProcedure {
     override def get() = new ShowColumnStatsOverlapProcedure()
   }
 }
+
