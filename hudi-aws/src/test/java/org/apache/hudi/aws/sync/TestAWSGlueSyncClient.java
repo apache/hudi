@@ -673,7 +673,7 @@ class TestAWSGlueSyncClient {
     properties.setProperty(GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME.key(), tableName);
 
     HiveSyncConfig hiveSyncConfig = new HiveSyncConfig(properties);
-    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, hiveSyncConfig, GlueTestUtil.getMetaClient());
     assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
     assertEquals(tableName, awsGlueSyncClient.getTableName());
 
@@ -684,7 +684,7 @@ class TestAWSGlueSyncClient {
     properties.setProperty(META_SYNC_TABLE_NAME.key(), tableName);
 
     hiveSyncConfig = new HiveSyncConfig(properties);
-    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, hiveSyncConfig, GlueTestUtil.getMetaClient());
     assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
     assertEquals(tableName, awsGlueSyncClient.getTableName());
 
@@ -695,12 +695,12 @@ class TestAWSGlueSyncClient {
     properties.setProperty(HOODIE_TABLE_NAME_KEY, tableName);
 
     hiveSyncConfig = new HiveSyncConfig(properties);
-    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, hiveSyncConfig, GlueTestUtil.getMetaClient());
     assertEquals(dbName, awsGlueSyncClient.getDatabaseName());
     assertEquals(tableName, awsGlueSyncClient.getTableName());
 
     hiveSyncConfig = new HiveSyncConfig(new Properties());
-    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, GlueTestUtil.getMetaClient());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, mockSts, hiveSyncConfig, GlueTestUtil.getMetaClient());
     assertEquals(META_SYNC_DATABASE_NAME.defaultValue(), awsGlueSyncClient.getDatabaseName());
     assertEquals(META_SYNC_TABLE_NAME.defaultValue(), awsGlueSyncClient.getTableName());
   }
