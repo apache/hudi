@@ -500,7 +500,7 @@ class TestAWSGlueSyncClient {
 
     // stub getTable to return a dummy StorageDescriptor
     StorageDescriptor baseSd = StorageDescriptor.builder().location("s3://base").build();
-    Table table = Table.builder().storageDescriptor(baseSd).build();
+    Table table = Table.builder().name(tableName).storageDescriptor(baseSd).build();
     GetTableResponse gt = GetTableResponse.builder().table(table).build();
     when(mockAwsGlue.getTable(any(GetTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(gt));
@@ -528,7 +528,7 @@ class TestAWSGlueSyncClient {
 
     // stub getTable
     StorageDescriptor baseSd = StorageDescriptor.builder().location("s3://base").build();
-    Table table = Table.builder().storageDescriptor(baseSd).build();
+    Table table = Table.builder().name(tableName).storageDescriptor(baseSd).build();
     GetTableResponse gt = GetTableResponse.builder().table(table).build();
     when(mockAwsGlue.getTable(any(GetTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(gt));
@@ -560,7 +560,7 @@ class TestAWSGlueSyncClient {
     List<String> changed = Arrays.asList("2025/05/20");
 
     StorageDescriptor baseSd = StorageDescriptor.builder().location("s3://base").build();
-    Table table = Table.builder().storageDescriptor(baseSd).build();
+    Table table = Table.builder().name(tableName).storageDescriptor(baseSd).build();
     GetTableResponse gt = GetTableResponse.builder().table(table).build();
     when(mockAwsGlue.getTable(any(GetTableRequest.class)))
         .thenReturn(CompletableFuture.completedFuture(gt));
@@ -588,7 +588,10 @@ class TestAWSGlueSyncClient {
         HoodieGlueSyncException.class,
         () -> awsGlueSyncClient.updatePartitionsToTable(tableName, changed)
     );
-    assertTrue(ex.getMessage().contains("Fail to update partitions"));
+    // The exception is wrapped by the parallelizeChange method, so check the root cause
+    assertTrue(ex.getMessage().contains("Failed to parallelize operation"));
+    assertTrue(ex.getCause() != null && ex.getCause().getCause() != null);
+    assertTrue(ex.getCause().getCause().getMessage().contains("Fail to update partitions"));
   }
 
   @Test
@@ -629,7 +632,10 @@ class TestAWSGlueSyncClient {
         HoodieGlueSyncException.class,
         () -> awsGlueSyncClient.dropPartitions(tableName, toDrop)
     );
-    assertTrue(ex.getMessage().contains("Fail to drop partitions"));
+    // The exception is wrapped by the parallelizeChange method, so check the root cause
+    assertTrue(ex.getMessage().contains("Failed to parallelize operation"));
+    assertTrue(ex.getCause() != null && ex.getCause().getCause() != null);
+    assertTrue(ex.getCause().getCause().getMessage().contains("Fail to drop partitions"));
   }
 
   @Disabled("Integration test – requires real AWS environment")

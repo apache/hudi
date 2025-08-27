@@ -84,9 +84,6 @@ import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
-import org.apache.parquet.schema.MessageType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -157,7 +154,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private final String catalogId;
 
   public AWSGlueCatalogSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
-    this(GlueAsyncClient.builder().build(), StsClient.create(), config, metaClient);
+    this(buildAsyncClient(config), StsClient.create(), config, metaClient);
   }
 
   AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, StsClient stsClient, HiveSyncConfig config, HoodieTableMetaClient metaClient) {
@@ -422,14 +419,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
             .build()
       ).collect(Collectors.toList());
 
-        BatchDeletePartitionRequest batchDeletePartitionRequest = BatchDeletePartitionRequest.builder()
+      BatchDeletePartitionRequest batchDeletePartitionRequest = BatchDeletePartitionRequest.builder()
             .catalogId(catalogId)
             .databaseName(databaseName)
             .tableName(tableName)
             .partitionsToDelete(partitionValueLists)
             .build();
-        futures.add(awsGlue.batchDeletePartition(batchDeletePartitionRequest));
-      }
+      CompletableFuture<BatchDeletePartitionResponse> future = awsGlue.batchDeletePartition(batchDeletePartitionRequest);
 
       BatchDeletePartitionResponse response = future.get();
       if (CollectionUtils.nonEmpty(response.errors())) {
