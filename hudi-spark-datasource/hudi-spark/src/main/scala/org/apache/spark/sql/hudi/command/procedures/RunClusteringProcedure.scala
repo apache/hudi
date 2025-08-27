@@ -59,7 +59,7 @@ class RunClusteringProcedure extends BaseProcedure
     ProcedureParameter.optional(7, "options", DataTypes.StringType),
     ProcedureParameter.optional(8, "instants", DataTypes.StringType),
     ProcedureParameter.optional(9, "selected_partitions", DataTypes.StringType),
-    ProcedureParameter.optional(10, "selected_partitions_reg", DataTypes.StringType),
+    ProcedureParameter.optional(10, "partition_regex_pattern", DataTypes.StringType),
     ProcedureParameter.optional(11, "limit", DataTypes.IntegerType)
   )
 
