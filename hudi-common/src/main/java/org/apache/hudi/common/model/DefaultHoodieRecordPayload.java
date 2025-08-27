@@ -170,7 +170,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
         field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled));
     Comparable incomingOrderingVal = getIncomingOrderingVal(incomingRecord, orderingFields, consistentLogicalTimestampEnabled);
     // If the incoming record is a delete record without an ordering value, it is processed as "commit time" ordering.
-    if (incomingRecord.isEmpty() && incomingOrderingVal == OrderingValues.getDefault()) {
+    if (incomingRecord.isEmpty() && OrderingValues.isDefault(incomingOrderingVal)) {
       return true;
     }
     return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;

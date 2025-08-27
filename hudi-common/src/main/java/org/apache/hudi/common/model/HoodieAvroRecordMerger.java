@@ -28,7 +28,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Properties;
 
 /**
  * Record merger for Hoodie avro record.
@@ -78,15 +77,6 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   @Override
   public HoodieRecordType getRecordType() {
     return HoodieRecordType.AVRO;
-  }
-
-  private Option<IndexedRecord> combineAndGetUpdateValue(HoodieRecord older, HoodieRecord newer, Schema oldSchema, Schema newSchema, Properties props) throws IOException {
-    Option<IndexedRecord> previousAvroData = older.toIndexedRecord(oldSchema, props).map(HoodieAvroIndexedRecord::getData);
-    HoodieRecordPayload payload = ((HoodieAvroRecord) newer).getData();
-    if (previousAvroData.isEmpty()) {
-      return payload.getInsertValue(newSchema, props);
-    }
-    return ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), newSchema, props);
   }
 
   @Override

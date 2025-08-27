@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -463,11 +462,9 @@ public class BufferedRecordMergerFactory {
       // If pre-combine does not return existing record, update it
       if (combinedRecordData.map(record -> record != existingRecord.getRecord()).orElse(true)) {
         // For pkless we need to use record key from existing record
-        boolean isDelete = mergedRecord.isDelete(readerSchema, props);
+        boolean isDelete = mergedRecord.isDelete(mergeResultSchema, props);
         Comparable orderingValue = mergedRecord.getOrderingValue(mergeResultSchema, props, orderingFieldNames);
-        T mergedEngineRecord = mergedRecord.toIndexedRecord(mergeResultSchema, props)
-            .map(hoodieAvroIndexedRecord -> recordContext.convertAvroRecord(hoodieAvroIndexedRecord.getData()))
-            .orElse(null);
+        T mergedEngineRecord = combinedRecordData.orElse(null);
         return Option.of(BufferedRecords.fromEngineRecord(mergedEngineRecord, readerSchema, recordContext, orderingValue, existingRecord.getRecordKey(), isDelete));
 
       }
@@ -484,7 +481,7 @@ public class BufferedRecordMergerFactory {
       if (mergedRecord.getData() == HoodieRecord.SENTINEL) {
         return olderRecord;
       }
-      boolean isDelete = mergedRecord.isDelete(readerSchema, props);
+      boolean isDelete = mergedRecord.isDelete(mergeResultSchema, props);
       Comparable orderingValue = mergedRecord.getOrderingValue(mergeResultSchema, props, orderingFieldNames);
       T mergedEngineRecord = mergedRecord.toIndexedRecord(mergeResultSchema, props)
           .map(hoodieAvroIndexedRecord -> recordContext.convertAvroRecord(hoodieAvroIndexedRecord.getData()))
@@ -572,13 +569,6 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      if (olderRecord == null) {
-        return newerRecord;
-      }
-      // handle special case for deletes that are sent to older partitions in global-index, this delete takes precedence regardless of the previous value
-      if (newerRecord.getHoodieOperation() == HoodieOperation.UPDATE_BEFORE) {
-        return newerRecord;
-      }
       return mergeRecords(olderRecord, newerRecord);
     }
 
