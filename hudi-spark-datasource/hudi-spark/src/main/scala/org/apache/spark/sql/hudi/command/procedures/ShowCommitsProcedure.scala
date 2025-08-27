@@ -162,4 +162,3 @@ object ShowCommitsMetadataProcedure {
     override def get() = new ShowCommitsProcedure(true)
   }
 }
-
