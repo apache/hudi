@@ -108,7 +108,7 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "database_name")
       .noDefaultValue()
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_DATABASE_NAME.key()))
-          .or(() -> Option.of(cfg.getStringOrDefault(DATABASE_NAME, DATABASE_NAME.defaultValue()))))
+          .or(() -> Option.of(cfg.getStringOrDefault(DATABASE_NAME, META_SYNC_DATABASE_NAME.defaultValue()))))
       .markAdvanced()
       .withDocumentation("The name of the destination database that we should sync the hudi table to.");
 
