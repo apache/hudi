@@ -100,6 +100,34 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .withDocumentation("Path to the CA certificate file for TLS verification. "
           + "Used when connecting to DataHub over HTTPS with custom CA certificates.");
 
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_KEYSTORE_PATH = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.keystore.path")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Path to the keystore file for TLS client authentication. "
+          + "Used when connecting to DataHub over HTTPS with mutual TLS authentication.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.keystore.password")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Password for the keystore file. Optional but recommended for security. "
+          + "If not provided, an empty password will be used.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.truststore.path")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Path to the truststore file for TLS server verification. "
+          + "Alternative to CA certificate file for trust management.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD = ConfigProperty
+      .key("hoodie.meta.sync.datahub.tls.truststore.password")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Password for the truststore file. Optional but recommended for security. "
+          + "If not provided, an empty password will be used.");
+
   public final HoodieDataHubDatasetIdentifier datasetIdentifier;
 
   public DataHubSyncConfig(Properties props) {
@@ -147,6 +175,18 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--tls-ca-cert-path"}, description = "Path to the CA certificate file for TLS verification when connecting to DataHub over HTTPS with custom CA certificates.")
     public String tlsCaCertPath;
 
+    @Parameter(names = {"--tls-keystore-path"}, description = "Path to the keystore file for TLS client authentication.")
+    public String tlsKeystorePath;
+
+    @Parameter(names = {"--tls-keystore-password"}, description = "Password for the keystore file. Optional but recommended for security.")
+    public String tlsKeystorePassword;
+
+    @Parameter(names = {"--tls-truststore-path"}, description = "Path to the truststore file for TLS server verification.")
+    public String tlsTruststorePath;
+
+    @Parameter(names = {"--tls-truststore-password"}, description = "Password for the truststore file. Optional but recommended for security.")
+    public String tlsTruststorePassword;
+
     @Parameter(names = {"--data-platform-name"}, description = "String used to represent Hudi when creating its "
         + "corresponding DataPlatform entity within Datahub")
     public String dataPlatformName;
@@ -171,6 +211,10 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_TOKEN.key(), emitterToken);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), emitterSupplierClass);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_CA_CERT_PATH.key(), tlsCaCertPath);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_KEYSTORE_PATH.key(), tlsKeystorePath);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_KEYSTORE_PASSWORD.key(), tlsKeystorePassword);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PATH.key(), tlsTruststorePath);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TLS_TRUSTSTORE_PASSWORD.key(), tlsTruststorePassword);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATAPLATFORM_NAME.key(), dataPlatformName);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATASET_ENV.key(), datasetEnv);
       props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATABASE_NAME.key(), databaseName);
