@@ -19,7 +19,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-
 class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call archive_commits Procedure by Table") {
