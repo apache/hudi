@@ -125,23 +125,42 @@ object ShowFileHistoryProcedureUtils extends Logging {
                        targetPartition: Option[String],
                        timelineType: String,
                        entries: util.ArrayList[HistoryEntry],
-                       limit: Int): Unit = {
+                       limit: Int,
+                       startTime: String,
+                       endTime: String): Unit = {
 
     val writeTimeline = timeline.getWriteTimeline
-    val instants = writeTimeline.getInstants.iterator().asScala.toList
-      .sortBy(_.requestedTime)(Ordering[String].reverse)
+    val instants = writeTimeline.getInstants.asScala.toSeq
+      .filter { instant =>
+        val instantTime = instant.requestedTime()
+        val withinStartTime = if (startTime.nonEmpty) instantTime >= startTime else true
+        val withinEndTime = if (endTime.nonEmpty) instantTime <= endTime else true
+        withinStartTime && withinEndTime
+      }
+    val filteredInstants = instants.sortWith((a, b) => a.requestedTime() > b.requestedTime())
 
-    var foundCount = 0
-    for (instant <- instants if foundCount < limit) {
-      try {
-        val initialSize = entries.size()
-        processInstant(timeline, instant, fileGroupId, targetPartition, timelineType, entries)
-        if (entries.size() > initialSize) {
-          foundCount += 1
+    if (startTime.nonEmpty && endTime.nonEmpty) {
+      for (instant <- filteredInstants) {
+        try {
+          processInstant(timeline, instant, fileGroupId, targetPartition, timelineType, entries)
+        } catch {
+          case e: Exception =>
+            log.warn(s"Failed to process instant ${instant.requestedTime}: ${e.getMessage}")
         }
-      } catch {
-        case e: Exception =>
-          log.warn(s"Failed to process instant ${instant.requestedTime}: ${e.getMessage}")
+      }
+    } else {
+      var foundCount = 0
+      for (instant <- filteredInstants if foundCount < limit) {
+        try {
+          val initialSize = entries.size()
+          processInstant(timeline, instant, fileGroupId, targetPartition, timelineType, entries)
+          if (entries.size() > initialSize) {
+            foundCount += 1
+          }
+        } catch {
+          case e: Exception =>
+            log.warn(s"Failed to process instant ${instant.requestedTime}: ${e.getMessage}")
+        }
       }
     }
   }

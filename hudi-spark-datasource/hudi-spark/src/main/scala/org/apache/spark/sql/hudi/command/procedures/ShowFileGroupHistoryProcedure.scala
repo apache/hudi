@@ -37,7 +37,9 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     ProcedureParameter.optional(3, "partition", DataTypes.StringType),
     ProcedureParameter.optional(4, "showArchived", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 20),
-    ProcedureParameter.optional(6, "filter", DataTypes.StringType, "")
+    ProcedureParameter.optional(6, "filter", DataTypes.StringType, ""),
+    ProcedureParameter.optional(7, "startTime", DataTypes.StringType, ""),
+    ProcedureParameter.optional(8, "endTime", DataTypes.StringType, "")
   )
 
   def parameters: Array[ProcedureParameter] = PARAMETERS
@@ -54,6 +56,8 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     val showArchived = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[Boolean]
     val limit = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[Int]
     val filter = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
+    val startTime = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
+    val endTime = getArgValueOrDefault(args, PARAMETERS(8)).get.asInstanceOf[String]
 
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
@@ -66,7 +70,7 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    val fileGroupHistory = collectFileGroupHistory(metaClient, fileGroupId, partition, showArchived, limit)
+    val fileGroupHistory = collectFileGroupHistory(metaClient, fileGroupId, partition, showArchived, limit, startTime, endTime)
 
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.evaluateFilter(fileGroupHistory, filter, outputType, sparkSession)
@@ -80,20 +84,22 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
                                        fileGroupId: String,
                                        partition: Option[String],
                                        showArchived: Boolean,
-                                       limit: Int): Seq[Row] = {
+                                       limit: Int,
+                                       startTime: String,
+                                       endTime: String): Seq[Row] = {
 
     import ShowFileHistoryProcedureUtils._
 
     val activeEntries = new util.ArrayList[HistoryEntry]()
     val activeTimeline = metaClient.getActiveTimeline
-    ShowFileHistoryProcedureUtils.processTimeline(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit)
+    ShowFileHistoryProcedureUtils.processTimeline(activeTimeline, fileGroupId, partition, "ACTIVE", activeEntries, limit, startTime, endTime)
 
     val archivedEntries = new util.ArrayList[HistoryEntry]()
     if (showArchived) {
       try {
         val archivedTimeline = metaClient.getArchivedTimeline.reload()
         archivedTimeline.loadCompletedInstantDetailsInMemory()
-        ShowFileHistoryProcedureUtils.processTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit)
+        ShowFileHistoryProcedureUtils.processTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", archivedEntries, limit, startTime, endTime)
       } catch {
         case e: Exception =>
           log.warn(s"Failed to process archived timeline: ${e.getMessage}")
@@ -103,11 +109,16 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     val allEntries = (activeEntries.asScala ++ archivedEntries.asScala).toList
     val sortedEntries = allEntries
       .sortBy(_.instantTime)(Ordering[String].reverse)
-      .take(limit)
+
+    val finalEntries = if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+      sortedEntries
+    } else {
+      sortedEntries.take(limit)
+    }
 
     val (deletionInfo, replacementInfo) = ShowFileHistoryProcedureUtils.checkForDeletionsAndReplacements(metaClient, fileGroupId, partition, showArchived)
 
-    sortedEntries.map { entry =>
+    val rows = finalEntries.map { entry =>
       val deletion = deletionInfo.get(entry.fileName)
       val replacement = replacementInfo.get(entry.fileName).orElse {
         val fileId = entry.fileName.split("_").headOption.getOrElse("")
@@ -143,6 +154,15 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
         entry.columnStatsAvailable
       )
     }.toSeq
+
+    if (rows.nonEmpty) {
+      val firstRow = rows.head
+      val firstRowValues = firstRow.toSeq.toArray
+      val markedFirstRow = Row.fromSeq(("*" + firstRowValues(0)) +: firstRowValues.tail)
+      markedFirstRow +: rows.tail
+    } else {
+      rows
+    }
   }
 
 
