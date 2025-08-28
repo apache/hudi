@@ -102,12 +102,12 @@ public class DataHubSyncClient extends HoodieSyncClient {
 
   @Override
   public String getDatabaseName() {
-    return config.getStringOrDefault(META_SYNC_DATAHUB_DATABASE_NAME, META_SYNC_DATAHUB_DATABASE_NAME.getInferFunction().get().apply(config).get());
+    return this.databaseName;
   }
 
   @Override
   public String getTableName() {
-    return config.getStringOrDefault(META_SYNC_DATAHUB_TABLE_NAME, META_SYNC_DATAHUB_TABLE_NAME.getInferFunction().get().apply(config).get());
+    return this.tableName;
   }
 
   @Override
