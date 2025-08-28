@@ -20,9 +20,9 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -66,7 +66,7 @@ class TestDefaultSparkRecordMerger {
       new StructField(PARTITION_PATH_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
       new StructField(INT_COLUMN_NAME, DataTypes.IntegerType, false, Metadata.empty()),
       new StructField(STRING_COLUMN_NAME, DataTypes.StringType, false, Metadata.empty())});
-  private final SparkFileFormatInternalRecordContext recordContext = new SparkFileFormatInternalRecordContext(new HoodieTableConfig());
+  private final RecordContext<InternalRow> recordContext = SparkFileFormatInternalRecordContext.getFieldAccessorInstance();
 
   /**
    * If the input records are not Spark record, it throws.

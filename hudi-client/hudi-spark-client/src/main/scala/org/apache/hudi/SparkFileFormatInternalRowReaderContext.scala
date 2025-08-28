@@ -60,7 +60,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
                                               tableConfig: HoodieTableConfig)
-  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, new SparkFileFormatInternalRecordContext(tableConfig)) {
+  extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private lazy val allFilters = filters ++ requiredFilters

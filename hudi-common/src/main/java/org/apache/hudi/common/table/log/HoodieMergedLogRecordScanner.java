@@ -258,7 +258,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       BufferedRecord<T> combinedRecord = recordMerger.merge(prevBufferedRecord, newBufferedRecord, recordContext, this.getPayloadProps());
       // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getRecord() != prevRecord.getData()) {
-        HoodieRecord combinedHoodieRecord = recordContext.constructHoodieRecord(combinedRecord, newRecord.getPartitionPath());
+        HoodieRecord combinedHoodieRecord = recordContext.constructFinalHoodieRecord(combinedRecord);
         HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedHoodieRecord, key);
 
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
@@ -354,7 +354,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
     protected boolean allowInflightInstants = false;
-    private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
+    private HoodieRecordMerger recordMerger = new HoodiePreCombineAvroRecordMerger();
     protected HoodieTableMetaClient hoodieTableMetaClient;
 
     @Override
