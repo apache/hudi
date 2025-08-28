@@ -51,16 +51,16 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
   ))
 
   override def call(args: ProcedureArgs): Seq[Row] = {
-    checkArgs(parameters, args)
     val table = getArgValueOrDefault(args, parameters(0))
     val path = getArgValueOrDefault(args, parameters(1))
+    val basePath = getBasePath(table, path)
+    checkArgs(parameters, args)
     val logFilePathPattern: String = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
     val merge: Boolean = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Boolean]
     val limit: Int = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[Int]
     val filter = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[String]
 
     validateFilter(filter, outputType)
-    val basePath = getBasePath(table, path)
     val client = createMetaClient(jsc, basePath)
     val storage = client.getStorage
     val logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(logFilePathPattern)).iterator().asScala
