@@ -27,6 +27,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import javax.annotation.Nullable;
 
@@ -69,14 +71,14 @@ public class TestMySqlDebeziumAvroPayload {
 
   @Test
   public void testPreCombine() {
-    GenericRecord insertRecord = createRecord(0, Operation.INSERT, "00002.111");
-    MySqlDebeziumAvroPayload insertPayload = new MySqlDebeziumAvroPayload(insertRecord, "00002.111");
+    GenericRecord insertRecord = createRecord(0, Operation.INSERT, "00002.123");
+    MySqlDebeziumAvroPayload insertPayload = new MySqlDebeziumAvroPayload(insertRecord, "00002.123");
 
     GenericRecord updateRecord = createRecord(0, Operation.UPDATE, "00001.111");
     MySqlDebeziumAvroPayload updatePayload = new MySqlDebeziumAvroPayload(updateRecord, "00001.111");
 
-    GenericRecord deleteRecord = createRecord(0, Operation.DELETE, "00002.11");
-    MySqlDebeziumAvroPayload deletePayload = new MySqlDebeziumAvroPayload(deleteRecord, "00002.11");
+    GenericRecord deleteRecord = createRecord(0, Operation.DELETE, "00002.23");
+    MySqlDebeziumAvroPayload deletePayload = new MySqlDebeziumAvroPayload(deleteRecord, "00002.23");
 
     assertEquals(insertPayload, insertPayload.preCombine(updatePayload));
     assertEquals(deletePayload, deletePayload.preCombine(updatePayload));
@@ -140,6 +142,23 @@ public class TestMySqlDebeziumAvroPayload {
     assertThrows(HoodieDebeziumAvroPayloadException.class,
         () -> payload.combineAndGetUpdateValue(existingRecord, avroSchema),
         "should have thrown because event seq value of the incoming record is null");
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      // Different file numbers - current file is latest
+      "'00002.100', '00001.200', true",
+      // Different file numbers - new file is latest
+      "'00001.200', '00002.100', false",
+      // Same file number, position comparison
+      "'00001.100', '00001.50', true",
+      "'00000.23', '00000.123', false",
+      "'00000.1', '00000.10', false",
+      "'00000.10', '00000.1', true",
+      // Same file number and position - should pick current
+      "'00001.100', '00001.100', true"})
+  public void testIsCurrentSeqLatest(String currentSeq, String newSeq, boolean expectedResult) {
+    assertEquals(expectedResult, MySqlDebeziumAvroPayload.isCurrentSeqLatest(currentSeq, newSeq));
   }
 
   private GenericRecord createRecord(int primaryKeyValue, @Nullable Operation op, @Nullable String seqValue) {
