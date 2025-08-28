@@ -69,9 +69,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATABASE_NAME;
-import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME;
-
 public class DataHubSyncClient extends HoodieSyncClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(DataHubSyncClient.class);
