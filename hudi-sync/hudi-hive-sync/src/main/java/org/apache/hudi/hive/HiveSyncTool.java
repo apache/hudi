@@ -345,6 +345,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       // Sync the partitions if needed
       // find dropped partitions, if any, in the latest commit
       Set<String> droppedPartitions = syncClient.getDroppedPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
+      LOG.info("Partitions dropped since last sync: {}", droppedPartitions.size());
       partitionsChanged = syncPartitions(tableName, writtenPartitionsSince, droppedPartitions);
     }
     return partitionsChanged;
