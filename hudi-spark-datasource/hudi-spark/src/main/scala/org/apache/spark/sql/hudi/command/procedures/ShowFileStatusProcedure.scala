@@ -68,16 +68,16 @@ class ShowFileStatusProcedure extends BaseProcedure
   override def outputType: StructType = OUTPUT_TYPE
 
   override def call(args: ProcedureArgs): Seq[Row] = {
-    super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
     val tablePath = getArgValueOrDefault(args, PARAMETERS(1))
+    val basePath: String = getBasePath(tableName, tablePath)
+    super.checkArgs(PARAMETERS, args)
     val partition = getArgValueOrDefault(args, PARAMETERS(2))
     val fileName = getArgValueOrDefault(args, PARAMETERS(3))
     val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
 
     validateFilter(filter, outputType)
-    val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, tableName.asInstanceOf[Option[String]])
     val table: HoodieSparkTable[String] = HoodieSparkTable.create(client.getConfig, client.getEngineContext)

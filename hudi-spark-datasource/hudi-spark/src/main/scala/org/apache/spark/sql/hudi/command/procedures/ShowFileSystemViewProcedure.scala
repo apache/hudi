@@ -215,9 +215,10 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
   }
 
   override def call(args: ProcedureArgs): Seq[Row] = {
-    super.checkArgs(parameters, args)
     val table = getArgValueOrDefault(args, parameters(0))
     val path = getArgValueOrDefault(args, parameters(1))
+    val basePath = getBasePath(table, path)
+    super.checkArgs(parameters, args)
     val maxInstant = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
     val includeMax = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Boolean]
     val includeInflight = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[Boolean]
@@ -239,7 +240,6 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[String]
     }
     validateFilter(filter, outputType)
-    val basePath = getBasePath(table, path)
     val metaClient = createMetaClient(jsc, basePath)
     val fsView = buildFileSystemView(basePath, metaClient, globRegex, maxInstant, includeMax, includeInflight, excludeCompaction)
     val rows = if (showLatest) {
