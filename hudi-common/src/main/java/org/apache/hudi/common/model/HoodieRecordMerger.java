@@ -22,9 +22,11 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -64,14 +66,13 @@ public interface HoodieRecordMerger extends Serializable {
    * of the single record, both orders of operations applications have to yield the same result)
    * This method takes only full records for merging.
    *
-   * @param older     Older record in terms of commit time ordering.
-   * @param oldSchema The schema of the older record.
-   * @param newer     Newer record in terms of commit time ordering.
-   * @param newSchema The schema of the newer record.
-   * @param props     The additional properties for the merging operation.
+   * @param older         Older record in terms of commit time ordering.
+   * @param newer         Newer record in terms of commit time ordering.
+   * @param recordContext The record context for accessing and manipulating the records.
+   * @param props         Additional properties for configuring the merging behavior.
    * @return The merged record and schema. The record is expected to be non-null. If the record represents a deletion, the operation must be set as {@link HoodieOperation#DELETE}.
    */
-  Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException;
+  <T> BufferedRecord merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException;
 
   /**
    * Merges records which can contain partial updates, i.e., only subset of fields and values are
@@ -118,17 +119,16 @@ public interface HoodieRecordMerger extends Serializable {
    * ts | price | tags
    * 16 |  2.8  | fruit,juicy
    *
-   * @param older        Older record.
-   * @param oldSchema    Schema of the older record.
-   * @param newer        Newer record.
-   * @param newSchema    Schema of the newer record.
-   * @param readerSchema Reader schema containing all the fields to read. This is used to maintain
-   *                     the ordering of the fields of the merged record.
-   * @param props        Configuration in {@link TypedProperties}.
+   * @param older         Older record.
+   * @param newer         Newer record.
+   * @param readerSchema  Reader schema containing all the fields to read. This is used to maintain
+   *                      the ordering of the fields of the merged record.
+   * @param recordContext the record context for accessing and manipulating the records.
+   * @param props         Configuration in {@link TypedProperties}.
    * @return The merged record and schema. The record is expected to be non-null. If the record represents a deletion, the operation must be set as {@link HoodieOperation#DELETE}.
    * @throws IOException upon merging error.
    */
-  default Pair<HoodieRecord, Schema> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
+  default <T> BufferedRecord<T> partialMerge(BufferedRecord<T> older, BufferedRecord<T> newer, Schema readerSchema, RecordContext<T> recordContext, TypedProperties props) throws IOException {
     throw new UnsupportedOperationException("Partial merging logic is not implemented by " + this.getClass().getName());
   }
 

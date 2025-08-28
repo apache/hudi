@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.avro.AvroRecordContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -26,6 +28,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -248,11 +252,14 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
       // Merge and store the combined record
-      HoodieRecord<T> combinedRecord = (HoodieRecord<T>) recordMerger.merge(prevRecord, readerSchema,
-          newRecord, readerSchema, this.getPayloadProps()).getLeft();
+      RecordContext recordContext = AvroRecordContext.getFieldAccessorInstance();
+      BufferedRecord<T> prevBufferedRecord = BufferedRecords.fromHoodieRecord(prevRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields);
+      BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, readerSchema, recordContext, this.getPayloadProps(), orderingFields);
+      BufferedRecord<T> combinedRecord = recordMerger.merge(prevBufferedRecord, newBufferedRecord, recordContext, this.getPayloadProps());
       // If pre-combine returns existing record, no need to update it
-      if (combinedRecord.getData() != prevRecord.getData()) {
-        HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
+      if (combinedRecord.getRecord() != prevRecord.getData()) {
+        HoodieRecord combinedHoodieRecord = recordContext.constructHoodieRecord(combinedRecord, newRecord.getPartitionPath());
+        HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedHoodieRecord, key);
 
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of

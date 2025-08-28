@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.BaseAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -32,6 +33,8 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -205,22 +208,22 @@ public class BaseTestFileGroupRecordBuffer {
     private final String strategy = UUID.randomUUID().toString();
 
     @Override
-    public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-      if (newer.isDelete(newSchema, props)) {
-        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.AVRO), SCHEMA);
+    public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+      if (newer.isDelete()) {
+        return newer;
       }
-      GenericRecord olderData = (GenericRecord) older.toIndexedRecord(oldSchema, props).get().getData();
-      GenericRecord newerData = (GenericRecord) newer.toIndexedRecord(newSchema, props).get().getData();
+      GenericRecord olderData = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
+      GenericRecord newerData = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
       if (olderData.get(2).equals(newerData.get(2))) {
         // If the timestamps are the same, we do not update
-        return Pair.of(older, oldSchema);
+        return older;
       }
       int result = (int) olderData.get(1) + (int) newerData.get(1);
       if (result > 2) {
-        return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.AVRO), SCHEMA);
+        return BufferedRecords.fromEngineRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer), recordContext, newer.getOrderingValue(), newer.getRecordKey(), true);
       }
-      HoodieKey hoodieKey = older.getKey();
-      return Pair.of(new HoodieAvroIndexedRecord(createTestRecord(hoodieKey.getRecordKey(), result, (long) newerData.get(2))), SCHEMA);
+      T mergedRecord = recordContext.convertAvroRecord(createTestRecord(newer.getRecordKey(), result, (long) newerData.get(2)));
+      return BufferedRecords.fromEngineRecord(mergedRecord, recordContext.getSchemaFromBufferRecord(newer), recordContext, newer.getOrderingValue(), newer.getRecordKey(), false);
     }
 
     @Override

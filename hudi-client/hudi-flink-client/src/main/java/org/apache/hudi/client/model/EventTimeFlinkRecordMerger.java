@@ -20,12 +20,8 @@
 package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.table.read.BufferedRecord;
 
 import java.io.IOException;
 
@@ -34,31 +30,22 @@ import java.io.IOException;
  */
 public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
-  private String[] orderingFields;
-
   @Override
   public String getMergingStrategy() {
     return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 
   @Override
-  public Pair<HoodieRecord, Schema> merge(
-      HoodieRecord older,
-      Schema oldSchema,
-      HoodieRecord newer,
-      Schema newSchema,
+  public <T> BufferedRecord<T> merge(
+      BufferedRecord<T> older,
+      BufferedRecord<T> newer,
+      RecordContext<T> recordContext,
       TypedProperties props) throws IOException {
-    // Note: can be removed if we can ensure the type from invoker.
-    ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
-    ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
 
-    if (orderingFields == null) {
-      orderingFields = ConfigUtils.getOrderingFields(props);
-    }
-    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
-      return Pair.of(older, oldSchema);
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
+      return older;
     } else {
-      return Pair.of(newer, newSchema);
+      return newer;
     }
   }
 }

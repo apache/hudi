@@ -74,7 +74,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -613,6 +612,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         new Schema.Field("timestamp", Schema.create(Schema.Type.LONG), null, null),
         new Schema.Field(HoodieRecord.HOODIE_IS_DELETED_FIELD, Schema.create(Schema.Type.BOOLEAN))));
     // Configure reader context with custom schema
+    props.setProperty(ORDERING_FIELDS.key(), "timestamp");
     HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     avroReaderContext.setHasLogFiles(false);
     avroReaderContext.setHasBootstrapBaseFile(false);
@@ -626,7 +626,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         RecordMergeMode.CUSTOM,
         false,
         recordMerger,
-        Collections.emptyList(),
         payloadClassName,
         customSchema,
         props,
@@ -778,7 +777,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
-        Collections.emptyList(), // orderingFieldNames
         Option.empty(), // payloadClass
         READER_SCHEMA, // readerSchema
         props, // props
@@ -795,7 +793,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
-        Collections.emptyList(), // orderingFieldNames
         Option.empty(), // payloadClass
         READER_SCHEMA, // readerSchema
         props, // props

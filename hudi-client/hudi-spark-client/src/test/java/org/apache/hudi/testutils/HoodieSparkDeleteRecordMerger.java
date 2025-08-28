@@ -21,13 +21,9 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.HoodieSparkRecordMerger;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
-import org.apache.hudi.common.model.HoodieOperation;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.OrderingValues;
-import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 
 import java.io.IOException;
 
@@ -39,8 +35,8 @@ public class HoodieSparkDeleteRecordMerger extends HoodieSparkRecordMerger {
   public static final String DELETE_MERGER_STRATEGY = "aea2e14e-19a2-4e33-bc37-f8871d55bd5b";
 
   @Override
-  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return Pair.of(new HoodieEmptyRecord<>(older.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecord.HoodieRecordType.SPARK), newSchema);
+  public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    return BufferedRecords.createDelete(newer.getRecordKey());
   }
 
   @Override

@@ -20,14 +20,13 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
 import org.apache.avro.Schema;
+import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.IOException;
 
@@ -36,46 +35,38 @@ import java.io.IOException;
  */
 public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
-  private String[] orderingFields;
-
   @Override
   public String getMergingStrategy() {
     return HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 
   @Override
-  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    Pair<HoodieRecord, Schema> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
-    if (deleteHandlingResult != null) {
-      return deleteHandlingResult;
-    }
-
-    if (orderingFields == null) {
-      orderingFields = ConfigUtils.getOrderingFields(props);
-    }
-    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
-      return Pair.of(older, oldSchema);
+  public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
+      return older;
     } else {
-      return Pair.of(newer, newSchema);
+      return newer;
     }
   }
 
   @Override
-  public Pair<HoodieRecord, Schema> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
-    Pair<HoodieRecord, Schema> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
-    if (deleteHandlingResult != null) {
-      return deleteHandlingResult;
-    }
-
-    if (orderingFields == null) {
-      orderingFields = ConfigUtils.getOrderingFields(props);
-    }
-    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
-      return SparkRecordMergingUtils.mergePartialRecords(
-          (HoodieSparkRecord) newer, newSchema, (HoodieSparkRecord) older, oldSchema, readerSchema, props);
+  public <T> BufferedRecord<T> partialMerge(BufferedRecord<T> older, BufferedRecord<T> newer, Schema readerSchema, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
+      if (older.isDelete() || newer.isDelete()) {
+        return older;
+      }
+      Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+      Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+      return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) newer, newSchema,
+          (BufferedRecord<InternalRow>) older, oldSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
     } else {
-      return SparkRecordMergingUtils.mergePartialRecords(
-          (HoodieSparkRecord) older, oldSchema, (HoodieSparkRecord) newer, newSchema, readerSchema, props);
+      if (newer.isDelete() || older.isDelete()) {
+        return newer;
+      }
+      Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+      Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+      return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) older, oldSchema,
+          (BufferedRecord<InternalRow>) newer, newSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
     }
   }
 }

@@ -20,10 +20,9 @@
 package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.util.RowDataAvroQueryContexts;
 
 import org.apache.avro.Schema;
@@ -81,48 +80,43 @@ import java.io.IOException;
  */
 public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
 
-  private String[] orderingFields;
-
   @Override
   public String getMergingStrategy() {
     return EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
   }
 
   @Override
-  public Pair<HoodieRecord, Schema> merge(
-      HoodieRecord older,
-      Schema oldSchema,
-      HoodieRecord newer,
-      Schema newSchema,
+  public <T> BufferedRecord<T> merge(
+      BufferedRecord<T> older,
+      BufferedRecord<T> newer,
+      RecordContext<T> recordContext,
       TypedProperties props) throws IOException {
-    // Note: can be removed if we can ensure the type from invoker.
-    ValidationUtils.checkArgument(older.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
-    ValidationUtils.checkArgument(newer.getRecordType() == HoodieRecord.HoodieRecordType.FLINK);
-
-    if (orderingFields == null) {
-      orderingFields = ConfigUtils.getOrderingFields(props);
-    }
-    if (older.getOrderingValue(oldSchema, props, orderingFields).compareTo(newer.getOrderingValue(newSchema, props, orderingFields)) > 0) {
-      if (older.isDelete(oldSchema, props) || newer.isDelete(newSchema, props)) {
-        return Pair.of(older, oldSchema);
+    if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
+      if (older.isDelete() || newer.isDelete()) {
+        return older;
       } else {
-        return Pair.of(mergeRecord(newer, newSchema, older, oldSchema, newSchema, props), newSchema);
+        Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+        return mergeRecord(newer, newSchema, older, oldSchema, newSchema, recordContext, props);
       }
     } else {
-      if (newer.isDelete(newSchema, props) || older.isDelete(oldSchema, props)) {
-        return Pair.of(newer, newSchema);
+      if (newer.isDelete() || older.isDelete()) {
+        return newer;
       } else {
-        return Pair.of(mergeRecord(older, oldSchema, newer, newSchema, newSchema, props), newSchema);
+        Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+        return mergeRecord(older, oldSchema, newer, newSchema, newSchema, recordContext, props);
       }
     }
   }
 
-  private HoodieRecord mergeRecord(
-      HoodieRecord lowOrderRecord,
+  private <T> BufferedRecord<T> mergeRecord(
+      BufferedRecord<T> lowOrderRecord,
       Schema lowOrderSchema,
-      HoodieRecord highOrderRecord,
+      BufferedRecord<T> highOrderRecord,
       Schema highOrderSchema,
       Schema newSchema,
+      RecordContext<T> recordContext,
       TypedProperties props) {
     // Assumptions: there is no schema evolution, will solve it in HUDI-9253
     // 1. schema differences are ONLY due to meta fields;
@@ -150,8 +144,8 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       highOrderFieldGetters = RowDataAvroQueryContexts.fromAvroSchema(highOrderSchema, utcTimezone).fieldGetters();
     }
 
-    RowData lowOrderRow = (RowData) lowOrderRecord.getData();
-    RowData highOrderRow = (RowData) highOrderRecord.getData();
+    RowData lowOrderRow = (RowData) lowOrderRecord.getRecord();
+    RowData highOrderRow = (RowData) highOrderRecord.getRecord();
     GenericRowData mergedRow = new GenericRowData(mergedArity);
     for (int i = 0; i < mergedArity; i++) {
       Object fieldValWithHighOrder = highOrderFieldGetters[highOrderIdx].getFieldOrNull(highOrderRow);
@@ -163,10 +157,6 @@ public class PartialUpdateFlinkRecordMerger extends HoodieFlinkRecordMerger {
       lowOrderIdx++;
       highOrderIdx++;
     }
-    return new HoodieFlinkRecord(
-        highOrderRecord.getKey(),
-        highOrderRecord.getOperation(),
-        highOrderRecord.getOrderingValue(highOrderSchema, props, orderingFields),
-        mergedRow);
+    return BufferedRecords.fromEngineRecord((T) mergedRow, newSchema, recordContext, highOrderRecord.getOrderingValue(), highOrderRecord.getRecordKey(), highOrderRecord.isDelete());
   }
 }

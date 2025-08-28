@@ -20,12 +20,12 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.merge.SparkRecordMergingUtils;
 
 import org.apache.avro.Schema;
+import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.IOException;
 
@@ -40,17 +40,18 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
   }
 
   @Override
-  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    return Pair.of(newer, newSchema);
+  public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    return newer;
   }
 
   @Override
-  public Pair<HoodieRecord, Schema> partialMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, Schema readerSchema, TypedProperties props) throws IOException {
-    Pair<HoodieRecord, Schema> deleteHandlingResult = handleDeletes(older, oldSchema, newer, newSchema, props);
-    if (deleteHandlingResult != null) {
-      return deleteHandlingResult;
+  public <T> BufferedRecord<T> partialMerge(BufferedRecord<T> older, BufferedRecord<T> newer, Schema readerSchema, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    if (newer.isDelete()) {
+      return newer;
     }
-    return SparkRecordMergingUtils.mergePartialRecords(
-        (HoodieSparkRecord) older, oldSchema, (HoodieSparkRecord) newer, newSchema, readerSchema, props);
+    Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
+    Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
+    return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) newer, newSchema,
+        (BufferedRecord<InternalRow>) older, oldSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
   }
 }

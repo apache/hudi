@@ -90,17 +90,17 @@ public class HoodieRecordUtils {
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
                                                       List<String> mergerClassList, String recordMergerStrategy) {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
-      return HoodieAvroRecordMerger.INSTANCE;
+      return new HoodieAvroRecordMerger();
     } else {
       return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
-          .orElse(HoodieAvroRecordMerger.INSTANCE);
+          .orElseGet(HoodieAvroRecordMerger::new);
     }
   }
 
   public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
                                                                    String mergerImpls, String recordMergerStrategy) {
     if (recordMergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID)) {
-      return Option.of(HoodieAvroRecordMerger.INSTANCE);
+      return Option.of(new HoodieAvroRecordMerger());
     }
     return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
   }

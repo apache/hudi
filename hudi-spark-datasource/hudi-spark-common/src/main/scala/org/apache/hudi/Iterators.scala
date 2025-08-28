@@ -303,27 +303,8 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   private def merge(curRow: InternalRow, newRecord: HoodieRecord[_]): Option[InternalRow] = {
     // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
     //       on the record from the Delta Log
-    recordMerger.getRecordType match {
-      case HoodieRecordType.SPARK =>
-        val curRecord = new HoodieSparkRecord(curRow, readerSchema)
-        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        if (result.getLeft.isDelete(result.getRight, payloadProps)) {
-          None
-         } else {
-          val schema = HoodieInternalRowUtils.getCachedSchema(result.getRight)
-          val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-          Some(projection.apply(result.getLeft.getData.asInstanceOf[InternalRow]))
-         }
-      case _ =>
-        val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
-        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        if (result.getLeft.isDelete(result.getRight, payloadProps)) {
-          None
-        } else {
-          val avroRecord = result.getLeft.toIndexedRecord(result.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
-          Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
-        }
-    }
+    // TODO figure out if this can simply be removed now
+    throw new NotImplementedError("Merging logic is not implemented yet")
   }
 }
 

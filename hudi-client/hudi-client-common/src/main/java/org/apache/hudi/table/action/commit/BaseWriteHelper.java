@@ -120,7 +120,6 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger().map(HoodieRecordUtils::mergerToPreCombineMode),
-        orderingFieldNames,
         Option.ofNullable(table.getConfig().getPayloadClass()),
         recordSchema,
         mergedProperties,

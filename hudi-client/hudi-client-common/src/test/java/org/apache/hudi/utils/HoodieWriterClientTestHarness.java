@@ -572,7 +572,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
         metaClient.getTableConfig().getRecordMergeMode(),
         false,
         Option.ofNullable(writeClient.getConfig().getRecordMerger()),
-        orderingFieldNames,
         Option.ofNullable(writeClient.getConfig().getPayloadClass()),
         new Schema.Parser().parse(writeClient.getConfig().getSchema()),
         writeClient.getConfig().getProps(),
