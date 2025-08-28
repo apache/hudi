@@ -201,7 +201,7 @@ public class HoodieRecordUtils {
     if (isPayloadClassDeprecated(payloadClazz)) {
       return new HoodieEmptyRecord<>(key, hoodieOperation, orderingVal, HoodieRecordType.AVRO);
     }
-    return new HoodieAvroRecord<>(key, HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal), hoodieOperation, true);
+    return new HoodieAvroRecord<>(key, HoodieRecordUtils.loadPayload(payloadClazz, null, orderingVal), hoodieOperation, orderingVal, true);
   }
 
   public static boolean recordTypeCompatibleEngine(HoodieRecordType recordType, EngineType engineType) {

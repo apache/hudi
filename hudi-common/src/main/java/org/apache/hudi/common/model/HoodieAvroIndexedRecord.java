@@ -108,13 +108,6 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     this.orderingValue = orderingValue;
   }
 
-  public HoodieAvroIndexedRecord(
-      HoodieKey key,
-      IndexedRecord data,
-      Option<Map<String, String>> metaData) {
-    this(key, data, null, metaData,  null);
-  }
-
   private HoodieAvroIndexedRecord(
       HoodieKey key,
       SerializableIndexedRecord data,
@@ -235,13 +228,10 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
 
   @Override
   protected boolean checkIsDelete(Schema recordSchema, Properties props) {
-    if (data == null) {
+    if (data == null || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
 
-    if (HoodieOperation.isDelete(getOperation())) {
-      return true;
-    }
     decodeRecord(recordSchema);
     if (getData().equals(SENTINEL)) {
       return false; // Sentinel record is not a delete

@@ -188,10 +188,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
 
   @Override
   public boolean checkIsDelete(Schema recordSchema, Properties props) throws IOException {
-    if (null == data) {
-      return true;
-    }
-    if (HoodieOperation.isDelete(getOperation())) {
+    if (null == data || HoodieOperation.isDelete(getOperation())) {
       return true;
     }
     if (recordSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) == null) {
