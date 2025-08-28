@@ -1019,8 +1019,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE) && config.enableComplexKeygenValidation()) {
-      validateComplexKeygen(tableConfig);
+    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
+        && config.enableComplexKeygenValidation()
+        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
+      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
@@ -1695,11 +1697,5 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }
     });
-  }
-
-  private void validateComplexKeygen(HoodieTableConfig tableConfig) {
-    if (isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
-    }
   }
 }
