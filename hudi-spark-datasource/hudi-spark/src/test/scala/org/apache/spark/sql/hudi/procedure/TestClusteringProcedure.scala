@@ -442,7 +442,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 's2', 'addr1')")
         spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 's1', 'addr2')")
         // clustering table with partition predicate
-        resultA = spark.sql(s"call run_clustering(table => '$tableName', selected_partitions_reg => 'sex=s1/.*', order => 'ts', show_involved_partition => true)")
+        resultA = spark.sql(s"call run_clustering(table => '$tableName', partition_regex_pattern => 'sex=s1/.*', order => 'ts', show_involved_partition => true)")
           .collect()
           .map(row => Seq(row.getString(0), row.getInt(1), row.getString(2), row.getString(3)))
         assertResult(1)(resultA.length)
