@@ -38,7 +38,7 @@ import scala.collection.JavaConverters._
  * == Parameters ==
  * - `table`: Optional. The name of the Hudi table to query (mutually exclusive with `path`)
  * - `path`: Optional. The base path of the Hudi table (mutually exclusive with `table`)
- * - `file_group_id`: Required. The unique identifier of the file group to track
+ * - `fileGroupId`: Required. The unique identifier of the file group to track
  * - `partition`: Optional. Specific partition to filter results (default: all partitions)
  * - `showArchived`: Optional. Whether to include archived timeline data (default: false)
  * - `limit`: Optional. Maximum number of history entries to return (default: 20)
@@ -76,7 +76,7 @@ import scala.collection.JavaConverters._
  * - `column_stats_available`: Whether column statistics are available for this file
  *
  * == Error Handling ==
- * - Throws `IllegalArgumentException` for invalid filter expressions or missing file_group_id
+ * - Throws `IllegalArgumentException` for invalid filter expressions or missing fileGroupId
  * - Throws `HoodieException` for table access issues or invalid file group identifiers
  * - Returns empty result set if no file group history matches the criteria
  * - Gracefully handles archived timeline access failures with warning logs
@@ -90,34 +90,34 @@ import scala.collection.JavaConverters._
  * -- Basic usage: Show file group history
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   file_group_id => 'abc123'
+ *   fileGroupId => 'abc123'
  * )
  *
  * -- Show history with custom limit
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   file_group_id => 'abc123',
+ *   fileGroupId => 'abc123',
  *   limit => 50
  * )
  *
  * -- Show history for specific partition (partitioned to datetime column here)
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   file_group_id => 'abc123',
+ *   fileGroupId => 'abc123',
  *   partition => '2025/08/28'
  * )
  *
  * -- Include archived timeline data
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   file_group_id => 'abc123',
+ *   fileGroupId => 'abc123',
  *   showArchived => true
  * )
  *
  * -- Filter for specific operation types
  * CALL show_file_group_history(
  *   table => 'hudi_table_1',
- *   file_group_id => 'abc123',
+ *   fileGroupId => 'abc123',
  *   filter => "operation_type = 'INSERT'"
  * )
  * }}}
@@ -130,7 +130,7 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.optional(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
-    ProcedureParameter.required(2, "file_group_id", DataTypes.StringType),
+    ProcedureParameter.required(2, "fileGroupId", DataTypes.StringType),
     ProcedureParameter.optional(3, "partition", DataTypes.StringType),
     ProcedureParameter.optional(4, "showArchived", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 20),

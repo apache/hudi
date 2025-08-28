@@ -60,7 +60,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyResultDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId'
+           |  fileGroupId => '$fileGroupId'
            |)""".stripMargin)
       historyResultDf.show(false)
       val historyResult = historyResultDf.collect()
@@ -114,7 +114,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyWithPartition = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId',
+           |  fileGroupId => '$fileGroupId',
            |  partition => 'category=electronics'
            |)""".stripMargin).collect()
 
@@ -129,7 +129,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyWithoutPartition = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId'
+           |  fileGroupId => '$fileGroupId'
            |)""".stripMargin).collect()
 
       assert(historyWithoutPartition.length >= historyWithPartition.length,
@@ -174,7 +174,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val limitedHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId',
+           |  fileGroupId => '$fileGroupId',
            |  limit => 3
            |)""".stripMargin)
       limitedHistoryDf.show(false)
@@ -185,7 +185,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val higherLimitedHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId',
+           |  fileGroupId => '$fileGroupId',
            |  limit => 20
            |)""".stripMargin)
       higherLimitedHistoryDf.show(false)
@@ -245,7 +245,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val historyBeforeCleanDf = spark.sql(
           s"""call show_file_group_history(
              |  table => '$tableName',
-             |  file_group_id => '$fileGroupId',
+             |  fileGroupId => '$fileGroupId',
              |  limit => 25
              |)""".stripMargin)
 
@@ -256,7 +256,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val historyAfterCleanDf = spark.sql(
           s"""call show_file_group_history(
              |  table => '$tableName',
-             |  file_group_id => '$fileGroupId',
+             |  fileGroupId => '$fileGroupId',
              |  limit => 25
              |)""".stripMargin)
 
@@ -308,7 +308,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val noHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => 'non-existent-file-group-id'
+           |  fileGroupId => 'non-existent-file-group-id'
            |)""".stripMargin).collect()
 
       assert(noHistory.length == 0, "Should return empty results for non-existent file group")
@@ -342,7 +342,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val emptyResult = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '',
+           |  fileGroupId => '',
            |  limit => 0
            |)""".stripMargin).collect()
 
@@ -384,7 +384,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val commitOnlyHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId',
+           |  fileGroupId => '$fileGroupId',
            |  filter => "action = 'commit'"
            |)""".stripMargin).collect()
 
@@ -396,7 +396,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val insertOnlyHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId',
+           |  fileGroupId => '$fileGroupId',
            |  filter => "operation_type = 'INSERT'"
            |)""".stripMargin).collect()
 
@@ -408,7 +408,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val allHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId'
+           |  fileGroupId => '$fileGroupId'
            |)""".stripMargin).collect()
 
       assert(allHistory.length >= commitOnlyHistory.length, "Unfiltered results should have >= filtered results")
@@ -456,7 +456,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val historyBeforeCompactionDf = spark.sql(
           s"""call show_file_group_history(
              | table => '$tableName',
-             | file_group_id => '$fileGroupId',
+             | fileGroupId => '$fileGroupId',
              | limit => 25
              |)""".stripMargin)
 
@@ -475,7 +475,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val historyAfterCompactionDf = spark.sql(
           s"""call show_file_group_history(
              | table => '$tableName',
-             | file_group_id => '$fileGroupId',
+             | fileGroupId => '$fileGroupId',
              | limit => 25
              |)""".stripMargin)
 
@@ -538,7 +538,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val writesFilterHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId',
+           |  fileGroupId => '$fileGroupId',
            |  filter => "num_writes > 0"
            |)""".stripMargin).collect()
 
@@ -550,7 +550,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val complexFilterHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId',
+           |  fileGroupId => '$fileGroupId',
            |  filter => "action = 'commit' AND num_writes > 0 AND state = 'COMPLETED'"
            |)""".stripMargin).collect()
 
@@ -564,7 +564,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val fileSizeFilterHistory = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
-           |  file_group_id => '$fileGroupId',
+           |  fileGroupId => '$fileGroupId',
            |  filter => "file_size_bytes > 0 AND total_write_bytes > 0"
            |)""".stripMargin).collect()
 
@@ -620,7 +620,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val historyBeforeClusteringDf = spark.sql(
         s"""call show_file_group_history(
            | table => '$tableName',
-           | file_group_id => '$fileGroupId',
+           | fileGroupId => '$fileGroupId',
            | limit => 25
            |)""".stripMargin)
 
@@ -637,7 +637,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
       val originalHistoryAfterClusteringDf = spark.sql(
         s"""call show_file_group_history(
            | table => '$tableName',
-           | file_group_id => '$fileGroupId',
+           | fileGroupId => '$fileGroupId',
            | limit => 25
            |)""".stripMargin)
       originalHistoryAfterClusteringDf.show(false)
@@ -652,7 +652,7 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
         val currentHistoryDf = spark.sql(
           s"""call show_file_group_history(
              | table => '$tableName',
-             | file_group_id => '$currentFileGroupId',
+             | fileGroupId => '$currentFileGroupId',
              | limit => 25
              |)""".stripMargin)
 
