@@ -25,12 +25,14 @@ import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.Lazy;
 
 import java.io.IOException;
 
@@ -43,6 +45,7 @@ public class HFileReaderFactory {
   private final HoodieStorage storage;
   private final HoodieMetadataConfig metadataConfig;
   private final Either<StoragePath, byte[]> fileSource;
+  private final Lazy<Long> fileSize;
 
   public HFileReaderFactory(HoodieStorage storage,
                             TypedProperties properties,
@@ -50,12 +53,18 @@ public class HFileReaderFactory {
     this.storage = storage;
     this.metadataConfig = HoodieMetadataConfig.newBuilder().withProperties(properties).build();
     this.fileSource = fileSource;
+    this.fileSize = Lazy.lazily(() -> {
+      try {
+        return determineFileSize();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read file size", e);
+      }
+    });
   }
 
   public HFileReader createHFileReader() throws IOException {
-    final long fileSize = determineFileSize();
-    final SeekableDataInputStream inputStream = createInputStream(fileSize);
-    return new HFileReaderImpl(inputStream, fileSize);
+    final SeekableDataInputStream inputStream = createInputStream(fileSize.get());
+    return new HFileReaderImpl(inputStream, fileSize.get());
   }
 
   private long determineFileSize() throws IOException {
