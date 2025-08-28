@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 
@@ -36,6 +37,9 @@ import javax.annotation.concurrent.Immutable;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_DATAHUB_ENV;
 import static org.apache.hudi.sync.datahub.config.HoodieDataHubDatasetIdentifier.DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME;
 
@@ -115,6 +119,22 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       .defaultValue(true)
       .markAdvanced()
       .withDocumentation("Suppress exceptions during DataHub sync. This is true by default to ensure that when running inline with other jobs, the sync does not fail the job.");
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_DATABASE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.database.name")
+      .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_DATABASE_NAME.key()))
+          .or(() -> Option.of(cfg.getStringOrDefault(DATABASE_NAME, META_SYNC_DATABASE_NAME.defaultValue()))))
+      .markAdvanced()
+      .withDocumentation("The name of the destination database that we should sync the hudi table to.");
+
+  public static final ConfigProperty<String> META_SYNC_DATAHUB_TABLE_NAME = ConfigProperty
+      .key("hoodie.meta.sync.datahub.table.name")
+      .noDefaultValue()
+      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_TABLE_NAME.key()))
+          .or(() -> Option.ofNullable(cfg.getString(HOODIE_TABLE_NAME_KEY)))
+          .or(() -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))))
+      .markAdvanced()
+      .withDocumentation("The name of the destination table that we should sync the hudi table to.");
 
   public DataHubSyncConfig(Properties props) {
     super(props);
@@ -188,6 +208,12 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
     @Parameter(names = {"--dataset-env"}, description = "Which Datahub Environment to use when pushing entities")
     public String datasetEnv;
 
+    @Parameter(names = {"--database-name"}, description = "Database name to use for datahub sync")
+    public String databaseName;
+
+    @Parameter(names = {"--table-name"}, description = "Table name to use for datahub sync")
+    public String tableName;
+
     @Parameter(names = {
         "--domain"}, description = "Domain identifier for the dataset. When provided all datasets will be attached to the provided domain. Must be in urn form (e.g., urn:li:domain:_domain_id).")
     public String domainIdentifier;
@@ -216,6 +242,8 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
       } else {
         props.setProperty(META_SYNC_DATAHUB_SYNC_SUPPRESS_EXCEPTIONS.key(), String.valueOf(suppressExceptions));
       }
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_DATABASE_NAME.key(), databaseName);
+      props.setPropertyIfNonNull(META_SYNC_DATAHUB_TABLE_NAME.key(), tableName);
       return props;
     }
   }

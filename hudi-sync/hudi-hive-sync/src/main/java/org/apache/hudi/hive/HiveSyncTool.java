@@ -73,12 +73,10 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.getSchemaDifference;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SNAPSHOT_WITH_TABLE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SPARK_VERSION;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**
@@ -96,8 +94,8 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
   protected HiveSyncConfig config;
-  private final String databaseName;
-  private final String tableName;
+  private String databaseName;
+  private String tableName;
 
   protected HoodieSyncClient syncClient;
   protected String snapshotTableName;
@@ -124,10 +122,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     }
 
     this.config = new HiveSyncConfig(props, hadoopConfForSync);
-    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    this.tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
     HoodieTableMetaClient metaClient = metaClientOption.orElseGet(() -> buildMetaClient(config));
     initSyncClient(config, metaClient);
+    // initSyncClient leaves syncClient as null
+    if (!Objects.isNull(this.syncClient)) {
+      this.tableName = this.syncClient.getTableName();
+      this.databaseName = this.syncClient.getDatabaseName();
+    }
     initTableNameVars(config);
   }
 
@@ -144,7 +145,6 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   private void initTableNameVars(HiveSyncConfig config) {
-    final String tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
     if (syncClient != null) {
       switch (syncClient.getTableType()) {
         case COPY_ON_WRITE:
@@ -163,6 +163,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
           throw new InvalidTableException(syncClient.getBasePath());
       }
     }
+  }
+
+  public String getTableName() {
+    return this.tableName;
+  }
+
+  public String getDatabaseName() {
+    return this.databaseName;
   }
 
   @Override

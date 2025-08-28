@@ -98,6 +98,16 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public String getDatabaseName() {
+    return this.databaseName;
+  }
+
+  @Override
+  public String getTableName() {
+    return this.tableName;
+  }
+
+  @Override
   public Option<String> getLastCommitTimeSynced(String tableName) {
     throw new UnsupportedOperationException("Not supported: `getLastCommitTimeSynced`");
   }
