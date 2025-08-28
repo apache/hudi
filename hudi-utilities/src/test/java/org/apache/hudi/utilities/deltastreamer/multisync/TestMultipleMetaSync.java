@@ -43,7 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMultipleMetaSync extends HoodieDeltaStreamerTestBase {
 
-  @Disabled
   @Test
   void testMultipleMetaStore() throws Exception {
     String tableBasePath = basePath + "/test_multiple_metastore";

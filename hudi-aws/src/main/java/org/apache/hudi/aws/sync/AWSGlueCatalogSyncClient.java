@@ -1164,10 +1164,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
-  private String getBasePathForTable() {
-    return s3aToS3(getBasePath());
-  }
-
   private void tagResource(String resourceArn) {
     Map<String, String> resourceTags = parseResourceTags(config.getStringOrDefault(GLUE_SYNC_RESOURCE_TAGS, ""));
     if (resourceTags.isEmpty()) {

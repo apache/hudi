@@ -107,13 +107,14 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
   public static final ConfigProperty<String> GLUE_CATALOG_ID = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "catalogId")
       .noDefaultValue()
-      .sinceVersion("0.15.0")
+      .sinceVersion("1.1.0")
       .markAdvanced()
       .withDocumentation("The catalogId needs to be populated for syncing hoodie tables in a different AWS account");
 
   public static final ConfigProperty<String> GLUE_SYNC_DATABASE_NAME = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "database_name")
       .noDefaultValue()
+      .sinceVersion("1.1.0")
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_DATABASE_NAME.key()))
           .or(() -> Option.of(cfg.getStringOrDefault(DATABASE_NAME, META_SYNC_DATABASE_NAME.defaultValue()))))
       .markAdvanced()
@@ -122,6 +123,7 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
   public static final ConfigProperty<String> GLUE_SYNC_TABLE_NAME = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "table_name")
       .noDefaultValue()
+      .sinceVersion("1.1.0")
       .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_TABLE_NAME.key()))
           .or(() -> Option.ofNullable(cfg.getString(HOODIE_TABLE_NAME_KEY)))
           .or(() -> Option.ofNullable(cfg.getString(HOODIE_WRITE_TABLE_NAME_KEY))))
