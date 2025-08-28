@@ -149,6 +149,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private static final String GLUE_TABLE_ARN_FORMAT = "arn:aws:glue:%s:%s:table/%s/%s";
   private static final String GLUE_DATABASE_ARN_FORMAT = "arn:aws:glue:%s:%s:database/%s";
   private final String databaseName;
+  private final String tableName;
 
   private final boolean skipTableArchive;
   private final String enableMetadataTable;
@@ -166,6 +167,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     super(config, metaClient);
     this.awsGlue = awsGlue;
     this.databaseName = config.getStringOrDefault(GLUE_SYNC_DATABASE_NAME, GLUE_SYNC_DATABASE_NAME.getInferFunction().get().apply(config).get());
+    this.tableName = config.getStringOrDefault(GLUE_SYNC_TABLE_NAME, GLUE_SYNC_TABLE_NAME.getInferFunction().get().apply(config).get());
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
     this.allPartitionsReadParallelism = config.getIntOrDefault(ALL_PARTITIONS_READ_PARALLELISM);
@@ -191,7 +193,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public String getTableName() {
-    return config.getStringOrDefault(GLUE_SYNC_TABLE_NAME, GLUE_SYNC_TABLE_NAME.getInferFunction().get().apply(config).get());
+    return this.tableName;
   }
 
   @Override
