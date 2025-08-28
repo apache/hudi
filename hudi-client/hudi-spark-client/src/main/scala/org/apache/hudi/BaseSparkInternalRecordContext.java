@@ -127,14 +127,6 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   }
 
   @Override
-  public Comparable convertValueFromEngineType(Comparable value) {
-    if (value instanceof UTF8String) {
-      return ((UTF8String) value).toString();
-    }
-    return value;
-  }
-
-  @Override
   public InternalRow getDeleteRow(String recordKey) {
     return new HoodieInternalRow(null, null, UTF8String.fromString(recordKey), UTF8String.fromString(partitionPath), null, null, false);
   }

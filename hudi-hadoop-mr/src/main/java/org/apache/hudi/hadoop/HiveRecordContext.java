@@ -125,25 +125,6 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
     return value;
   }
 
-  public Comparable convertValueFromEngineType(Comparable value) {
-    if (value == null) {
-      return null;
-    } else if (value instanceof Text) {
-      return value.toString();
-    } else if (value instanceof IntWritable) {
-      return ((IntWritable) value).get();
-    } else if (value instanceof LongWritable) {
-      return ((LongWritable) value).get();
-    } else if (value instanceof FloatWritable) {
-      return ((FloatWritable) value).get();
-    } else if (value instanceof DoubleWritable) {
-      return ((DoubleWritable) value).get();
-    } else if (value instanceof BooleanWritable) {
-      return ((BooleanWritable) value).get();
-    }
-    return value;
-  }
-
   @Override
   public ArrayWritable convertAvroRecord(IndexedRecord avroRecord) {
     return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(avroRecord, avroRecord.getSchema(), true);
