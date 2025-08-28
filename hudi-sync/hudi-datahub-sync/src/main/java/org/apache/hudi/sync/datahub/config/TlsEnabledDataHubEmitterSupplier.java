@@ -90,9 +90,9 @@ public class TlsEnabledDataHubEmitterSupplier implements DataHubEmitterSupplier 
   }
 
   private boolean hasTlsConfiguration(String caCertPath, String keystorePath, String truststorePath) {
-    return (caCertPath != null && !caCertPath.isEmpty()) ||
-           (keystorePath != null && !keystorePath.isEmpty()) ||
-           (truststorePath != null && !truststorePath.isEmpty());
+    return (caCertPath != null && !caCertPath.isEmpty())
+        || (keystorePath != null && !keystorePath.isEmpty())
+        || (truststorePath != null && !truststorePath.isEmpty());
   }
 
   private SSLContext createSSLContext(String caCertPath, String keystorePath, String keystorePassword, 
