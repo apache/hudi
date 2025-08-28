@@ -132,7 +132,7 @@ public class SparkRecordMergingUtils {
         }
       }
       InternalRow mergedRow = new GenericInternalRow(values.toArray());
-      return BufferedRecords.fromEngineRecord(mergedRow, readerSchema, recordContext, newer.getOrderingValue(), newer.getRecordKey(), newer.isDelete());
+      return BufferedRecords.fromEngineRecord(mergedRow, mergedSchemaPair.getRight().getRight(), recordContext, newer.getOrderingValue(), newer.getRecordKey(), newer.isDelete());
     } else {
       return newer;
     }
