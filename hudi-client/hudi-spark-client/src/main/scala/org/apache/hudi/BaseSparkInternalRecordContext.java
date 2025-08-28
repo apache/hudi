@@ -50,8 +50,12 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 
 public abstract class BaseSparkInternalRecordContext extends RecordContext<InternalRow> {
 
-  public BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
+  protected BaseSparkInternalRecordContext(HoodieTableConfig tableConfig) {
     super(tableConfig, new DefaultJavaTypeConverter());
+  }
+
+  protected BaseSparkInternalRecordContext() {
+    super(new DefaultJavaTypeConverter());
   }
 
   public static Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {

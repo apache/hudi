@@ -22,11 +22,12 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -37,22 +38,19 @@ import java.io.IOException;
  * <p>It should only be used for deduplication among incoming records.
  */
 public class HoodiePreCombineAvroRecordMerger extends HoodieAvroRecordMerger {
-  public static final HoodiePreCombineAvroRecordMerger INSTANCE = new HoodiePreCombineAvroRecordMerger();
-
-  private String[] orderingFields;
 
   @Override
   public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
-    if (orderingFields == null) {
-      orderingFields = ConfigUtils.getOrderingFields(props);
-    }
+    init(props);
     return preCombine(older, newer, recordContext, recordContext.getSchemaFromBufferRecord(newer), props);
   }
 
   @SuppressWarnings("rawtypes, unchecked")
   private <T> BufferedRecord<T> preCombine(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, Schema newSchema, TypedProperties props) {
-    HoodieRecordPayload newerPayload = ((HoodieAvroRecord) recordContext.constructHoodieRecord(newer)).getData();
-    HoodieRecordPayload olderPayload = ((HoodieAvroRecord) recordContext.constructHoodieRecord(older)).getData();
+    GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
+    GenericRecord olderAvroRecord = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
+    HoodieRecordPayload newerPayload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
+    HoodieRecordPayload olderPayload = HoodieRecordUtils.loadPayload(payloadClass, olderAvroRecord, newer.getOrderingValue());
     HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema, props);
     try {
       if (payload == olderPayload) {

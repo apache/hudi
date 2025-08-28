@@ -40,8 +40,8 @@ import java.io.IOException;
  */
 public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationModeAwareness {
   public static final String PAYLOAD_CLASS_PROP = "_hoodie.merger.payload.class";
-  private String payloadClass;
-  public String[] orderingFields;
+  protected String payloadClass;
+  protected String[] orderingFields;
 
   @Override
   public String getMergingStrategy() {
@@ -54,16 +54,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
     if (newer.isCommitTimeOrderingDelete()) {
       return newer;
     }
-    if (payloadClass == null) {
-      payloadClass = Option.ofNullable(props.getString(PAYLOAD_CLASS_PROP, null)).orElseGet(() -> ConfigUtils.getPayloadClass(props));
-    }
-    if (orderingFields == null) {
-      orderingFields = ConfigUtils.getOrderingFields(props);
-      // if there are no ordering fields, use empty array
-      if (orderingFields == null) {
-        orderingFields = new String[0];
-      }
-    }
+    init(props);
     IndexedRecord previousAvroData = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
     Schema newerSchema = recordContext.getSchemaFromBufferRecord(newer);
     GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
@@ -103,6 +94,19 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
     }
   }
 
+  protected void init(TypedProperties props) {
+    if (payloadClass == null) {
+      payloadClass = Option.ofNullable(props.getString(PAYLOAD_CLASS_PROP, null)).orElseGet(() -> ConfigUtils.getPayloadClass(props));
+    }
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+      // if there are no ordering fields, use empty array
+      if (orderingFields == null) {
+        orderingFields = new String[0];
+      }
+    }
+  }
+
   @Override
   public HoodieRecordType getRecordType() {
     return HoodieRecordType.AVRO;
@@ -110,6 +114,6 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
 
   @Override
   public HoodieRecordMerger asPreCombiningMode() {
-    return HoodiePreCombineAvroRecordMerger.INSTANCE;
+    return new HoodiePreCombineAvroRecordMerger();
   }
 }
