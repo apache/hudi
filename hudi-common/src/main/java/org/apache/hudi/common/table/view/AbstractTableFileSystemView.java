@@ -114,6 +114,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected final WriteLock writeLock = globalLock.writeLock();
 
   private BootstrapIndex bootstrapIndex;
+  private HoodieTableVersion tableVersion;
 
   protected AbstractTableFileSystemView(HoodieTableMetadata tableMetadata) {
     this.tableMetadata = tableMetadata;
@@ -125,6 +126,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected void init(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline) {
     this.metaClient = metaClient;
     this.completionTimeQueryView = metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient);
+    this.tableVersion = metaClient.getTableConfig().getTableVersion();
     refreshTimeline(visibleActiveTimeline);
     resetFileGroupsReplaced(visibleCommitsAndCompactionTimeline);
     this.bootstrapIndex =  BootstrapIndex.getBootstrapIndex(metaClient);
@@ -254,7 +256,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   private boolean tableVersion8AndAbove() {
-    HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
     return tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT);
   }
 
