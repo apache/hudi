@@ -29,9 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestKeyGeneratorType {
-
   @Test
-  public void testIsComplexKeyGeneratorWithKeyGeneratorType() {
+  void testIsComplexKeyGeneratorWithKeyGeneratorType() {
     HoodieConfig config = new HoodieConfig();
 
     config.setValue(KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name());
@@ -54,7 +53,7 @@ public class TestKeyGeneratorType {
   }
 
   @Test
-  public void testIsComplexKeyGeneratorWithKeyGeneratorClassName() {
+  void testIsComplexKeyGeneratorWithKeyGeneratorClassName() {
     HoodieConfig config = new HoodieConfig();
 
     config.setValue(KEY_GENERATOR_CLASS_NAME, KeyGeneratorType.COMPLEX.getClassName());
@@ -77,7 +76,7 @@ public class TestKeyGeneratorType {
   }
 
   @Test
-  public void testIsComplexKeyGeneratorWithUserDefinedClassName() {
+  void testIsComplexKeyGeneratorWithUserDefinedClassName() {
     HoodieConfig config = new HoodieConfig();
 
     config.setValue(KEY_GENERATOR_CLASS_NAME, "com.example.UserDefinedKeyGenerator");
@@ -85,7 +84,7 @@ public class TestKeyGeneratorType {
   }
 
   @Test
-  public void testIsComplexKeyGeneratorWithNoConfig() {
+  void testIsComplexKeyGeneratorWithNoConfig() {
     HoodieConfig config = new HoodieConfig();
 
     assertFalse(KeyGeneratorType.isComplexKeyGenerator(config));
