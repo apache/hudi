@@ -370,8 +370,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       HoodieData<RecordIndexRawKey> rawKeys = recordKeys.map(RecordIndexRawKey::new);
-      return readIndexPayloadWithKeys(rawKeys, RECORD_INDEX.getPartitionPath(), Option.empty())
-            .map(r -> r.getRight().getRecordGlobalLocation());
+      return readIndexRecords(rawKeys, RECORD_INDEX.getPartitionPath(), Option.empty())
+          .map(r -> r.getData().getRecordGlobalLocation());
     });
   }
 
