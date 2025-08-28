@@ -209,11 +209,14 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
 
-      if (droppedPartitionsOnStorage.contains(storagePartition)) {
-        events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
-      } else {
-        if (!storagePartitionValues.isEmpty()) {
-          String storageValue = String.join(", ", storagePartitionValues);
+      if (!storagePartitionValues.isEmpty()) {
+        String storageValue = String.join(", ", storagePartitionValues);
+        if (droppedPartitionsOnStorage.contains(storagePartition)) {
+          if (paths.containsKey(storageValue)) {
+            // Add partition drop event only if it exists in the metastore
+            events.add(PartitionEvent.newPartitionDropEvent(storagePartition));
+          }
+        } else {
           if (!paths.containsKey(storageValue)) {
             events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
           } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
