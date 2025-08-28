@@ -106,6 +106,6 @@ public class MySqlDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     // file name is the same, compare the position in the file
     long currentPos = Long.parseLong(currentFilePos[1]);
     long newPos = Long.parseLong(newFilePos[1]);
-    return newPos <= currentPos;
+    return newPos < currentPos;
   }
 }
