@@ -283,8 +283,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      // Disable complex key generator validation so that the writer can succeed
-      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -306,8 +304,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      // Disable complex key generator validation so that the writer can succeed
-      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -1903,8 +1899,6 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       DataSourceWriteOptions.OPERATION.key() -> "insert",
       HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key() -> "ts",
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
-      // Disable complex key generator validation so that the writer can succeed
-      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false",
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
       HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key() -> "org.apache.hudi.DefaultSparkRecordMerger"
