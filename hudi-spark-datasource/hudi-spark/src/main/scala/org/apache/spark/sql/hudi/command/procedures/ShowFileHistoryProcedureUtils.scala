@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieWriteStat}
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieWriteStat, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.ClusteringUtils
@@ -29,28 +29,27 @@ import java.util
 
 import scala.collection.JavaConverters._
 
-case class HistoryEntry(
-                         instantTime: String,
-                         completionTime: String,
-                         action: String,
-                         timelineType: String,
-                         state: String,
-                         partitionPath: String,
-                         fileName: String,
-                         operationType: String,
-                         numWrites: Long,
-                         numInserts: Long,
-                         numUpdates: Long,
-                         numDeletes: Long,
-                         fileSizeBytes: Long,
-                         totalWriteBytes: Long,
-                         prevCommit: String,
-                         totalWriteErrors: Long,
-                         totalScanTimeMs: Long,
-                         totalUpsertTimeMs: Long,
-                         totalCreateTimeMs: Long,
-                         prevBaseFile: Option[String],
-                         columnStatsAvailable: Boolean
+case class HistoryEntry(instantTime: String,
+                        completionTime: String,
+                        action: String,
+                        timelineType: String,
+                        state: String,
+                        partitionPath: String,
+                        fileName: String,
+                        operationType: String,
+                        numWrites: Long,
+                        numInserts: Long,
+                        numUpdates: Long,
+                        numDeletes: Long,
+                        fileSizeBytes: Long,
+                        totalWriteBytes: Long,
+                        prevCommit: String,
+                        totalWriteErrors: Long,
+                        totalScanTimeMs: Long,
+                        totalUpsertTimeMs: Long,
+                        totalCreateTimeMs: Long,
+                        prevBaseFile: Option[String],
+                        columnStatsAvailable: Boolean
                        )
 
 case class DeletionInfo(action: String, instant: String, timelineType: String)
@@ -111,23 +110,14 @@ object ShowFileHistoryProcedureUtils extends Logging {
     else "UNKNOWN"
   }
 
-  private def matchesFileGroup(writeStat: HoodieWriteStat, targetFileGroupId: String, targetPartition: Option[String]): Boolean = {
-    val fileId = writeStat.getFileId
-    val partitionPath = writeStat.getPartitionPath
-    val fileIdMatches = fileId == targetFileGroupId
-    val partitionMatches = targetPartition.isEmpty || targetPartition.get == partitionPath
-    fileIdMatches && partitionMatches
-  }
-
-  def processTimeline(
-                       timeline: HoodieTimeline,
-                       fileGroupId: String,
-                       targetPartition: Option[String],
-                       timelineType: String,
-                       entries: util.ArrayList[HistoryEntry],
-                       limit: Int,
-                       startTime: String,
-                       endTime: String): Unit = {
+  def processTimeline(timeline: HoodieTimeline,
+                      fileGroupId: String,
+                      targetPartition: Option[String],
+                      timelineType: String,
+                      entries: util.ArrayList[HistoryEntry],
+                      limit: Int,
+                      startTime: String,
+                      endTime: String): Unit = {
 
     val writeTimeline = timeline.getWriteTimeline
     val instants = writeTimeline.getInstants.asScala.toSeq
@@ -165,16 +155,15 @@ object ShowFileHistoryProcedureUtils extends Logging {
     }
   }
 
-  private def processInstant(
-                              timeline: HoodieTimeline,
-                              instant: HoodieInstant,
-                              fileGroupId: String,
-                              targetPartition: Option[String],
-                              timelineType: String,
-                              entries: util.ArrayList[HistoryEntry]): Unit = {
+  private def processInstant(timeline: HoodieTimeline,
+                             instant: HoodieInstant,
+                             fileGroupId: String,
+                             targetPartition: Option[String],
+                             timelineType: String,
+                             entries: util.ArrayList[HistoryEntry]): Unit = {
 
     if (instant.getState == HoodieInstant.State.INFLIGHT || instant.getState == HoodieInstant.State.REQUESTED) {
-      val entry = createInflightRequestedEntry(instant, fileGroupId, targetPartition, timelineType)
+      val entry = createInflightRequestedEntry(instant, targetPartition, timelineType)
       entries.add(entry)
     }
 
@@ -188,7 +177,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
         if (writeStatsOpt.isDefined) {
           val writeStats = writeStatsOpt.get.asScala
           for (writeStat <- writeStats) {
-            if (matchesFileGroup(writeStat, fileGroupId, targetPartition)) {
+            if (writeStat.getFileId == fileGroupId) {
               val entry = createHistoryEntry(instant, writeStat, partitionPath, timelineType)
               entries.add(entry)
             }
@@ -200,7 +189,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
 
   def createHistoryEntry(instant: HoodieInstant,
                          writeStat: HoodieWriteStat,
-                         partitionPath: String,
+                         targetPartition: String,
                          timelineType: String): HistoryEntry = {
 
     val fileName = Option(writeStat.getPath).map(_.split("/").last).getOrElse("")
@@ -217,7 +206,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
       action = instant.getAction,
       timelineType = timelineType,
       state = instant.getState.toString,
-      partitionPath = partitionPath,
+      partitionPath = targetPartition,
       fileName = fileName,
       operationType = operationType,
       numWrites = writeStat.getNumWrites,
@@ -237,7 +226,6 @@ object ShowFileHistoryProcedureUtils extends Logging {
   }
 
   def createInflightRequestedEntry(instant: HoodieInstant,
-                                   fileGroupId: String,
                                    targetPartition: Option[String],
                                    timelineType: String): HistoryEntry = {
 
@@ -268,19 +256,19 @@ object ShowFileHistoryProcedureUtils extends Logging {
 
   def checkForDeletionsAndReplacements(metaClient: HoodieTableMetaClient,
                                        fileGroupId: String,
-                                       partition: Option[String],
+                                       targetPartition: Option[String],
                                        showArchived: Boolean): (Map[String, DeletionInfo], Map[String, ReplacementInfo]) = {
 
     val deletions = scala.collection.mutable.Map[String, DeletionInfo]()
     val replacements = scala.collection.mutable.Map[String, ReplacementInfo]()
 
-    checkDeletionsAndReplacementsInTimeline(metaClient.getActiveTimeline, fileGroupId, partition, "ACTIVE", deletions, replacements)
+    checkDeletionsAndReplacementsInTimeline(metaClient.getActiveTimeline, fileGroupId, targetPartition, "ACTIVE", deletions, replacements)
 
     if (showArchived) {
       try {
         val archivedTimeline = metaClient.getArchivedTimeline.reload()
         archivedTimeline.loadCompletedInstantDetailsInMemory()
-        checkDeletionsAndReplacementsInTimeline(archivedTimeline, fileGroupId, partition, "ARCHIVED", deletions, replacements)
+        checkDeletionsAndReplacementsInTimeline(archivedTimeline, fileGroupId, targetPartition, "ARCHIVED", deletions, replacements)
       } catch {
         case e: Exception =>
           log.warn(s"Failed to check deletions in archived timeline: ${e.getMessage}")
@@ -292,7 +280,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
 
   def checkDeletionsAndReplacementsInTimeline(timeline: HoodieTimeline,
                                               fileGroupId: String,
-                                              partition: Option[String],
+                                              targetPartition: Option[String],
                                               timelineType: String,
                                               deletions: scala.collection.mutable.Map[String, DeletionInfo],
                                               replacements: scala.collection.mutable.Map[String, ReplacementInfo]): Unit = {
@@ -302,7 +290,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
       try {
         if (instant.getState == HoodieInstant.State.COMPLETED) {
           val cleanMetadata = timeline.readCleanMetadata(instant)
-          val partitionsToCheck = partition.map(Set(_)).getOrElse(cleanMetadata.getPartitionMetadata.keySet().asScala.toSet)
+          val partitionsToCheck = targetPartition.map(Set(_)).getOrElse(cleanMetadata.getPartitionMetadata.keySet().asScala.toSet)
 
           for {
             partitionPath <- partitionsToCheck
@@ -311,7 +299,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
             if matchesDeletedFileGroup(deletedFile, fileGroupId)
           } {
             val deletedFileName = extractActualFileName(deletedFile)
-            deletions(deletedFileName) = DeletionInfo("clean", instant.requestedTime, timelineType)
+            deletions(deletedFileName) = DeletionInfo(HoodieTimeline.CLEAN_ACTION, instant.requestedTime, timelineType)
           }
         }
       } catch {
@@ -325,7 +313,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
       try {
         if (instant.getState == HoodieInstant.State.COMPLETED) {
           val rollbackMetadata = timeline.readRollbackMetadata(instant)
-          val partitionsToCheck = partition.map(Set(_)).getOrElse(rollbackMetadata.getPartitionMetadata.keySet().asScala.toSet)
+          val partitionsToCheck = targetPartition.map(Set(_)).getOrElse(rollbackMetadata.getPartitionMetadata.keySet().asScala.toSet)
 
           for {
             partitionPath <- partitionsToCheck
@@ -334,7 +322,7 @@ object ShowFileHistoryProcedureUtils extends Logging {
             if matchesDeletedFileGroup(deletedFile, fileGroupId)
           } {
             val deletedFileName = extractActualFileName(deletedFile)
-            deletions(deletedFileName) = DeletionInfo("rollback", instant.requestedTime, timelineType)
+            deletions(deletedFileName) = DeletionInfo(HoodieTimeline.ROLLBACK_ACTION, instant.requestedTime, timelineType)
           }
         }
       } catch {
@@ -352,18 +340,18 @@ object ShowFileHistoryProcedureUtils extends Logging {
             val metadata = commitMetadata.get
 
             val isCompaction = (metadata.getCompacted != null && metadata.getCompacted.booleanValue()) ||
-              (metadata.getOperationType != null && metadata.getOperationType.toString.toLowerCase == "compact")
-            val isClustering = instant.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION
+              (metadata.getOperationType != null && metadata.getOperationType.toString.toLowerCase.equals(WriteOperationType.COMPACT.value()))
+            val isClustering = instant.getAction.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
 
             if (isCompaction || isClustering) {
-              val operationType = if (isCompaction) "compaction" else "clustering"
+              val operationType = if (isCompaction) HoodieTimeline.COMPACTION_ACTION else HoodieTimeline.CLUSTERING_ACTION
 
               if (isClustering) {
                 metadata match {
                   case replaceMetadata: org.apache.hudi.common.model.HoodieReplaceCommitMetadata =>
                     val partitionToReplaceFileIds = replaceMetadata.getPartitionToReplaceFileIds
                     if (partitionToReplaceFileIds != null) {
-                      val partitionsToCheck = partition.map(Set(_)).getOrElse(partitionToReplaceFileIds.keySet().asScala.toSet)
+                      val partitionsToCheck = targetPartition.map(Set(_)).getOrElse(partitionToReplaceFileIds.keySet().asScala.toSet)
                       for (partitionPath <- partitionsToCheck) {
                         val replacedFileIds = Option(partitionToReplaceFileIds.get(partitionPath))
                         if (replacedFileIds.isDefined) {
@@ -377,13 +365,13 @@ object ShowFileHistoryProcedureUtils extends Logging {
                     }
                 }
               } else {
-                val partitionsToCheck = partition.map(Set(_)).getOrElse(metadata.getPartitionToWriteStats.keySet().asScala.toSet)
+                val partitionsToCheck = targetPartition.map(Set(_)).getOrElse(metadata.getPartitionToWriteStats.keySet().asScala.toSet)
                 for (partitionPath <- partitionsToCheck) {
                   val writeStatsOpt = Option(metadata.getPartitionToWriteStats.get(partitionPath))
                   if (writeStatsOpt.isDefined) {
                     val writeStats = writeStatsOpt.get.asScala
                     for (writeStat <- writeStats) {
-                      if (writeStat.getPrevCommit != null && matchesFileGroup(writeStat, fileGroupId, partition)) {
+                      if (writeStat.getPrevCommit != null && writeStat.getFileId == fileGroupId) {
                         val prevBaseFile = writeStat.getPrevBaseFile
                         if (prevBaseFile != null && prevBaseFile.nonEmpty) {
                           val replacedFileName = prevBaseFile.split("/").last

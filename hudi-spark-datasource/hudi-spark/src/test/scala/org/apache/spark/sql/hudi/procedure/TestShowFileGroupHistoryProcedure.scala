@@ -182,19 +182,19 @@ class TestShowFileGroupHistoryProcedure extends HoodieSparkSqlTestBase {
 
       assert(limitedHistory.length == 3, "Should respect limit parameter")
 
-      val unlimitedHistoryDf = spark.sql(
+      val higherLimitedHistoryDf = spark.sql(
         s"""call show_file_group_history(
            |  table => '$tableName',
            |  file_group_id => '$fileGroupId',
            |  limit => 20
            |)""".stripMargin)
-      unlimitedHistoryDf.show(false)
-      val unlimitedHistory = unlimitedHistoryDf.collect()
+      higherLimitedHistoryDf.show(false)
+      val higherLimitedHistory = higherLimitedHistoryDf.collect()
 
-      assert(unlimitedHistory.length >= limitedHistory.length,
+      assert(higherLimitedHistory.length >= limitedHistory.length,
         "Higher limit should return >= results")
 
-      val operationTypes = unlimitedHistory.map(_.getString(7)).distinct
+      val operationTypes = higherLimitedHistory.map(_.getString(7)).distinct
       assert(operationTypes.length == 2, "Should have INSERT and UPDATE types")
 
       val hasInsertOrUpdate = operationTypes.exists(op =>

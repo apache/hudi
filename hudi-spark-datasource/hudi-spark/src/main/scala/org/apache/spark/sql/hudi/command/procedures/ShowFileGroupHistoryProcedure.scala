@@ -28,6 +28,103 @@ import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
 
+/**
+ * Spark SQL procedure to show the complete history of a specific file group in a Hudi table.
+ *
+ * This procedure displays comprehensive information about all operations performed on a specific file group,
+ * including commits, updates, deletions, replacements, and metadata changes in a detailed partition specific view. It tracks the lifecycle of
+ * files from creation through various modifications and eventual deletion or replacement.
+ *
+ * == Parameters ==
+ * - `table`: Optional. The name of the Hudi table to query (mutually exclusive with `path`)
+ * - `path`: Optional. The base path of the Hudi table (mutually exclusive with `table`)
+ * - `file_group_id`: Required. The unique identifier of the file group to track
+ * - `partition`: Optional. Specific partition to filter results (default: all partitions)
+ * - `showArchived`: Optional. Whether to include archived timeline data (default: false)
+ * - `limit`: Optional. Maximum number of history entries to return (default: 20)
+ * - `filter`: Optional. SQL expression to filter results (default: empty string)
+ * - `startTime`: Optional. Start timestamp for filtering results (format: yyyyMMddHHmmss)
+ * - `endTime`: Optional. End timestamp for filtering results (format: yyyyMMddHHmmss)
+ *
+ * == Output Schema ==
+ * - `instant_time`: Timestamp when the operation was performed
+ * - `completion_time`: Time when the operation completed (null for pending operations)
+ * - `action`: The action type (commit, deltacommit, compaction, clustering, etc.)
+ * - `timeline_type`: Whether the data is from ACTIVE or ARCHIVED timeline
+ * - `state`: Current state of the operation (REQUESTED, INFLIGHT, COMPLETED)
+ * - `partition_path`: Partition path where the file group resides
+ * - `file_name`: Name of the file in the file group
+ * - `operation_type`: Type of write operation (INSERT, UPDATE, UPSERT, DELETE)
+ * - `num_writes`: Total number of records written in this operation
+ * - `num_inserts`: Number of new records inserted
+ * - `num_updates`: Number of existing records updated
+ * - `num_deletes`: Number of records deleted
+ * - `file_size_bytes`: Size of the file in bytes
+ * - `total_write_bytes`: Total bytes written during the operation
+ * - `prev_commit`: Previous commit timestamp that this operation builds upon
+ * - `was_deleted`: Whether the file was deleted in a subsequent operation
+ * - `delete_action`: Action that caused the deletion (clean, rollback, etc.)
+ * - `delete_instant`: Timestamp when the deletion occurred
+ * - `is_replaced`: Whether the file was replaced in a subsequent operation
+ * - `replace_action`: Action that caused the replacement (compaction, clustering, etc.)
+ * - `replace_instant`: Timestamp when the replacement occurred
+ * - `total_write_errors`: Number of write errors encountered
+ * - `total_scan_time_ms`: Total time spent scanning during the operation
+ * - `total_upsert_time_ms`: Total time spent in upsert processing
+ * - `total_create_time_ms`: Total time spent in file creation
+ * - `prev_base_file`: Previous base file that was replaced (for compaction/clustering)
+ * - `column_stats_available`: Whether column statistics are available for this file
+ *
+ * == Error Handling ==
+ * - Throws `IllegalArgumentException` for invalid filter expressions or missing file_group_id
+ * - Throws `HoodieException` for table access issues or invalid file group identifiers
+ * - Returns empty result set if no file group history matches the criteria
+ * - Gracefully handles archived timeline access failures with warning logs
+ *
+ * == Filter Support ==
+ * The `filter` parameter supports SQL expressions for filtering results on any output column.
+ * The filter uses Spark SQL syntax and supports various data types and operations.
+ *
+ * == Usage Examples ==
+ * {{{
+ * -- Basic usage: Show file group history
+ * CALL show_file_group_history(
+ *   table => 'hudi_table_1',
+ *   file_group_id => 'abc123'
+ * )
+ *
+ * -- Show history with custom limit
+ * CALL show_file_group_history(
+ *   table => 'hudi_table_1',
+ *   file_group_id => 'abc123',
+ *   limit => 50
+ * )
+ *
+ * -- Show history for specific partition (partitioned to datetime column here)
+ * CALL show_file_group_history(
+ *   table => 'hudi_table_1',
+ *   file_group_id => 'abc123',
+ *   partition => '2025/08/28'
+ * )
+ *
+ * -- Include archived timeline data
+ * CALL show_file_group_history(
+ *   table => 'hudi_table_1',
+ *   file_group_id => 'abc123',
+ *   showArchived => true
+ * )
+ *
+ * -- Filter for specific operation types
+ * CALL show_file_group_history(
+ *   table => 'hudi_table_1',
+ *   file_group_id => 'abc123',
+ *   filter => "operation_type = 'INSERT'"
+ * )
+ * }}}
+ *
+ * @see [[ShowFileHistoryProcedureUtils]] for underlying utility methods
+ * @see [[HoodieProcedureFilterUtils]] for detailed filter expression syntax
+ */
 class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
@@ -79,14 +176,13 @@ class ShowFileGroupHistoryProcedure extends BaseProcedure with ProcedureBuilder 
     }
   }
 
-  private def collectFileGroupHistory(
-                                       metaClient: HoodieTableMetaClient,
-                                       fileGroupId: String,
-                                       partition: Option[String],
-                                       showArchived: Boolean,
-                                       limit: Int,
-                                       startTime: String,
-                                       endTime: String): Seq[Row] = {
+  private def collectFileGroupHistory(metaClient: HoodieTableMetaClient,
+                                      fileGroupId: String,
+                                      partition: Option[String],
+                                      showArchived: Boolean,
+                                      limit: Int,
+                                      startTime: String,
+                                      endTime: String): Seq[Row] = {
 
     import ShowFileHistoryProcedureUtils._
 
