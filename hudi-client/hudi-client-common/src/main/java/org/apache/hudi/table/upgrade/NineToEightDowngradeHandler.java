@@ -52,6 +52,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_STRATEGY_ID;
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.PAYLOAD_CLASSES_TO_HANDLE;
 
@@ -80,13 +81,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     if (config.enableComplexKeygenValidation()
         && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
-      throw new HoodieException("This table uses the complex key generator with a single record "
-          + "key field. Downgrading to older table versions and resume ingestion with 0.14.1, "
-          + "0.15.0, 1.0.0, 1.0.1, or 1.0.2 release may potentially introduce duplicates due to a breaking "
-          + "change in the key encoding in the _hoodie_record_key meta field (HUDI-7001) which "
-          + "is crucial for upserts. If you're certain that the table is not going to be affected "
-          + "by the key encoding change, set "
-          + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.");
+      throw new HoodieException(getComplexKeygenErrorMessage("downgrade"));
     }
     // Handle secondary index.
     UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(
