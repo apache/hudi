@@ -176,11 +176,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Option<HoodieRecord<HoodieMetadataPayload>> readFilesIndexRecords(String key, String partitionName) {
-    HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> recordsData = readIndexRecordsWithKeys(
+  protected Option<HoodieMetadataPayload> readFilesIndexRecords(String key, String partitionName) {
+    HoodiePairData<String, HoodieMetadataPayload> recordsData = readIndexPayloadWithKeys(
         HoodieListData.eager(Collections.singletonList(new FilesIndexRawKey(key))), partitionName);
     try {
-      List<HoodieRecord<HoodieMetadataPayload>> records = recordsData.values().collectAsList();
+      List<HoodieMetadataPayload> records = recordsData.values().collectAsList();
       ValidationUtils.checkArgument(records.size() <= 1, () -> "Found more than 1 record for record key " + key);
       return records.isEmpty() ? Option.empty() : Option.ofNullable(records.get(0));
     } finally {
@@ -347,8 +347,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       // TODO [HUDI-9544]: Metric does not work for rdd based API due to lazy evaluation.
       HoodieData<RecordIndexRawKey> rawKeys = recordKeys.map(RecordIndexRawKey::new);
-      return readIndexRecordsWithKeys(rawKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition)
-          .mapToPair((Pair<String, HoodieRecord<HoodieMetadataPayload>> p) -> Pair.of(p.getLeft(), p.getRight().getData().getRecordGlobalLocation()));
+      return readIndexPayloadWithKeys(rawKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition)
+          .mapToPair((Pair<String, HoodieMetadataPayload> p) -> Pair.of(p.getLeft(), p.getRight().getRecordGlobalLocation()));
     });
   }
 
@@ -370,8 +370,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       HoodieData<RecordIndexRawKey> rawKeys = recordKeys.map(RecordIndexRawKey::new);
-      return readIndexRecords(rawKeys, RECORD_INDEX.getPartitionPath(), Option.empty())
-            .map(r -> r.getData().getRecordGlobalLocation());
+      return readIndexPayloadWithKeys(rawKeys, RECORD_INDEX.getPartitionPath(), Option.empty())
+            .map(r -> r.getRight().getRecordGlobalLocation());
     });
   }
 
@@ -420,23 +420,23 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
+  public HoodiePairData<String, HoodieMetadataPayload> readIndexPayloadWithKeys(
       HoodieData<? extends RawKey> rawKeys, String partitionName) {
-    return readIndexRecordsWithKeys(rawKeys, partitionName, Option.empty());
+    return readIndexPayloadWithKeys(rawKeys, partitionName, Option.empty());
   }
 
   @Override
-  public HoodiePairData<String, HoodieRecord<HoodieMetadataPayload>> readIndexRecordsWithKeys(
+  public HoodiePairData<String, HoodieMetadataPayload> readIndexPayloadWithKeys(
       HoodieData<? extends RawKey> rawKeys, String partitionName, Option<String> dataTablePartition) {
     return readIndexRecords(rawKeys, partitionName, dataTablePartition)
-        .mapToPair(record -> Pair.of(record.getRecordKey(), record));
+        .mapToPair(record -> Pair.of(record.getRecordKey(), record.getData()));
   }
 
   public HoodieData<String> readSecondaryIndexDataTableRecordKeysV2(HoodieData<String> secondaryKeys, String partitionName) {
     return dataCleanupManager.ensureDataCleanupOnException(v -> {
       HoodieData<SecondaryIndexPrefixRawKey> rawKeys = secondaryKeys.map(SecondaryIndexPrefixRawKey::new);
-      return readIndexRecords(rawKeys, partitionName, Option.empty())
-            .map(hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getRecordKey()));
+      return readIndexPayloadWithKeys(rawKeys, partitionName, Option.empty())
+            .map(hoodieRecord -> SecondaryIndexKeyUtils.getRecordKeyFromSecondaryIndexKey(hoodieRecord.getLeft()));
     });
   }
 
