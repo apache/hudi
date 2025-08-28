@@ -20,6 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -29,11 +30,13 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.serialization.DefaultSerializer;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -98,9 +101,11 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieWriteMergeHandle.class);
 
+  private final String[] orderingFields;
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
+  protected HoodieReaderContext<T> readerContext;
 
   protected long recordsWritten = 0;
   protected long recordsDeleted = 0;
@@ -120,6 +125,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt, false);
     populateIncomingRecordsMap(recordItr);
     initMarkerFileAndFileWriter(fileId, partitionPath);
+    this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
+    this.orderingFields = ConfigUtils.getOrderingFields(config.getProps());
   }
 
   /**
@@ -134,6 +141,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
         !HoodieTableMetadata.isMetadataTable(config.getBasePath()));
     this.keyToNewRecords = keyToNewRecords;
     initMarkerFileAndFileWriter(fileId, this.partitionPath);
+    this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
+    this.orderingFields = ConfigUtils.getOrderingFields(config.getProps());
   }
 
   /**
@@ -149,6 +158,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                                 String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, true);
+    this.orderingFields = ConfigUtils.getOrderingFields(config.getProps());
   }
 
   @Override
@@ -359,9 +369,11 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       // writing the first record. So make a copy of the record to be merged
       HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
       try {
-        Pair<HoodieRecord, Schema> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
-        Schema combineRecordSchema = mergeResult.getRight();
-        HoodieRecord combinedRecord = mergeResult.getLeft();
+        BufferedRecord<T> oldBufferedRecord = BufferedRecords.fromHoodieRecord(oldRecord, oldSchema, readerContext.getRecordContext(), props, orderingFields);
+        BufferedRecord<T> newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, newSchema, readerContext.getRecordContext(), props, orderingFields);
+        BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
+        Schema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
+        HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
         if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
@@ -496,5 +508,13 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
               instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
               baseFileToMerge.getCommitTime(), oldNumWrites));
     }
+  }
+
+  /**
+   * This is only for spark, the engine context fetched from a serialized hoodie table is always local,
+   * overrides it to spark specific reader context.
+   */
+  public void setReaderContext(HoodieReaderContext<T> readerContext) {
+    this.readerContext = readerContext;
   }
 }

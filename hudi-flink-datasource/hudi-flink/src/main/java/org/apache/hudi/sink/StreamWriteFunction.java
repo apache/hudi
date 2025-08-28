@@ -241,7 +241,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger(),
-        orderingFieldNames,
         new Schema.Parser().parse(writeClient.getConfig().getSchema()),
         readerContext.getPayloadClasses(writeClient.getConfig().getProps()),
         writeClient.getConfig().getProps(),

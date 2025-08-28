@@ -19,12 +19,16 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValues;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -35,7 +39,9 @@ import java.io.IOException;
  * <p>It should only be used for base record from disk to merge with incoming record.
  */
 public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationModeAwareness {
-  public static final HoodieAvroRecordMerger INSTANCE = new HoodieAvroRecordMerger();
+  public static final String PAYLOAD_CLASS_PROP = "_hoodie.merger.payload.class";
+  private String payloadClass;
+  public String[] orderingFields;
 
   @Override
   public String getMergingStrategy() {
@@ -43,35 +49,58 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   }
 
   @Override
-  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    Option<IndexedRecord> previousAvroData = older.toIndexedRecord(oldSchema, props).map(HoodieAvroIndexedRecord::getData);
-    HoodieRecordPayload payload = ((HoodieAvroRecord) newer).getData();
-    Option<IndexedRecord> updatedValue;
-    Comparable orderingVal;
-    if (previousAvroData.isEmpty()) {
-      updatedValue = payload.getInsertValue(newSchema, props);
-      orderingVal = payload.getOrderingValue();
+  public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    // special case for handling commit time ordering deletes
+    if (newer.isCommitTimeOrderingDelete()) {
+      return newer;
+    }
+    if (payloadClass == null) {
+      payloadClass = Option.ofNullable(props.getString(PAYLOAD_CLASS_PROP, null)).orElseGet(() -> ConfigUtils.getPayloadClass(props));
+    }
+    if (orderingFields == null) {
+      orderingFields = ConfigUtils.getOrderingFields(props);
+      // if there are no ordering fields, use empty array
+      if (orderingFields == null) {
+        orderingFields = new String[0];
+      }
+    }
+    IndexedRecord previousAvroData = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
+    Schema newerSchema = recordContext.getSchemaFromBufferRecord(newer);
+    GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
+    HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
+
+    if (previousAvroData == null) {
+      // No data to merge with, simply return the newer one
+      return newer;
     } else {
-      updatedValue = ((HoodieAvroRecord) newer).getData().combineAndGetUpdateValue(previousAvroData.get(), newSchema, props);
-      if (updatedValue.map(value -> value == previousAvroData.get()).orElse(false)) {
-        // Ordering value is set during record creation if one is required for this payload, so ordering fields are not required here
-        return Pair.of(older, oldSchema);
+      Option<IndexedRecord> updatedValue = payload.combineAndGetUpdateValue(previousAvroData, newerSchema, props);
+      if (updatedValue.isPresent()) {
+        IndexedRecord updatedRecord = updatedValue.get();
+        // If there is no change in the record or the merge results in SENTINEL record (returned by expression payload when condition is not matched), then return the older record
+        if (updatedRecord == previousAvroData || updatedRecord == HoodieRecord.SENTINEL) {
+          return older;
+        }
+        if (updatedRecord == newerAvroRecord) {
+          // simply return the newer record instead of creating a new record
+          return newer;
+        }
+        // Construct a new BufferedRecord with updated value
+        T resultRecord = recordContext.convertAvroRecord(updatedRecord);
+        return BufferedRecords.fromEngineRecord(resultRecord, updatedValue.map(IndexedRecord::getSchema).orElseGet(() -> newerSchema),
+            recordContext, orderingFields, newer.getRecordKey(), updatedValue.isEmpty());
       } else {
-        orderingVal = payload.getOrderingValue();
+        // If the updated value is empty, it means the result is a DELETE operation
+        // If one of the inputs is a DELETE operation, simply return that
+        if (newer.isDelete()) {
+          return newer;
+        } else if (older.isDelete()) {
+          return older;
+        } else {
+          // Edge case when neither input is a deletion but the output is a deletion
+          return BufferedRecords.createDelete(newer.getRecordKey());
+        }
       }
     }
-    if (updatedValue.isEmpty()) {
-      // pass through the record that results in the delete operation. If both newer and older are deletes, we return the newer one.
-      if (newer.isDelete(newSchema, props)) {
-        return Pair.of(newer.newInstance(newer.getKey(), HoodieOperation.DELETE), newSchema);
-      } else if (older.isDelete(oldSchema, props)) {
-        // if older is delete, return it
-        return Pair.of(older.newInstance(newer.getKey(), HoodieOperation.DELETE), oldSchema);
-      }
-      // If neither of the records are a delete, return a delete record with an empty value and default ordering value.
-      return Pair.of(new HoodieEmptyRecord<>(newer.getKey(), HoodieOperation.DELETE, OrderingValues.getDefault(), HoodieRecordType.AVRO), newSchema);
-    }
-    return Pair.of(new HoodieAvroIndexedRecord(newer.getKey(), updatedValue.get(), orderingVal), updatedValue.get().getSchema());
   }
 
   @Override

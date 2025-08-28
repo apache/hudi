@@ -21,10 +21,11 @@ package org.apache.hudi.merge;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.AvroSchemaCache;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -92,28 +93,28 @@ public class SparkRecordMergingUtils {
    * ts | price | tags
    * 16 |  2.8  | fruit,juicy
    *
-   * @param older        Older {@link HoodieSparkRecord}.
-   * @param oldSchema    Schema of the older record.
-   * @param newer        Newer {@link HoodieSparkRecord}.
-   * @param newSchema    Schema of the newer record.
-   * @param readerSchema Reader schema containing all the fields to read. This is used to maintain
-   *                     the ordering of the fields of the merged record.
-   * @param props        Configuration in {@link TypedProperties}.
+   * @param older         Older {@link HoodieSparkRecord}.
+   * @param oldSchema     Schema of the older record.
+   * @param newer         Newer {@link HoodieSparkRecord}.
+   * @param newSchema     Schema of the newer record.
+   * @param readerSchema  Reader schema containing all the fields to read. This is used to maintain
+   *                      the ordering of the fields of the merged record.
+   * @param recordContext Record context for working with the records.
    * @return The merged record and schema.
    */
-  public static Pair<HoodieRecord, Schema> mergePartialRecords(HoodieSparkRecord older,
-                                                               Schema oldSchema,
-                                                               HoodieSparkRecord newer,
-                                                               Schema newSchema,
-                                                               Schema readerSchema,
-                                                               TypedProperties props) {
+  public static BufferedRecord<InternalRow> mergePartialRecords(BufferedRecord<InternalRow> older,
+                                                                Schema oldSchema,
+                                                                BufferedRecord<InternalRow> newer,
+                                                                Schema newSchema,
+                                                                Schema readerSchema,
+                                                                RecordContext<InternalRow> recordContext) {
     // The merged schema contains fields that only appear in either older and/or newer record
     Pair<Map<Integer, StructField>, Pair<StructType, Schema>> mergedSchemaPair =
         getCachedMergedSchema(oldSchema, newSchema, readerSchema);
     boolean isNewerPartial = isPartial(newSchema, mergedSchemaPair.getRight().getRight());
     if (isNewerPartial) {
-      InternalRow oldRow = older.getData();
-      InternalRow newPartialRow = newer.getData();
+      InternalRow oldRow = older.getRecord();
+      InternalRow newPartialRow = newer.getRecord();
 
       Map<Integer, StructField> mergedIdToFieldMapping = mergedSchemaPair.getLeft();
       Map<String, Integer> oldNameToIdMapping = getCachedFieldNameToIdMapping(oldSchema);
@@ -131,12 +132,9 @@ public class SparkRecordMergingUtils {
         }
       }
       InternalRow mergedRow = new GenericInternalRow(values.toArray());
-
-      HoodieSparkRecord mergedSparkRecord = new HoodieSparkRecord(
-          mergedRow, mergedSchemaPair.getRight().getLeft());
-      return Pair.of(mergedSparkRecord, mergedSchemaPair.getRight().getRight());
+      return BufferedRecords.fromEngineRecord(mergedRow, readerSchema, recordContext, newer.getOrderingValue(), newer.getRecordKey(), newer.isDelete());
     } else {
-      return Pair.of(newer, newSchema);
+      return newer;
     }
   }
 

@@ -19,11 +19,10 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.table.read.BufferedRecord;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -36,18 +35,18 @@ public class CustomMerger implements HoodieRecordMerger {
   }
 
   @Override
-  public Pair<HoodieRecord, Schema> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    Long olderTimestamp = (Long) older.getOrderingValue(oldSchema, props, new String[0]);
-    Long newerTimestamp = (Long) newer.getOrderingValue(oldSchema, props, new String[0]);
+  public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    Long olderTimestamp = (Long) older.getOrderingValue();
+    Long newerTimestamp = (Long) newer.getOrderingValue();
     if (olderTimestamp.equals(newerTimestamp)) {
       // If the timestamps are the same, we do not update
-      return Pair.of(older, oldSchema);
+      return older;
     } else if (olderTimestamp < newerTimestamp) {
       // Custom merger chooses record with lower ordering value
-      return Pair.of(older, oldSchema);
+      return older;
     } else {
       // Custom merger chooses record with lower ordering value
-      return Pair.of(newer, newSchema);
+      return newer;
     }
   }
 

@@ -20,12 +20,12 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.Row;
@@ -38,9 +38,9 @@ import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.common.model.HoodieRecord.HoodieRecordType.SPARK;
 import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,6 +66,7 @@ class TestDefaultSparkRecordMerger {
       new StructField(PARTITION_PATH_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
       new StructField(INT_COLUMN_NAME, DataTypes.IntegerType, false, Metadata.empty()),
       new StructField(STRING_COLUMN_NAME, DataTypes.StringType, false, Metadata.empty())});
+  private final SparkFileFormatInternalRecordContext recordContext = new SparkFileFormatInternalRecordContext(new HoodieTableConfig());
 
   /**
    * If the input records are not Spark record, it throws.
@@ -77,9 +78,11 @@ class TestDefaultSparkRecordMerger {
       DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
       TypedProperties props = new TypedProperties();
       Schema recordSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+      BufferedRecord<InternalRow> oldRecord = BufferedRecords.fromHoodieRecord(records.get(0), recordSchema, recordContext, props, new String[0]);
+      BufferedRecord<InternalRow> newRecord = BufferedRecords.fromHoodieRecord(records.get(1), recordSchema, recordContext, props, new String[0]);
       assertThrows(
           IllegalArgumentException.class,
-          () -> merger.merge(records.get(0), recordSchema, records.get(1), recordSchema, props));
+          () -> merger.merge(oldRecord, newRecord, recordContext, props));
     }
   }
 
@@ -92,22 +95,21 @@ class TestDefaultSparkRecordMerger {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row oldValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
     Row newValue = getSpecificValue(key, "002", 2L, "file2", 2, "2");
-    HoodieRecord<InternalRow> oldRecord =
-        new HoodieSparkRecord(InternalRow.apply(oldValue.toSeq()), SPARK_SCHEMA);
-    HoodieRecord<InternalRow> newRecord =
-        new HoodieSparkRecord(InternalRow.apply(newValue.toSeq()), SPARK_SCHEMA);
+    Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
+    BufferedRecord<InternalRow> oldRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(oldValue.toSeq()), avroSchema, recordContext, Collections.singletonList(INT_COLUMN_NAME), false);
+    BufferedRecord<InternalRow> newRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(newValue.toSeq()), avroSchema, recordContext, Collections.singletonList(INT_COLUMN_NAME), false);
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
     props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
-    Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    Pair<HoodieRecord, Schema> merged =
-        merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
+
+    BufferedRecord<InternalRow> merged =
+        merger.merge(oldRecord, newRecord, recordContext, props);
 
     assertEquals(
         InternalRow.apply(newValue.toSeq()),
-        merged.getLeft().getData());
+        merged.getRecord());
   }
 
   /**
@@ -119,22 +121,20 @@ class TestDefaultSparkRecordMerger {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row oldValue = getSpecificValue(key, "001", 1L, "file1", 3, "1");
     Row newValue = getSpecificValue(key, "002", 2L, "file2", 2, "2");
-    HoodieRecord<InternalRow> oldRecord =
-        new HoodieSparkRecord(InternalRow.apply(oldValue.toSeq()), SPARK_SCHEMA);
-    HoodieRecord<InternalRow> newRecord =
-        new HoodieSparkRecord(InternalRow.apply(newValue.toSeq()), SPARK_SCHEMA);
+    Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
+    BufferedRecord<InternalRow> oldRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(oldValue.toSeq()), avroSchema, recordContext, Collections.singletonList(INT_COLUMN_NAME), false);
+    BufferedRecord<InternalRow> newRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(newValue.toSeq()), avroSchema, recordContext, Collections.singletonList(INT_COLUMN_NAME), false);
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
     props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
-    Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    Pair<HoodieRecord, Schema> merged =
-        merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
+    BufferedRecord<InternalRow> merged =
+        merger.merge(oldRecord, newRecord, recordContext, props);
 
     assertEquals(
         InternalRow.apply(oldValue.toSeq()),
-        merged.getLeft().getData());
+        merged.getRecord());
   }
 
   /**
@@ -144,18 +144,17 @@ class TestDefaultSparkRecordMerger {
   void testMergerWithNewRecordAsDelete() throws IOException {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row oldValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
-    HoodieRecord<InternalRow> oldRecord =
-        new HoodieSparkRecord(InternalRow.apply(oldValue.toSeq()), SPARK_SCHEMA);
-    HoodieRecord<InternalRow> newRecord = new HoodieEmptyRecord<>(key, SPARK);
+    Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
+    BufferedRecord<InternalRow> oldRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(oldValue.toSeq()), avroSchema, recordContext, Collections.singletonList(INT_COLUMN_NAME), false);
+    BufferedRecord<InternalRow> newRecord = BufferedRecords.createDelete(key.getRecordKey());
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
     props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
-    Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    Pair<HoodieRecord, Schema> merged =
-        merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
-    assertTrue(merged.getLeft().isDelete(avroSchema, props));
+    BufferedRecord<InternalRow> merged =
+        merger.merge(oldRecord, newRecord, recordContext, props);
+    assertTrue(merged.isDelete());
   }
 
   /**
@@ -165,19 +164,18 @@ class TestDefaultSparkRecordMerger {
   void testMergerWithOldRecordAsDelete() throws IOException {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row newValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
-    HoodieRecord<InternalRow> oldRecord = new HoodieEmptyRecord<>(key, SPARK);
-    HoodieRecord<InternalRow> newRecord =
-        new HoodieSparkRecord(InternalRow.apply(newValue.toSeq()), SPARK_SCHEMA);
+    Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
+    BufferedRecord<InternalRow> oldRecord = BufferedRecords.createDelete(key.getRecordKey());
+    BufferedRecord<InternalRow> newRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(newValue.toSeq()), avroSchema, recordContext, Collections.singletonList(INT_COLUMN_NAME), false);
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
     props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
-    Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
-        SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    Pair<HoodieRecord, Schema> result = merger.merge(oldRecord, avroSchema, newRecord, avroSchema, props);
+    BufferedRecord<InternalRow> result = merger.merge(oldRecord, newRecord, recordContext, props);
     assertEquals(
         InternalRow.apply(newValue.toSeq()),
-        result.getLeft().getData());
+        result.getRecord());
   }
 
   static Row getSpecificValue(

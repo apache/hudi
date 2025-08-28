@@ -52,6 +52,7 @@ import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
@@ -401,7 +402,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       mergeHandle.setPartitionFields(partitionFields);
       mergeHandle.setPartitionValues(partitionValues);
     }
-    if (readerContextFactory != null && mergeHandle instanceof FileGroupReaderBasedMergeHandle) {
+    if (readerContextFactory != null && mergeHandle instanceof HoodieWriteMergeHandle) {
       ((FileGroupReaderBasedMergeHandle) mergeHandle).setReaderContext(readerContextFactory.getContext());
     }
     return mergeHandle;
