@@ -1845,7 +1845,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                                                expectedRowsBefore: Seq[Any]*)(expectedRowsAfter: Seq[Any]*): Unit = {
     if (tableVersion < 9) {
       // By default, the complex key generator validation is enabled and should throw exception on DML
-      Assertions.assertComplexKeyGeneratorValidationThrows(() => spark.sql(dmlToWrite))
+      Assertions.assertComplexKeyGeneratorValidationThrows(() => spark.sql(dmlToWrite), "ingestion")
       // Query should still succeed
       checkAnswer(query)(expectedRowsBefore: _*)
       // Disabling the complex key generator validation should let write succeed

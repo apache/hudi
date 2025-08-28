@@ -242,7 +242,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
         && recordKeyFields.split(",").length == 1) {
-      assertComplexKeyGeneratorValidationThrows(() -> writeClient.startCommit("commit"));
+      assertComplexKeyGeneratorValidationThrows(() -> writeClient.startCommit("commit"), "ingestion");
     } else {
       String requestedTime = writeClient.startCommit("commit");
 
