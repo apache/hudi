@@ -42,7 +42,6 @@ object HoodieProcedures {
       ,(RunClusteringProcedure.NAME, RunClusteringProcedure.builder)
       ,(ShowClusteringProcedure.NAME, ShowClusteringProcedure.builder)
       ,(ShowCommitsProcedure.NAME, ShowCommitsProcedure.builder)
-      ,(ShowCommitsMetadataProcedure.NAME, ShowCommitsMetadataProcedure.builder)
       ,(ShowArchivedCommitsProcedure.NAME, ShowArchivedCommitsProcedure.builder)
       ,(ShowArchivedCommitsMetadataProcedure.NAME, ShowArchivedCommitsMetadataProcedure.builder)
       ,(ShowCommitFilesProcedure.NAME, ShowCommitFilesProcedure.builder)

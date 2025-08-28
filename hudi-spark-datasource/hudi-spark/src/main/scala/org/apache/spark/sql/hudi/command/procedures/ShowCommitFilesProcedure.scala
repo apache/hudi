@@ -33,6 +33,10 @@ import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
 
+/**
+ * @deprecated Use [[ShowCommitsProcedure]] instead which provides a comprehensive view of commit operations
+ */
+@Deprecated
 class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),

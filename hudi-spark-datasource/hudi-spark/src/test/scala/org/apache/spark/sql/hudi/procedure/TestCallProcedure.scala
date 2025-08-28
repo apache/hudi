@@ -56,39 +56,6 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
-  test("Test Call show_commits_metadata Procedure") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  orderingFields = 'ts'
-           | )
-       """.stripMargin)
-      // insert data to table
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-
-      // Check required fields
-      checkExceptionContain(s"""call show_commits_metadata(limit => 10)""")(
-        s"Table name or table path must be given one")
-
-      // collect commits for table
-      val commits = spark.sql(s"""call show_commits_metadata(table => '$tableName', limit => 10)""").collect()
-      assertResult(1) {
-        commits.length
-      }
-    }
-  }
-
   test("Test Call rollback_to_instant Procedure") {
     withTempDir { tmp =>
       val tableName = generateTableName

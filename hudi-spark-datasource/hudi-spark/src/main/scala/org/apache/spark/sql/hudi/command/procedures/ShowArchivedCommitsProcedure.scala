@@ -31,6 +31,10 @@ import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
 
+/**
+ * @deprecated Use [[ShowCommitsProcedure]] with showArchived=true instead which provides a comprehensive view of commit operations
+ */
+@Deprecated
 class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
