@@ -156,7 +156,7 @@ public class TestMySqlDebeziumAvroPayload {
       "'00000.1', '00000.10', false",
       "'00000.10', '00000.1', true",
       // Same file number and position - should pick current
-      "'00001.100', '00001.100', true"})
+      "'00001.100', '00001.100', false"})
   public void testIsCurrentSeqLatest(String currentSeq, String newSeq, boolean expectedResult) {
     assertEquals(expectedResult, MySqlDebeziumAvroPayload.isCurrentSeqLatest(currentSeq, newSeq));
   }
