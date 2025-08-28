@@ -151,11 +151,19 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     val activeResults = getCombinedCompactionsWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime)
     val finalResults = if (showArchived) {
       val archivedResults = getCombinedCompactionsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime)
-      (activeResults ++ archivedResults)
+      val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
-        .take(limit)
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        combinedResults
+      } else {
+        combinedResults.take(limit)
+      }
     } else {
-      activeResults.take(limit)
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        activeResults
+      } else {
+        activeResults.take(limit)
+      }
     }
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.evaluateFilter(finalResults, filter, OUTPUT_TYPE, sparkSession)

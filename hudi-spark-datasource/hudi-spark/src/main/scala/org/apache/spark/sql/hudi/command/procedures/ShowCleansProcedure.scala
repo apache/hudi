@@ -207,11 +207,19 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
     val activeResults = getCombinedCleansWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime)
     val finalResults = if (showArchived) {
       val archivedResults = getCombinedCleansWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime)
-      (activeResults ++ archivedResults)
+      val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
-        .take(limit)
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        combinedResults
+      } else {
+        combinedResults.take(limit)
+      }
     } else {
-      activeResults.take(limit)
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        activeResults
+      } else {
+        activeResults.take(limit)
+      }
     }
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.evaluateFilter(finalResults, filter, outputType, sparkSession)

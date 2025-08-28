@@ -153,11 +153,19 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
     val activeResults = getCombinedRollbacksWithPartitionMetadata(metaClient, metaClient.getActiveTimeline, limit, startTime, endTime)
     val finalResults = if (showArchived) {
       val archivedResults = getCombinedRollbacksWithPartitionMetadata(metaClient, metaClient.getArchivedTimeline, limit, startTime, endTime)
-      (activeResults ++ archivedResults)
+      val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
-        .take(limit)
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        combinedResults
+      } else {
+        combinedResults.take(limit)
+      }
     } else {
-      activeResults
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        activeResults
+      } else {
+        activeResults.take(limit)
+      }
     }
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.evaluateFilter(finalResults, filter, OUTPUT_TYPE, sparkSession)

@@ -145,15 +145,20 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
       metaClient.getActiveTimeline, limit, showFiles, startTime, endTime, metaClient)
 
     val finalResults = if (showArchived) {
-      val archivedTimeline = metaClient.getArchivedTimeline.reload()
-      val archivedResults = getCommitsWithPartitionMetadata(
-        archivedTimeline, limit, showFiles, startTime, endTime, metaClient)
-
-      (activeResults ++ archivedResults)
+      val archivedResults = getCommitsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, showFiles, startTime, endTime, metaClient)
+      val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
-        .take(limit)
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        combinedResults
+      } else {
+        combinedResults.take(limit)
+      }
     } else {
-      activeResults.take(limit)
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        activeResults
+      } else {
+        activeResults.take(limit)
+      }
     }
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.evaluateFilter(finalResults, filter, outputType, sparkSession)

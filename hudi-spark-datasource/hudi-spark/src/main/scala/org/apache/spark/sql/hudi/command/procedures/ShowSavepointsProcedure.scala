@@ -139,11 +139,19 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
     val activeResults = getCombinedSavepointsWithPartitionMetadata(metaClient.getActiveTimeline, limit, startTime, endTime)
     val finalResults = if (showArchived) {
       val archivedResults = getCombinedSavepointsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, startTime, endTime)
-      (activeResults ++ archivedResults)
+      val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
-        .take(limit)
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        combinedResults
+      } else {
+        combinedResults.take(limit)
+      }
     } else {
-      activeResults
+      if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
+        activeResults
+      } else {
+        activeResults.take(limit)
+      }
     }
     if (filter != null && filter.trim.nonEmpty) {
       HoodieProcedureFilterUtils.evaluateFilter(finalResults, filter, outputType, sparkSession)
