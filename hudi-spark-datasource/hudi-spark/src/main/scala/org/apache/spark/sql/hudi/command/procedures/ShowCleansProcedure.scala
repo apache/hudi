@@ -382,11 +382,10 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
     )
   }
 
-  private case class CleanPlanStatistics(
-                                          earliestInstantToRetain: String,
-                                          totalPartitionsToClean: Int,
-                                          totalPartitionsToDelete: Int,
-                                          involvedPartitions: Set[String]
+  private case class CleanPlanStatistics(earliestInstantToRetain: String,
+                                         totalPartitionsToClean: Int,
+                                         totalPartitionsToDelete: Int,
+                                         involvedPartitions: Set[String]
                                         )
 }
 

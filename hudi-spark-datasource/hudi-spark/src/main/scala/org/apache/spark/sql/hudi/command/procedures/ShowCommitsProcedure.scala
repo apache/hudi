@@ -167,13 +167,12 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
     }
   }
 
-  private def getCommitsWithPartitionMetadata(
-                                               timeline: HoodieTimeline,
-                                               limit: Int,
-                                               showFiles: Boolean,
-                                               startTime: String,
-                                               endTime: String,
-                                               metaClient: HoodieTableMetaClient): Seq[Row] = {
+  private def getCommitsWithPartitionMetadata(timeline: HoodieTimeline,
+                                              limit: Int,
+                                              showFiles: Boolean,
+                                              startTime: String,
+                                              endTime: String,
+                                              metaClient: HoodieTableMetaClient): Seq[Row] = {
 
     val allRows = scala.collection.mutable.ListBuffer[Row]()
 
@@ -420,9 +419,8 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
     allRows.toSeq
   }
 
-  private def extractCommitPlanStats(
-                                      commitInstant: HoodieInstant,
-                                      metaClient: HoodieTableMetaClient = null): CommitPlanStatistics = {
+  private def extractCommitPlanStats(commitInstant: HoodieInstant,
+                                     metaClient: HoodieTableMetaClient = null): CommitPlanStatistics = {
 
     try {
       val extraMetadata = Try {
@@ -466,9 +464,8 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
     }
   }
 
-  private case class CommitPlanStatistics(
-                                           extraMetadata: String,
-                                           involvedPartitions: Set[String]
+  private case class CommitPlanStatistics(extraMetadata: String,
+                                          involvedPartitions: Set[String]
                                          )
 
   private def createErrorRow(instant: HoodieInstant): Row = {

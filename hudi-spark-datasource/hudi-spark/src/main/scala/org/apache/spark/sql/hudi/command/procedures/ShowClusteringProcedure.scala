@@ -309,17 +309,15 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     )
   }
 
-  private case class ClusteringPlanStatistics(
-                                               totalInputGroups: Int,
-                                               totalInputFiles: Int,
-                                               totalOutputGroups: Int,
-                                               involvedPartitions: Set[String],
-                                               partitionStats: Map[String, ClusteringPartitionStats]
+  private case class ClusteringPlanStatistics(totalInputGroups: Int,
+                                              totalInputFiles: Int,
+                                              totalOutputGroups: Int,
+                                              involvedPartitions: Set[String],
+                                              partitionStats: Map[String, ClusteringPartitionStats]
                                              )
 
-  private case class ClusteringPartitionStats(
-                                               inputFiles: Int,
-                                               outputGroups: Int
+  private case class ClusteringPartitionStats(inputFiles: Int,
+                                              outputGroups: Int
                                              )
 
   private def createErrorRowForCompletedWithPartition(instant: HoodieInstant): Row = {

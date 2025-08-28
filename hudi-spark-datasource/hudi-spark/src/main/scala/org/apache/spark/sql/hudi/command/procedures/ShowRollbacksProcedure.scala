@@ -335,17 +335,15 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
   override def build: Procedure = new ShowRollbacksProcedure()
 }
 
-case class RollbackMetadataStatistics(
-                                       totalFilesDeleted: Int,
-                                       totalPartitionsAffected: Int,
-                                       timeTakenInMillis: Long
+case class RollbackMetadataStatistics(totalFilesDeleted: Int,
+                                      totalPartitionsAffected: Int,
+                                      timeTakenInMillis: Long
                                      )
 
-case class RollbackPlanStatistics(
-                                   instantToRollback: String,
-                                   totalPartitionsAffected: Int,
-                                   totalFilesToDelete: Int,
-                                   involvedPartitions: Set[String]
+case class RollbackPlanStatistics(instantToRollback: String,
+                                  totalPartitionsAffected: Int,
+                                  totalFilesToDelete: Int,
+                                  involvedPartitions: Set[String]
                                  )
 
 object ShowRollbacksProcedure {
