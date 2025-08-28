@@ -180,7 +180,7 @@ services:
       - "namenode"
 
   zookeeper:
-    image: 'bitnami/zookeeper:3.4.12-r68'
+    image: 'bitnamilegacy/zookeeper:3.4.12-r68'
     hostname: zookeeper
     container_name: zookeeper
     ports:
@@ -189,7 +189,7 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
 
   kafka:
-    image: 'bitnami/kafka:2.0.0'
+    image: 'bitnamilegacy/kafka:2.0.0'
     hostname: kafkabroker
     container_name: kafkabroker
     ports:
