@@ -18,7 +18,7 @@ More details can be found [here](/docs/concepts/) and also [Design And Architect
 
 ### How do I migrate my data to Hudi?
 
-Hudi provides built in support for rewriting your entire table into Hudi one-time using the HDFSParquetImporter tool available from the hudi-cli . You could also do this via a simple read and write of the dataset using the Spark datasource APIs. Once migrated, writes can be performed using normal means discussed [here](faq_writing_tables#what-are-some-ways-to-write-a-hudi-table). This topic is discussed in detail [here](/docs/migration_guide/), including ways to doing partial migrations.
+Hudi provides built in support for rewriting your entire table into Hudi one-time using the HDFSParquetImporter tool available from the hudi-cli . You could also do this via a simple read and write of the dataset using the Spark datasource APIs. Once migrated, writes can be performed using normal means discussed [here](/docs/faq_writing_tables#what-are-some-ways-to-write-a-hudi-table). This topic is discussed in detail [here](/docs/migration_guide/), including ways to doing partial migrations.
 
 ### How to convert an existing COW table to MOR?
 

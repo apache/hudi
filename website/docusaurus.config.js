@@ -268,7 +268,7 @@ module.exports = {
         { to: "/blog", label: "Blog", position: "left" },
         { to: "/powered-by", label: "Who's Using", position: "left" },
         { to: "/roadmap", label: "Roadmap", position: "left" },
-        { to: "/releases/download", label: "Releases", position: "left" },
+        { to: "/releases/download", label: "Download", position: "left" },
         {
           label: 'FAQs',
           position: 'left',
