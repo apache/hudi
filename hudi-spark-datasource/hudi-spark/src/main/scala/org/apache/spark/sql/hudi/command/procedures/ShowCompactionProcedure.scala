@@ -111,6 +111,7 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("timeline_type", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("operation_size", DataTypes.IntegerType, nullable = true, Metadata.empty),
     StructField("partition_path", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("total_log_files_per_partition", DataTypes.LongType, nullable = true, Metadata.empty),
@@ -142,9 +143,9 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
       throw new IllegalArgumentException("Cannot show compaction on a Non Merge On Read table.")
     }
 
-    val activeResults = getCombinedCompactionsWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime)
+    val activeResults = getCombinedCompactionsWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime, "ACTIVE")
     val finalResults = if (showArchived) {
-      val archivedResults = getCombinedCompactionsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime)
+      val archivedResults = getCombinedCompactionsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime, "ARCHIVED")
       val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
       if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
@@ -166,7 +167,8 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
                                                           limit: Int,
                                                           metaClient: HoodieTableMetaClient,
                                                           startTime: String,
-                                                          endTime: String): Seq[Row] = {
+                                                          endTime: String,
+                                                          timelineType: String): Seq[Row] = {
     import scala.collection.mutable.ListBuffer
 
     val allRows = ListBuffer[Row]()
@@ -204,6 +206,7 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
                 compactionInstant.getCompletionTime,
                 compactionInstant.getState.name(),
                 compactionInstant.getAction,
+                timelineType,
                 operationSize,
                 partitionPath,
                 writeStat.getTotalLogFilesCompacted,
@@ -214,10 +217,36 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
               allRows += row
             }
           }
+          if (compactionMetadata.getPartitionToWriteStats.isEmpty) {
+            val operationSize = Try {
+              val compactionPlan = CompactionUtils.getCompactionPlan(metaClient, compactionInstant.requestedTime)
+              compactionPlan.getOperations.size()
+            }.getOrElse(null)
+
+            val totalLogFilesCompacted = compactionMetadata.getTotalLogFilesCompacted
+            val totalUpdatedRecordsCompacted = compactionMetadata.fetchTotalUpdateRecordsWritten
+            val totalLogSizeCompacted = compactionMetadata.getTotalLogFilesSize
+            val totalWriteBytes = compactionMetadata.fetchTotalBytesWritten
+
+            val row = Row(
+              compactionInstant.requestedTime(),
+              compactionInstant.getCompletionTime,
+              compactionInstant.getState.name(),
+              compactionInstant.getAction,
+              timelineType,
+              operationSize,
+              null,
+              totalLogFilesCompacted,
+              totalUpdatedRecordsCompacted,
+              totalLogSizeCompacted,
+              totalWriteBytes
+            )
+            allRows += row
+          }
         }.recover {
           case e: Exception =>
             log.warn(s"Failed to read compaction metadata for instant ${compactionInstant.requestedTime}: ${e.getMessage}")
-            val row = createErrorRowForCompletedWithPartition(compactionInstant)
+            val row = createErrorRowForCompletedWithPartition(compactionInstant, timelineType)
             allRows += row
         }
       } else {
@@ -233,6 +262,7 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
               null,
               compactionInstant.getState.name(),
               compactionInstant.getAction,
+              timelineType,
               partitionOps.size,
               partitionPath,
               partitionDeltaFiles.toLong,
@@ -245,7 +275,7 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
         }.recover {
           case e: Exception =>
             log.warn(s"Failed to read compaction plan for instant ${compactionInstant.requestedTime}: ${e.getMessage}")
-            val row = createErrorRowForPendingWithPartition(compactionInstant)
+            val row = createErrorRowForPendingWithPartition(compactionInstant, timelineType)
             allRows += row
         }
       }
@@ -267,17 +297,17 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
 
   private case class CompactionPlanStatistics(involvedPartitions: Set[String])
 
-  private def createErrorRowForCompletedWithPartition(instant: HoodieInstant): Row = {
+  private def createErrorRowForCompletedWithPartition(instant: HoodieInstant, timelineType: String): Row = {
     Row(
       instant.requestedTime(), instant.getCompletionTime, instant.getState.name(), instant.getAction,
-      null, null, null, null, null, null
+      timelineType, null, null, null, null, null, null
     )
   }
 
-  private def createErrorRowForPendingWithPartition(instant: HoodieInstant): Row = {
+  private def createErrorRowForPendingWithPartition(instant: HoodieInstant, timelineType: String): Row = {
     Row(
       instant.requestedTime(), null, instant.getState.name(), instant.getAction,
-      null, null, null, null, null, null
+      timelineType, null, null, null, null, null, null
     )
   }
 

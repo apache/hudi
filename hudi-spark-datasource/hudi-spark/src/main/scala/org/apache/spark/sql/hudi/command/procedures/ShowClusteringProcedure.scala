@@ -115,6 +115,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("timeline_type", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("input_group_size", DataTypes.IntegerType, nullable = true, Metadata.empty),
     StructField("partition_path", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("input_files_count_per_partition", DataTypes.IntegerType, nullable = true, Metadata.empty),
@@ -141,9 +142,9 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    val activeResults = getCombinedClusteringsWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime)
+    val activeResults = getCombinedClusteringsWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime, "ACTIVE")
     val finalResults = if (showArchived) {
-      val archivedResults = getCombinedClusteringsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime)
+      val archivedResults = getCombinedClusteringsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime, "ARCHIVED")
       val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
       if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
@@ -166,7 +167,8 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
                                                           limit: Int,
                                                           metaClient: HoodieTableMetaClient,
                                                           startTime: String,
-                                                          endTime: String): Seq[Row] = {
+                                                          endTime: String,
+                                                          timelineType: String): Seq[Row] = {
     val allRows = scala.collection.mutable.ListBuffer[Row]()
 
     val filteredClusteringInstants = timeline.getInstants.iterator().asScala
@@ -211,6 +213,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
               clusteringInstant.getCompletionTime,
               clusteringInstant.getState.name(),
               clusteringInstant.getAction,
+              timelineType,
               inputGroupSize,
               partitionPath,
               totalInputFiles,
@@ -219,10 +222,30 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
             )
             allRows += row
           }
+          if (commitMetadata.getPartitionToWriteStats.isEmpty) {
+            val totalInputFiles = planStats.map(_.totalInputFiles).map(Integer.valueOf).orNull
+            val totalOutputFiles = commitMetadata.fetchTotalFilesInsert + commitMetadata.fetchTotalFilesUpdated
+            val totalOutputSizeBytes = commitMetadata.fetchTotalBytesWritten
+            val inputGroupSize = planStats.map(_.totalInputGroups).map(Integer.valueOf).orNull
+
+            val row = Row(
+              clusteringInstant.requestedTime(),
+              clusteringInstant.getCompletionTime,
+              clusteringInstant.getState.name(),
+              clusteringInstant.getAction,
+              timelineType,
+              inputGroupSize,
+              null,
+              totalInputFiles,
+              totalOutputFiles.toInt,
+              totalOutputSizeBytes
+            )
+            allRows += row
+          }
         }.recover {
           case e: Exception =>
             log.warn(s"Failed to read clustering metadata for instant ${clusteringInstant.requestedTime}: ${e.getMessage}")
-            val row = createErrorRowForCompletedWithPartition(clusteringInstant)
+            val row = createErrorRowForCompletedWithPartition(clusteringInstant, timelineType)
             allRows += row
         }
       } else {
@@ -239,6 +262,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
                 null, // state_transition_time - not available for pending
                 clusteringInstant.getState.name(),
                 clusteringInstant.getAction,
+                timelineType,
                 stats.totalInputGroups, // input_group_size - total across all partitions
                 partitionPath,
                 partitionStat.map(_.inputFiles).getOrElse(0), // input_files_count - per partition
@@ -249,13 +273,13 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
             }
           } else {
             // for inflight requests without a clustering plan
-            val row = createErrorRowForPendingWithPartition(clusteringInstant)
+            val row = createErrorRowForPendingWithPartition(clusteringInstant, timelineType)
             allRows += row
           }
         }.recover {
           case e: Exception =>
             log.warn(s"Failed to read clustering plan for instant ${clusteringInstant.requestedTime}: ${e.getMessage}")
-            val row = createErrorRowForPendingWithPartition(clusteringInstant)
+            val row = createErrorRowForPendingWithPartition(clusteringInstant, timelineType)
             allRows += row
         }
       }
@@ -310,17 +334,17 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
                                               outputGroups: Int
                                              )
 
-  private def createErrorRowForCompletedWithPartition(instant: HoodieInstant): Row = {
+  private def createErrorRowForCompletedWithPartition(instant: HoodieInstant, timelineType: String): Row = {
     Row(
       instant.requestedTime(), instant.getCompletionTime, instant.getState.name(), instant.getAction,
-      null, null, null, null, null
+      timelineType, null, null, null, null, null
     )
   }
 
-  private def createErrorRowForPendingWithPartition(instant: HoodieInstant): Row = {
+  private def createErrorRowForPendingWithPartition(instant: HoodieInstant, timelineType: String): Row = {
     Row(
       instant.requestedTime(), null, instant.getState.name(), instant.getAction,
-      null, null, null, null, null
+      timelineType, null, null, null, null, null
     )
   }
 

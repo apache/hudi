@@ -52,6 +52,7 @@ import scala.util.Try
  * - `state_transition_time`: Time when the commit transitioned to completed state (null for pending)
  * - `state`: Operation state (COMPLETED, INFLIGHT, REQUESTED)
  * - `action`: The action type (commit/deltacommit/replacecommit)
+ * - `timeline_type`: Source timeline (ACTIVE, ARCHIVED)
  * - `partition_path`: Partition path for the commit operation
  * - `file_id`: ID of the file
  * - `previous_commit`: Previous commit time for the file
@@ -91,6 +92,7 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
     StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("timeline_type", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("partition_path", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("file_id", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("previous_commit", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -136,10 +138,10 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
     val metaClient = createMetaClient(jsc, basePath)
 
     val activeResults = getCommitsWithPartitionMetadata(
-      metaClient.getActiveTimeline, limit, showFiles, startTime, endTime, metaClient)
+      metaClient.getActiveTimeline, limit, showFiles, startTime, endTime, metaClient, "ACTIVE")
 
     val finalResults = if (showArchived) {
-      val archivedResults = getCommitsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, showFiles, startTime, endTime, metaClient)
+      val archivedResults = getCommitsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, showFiles, startTime, endTime, metaClient, "ARCHIVED")
       val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
       if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
@@ -162,7 +164,8 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
                                               showFiles: Boolean,
                                               startTime: String,
                                               endTime: String,
-                                              metaClient: HoodieTableMetaClient): Seq[Row] = {
+                                              metaClient: HoodieTableMetaClient,
+                                              timelineType: String): Seq[Row] = {
 
     val allRows = scala.collection.mutable.ListBuffer[Row]()
 
@@ -228,6 +231,7 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
                   commitInstant.getCompletionTime,
                   commitInstant.getState.name(),
                   commitInstant.getAction,
+                  timelineType,
                   partitionPath,
                   fileId,
                   prevCommit,
@@ -304,9 +308,10 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
                 commitInstant.getCompletionTime,
                 commitInstant.getState.name(),
                 commitInstant.getAction,
+                timelineType,
                 partitionPath,
                 "*",
-                "*",
+                null,
                 totalNumWrites,
                 totalNumInserts,
                 totalNumDeletes,
@@ -327,6 +332,45 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
                 extraMetadata
               )
             }
+
+            if (commitMetadata.getPartitionToWriteStats.isEmpty) {
+              val totalFilesAdded = commitMetadata.fetchTotalFilesInsert
+              val totalFilesUpdated = commitMetadata.fetchTotalFilesUpdated
+              val totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten
+              val totalRecordsUpdated = commitMetadata.fetchTotalUpdateRecordsWritten
+              val totalBytesWritten = commitMetadata.fetchTotalBytesWritten
+              val totalErrors = commitMetadata.fetchTotalWriteErrors
+              val avgRecordSize = if (totalRecordsWritten > 0) totalBytesWritten / totalRecordsWritten else 0L
+
+              allRows += Row(
+                commitInstant.requestedTime(),
+                commitInstant.getCompletionTime,
+                commitInstant.getState.name(),
+                commitInstant.getAction,
+                timelineType,
+                null, // partitionPath
+                "*", // fileId
+                null, // prevCommit
+                totalRecordsWritten, // numWrites
+                totalFilesAdded, // numInserts
+                null, // numDeletes
+                totalRecordsUpdated, // numUpdateWrites
+                null, // totalLogBlocks
+                null, // totalCorruptLogBlocks
+                null, // totalRollbackBlocks
+                null, // totalLogRecords
+                null, // totalUpdatedRecordsCompacted
+                totalFilesAdded,
+                totalFilesUpdated,
+                totalRecordsWritten,
+                totalRecordsUpdated,
+                totalBytesWritten,
+                totalErrors,
+                null, // fileSize
+                avgRecordSize, // avgRecordSize
+                extraMetadata
+              )
+            }
           }
         }.recover {
           case e: Exception =>
@@ -342,9 +386,10 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
             null, // state_transition_time
             commitInstant.getState.name(),
             commitInstant.getAction,
+            timelineType,
             partitionPath,
             "*", // fileId
-            "*", // prevCommit
+            null, // prevCommit
             0L, // numWrites
             0L, // numInserts
             0L, // numDeletes

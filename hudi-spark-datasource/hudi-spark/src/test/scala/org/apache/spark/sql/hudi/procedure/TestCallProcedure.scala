@@ -175,7 +175,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
       val rollbacks = spark.sql(s"""call show_rollbacks(table => '$tableName', limit => 10)""")
       val rollbackData = rollbacks.collect()
       assert(rollbackData.length >= 1, "Should have at least one rollback operation")
-      assert(rollbacks.schema.fields.length == 13, "show_rollbacks should have 13 fields")
+      assert(rollbacks.schema.fields.length == 14, "show_rollbacks should have 14 fields")
       val schema = rollbacks.schema
       assert(schema.fieldNames.contains("rollback_time"))
       assert(schema.fieldNames.contains("state_transition_time"))
@@ -197,11 +197,11 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
         assert(completedRollback.getString(1) != null)
         assert(completedRollback.getString(2) == "COMPLETED")
         assert(completedRollback.getString(3) == "rollback")
-        assert(completedRollback.getString(4) != null)
-        assert(completedRollback.getInt(9) >= 0)
-        assert(completedRollback.getLong(10) >= 0)
-        assert(completedRollback.getInt(11) >= 0)
-        assert(completedRollback.getInt(12) >= 1)
+        assert(completedRollback.getString(5) != null)
+        assert(completedRollback.getInt(10) >= 0)
+        assert(completedRollback.getLong(11) >= 0)
+        assert(completedRollback.getInt(12) >= 0)
+        assert(completedRollback.getInt(13) >= 1)
       }
     }
   }
@@ -429,7 +429,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
 
       assert(filteredRollbacks.length >= 1, s"Should find at least 1 rollback with files deleted >= 0, got: ${filteredRollbacks.length}")
       filteredRollbacks.foreach { row =>
-        assert(row.getInt(9) >= 0, s"total_files_deleted should be >= 0, got: ${row.getInt(9)}")
+        assert(row.getInt(10) >= 0, s"total_files_deleted should be >= 0, got: ${row.getInt(10)}")
       }
 
       val specificDeleteFilter = spark.sql(
@@ -440,7 +440,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
            |)""".stripMargin).collect()
 
       specificDeleteFilter.foreach { row =>
-        assert(row.getInt(9) == 1, s"total_files_deleted should be 1, got: ${row.getInt(9)}")
+        assert(row.getInt(10) == 1, s"total_files_deleted should be 1, got: ${row.getInt(10)}")
       }
     }
   }

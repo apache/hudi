@@ -79,10 +79,10 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003, 1003)")
         val secondScheduleInstant = client.scheduleClustering(HOption.empty()).get()
         checkAnswer(s"call show_clustering('$tableName')")(
-          Seq(secondScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", 1, "partition=1003", 1, 1, 0L),
-          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", 3, "partition=1000", 1, 1, 0L),
-          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", 3, "partition=1001", 1, 1, 0L),
-          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", 3, "partition=1002", 1, 1, 0L)
+          Seq(secondScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", "ACTIVE", 1, "partition=1003", 1, 1, 0L),
+          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", "ACTIVE", 3, "partition=1000", 1, 1, 0L),
+          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", "ACTIVE", 3, "partition=1001", 1, 1, 0L),
+          Seq(firstScheduleInstant, null, HoodieInstant.State.REQUESTED.name(), "clustering", "ACTIVE", 3, "partition=1002", 1, 1, 0L)
         )
 
         // Do clustering for all clustering plan generated above, and no new clustering
@@ -127,10 +127,10 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
           assertResult(expected.head)(row.getString(0))
           assertResult(expected(2))(row.getString(2))
           assertResult(expected(3))(row.getString(3))
-          assertResult(expected(4))(row.getInt(4))
-          assertResult(expected(5))(row.getString(5))
-          assertResult(expected(6))(row.getInt(6))
-          assertResult(expected(7))(row.getInt(7))
+          assertResult(expected(4))(row.getInt(5))
+          assertResult(expected(5))(row.getString(6))
+          assertResult(expected(6))(row.getInt(7))
+          assertResult(expected(7))(row.getInt(8))
         }
 
         // Do clustering without manual schedule(which will do the schedule if no pending clustering exists)
@@ -197,7 +197,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
           assertResult(firstScheduleInstant)(row.getString(0))
           assertResult(HoodieInstant.State.REQUESTED.name())(row.getString(2))
           assertResult("clustering")(row.getString(3))
-          assertResult(3)(row.getInt(4))
+          assertResult(3)(row.getInt(5))
         }
         // Do clustering for all the clustering plan
         checkAnswer(s"call run_clustering(path => '$basePath', order => 'partition')")(
@@ -930,7 +930,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
         val allClusteringData = allClusterings.collect()
 
         assert(allClusteringData.length >= 1, "Should have at least one clustering operation")
-        assert(allClusterings.schema.fields.length == 9, "show_clustering should have 9 fields")
+        assert(allClusterings.schema.fields.length == 10, "show_clustering should have 10 fields")
 
         val schema = allClusterings.schema
         assert(schema.fieldNames.contains("clustering_time"))
@@ -951,7 +951,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
           assert(pendingClustering.getString(0) != null)
           assert(pendingClustering.getString(2) != null)
           assert(pendingClustering.getString(3) == "clustering")
-          assert(pendingClustering.getInt(4) >= 0)
+          assert(pendingClustering.getInt(5) >= 0)
         }
       }
     }

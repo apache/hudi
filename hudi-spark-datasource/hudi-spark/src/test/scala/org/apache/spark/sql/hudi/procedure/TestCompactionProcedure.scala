@@ -81,12 +81,12 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
       val secondResult = showCompactionResults.find(_.getString(0) == resultB(0).head).get
 
       assertResult(resultA(0).head)(firstResult.getString(0))
-      assertResult(resultA(0)(1))(firstResult.getInt(4))
+      assertResult(resultA(0)(1))(firstResult.getInt(5))
       assertResult(resultA(0)(2))(firstResult.getString(2))
       assertResult("compaction")(firstResult.getString(3))
 
       assertResult(resultB(0).head)(secondResult.getString(0))
-      assertResult(resultB(0)(1))(secondResult.getInt(4))
+      assertResult(resultB(0)(1))(secondResult.getInt(5))
       assertResult(resultB(0)(2))(secondResult.getString(2))
       assertResult("compaction")(secondResult.getString(3))
 
@@ -109,7 +109,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
       // can only see the first scheduled compaction instant
       val resultC = spark.sql(s"call show_compaction('$tableName')")
         .collect()
-        .map(row => Seq(row.getString(0), row.getInt(4), row.getString(2)))
+        .map(row => Seq(row.getString(0), row.getInt(5), row.getString(2)))
       assertResult(2)(resultC.length)
 
       checkAnswer(s"call run_compaction(op => 'run', table => '$tableName', timestamp => ${timestamps(0)})")(
@@ -184,12 +184,12 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
       val secondResult = showCompactionResults.find(_.getString(0) == resultB(0).head).get
 
       assertResult(resultA(0).head)(firstResult.getString(0))
-      assertResult(resultA(0)(1))(firstResult.getInt(4))
+      assertResult(resultA(0)(1))(firstResult.getInt(5))
       assertResult(resultA(0)(2))(firstResult.getString(2))
       assertResult("compaction")(firstResult.getString(3))
 
       assertResult(resultB(0).head)(secondResult.getString(0))
-      assertResult(resultB(0)(1))(secondResult.getInt(4))
+      assertResult(resultB(0)(1))(secondResult.getInt(5))
       assertResult(resultB(0)(2))(secondResult.getString(2))
       assertResult("compaction")(secondResult.getString(3))
 
@@ -438,7 +438,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
         val allCompactionData = allCompactions.collect()
 
         assert(allCompactionData.length >= 1, "Should have at least one compaction operation")
-        assert(allCompactions.schema.fields.length == 10, "show_compaction should have 10 fields")
+        assert(allCompactions.schema.fields.length == 11, "show_compaction should have 11 fields")
 
         val schema = allCompactions.schema
         assert(schema.fieldNames.contains("compaction_time"))
@@ -460,7 +460,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
           assert(pendingCompaction.getString(0) != null)
           assert(pendingCompaction.getString(2) != null)
           assert(pendingCompaction.getString(3) == "compaction")
-          assert(pendingCompaction.getInt(4) >= 0)
+          assert(pendingCompaction.getInt(5) >= 0)
         }
       }
     }

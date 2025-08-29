@@ -478,7 +478,7 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       val savepointData = savepoints.collect()
 
       assert(savepointData.length >= 1, "Should have at least one savepoint")
-      assert(savepoints.schema.fields.length == 10, "show_savepoints should have 10 fields")
+      assert(savepoints.schema.fields.length == 11, "show_savepoints should have 11 fields")
 
       val schema = savepoints.schema
       assert(schema.fieldNames.contains("savepoint_time"))
@@ -497,10 +497,10 @@ class TestSavepointsProcedure extends HoodieSparkProcedureTestBase {
       assert(savepoint.getString(1) != null)
       assert(savepoint.getString(2) == "COMPLETED")
       assert(savepoint.getString(3) == "savepoint")
-      assert(savepoint.getString(4) == "testuser")
-      assert(savepoint.getLong(5) > 0)
-      assert(savepoint.getString(6) == "test savepoint")
-      assert(savepoint.getInt(9) >= 1)
+      assert(savepoint.getString(5) == "testuser")
+      assert(savepoint.getLong(6) > 0)
+      assert(savepoint.getString(7) == "test savepoint")
+      assert(savepoint.getInt(10) >= 1)
     }
   }
 }

@@ -162,6 +162,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
     StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("timeline_type", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("start_clean_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("partition_path", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("policy", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -198,9 +199,9 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    val activeResults = getCombinedCleansWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime)
+    val activeResults = getCombinedCleansWithPartitionMetadata(metaClient.getActiveTimeline, limit, metaClient, startTime, endTime, "ACTIVE")
     val finalResults = if (showArchived) {
-      val archivedResults = getCombinedCleansWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime)
+      val archivedResults = getCombinedCleansWithPartitionMetadata(metaClient.getArchivedTimeline, limit, metaClient, startTime, endTime, "ARCHIVED")
       val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
       if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
@@ -220,7 +221,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
 
   override def build: Procedure = new ShowCleansProcedure()
 
-  private def getCombinedCleansWithPartitionMetadata(timeline: HoodieTimeline, limit: Int, metaClient: HoodieTableMetaClient, startTime: String, endTime: String): Seq[Row] = {
+  private def getCombinedCleansWithPartitionMetadata(timeline: HoodieTimeline, limit: Int, metaClient: HoodieTableMetaClient, startTime: String, endTime: String, timelineType: String): Seq[Row] = {
     import scala.collection.JavaConverters._
     import scala.util.{Failure, Success, Try}
 
@@ -253,6 +254,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
               cleanInstant.getCompletionTime,
               cleanInstant.getState.name(),
               cleanInstant.getAction,
+              timelineType,
               cleanMetadata.getStartCleanTime,
               partitionPath,
               partitionMetadata.getPolicy,
@@ -270,11 +272,35 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
             )
             allRows += row
           }
+          if (cleanMetadata.getPartitionMetadata.isEmpty) {
+            val row = Row(
+              cleanInstant.requestedTime(),
+              cleanInstant.getCompletionTime,
+              cleanInstant.getState.name(),
+              cleanInstant.getAction,
+              timelineType,
+              cleanMetadata.getStartCleanTime,
+              null,
+              null,
+              null,
+              cleanMetadata.getTotalFilesDeleted,
+              null,
+              null,
+              cleanMetadata.getTimeTakenInMillis,
+              cleanMetadata.getTotalFilesDeleted,
+              cleanMetadata.getEarliestCommitToRetain,
+              cleanMetadata.getLastCompletedCommitTimestamp,
+              cleanMetadata.getVersion,
+              null,
+              null
+            )
+            allRows += row
+          }
         } match {
           case Success(_) => // Successfully processed
           case Failure(exception) =>
             logWarning(s"Failed to read clean metadata for instant ${cleanInstant.requestedTime()}", exception)
-            allRows += createErrorRowForCompletedWithPartition(cleanInstant)
+            allRows += createErrorRowForCompletedWithPartition(cleanInstant, timelineType)
         }
       } else {
         Try {
@@ -298,6 +324,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
               null,
               cleanInstant.getState.name(),
               cleanInstant.getAction,
+              timelineType,
               null, // start_clean_time - not available in pending
               partitionPath,
               cleanerPlan.getPolicy,
@@ -319,7 +346,7 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
           case Success(_) => // Successfully processed
           case Failure(exception) =>
             logWarning(s"Failed to read clean plan for instant ${cleanInstant.requestedTime()}", exception)
-            allRows += createErrorRowForPendingWithPartition(cleanInstant)
+            allRows += createErrorRowForPendingWithPartition(cleanInstant, timelineType)
         }
       }
     }
@@ -327,22 +354,24 @@ class ShowCleansProcedure extends BaseProcedure with ProcedureBuilder with Spark
     allRows.take(limit).toSeq
   }
 
-  private def createErrorRowForCompletedWithPartition(cleanInstant: HoodieInstant): Row = {
+  private def createErrorRowForCompletedWithPartition(cleanInstant: HoodieInstant, timelineType: String): Row = {
     Row(
       cleanInstant.requestedTime(),
       cleanInstant.getCompletionTime,
       cleanInstant.getState.name(),
       cleanInstant.getAction,
+      timelineType,
       null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
     )
   }
 
-  private def createErrorRowForPendingWithPartition(cleanInstant: HoodieInstant): Row = {
+  private def createErrorRowForPendingWithPartition(cleanInstant: HoodieInstant, timelineType: String): Row = {
     Row(
       cleanInstant.requestedTime(),
       null,
       cleanInstant.getState.name(),
       cleanInstant.getAction,
+      timelineType,
       null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
     )
   }

@@ -102,6 +102,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
     StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("timeline_type", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("savepointed_by", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("savepointed_at", DataTypes.LongType, nullable = true, Metadata.empty),
     StructField("comments", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -130,9 +131,9 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    val activeResults = getCombinedSavepointsWithPartitionMetadata(metaClient.getActiveTimeline, limit, startTime, endTime)
+    val activeResults = getCombinedSavepointsWithPartitionMetadata(metaClient.getActiveTimeline, limit, startTime, endTime, "ACTIVE")
     val finalResults = if (showArchived) {
-      val archivedResults = getCombinedSavepointsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, startTime, endTime)
+      val archivedResults = getCombinedSavepointsWithPartitionMetadata(metaClient.getArchivedTimeline, limit, startTime, endTime, "ARCHIVED")
       val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
       if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
@@ -153,7 +154,8 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
   private def getCombinedSavepointsWithPartitionMetadata(timeline: HoodieTimeline,
                                                          limit: Int,
                                                          startTime: String,
-                                                         endTime: String): Seq[Row] = {
+                                                         endTime: String,
+                                                         timelineType: String): Seq[Row] = {
     import scala.collection.mutable.ListBuffer
     import scala.util.{Failure, Success, Try}
 
@@ -189,6 +191,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
                   savepointInstant.getCompletionTime,
                   savepointInstant.getState.name(),
                   savepointInstant.getAction,
+                  timelineType,
                   savepointMetadata.getSavepointedBy,
                   savepointMetadata.getSavepointedAt,
                   savepointMetadata.getComments,
@@ -205,6 +208,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
               savepointInstant.getCompletionTime,
               savepointInstant.getState.name(),
               savepointInstant.getAction,
+              timelineType,
               savepointMetadata.getSavepointedBy,
               savepointMetadata.getSavepointedAt,
               savepointMetadata.getComments,
@@ -223,6 +227,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
               savepointInstant.getCompletionTime,
               savepointInstant.getState.name(),
               savepointInstant.getAction,
+              timelineType,
               null,
               null,
               null,

@@ -130,14 +130,14 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       assert(archivedCommitsWithMetadata.length > 0, "Should have archived commits with file metadata")
 
       val fileSpecificRows = archivedCommitsWithMetadata.filter(row =>
-        row.getString(5) != null && !row.getString(5).equals("*"))
+        row.getString(6) != null && !row.getString(6).equals("*"))
       assert(fileSpecificRows.length > 0, "Should have rows with file specific details")
       fileSpecificRows.foreach { row =>
-        assert(row.getString(5) != null && row.getString(5).nonEmpty, "File ID should be populated")
+        assert(row.getString(6) != null && row.getString(6).nonEmpty, "File ID should be populated")
 
-        val hasMetrics = row.getLong(7) > 0 || // num_writes
-          row.getLong(20) > 0 || // total_bytes_written
-          row.getLong(22) > 0 // file_size
+        val hasMetrics = row.getLong(8) > 0 || // num_writes
+          row.getLong(21) > 0 || // total_bytes_written
+          row.getLong(23) > 0 // file_size
         assert(hasMetrics, "Should have some metrics populated for archived files")
       }
     }
@@ -223,14 +223,14 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       assert(commitFiles.length >= 1, s"Expected at least one file, got ${commitFiles.length}")
 
       commitFiles.foreach { row =>
-        val fileId = row.getString(5)
+        val fileId = row.getString(6)
         assert(!fileId.equals("*"), "File ID should not be '*' for file-level details")
-        val numWrites = row.getLong(7)
-        val fileSize = row.getLong(22)
-        val avgRecordSize = row.getLong(23)
+        val numWrites = row.getLong(8)
+        val fileSize = row.getLong(23)
+        val avgRecordSize = row.getLong(24)
         assert(numWrites > 0, s"Number of writes should be > 0, got $numWrites")
         assert(fileSize > 0, s"File size should be > 0, got $fileSize")
-        val totalBytesWritten = row.getLong(20)
+        val totalBytesWritten = row.getLong(21)
         val calculatedAvgSize = if (numWrites > 0) totalBytesWritten / numWrites else 0
         assert(avgRecordSize == calculatedAvgSize,
           s"avg_record_size ($avgRecordSize) should equal totalBytesWritten/numWrites ($calculatedAvgSize)")
@@ -385,7 +385,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       assert(metadatas.length == 1, "Should have at least one row with metadata for the commit")
 
       metadatas.foreach { row =>
-        val extraMetadata = row.getString(24)
+        val extraMetadata = row.getString(25)
         assert(extraMetadata != null, "extra_metadata should be populated")
         assert(extraMetadata.contains("schema"), "extra_metadata should contain schema information")
       }
@@ -430,7 +430,7 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       assert(filteredCommits.length >= 1, s"Should find at least 1 commit with bytes written > 0, got: ${filteredCommits.length}")
       filteredCommits.foreach { row =>
-        assert(row.getLong(20) > 0, s"total_bytes_written should be > 0, got: ${row.getLong(20)}")
+        assert(row.getLong(21) > 0, s"total_bytes_written should be > 0, got: ${row.getLong(21)}")
       }
 
       val complexFilterCommits = spark.sql(
@@ -442,8 +442,8 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       assert(complexFilterCommits.length >= 1, s"Should find commits matching complex filter, got: ${complexFilterCommits.length}")
       complexFilterCommits.foreach { row =>
-        assert(row.getLong(20) > 0, s"total_bytes_written should be > 0, got: ${row.getLong(20)}")
-        assert(row.getLong(16) >= 1, s"total_files_added should be >= 1, got: ${row.getLong(16)}")
+        assert(row.getLong(21) > 0, s"total_bytes_written should be > 0, got: ${row.getLong(21)}")
+        assert(row.getLong(17) >= 1, s"total_files_added should be >= 1, got: ${row.getLong(17)}")
       }
     }
   }

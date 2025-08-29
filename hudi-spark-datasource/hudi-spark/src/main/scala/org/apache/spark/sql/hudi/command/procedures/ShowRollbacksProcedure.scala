@@ -113,6 +113,7 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
     StructField("state_transition_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("state", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("action", DataTypes.StringType, nullable = true, Metadata.empty),
+    StructField("timeline_type", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("start_rollback_time", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("partition_path", DataTypes.StringType, nullable = true, Metadata.empty),
     StructField("rollback_instant", DataTypes.StringType, nullable = true, Metadata.empty),
@@ -144,9 +145,9 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    val activeResults = getCombinedRollbacksWithPartitionMetadata(metaClient, metaClient.getActiveTimeline, limit, startTime, endTime)
+    val activeResults = getCombinedRollbacksWithPartitionMetadata(metaClient, metaClient.getActiveTimeline, limit, startTime, endTime, "ACTIVE")
     val finalResults = if (showArchived) {
-      val archivedResults = getCombinedRollbacksWithPartitionMetadata(metaClient, metaClient.getArchivedTimeline, limit, startTime, endTime)
+      val archivedResults = getCombinedRollbacksWithPartitionMetadata(metaClient, metaClient.getArchivedTimeline, limit, startTime, endTime, "ARCHIVED")
       val combinedResults = (activeResults ++ archivedResults)
         .sortWith((a, b) => a.getString(0) > b.getString(0))
       if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) {
@@ -168,7 +169,8 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
                                                         timeline: HoodieTimeline,
                                                         limit: Int,
                                                         startTime: String,
-                                                        endTime: String): Seq[Row] = {
+                                                        endTime: String,
+                                                        timelineType: String): Seq[Row] = {
     import scala.collection.mutable.ListBuffer
 
     val allRows = ListBuffer[Row]()
@@ -201,6 +203,7 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
                 rollbackInstant.getCompletionTime,
                 rollbackInstant.getState.name(),
                 rollbackInstant.getAction,
+                timelineType,
                 rollbackMetadata.getStartRollbackTime,
                 partitionPath,
                 rollbackMetadata.getCommitsRollback.toString,
@@ -220,6 +223,7 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
                 rollbackInstant.getCompletionTime,
                 rollbackInstant.getState.name(),
                 rollbackInstant.getAction,
+                timelineType,
                 rollbackMetadata.getStartRollbackTime,
                 partitionPath,
                 rollbackMetadata.getCommitsRollback.toString,
@@ -233,10 +237,29 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
               allRows += row
             }
           }
+          if (rollbackMetadata.getPartitionMetadata.isEmpty) {
+            val row = Row(
+              rollbackInstant.requestedTime(),
+              rollbackInstant.getCompletionTime,
+              rollbackInstant.getState.name(),
+              rollbackInstant.getAction,
+              timelineType,
+              rollbackMetadata.getStartRollbackTime,
+              null,
+              rollbackMetadata.getCommitsRollback.toString,
+              null,
+              null,
+              metadataStats.totalFilesDeleted,
+              metadataStats.timeTakenInMillis,
+              metadataStats.totalPartitionsAffected,
+              rollbackMetadata.getVersion
+            )
+            allRows += row
+          }
         }.recover {
           case e: Exception =>
             log.warn(s"Failed to read rollback metadata for instant ${rollbackInstant.requestedTime}: ${e.getMessage}")
-            val row = createErrorRowForCompleted(rollbackInstant)
+            val row = createErrorRowForCompleted(rollbackInstant, timelineType)
             allRows += row
         }
       } else {
@@ -249,6 +272,7 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
               "", // state_transition_time - not available in pending
               rollbackInstant.getState.name(),
               rollbackInstant.getAction,
+              timelineType,
               "", // start_rollback_time - not available in pending
               partitionPath,
               planStats.instantToRollback,
@@ -264,7 +288,7 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
         }.recover {
           case e: Exception =>
             log.warn(s"Failed to read rollback plan for instant ${rollbackInstant.requestedTime}: ${e.getMessage}")
-            val row = createErrorRowForPending(rollbackInstant)
+            val row = createErrorRowForPending(rollbackInstant, timelineType)
             allRows += row
         }
       }
@@ -272,17 +296,17 @@ class ShowRollbacksProcedure extends BaseProcedure with ProcedureBuilder with Lo
     allRows.toSeq
   }
 
-  private def createErrorRowForCompleted(instant: HoodieInstant): Row = {
+  private def createErrorRowForCompleted(instant: HoodieInstant, timelineType: String): Row = {
     Row(
       instant.requestedTime(), instant.getCompletionTime, instant.getState.name(), instant.getAction,
-      null, null, null, null, null, null, null, null, null, null
+      timelineType, null, null, null, null, null, null, null, null, null
     )
   }
 
-  private def createErrorRowForPending(instant: HoodieInstant): Row = {
+  private def createErrorRowForPending(instant: HoodieInstant, timelineType: String): Row = {
     Row(
       instant.requestedTime(), null, instant.getState.name(), instant.getAction,
-      null, null, null, null, null, null, null, null, null, null
+      timelineType, null, null, null, null, null, null, null, null, null
     )
   }
 
