@@ -143,7 +143,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
               storagePathInfo, fileFormat, Option.empty());
     }
 
-    return getFileRecordIterator(storagePathInfo.getPath(), reader, dataSchema, requiredSchema);
+    return getFileRecordIterator(reader, storagePathInfo.getPath(), isLogFile, dataSchema, requiredSchema);
   }
 
   @Override
@@ -165,15 +165,15 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
               filePath, fileFormat, Option.empty());
     }
 
-    return getFileRecordIterator(filePath, reader, dataSchema, requiredSchema);
+    return getFileRecordIterator(reader, filePath, isLogFile, dataSchema, requiredSchema);
   }
 
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
-      StoragePath filePath,
       HoodieAvroFileReader reader,
+      StoragePath filePath,
+      boolean isLogFile,
       Schema dataSchema,
       Schema requiredSchema) throws IOException {
-    boolean isLogFile = FSUtils.isLogFile(filePath);
     Schema fileOutputSchema;
     Map<String, String> renamedColumns;
     if (isLogFile) {
