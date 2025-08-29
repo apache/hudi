@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.HashMap;
@@ -81,7 +81,7 @@ public class NineToEightDowngradeHandler implements DowngradeHandler {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     if (config.enableComplexKeygenValidation()
         && isComplexKeyGeneratorWithSingleRecordKeyField(metaClient.getTableConfig())) {
-      throw new HoodieException(getComplexKeygenErrorMessage("downgrade"));
+      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("downgrade"));
     }
     // Handle secondary index.
     UpgradeDowngradeUtils.dropNonV1SecondaryIndexPartitions(

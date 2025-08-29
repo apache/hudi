@@ -156,7 +156,6 @@ public class Assertions {
 
   public static void assertComplexKeyGeneratorValidationThrows(Executable writeOperation, String operation) {
     HoodieException exception = assertThrows(HoodieException.class, writeOperation);
-    assertEquals(getComplexKeygenErrorMessage(operation),
-        exception.getMessage());
+    assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage());
   }
 }

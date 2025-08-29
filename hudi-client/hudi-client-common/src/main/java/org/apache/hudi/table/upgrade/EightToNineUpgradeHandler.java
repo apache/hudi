@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.table.HoodieTable;
 
@@ -112,7 +112,7 @@ public class EightToNineUpgradeHandler implements UpgradeHandler {
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     if (config.enableComplexKeygenValidation()
         && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieException(getComplexKeygenErrorMessage("upgrade"));
+      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("upgrade"));
     }
     // Populate missing index versions indexes
     Option<HoodieIndexMetadata> indexMetadataOpt = metaClient.getIndexMetadata();
