@@ -42,6 +42,15 @@ github:
     master:
       required_pull_request_reviews:
         required_approving_review_count: 1
+    custom_subjects:
+      new_discussion: "{title} ({repository})"
+      edit_discussion: "Re: {title} ({repository})"
+      close_discussion: "Re: {title} ({repository})"
+      close_discussion_with_comment: "Re: {title} ({repository})"
+      reopen_discussion: "Re: {title} ({repository})"
+      new_comment_discussion: "Re: {title} ({repository})"
+      edit_comment_discussion: "Re: {title} ({repository})"
+      delete_comment_discussion: "Re: {title} ({repository})"
   collaborators:
     - ad1happy2go
     - rangareddy
@@ -50,4 +59,5 @@ notifications:
   commits:      commits@hudi.apache.org
   issues:       commits@hudi.apache.org
   pullrequests: commits@hudi.apache.org
+  discussions:  dev@hudi.apache.org
   jira_options: link label
