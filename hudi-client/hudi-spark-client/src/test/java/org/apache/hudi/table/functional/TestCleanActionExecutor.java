@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -150,6 +151,9 @@ public class TestCleanActionExecutor {
     when(activeTimeline.transitionCleanRequestedToInflight(any())).thenReturn(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLEAN_ACTION, "002"));
     when(mockHoodieTable.getMetadataWriter("002")).thenReturn(Option.empty());
 
+    TransactionManager mockTransactionManager = mock(TransactionManager.class);
+    when(mockHoodieTable.getTxnManager()).thenReturn(mockTransactionManager);
+
     CleanActionExecutor cleanActionExecutor = new CleanActionExecutor(context, config, mockHoodieTable, "002");
     if (failureType == CleanFailureType.TRUE_ON_DELETE) {
       assertCleanExecutionSuccess(cleanActionExecutor, filePath);
@@ -166,9 +170,7 @@ public class TestCleanActionExecutor {
   }
 
   private void assertCleanExecutionFailure(CleanActionExecutor cleanActionExecutor) {
-    assertThrows(HoodieException.class, () -> {
-      cleanActionExecutor.execute();
-    });
+    assertThrows(HoodieException.class, cleanActionExecutor::execute);
   }
 
   private void assertCleanExecutionSuccess(CleanActionExecutor cleanActionExecutor, StoragePath filePath) {

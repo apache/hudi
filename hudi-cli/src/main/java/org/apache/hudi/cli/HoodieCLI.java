@@ -92,7 +92,6 @@ public class HoodieCLI {
     setTableMetaClient(HoodieTableMetaClient.builder()
         .setConf(HoodieCLI.conf.newInstance()).setBasePath(basePath).setLoadActiveTimelineOnLoad(false)
         .setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
-        .setTimeGeneratorConfig(timeGeneratorConfig == null ? HoodieTimeGeneratorConfig.defaultConfig(basePath) : timeGeneratorConfig)
         .build());
   }
 

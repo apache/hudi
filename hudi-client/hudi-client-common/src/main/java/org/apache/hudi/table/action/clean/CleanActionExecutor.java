@@ -63,7 +63,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.txnManager = table.getTxnManager();
   }
 
   private static boolean deleteFileAndGetResult(HoodieStorage storage, String deletePathStr) throws IOException {
@@ -222,7 +222,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       );
       this.txnManager.beginStateChange(Option.of(inflightInstant), Option.empty());
       writeTableMetadata(metadata, inflightInstant.requestedTime());
-      table.getActiveTimeline().transitionCleanInflightToComplete(false, inflightInstant, Option.of(metadata));
+      table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant, Option.of(metadata), txnManager.generateInstantTime());
       LOG.info("Marked clean started on {} as complete", inflightInstant.requestedTime());
       return metadata;
     } finally {
