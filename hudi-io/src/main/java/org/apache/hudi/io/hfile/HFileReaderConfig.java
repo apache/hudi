@@ -19,6 +19,7 @@
 
 package org.apache.hudi.io.hfile;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -87,7 +88,25 @@ public class HFileReaderConfig {
   public long getCacheTtl(TimeUnit timeUnit) {
     return timeUnit.convert(cacheTtlMinutes, TimeUnit.MINUTES);
   }
-  
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(blockCacheSize, cacheTtlMinutes);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (obj == null || getClass() != obj.getClass()) {
+      return false;
+    }
+    HFileReaderConfig other = (HFileReaderConfig) obj;
+    return blockCacheSize == other.blockCacheSize
+        && cacheTtlMinutes == other.cacheTtlMinutes;
+  }
+
   @Override
   public String toString() {
     return "HFileReaderConfig{"
