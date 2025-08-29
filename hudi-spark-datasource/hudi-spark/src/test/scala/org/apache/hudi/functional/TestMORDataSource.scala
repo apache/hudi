@@ -30,7 +30,7 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtil
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
@@ -809,6 +809,47 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   def verifyShow(df: DataFrame): Unit = {
     df.show(1)
     df.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").show(1)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableVersion], names = Array("SIX", "EIGHT"))
+  def testIncrementalQueryMORWithCompactionAndClean(tableVersion: HoodieTableVersion): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+    initMetaClient(HoodieTableType.MERGE_ON_READ)
+    // delta commit1
+    // delta commit2
+    // delta commit3
+    // commit <--compaction
+    // delta commit4
+    // delta commit5
+    // clean
+    for (i <- 1 to 5) {
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 10)).asScala.toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+      inputDF.write.format("hudi")
+        .options(writeOpts)
+        .option(HoodieCompactionConfig.INLINE_COMPACT.key(), "true")
+        .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), tableVersion.versionCode().toString)
+        .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "3")
+        .option(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "2")
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+        // Use InMemoryIndex to generate log only mor table.
+        .option(HoodieIndexConfig.INDEX_TYPE.key, IndexType.INMEMORY.toString)
+        .mode(if (i == 1) SaveMode.Overwrite else SaveMode.Append)
+        .save(basePath)
+    }
+
+    // specify begin time as 000 for the incremental query, and the query will fallback to full table scan.
+    val rowCount1 = spark.read.format("hudi")
+      .options(readOpts)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key(), "true")
+      .option(DataSourceReadOptions.START_COMMIT.key(), "000")
+      .load(basePath)
+      .count()
+    assertEquals(50, rowCount1)
   }
 
   @ParameterizedTest
