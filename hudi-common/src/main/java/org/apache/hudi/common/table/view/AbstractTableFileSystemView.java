@@ -506,7 +506,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     Predicate<StoragePathInfo> rtFilePredicate = pathInfo -> {
       String fileName = pathInfo.getPath().getName();
       Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(fileName);
-      return matcher.find() && fileName.contains(logFileExtension);
+      return matcher.matches() && fileName.contains(logFileExtension);
     };
     return pathInfoList.stream().filter(rtFilePredicate).map(HoodieLogFile::new);
   }

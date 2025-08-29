@@ -18,12 +18,18 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieLogFile {
   private final String pathStr = "file:///tmp/hoodie/2021/01/01/.136281f3-c24e-423b-a65a-95dbfbddce1d_100.log.2_1-0-1";
@@ -75,6 +81,91 @@ public class TestHoodieLogFile {
     String pathWithSuffix = pathStr + suffix;
     HoodieLogFile hoodieLogFile = new HoodieLogFile(pathWithSuffix);
     assertFileGetters(pathWithSuffix, null, hoodieLogFile, -1, suffix);
+  }
+
+  @Test
+  void name() {
+  }
+
+  @Test
+  void testLogPatternMatch() {
+    boolean firstApproach = true; // toggle this to false if you want the other one
+    int runs = 100;
+    long totalTime = 0;
+
+    Pattern LOG_FILE_PATTERN_1 =
+        Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
+    Pattern LOG_FILE_PATTERN_2 =
+        Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?$");
+
+    for (int r = 0; r < runs; r++) {
+      HoodieTimer timer = HoodieTimer.start();
+      for (int i = 1; i < 1_000_000; i++) {
+        String logFileName = generateLogFileName();
+        if (firstApproach) {
+          Matcher matcher = LOG_FILE_PATTERN_1.matcher(logFileName);
+          assertTrue(matcher.find());
+        } else {
+          Matcher matcher = LOG_FILE_PATTERN_2.matcher(logFileName);
+          assertTrue(matcher.find());
+        }
+      }
+      long elapsed = timer.endTimer();
+      totalTime += elapsed;
+      System.out.println("Run " + (r + 1) + " took " + elapsed + " ms");
+    }
+
+    System.out.println("===================================");
+    System.out.println("Average time (" + (firstApproach ? "find" : "matches") + ") = "
+        + (totalTime / runs) + " ms");
+  }
+
+  private String generateLogFileName() {
+    // Part 1: random name before underscore
+    Random random = new Random();
+    String name1 = randomString(random, 3, 6);
+
+    // Part 2: random name after underscore
+    String name2 = randomString(random, 2, 5);
+
+    // Extension: log or archive
+    String extension = random.nextBoolean() ? "log" : "archive";
+
+    // Random number
+    long number = Math.abs(random.nextLong() & Long.MAX_VALUE) % 100000;
+
+    // Sometimes include date + optional .cdc
+    StringBuilder sb = new StringBuilder();
+    sb.append(".").append(name1).append("_").append(name2)
+        .append(".").append(extension)
+        .append(".").append(number);
+
+    if (random.nextBoolean()) { // optional date part
+      int year = 2000 + random.nextInt(30); // 2000–2029
+      int month = 1 + random.nextInt(12);
+      int day = 1 + random.nextInt(28); // keep safe
+
+      sb.append("_")
+          .append(year).append("-")
+          .append(String.format("%02d", month)).append("-")
+          .append(String.format("%02d", day));
+
+      if (random.nextBoolean()) { // optional .cdc
+        sb.append(".cdc");
+      }
+    }
+
+    return sb.toString();
+  }
+
+  private String randomString(Random random, int minLen, int maxLen) {
+    int len = minLen + random.nextInt(maxLen - minLen + 1);
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < len; i++) {
+      char c = (char) ('a' + random.nextInt(26));
+      sb.append(c);
+    }
+    return sb.toString();
   }
 
   private void assertFileGetters(StoragePathInfo pathInfo, HoodieLogFile hoodieLogFile,

@@ -318,7 +318,7 @@ public class FSUtils {
    */
   public static String getFileExtensionFromLog(StoragePath logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(logPath.toString(), "LogFile");
     }
     return matcher.group(3);
@@ -327,7 +327,7 @@ public class FSUtils {
   public static String getFileIdFromFileName(String fileName) {
     if (FSUtils.isLogFile(fileName)) {
       Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
-      if (!matcher.find()) {
+      if (!matcher.matches()) {
         throw new InvalidHoodieFileNameException(fileName, "LogFile");
       }
       return matcher.group(1);
@@ -337,7 +337,7 @@ public class FSUtils {
 
   public static String getFileIdFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path, "LogFile");
     }
     return matcher.group(1);
@@ -355,7 +355,7 @@ public class FSUtils {
    */
   public static String getDeltaCommitTimeFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(2);
@@ -366,7 +366,7 @@ public class FSUtils {
    */
   public static Integer getTaskPartitionIdFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     String val = matcher.group(7);
@@ -378,7 +378,7 @@ public class FSUtils {
    */
   public static String getWriteTokenFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(6);
@@ -389,7 +389,7 @@ public class FSUtils {
    */
   public static Integer getStageIdFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     String val = matcher.group(8);
@@ -401,7 +401,7 @@ public class FSUtils {
    */
   public static Integer getTaskAttemptIdFromLogPath(StoragePath path) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     String val = matcher.group(9);
@@ -417,7 +417,7 @@ public class FSUtils {
 
   public static int getFileVersionFromLog(String logFileName) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logFileName);
-    if (!matcher.find()) {
+    if (!matcher.matches()) {
       throw new HoodieIOException("Invalid log file name: " + logFileName);
     }
     return Integer.parseInt(matcher.group(4));
