@@ -45,26 +45,25 @@ public class HFileReaderFactory {
   private final HoodieStorage storage;
   private final HoodieMetadataConfig metadataConfig;
   private final Either<StoragePath, byte[]> fileSource;
-  private final Lazy<Long> fileSize;
+  private Option<Long> fileSizeOpt;
 
   public HFileReaderFactory(HoodieStorage storage,
                             TypedProperties properties,
-                            Either<StoragePath, byte[]> fileSource) {
+                            Either<StoragePath, byte[]> fileSource,
+                            Option<Long> fileSizeOpt) {
     this.storage = storage;
     this.metadataConfig = HoodieMetadataConfig.newBuilder().withProperties(properties).build();
     this.fileSource = fileSource;
-    this.fileSize = Lazy.lazily(() -> {
-      try {
-        return determineFileSize();
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to read file size", e);
-      }
-    });
+    this.fileSizeOpt = fileSizeOpt;
   }
 
   public HFileReader createHFileReader() throws IOException {
-    final SeekableDataInputStream inputStream = createInputStream(fileSize.get());
-    return new HFileReaderImpl(inputStream, fileSize.get());
+    if (fileSizeOpt.isEmpty()) {
+      fileSizeOpt = Option.of(determineFileSize());
+    }
+
+    final SeekableDataInputStream inputStream = createInputStream(fileSizeOpt.get());
+    return new HFileReaderImpl(inputStream, fileSizeOpt.get());
   }
 
   private long determineFileSize() throws IOException {
@@ -99,6 +98,7 @@ public class HFileReaderFactory {
     private HoodieStorage storage;
     private Option<TypedProperties> properties = Option.empty();
     private Either<StoragePath, byte[]> fileSource;
+    private Option<Long> fileSizeOpt;
 
     public Builder withStorage(HoodieStorage storage) {
       this.storage = storage;
@@ -122,11 +122,18 @@ public class HFileReaderFactory {
       return this;
     }
 
+    public Builder withFileSize(long fileSize) {
+      ValidationUtils.checkState(fileSize >= 0, "file size is invalid, should be greater than or equal to zero");
+      this.fileSizeOpt = Option.of(fileSize);
+      return this;
+    }
+
     public HFileReaderFactory build() {
       ValidationUtils.checkArgument(storage != null, "Storage cannot be null");
       ValidationUtils.checkArgument(fileSource != null, "HFile source cannot be null");
       TypedProperties props = properties.isPresent() ? properties.get() : new TypedProperties();
-      return new HFileReaderFactory(storage, props, fileSource);
+      Option<Long> newFileSizeOpt = fileSizeOpt == null ? Option.empty() : fileSizeOpt;
+      return new HFileReaderFactory(storage, props, fileSource, newFileSizeOpt);
     }
   }
 }
