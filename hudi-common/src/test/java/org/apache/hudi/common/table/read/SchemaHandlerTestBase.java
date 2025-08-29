@@ -273,7 +273,7 @@ public abstract class SchemaHandlerTestBase {
   private static HoodieRecordMerger mockRecordMerger(boolean isProjectionCompatible, String[] mandatoryFields) throws IOException {
     HoodieRecordMerger merger = mock(HoodieRecordMerger.class);
     when(merger.isProjectionCompatible()).thenReturn(isProjectionCompatible);
-    when(merger.merge(any(), any(), any(), any(), any())).thenReturn(null);
+    when(merger.merge(any(), any(), any(), any())).thenReturn(null);
     when(merger.getMandatoryFieldsForMerging(any(), any(), any())).thenReturn(mandatoryFields);
     return merger;
   }

@@ -22,7 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -31,10 +31,9 @@ import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -172,9 +171,8 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
   public void testWithThreeLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions, useRecordPositions);
     try (ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions)) {
-      // The records with keys 6 and 8 are deletes with lower ordering val
       List<String> leftKeysExpected =
-          Arrays.asList("1", "3", "6", "7", "8", "9", "10");
+          Arrays.asList("1", "3", "7", "9", "10");
       List<String> leftKeysActual = new ArrayList<>();
       while (iterator.hasNext()) {
         leftKeysActual.add(iterator.next()
@@ -242,37 +240,33 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
     private String[] orderingFields;
 
     @Override
-    public Option<Pair<HoodieRecord, Schema>> merge(
-        HoodieRecord older,
-        Schema oldSchema,
-        HoodieRecord newer,
-        Schema newSchema,
+    public <T> BufferedRecord<T> merge(
+        BufferedRecord<T> older,
+        BufferedRecord<T> newer,
+        RecordContext<T> recordContext,
         TypedProperties props
     ) throws IOException {
       if (orderingFields == null) {
         this.orderingFields = ConfigUtils.getOrderingFields(props);
       }
-      if (newer.getOrderingValue(newSchema, props, orderingFields).compareTo(
-          older.getOrderingValue(oldSchema, props, orderingFields)) >= 0) {
-        if (newer.isDelete(newSchema, props)) {
-          return Option.empty();
+      if (newer.getOrderingValue().compareTo(older.getOrderingValue()) >= 0) {
+        if (newer.isDelete()) {
+          return newer;
         }
-        int id = Integer.parseInt(((HoodieAvroIndexedRecord) newer)
-            .getData().get(newSchema.getField(ROW_KEY).pos()).toString());
+        int id = Integer.parseInt(newer.getRecordKey());
         if (id % 2 == 1L) {
-          return Option.of(Pair.of(newer, newSchema));
+          return newer;
         }
       } else {
-        if (older.isDelete(oldSchema, props)) {
-          return Option.empty();
+        if (older.isDelete()) {
+          return older;
         }
-        int id = Integer.parseInt(((HoodieAvroIndexedRecord) older)
-            .getData().get(oldSchema.getField(ROW_KEY).pos()).toString());
+        int id = Integer.parseInt(older.getRecordKey());
         if (id % 2 == 1L) {
-          return Option.of(Pair.of(older, oldSchema));
+          return older;
         }
       }
-      return Option.empty();
+      return BufferedRecords.createDelete(newer.getRecordKey(), OrderingValues.getDefault());
     }
 
     @Override

@@ -38,7 +38,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -553,7 +552,6 @@ public class HoodieIndexUtils {
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger(),
-        orderingFieldNames,
         writerSchema.get(),
         Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
         properties,
@@ -606,8 +604,6 @@ public class HoodieIndexUtils {
       boolean shouldUpdatePartitionPath,
       HoodieWriteConfig config,
       HoodieTable table) {
-    final HoodieRecordMerger merger = config.getRecordMerger();
-
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
         incomingRecords.mapToPair(record -> Pair.of(record.getRecordKey(), record));
 

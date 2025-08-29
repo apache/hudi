@@ -379,7 +379,7 @@ public abstract class RecordContext<T> implements Serializable {
   public Comparable getOrderingValue(T record,
                                      Schema schema,
                                      String[] orderingFieldNames) {
-    if (orderingFieldNames.length == 0) {
+    if (orderingFieldNames == null || orderingFieldNames.length == 0) {
       return OrderingValues.getDefault();
     }
 

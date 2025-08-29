@@ -47,14 +47,7 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
-    /*
-     * Check if the incoming record is a delete record.
-     */
-    if (recordBytes.length == 0 || isDeletedRecord) {
-      return Option.empty();
-    }
-
-    GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
+    Option<IndexedRecord> incomingRecord = recordBytes.length == 0 || isDeletedRecord ? Option.empty() : Option.of(bytesToAvro(recordBytes, schema));
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -62,7 +55,7 @@ public class EventTimeAvroPayload extends DefaultHoodieRecordPayload {
       return Option.of(currentValue);
     }
 
-    return Option.of(incomingRecord);
+    return incomingRecord;
   }
 
   @Override
