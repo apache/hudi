@@ -18,19 +18,10 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.spark.SparkConf
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestShowTimelineProcedure extends HoodieSparkSqlTestBase {
-  override def sparkConf(): SparkConf = {
-    super.sparkConf()
-      .set("spark.driver.host", "localhost")
-      .set("spark.driver.port", "0") // Let Spark choose a random available port
-      .set("spark.ui.port", "0") // Let Spark choose a random available port for UI
-      .set("spark.blockManager.port", "0") // Let Spark choose a random available port for block manager
-      .set("spark.driver.bindAddress", "127.0.0.1")
-      .set("spark.sql.defaultColumn.enabled", "false") // Also add this to avoid other warnings
-  }
 
   test("Test show_timeline procedure") {
     withTempDir { tmp =>

@@ -26,6 +26,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 /**
