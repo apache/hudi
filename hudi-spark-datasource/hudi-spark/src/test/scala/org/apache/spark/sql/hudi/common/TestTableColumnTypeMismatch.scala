@@ -23,7 +23,7 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.hudi.ErrorMessageChecker.isIncompatibleDataException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
-class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
+class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase {
 
   test("Test Spark successful implicit type casting behaviors") {
     withTempDir { tmp =>
@@ -553,7 +553,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         primaryKey = "id",
         orderingFields = "ts",
         tableType = "mor",
-        expectedErrorPattern = "Primary key data type mismatch between source table and target table. Target table uses IntegerType for column 'id', source table uses LongType for 's0.id'"
+        expectedErrorPattern = "Invalid MERGE INTO matching condition: s0.id: can't cast s0.id (of LongType) to IntegerType"
       ),
       TypeMismatchTestCase(
         description = "Precombine field type mismatch",
@@ -573,7 +573,7 @@ class TestTableColumnTypeMismatch extends HoodieSparkSqlTestBase with ScalaAsser
         primaryKey = "id",
         orderingFields = "ts",
         tableType = "cow",
-        expectedErrorPattern = "Precombine field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
+        expectedErrorPattern = "Ordering field data type mismatch between source table and target table. Target table uses LongType for column 'ts', source table uses IntegerType for 's0.ts'"
       )
     )
 
