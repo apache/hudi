@@ -41,7 +41,9 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     ProcedureParameter.optional(1, "path", DataTypes.StringType),
     ProcedureParameter.required(2, "log_file_path_pattern", DataTypes.StringType),
     ProcedureParameter.optional(3, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, ""),
+    ProcedureParameter.optional(5, "startTime", DataTypes.StringType, ""),
+    ProcedureParameter.optional(6, "endTime", DataTypes.StringType, "")
   )
 
   override def outputType: StructType = StructType(Array[StructField](
@@ -60,6 +62,8 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     val logFilePathPattern: String = getArgValueOrDefault(args, parameters(2)).get.asInstanceOf[String]
     val limit: Int = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Int]
     val filter = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[String]
+    val startTime = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[String]
+    val endTime = getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[String]
 
     validateFilter(filter, outputType)
     val storage = createMetaClient(jsc, basePath).getStorage
@@ -118,7 +122,18 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
     }
     val rows = new java.util.ArrayList[Row]
     val objectMapper = new ObjectMapper()
-    commitCountAndMetadata.asScala.foreach {
+
+    val filteredMetadata = if (startTime.nonEmpty && endTime.nonEmpty) {
+      commitCountAndMetadata.asScala.filter { case (instantTime, _) =>
+        val startMatches = startTime.isEmpty || instantTime >= startTime
+        val endMatches = endTime.isEmpty || instantTime <= endTime
+        startMatches && endMatches
+      }
+    } else {
+      commitCountAndMetadata.asScala
+    }
+
+    filteredMetadata.foreach {
       case (instantTime, values) =>
         values.asScala.foreach {
           tuple3 =>
@@ -131,7 +146,12 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
             ))
         }
     }
-    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+
+    val results = if (startTime.nonEmpty && endTime.nonEmpty) {
+      rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    } else {
+      rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    }
     applyFilter(results, filter, outputType)
   }
 

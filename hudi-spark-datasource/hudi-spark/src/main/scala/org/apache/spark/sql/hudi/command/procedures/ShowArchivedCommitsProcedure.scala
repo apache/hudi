@@ -39,8 +39,8 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(2, "start_ts", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "end_ts", DataTypes.StringType, ""),
+    ProcedureParameter.optional(2, "startTime", DataTypes.StringType, ""),
+    ProcedureParameter.optional(3, "endTime", DataTypes.StringType, ""),
     ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
