@@ -34,6 +34,10 @@ import java.util.Objects;
  * An interface abstracting a container holding a collection of objects of type {@code T}
  * allowing to perform common transformation on it.
  *
+ * For all HoodieData, make sure you wrap it with either
+ * - withHoodieDataCleanUp to clean it up in a finally clause.
+ * - or use HoodieDataCleanupManager to track the HoodieData and clean it up only on exception.
+ *
  * This abstraction provides common API implemented by
  * <ol>
  *   <li>In-memory implementation ({@code HoodieListData}, {@code HoodieListPairData}), where all objects
