@@ -131,24 +131,14 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
     val startTime = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
     val endTime = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
     val timelineEntries = getTimelineEntries(metaClient, limit, showArchived, startTime, endTime)
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(timelineEntries, filter, outputType, sparkSession)
-    } else {
-      timelineEntries
-    }
+    applyFilter(timelineEntries, filter, outputType)
   }
 
   override def build: Procedure = new ShowTimelineProcedure()
