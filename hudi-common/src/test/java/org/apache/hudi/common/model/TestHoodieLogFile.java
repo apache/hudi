@@ -30,6 +30,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieLogFile {
@@ -109,7 +110,41 @@ public class TestHoodieLogFile {
           assertTrue(matcher.find());
         } else {
           Matcher matcher = LOG_FILE_PATTERN_2.matcher(logFileName);
-          assertTrue(matcher.find());
+          assertTrue(matcher.matches());
+        }
+      }
+      long elapsed = timer.endTimer();
+      totalTime += elapsed;
+      System.out.println("Run " + (r + 1) + " took " + elapsed + " ms");
+    }
+
+    System.out.println("===================================");
+    System.out.println("Average time (" + (firstApproach ? "find" : "matches") + ") = "
+        + (totalTime / runs) + " ms");
+  }
+
+  @Test
+  void testLogPatternMatch_MisMatch() {
+    boolean firstApproach = true; // toggle this to false if you want the other one
+    int runs = 100;
+    long totalTime = 0;
+    Random random = new Random();
+
+    Pattern LOG_FILE_PATTERN_1 =
+        Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
+    Pattern LOG_FILE_PATTERN_2 =
+        Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?$");
+
+    for (int r = 0; r < runs; r++) {
+      HoodieTimer timer = HoodieTimer.start();
+      for (int i = 1; i < 1_000_000; i++) {
+        String logFileName = randomString(random, 10, 100) + ".hfile";
+        if (firstApproach) {
+          Matcher matcher = LOG_FILE_PATTERN_1.matcher(logFileName);
+          assertFalse(matcher.find());
+        } else {
+          Matcher matcher = LOG_FILE_PATTERN_2.matcher(logFileName);
+          assertFalse(matcher.matches());
         }
       }
       long elapsed = timer.endTimer();
