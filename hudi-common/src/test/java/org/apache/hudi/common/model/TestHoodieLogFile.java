@@ -96,9 +96,9 @@ public class TestHoodieLogFile {
     long totalTime = 0;
     Random random = new Random();
 
-    Pattern LOG_FILE_PATTERN_1 =
+    Pattern logFilePattern1 =
         Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
-    Pattern LOG_FILE_PATTERN_2 =
+    Pattern logFilePattern2 =
         Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?$");
 
     for (int r = 0; r < runs; r++) {
@@ -106,10 +106,10 @@ public class TestHoodieLogFile {
       for (int i = 1; i < 1_000_000; i++) {
         String logFileName = generateLogFileName(random);
         if (firstApproach) {
-          Matcher matcher = LOG_FILE_PATTERN_1.matcher(logFileName);
+          Matcher matcher = logFilePattern1.matcher(logFileName);
           assertTrue(matcher.find());
         } else {
-          Matcher matcher = LOG_FILE_PATTERN_2.matcher(logFileName);
+          Matcher matcher = logFilePattern2.matcher(logFileName);
           assertTrue(matcher.matches());
         }
       }
@@ -130,9 +130,9 @@ public class TestHoodieLogFile {
     long totalTime = 0;
     Random random = new Random();
 
-    Pattern LOG_FILE_PATTERN_1 =
+    Pattern logFilePattern1 =
         Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
-    Pattern LOG_FILE_PATTERN_2 =
+    Pattern logFilePattern2 =
         Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?$");
 
     for (int r = 0; r < runs; r++) {
@@ -140,10 +140,10 @@ public class TestHoodieLogFile {
       for (int i = 1; i < 1_000_000; i++) {
         String logFileName = randomString(random, 10, 100) + ".hfile";
         if (firstApproach) {
-          Matcher matcher = LOG_FILE_PATTERN_1.matcher(logFileName);
+          Matcher matcher = logFilePattern1.matcher(logFileName);
           assertFalse(matcher.find());
         } else {
-          Matcher matcher = LOG_FILE_PATTERN_2.matcher(logFileName);
+          Matcher matcher = logFilePattern2.matcher(logFileName);
           assertFalse(matcher.matches());
         }
       }
@@ -176,13 +176,13 @@ public class TestHoodieLogFile {
 
     StringBuilder sb = new StringBuilder();
 
-    int token_1 = Math.abs(random.nextInt());
-    int token_2 = Math.abs(random.nextInt());
-    int token_3 = Math.abs(random.nextInt());
+    int token1 = Math.abs(random.nextInt());
+    int token2 = Math.abs(random.nextInt());
+    int token3 = Math.abs(random.nextInt());
 
-    sb.append(token_1).append("-")
-        .append(token_2).append("-")
-        .append(token_3);
+    sb.append(token1).append("-")
+        .append(token2).append("-")
+        .append(token3);
 
     if (random.nextBoolean()) {
       sb.append(".cdc");
