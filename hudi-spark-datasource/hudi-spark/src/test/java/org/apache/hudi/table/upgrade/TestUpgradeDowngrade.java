@@ -353,12 +353,16 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, true),
         Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.NINE, false),
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, true),
+        Arguments.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, false),
         Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, true),
         Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, false),
         Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, true),
         Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.SIX, false),
         Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, true),
-        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, false)
+        Arguments.of(HoodieTableVersion.NINE, HoodieTableVersion.EIGHT, false),
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, true),
+        Arguments.of(HoodieTableVersion.EIGHT, HoodieTableVersion.SIX, false)
     );
   }
 
