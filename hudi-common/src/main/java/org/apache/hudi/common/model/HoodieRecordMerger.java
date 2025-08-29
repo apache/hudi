@@ -205,4 +205,11 @@ public interface HoodieRecordMerger extends Serializable {
       return null;
     }
   }
+
+  static <T> boolean mergingCommitTimeOrderedDelete(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
+    if (newRecord.isCommitTimeOrderingDelete() || oldRecord.isCommitTimeOrderingDelete()) {
+      return true;
+    }
+    return false;
+  }
 }

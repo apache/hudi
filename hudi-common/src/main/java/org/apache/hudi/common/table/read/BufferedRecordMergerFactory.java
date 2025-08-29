@@ -347,11 +347,6 @@ public class BufferedRecordMergerFactory {
       }
       return Option.empty();
     }
-
-    @Override
-    public BufferedRecord<T> mergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      return recordMerger.merge(olderRecord, newerRecord, recordContext, props);
-    }
   }
 
   /**
@@ -369,12 +364,13 @@ public class BufferedRecordMergerFactory {
     }
 
     @Override
-    protected BufferedRecord<T> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
-      if (isFinalMerge) {
-        return super.getMergedRecord(olderRecord, newerRecord, isFinalMerge);
-      } else {
-        return deltaMerger.merge(olderRecord, newerRecord, recordContext, props);
+    public Option<BufferedRecord<T>> deltaMergeRecords(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
+      BufferedRecord<T> mergedRecord = deltaMerger.merge(existingRecord, newRecord, recordContext, props);
+      // If pre-combine does not return existing record, update it
+      if (mergedRecord.getRecord() != existingRecord.getRecord()) {
+        return Option.of(mergedRecord);
       }
+      return Option.empty();
     }
   }
 
@@ -398,21 +394,12 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public Option<BufferedRecord<T>> deltaMergeRecords(BufferedRecord<T> newRecord, BufferedRecord<T> existingRecord) throws IOException {
-      BufferedRecord<T> mergedRecord = getMergedRecord(existingRecord, newRecord, false);
+      BufferedRecord<T> mergedRecord = recordMerger.merge(existingRecord, newRecord, recordContext, props);
       // If pre-combine does not return existing record, update it
       if (mergedRecord.getRecord() != existingRecord.getRecord()) {
         return Option.of(mergedRecord);
       }
       return Option.empty();
-    }
-
-    @Override
-    public BufferedRecord<T> mergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      return getMergedRecord(olderRecord, newerRecord, true);
-    }
-
-    protected BufferedRecord<T> getMergedRecord(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord, boolean isFinalMerge) throws IOException {
-      return recordMerger.merge(olderRecord, newerRecord, recordContext, props);
     }
   }
 
@@ -461,10 +448,8 @@ public class BufferedRecordMergerFactory {
 
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException {
-      return mergeRecords(olderRecord, newerRecord);
+      return recordMerger.merge(olderRecord, newerRecord, recordContext, props);
     }
-
-    public abstract BufferedRecord<T> mergeRecords(BufferedRecord<T> olderRecord, BufferedRecord<T> newerRecord) throws IOException;
   }
 
   // -------------------------------------------------------------------------

@@ -42,6 +42,11 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    // If the new record is a commit time ordered delete, it will always be used regardless of the ordering value of the old record.
+    // If the old record was a commit time ordered delete, the newer record will be returned because it occurred after that delete and ordering time comparison is not needed.
+    if (HoodieRecordMerger.mergingCommitTimeOrderedDelete(older, newer)) {
+      return newer;
+    }
     if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
       return older;
     } else {
@@ -51,6 +56,11 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public <T> BufferedRecord<T> partialMerge(BufferedRecord<T> older, BufferedRecord<T> newer, Schema readerSchema, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    // If the new record is a commit time ordered delete, it will always be used regardless of the ordering value of the old record.
+    // If the old record was a commit time ordered delete, the newer record will be returned because it occurred after that delete and ordering time comparison is not needed.
+    if (HoodieRecordMerger.mergingCommitTimeOrderedDelete(older, newer)) {
+      return newer;
+    }
     if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
       if (older.isDelete() || newer.isDelete()) {
         return older;
