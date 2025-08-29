@@ -31,6 +31,13 @@ import TabItem from '@theme/TabItem';
 * Flink engine
 * Unit, functional, integration tests and CI
 
+## Known Regressions
+We have a ComplexKeyGenerator related regression reported [here](release-0.14.1#known-regressions). Please refrain from migrating, if you have single field as record key and multiple partition fields.
+
+:::tip
+Avoid upgrading any existing table to 1.0.1 if you are using ComplexKeyGenerator with single record key configured.
+:::
+
 ## Raw Release Notes
 
 The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12355195)

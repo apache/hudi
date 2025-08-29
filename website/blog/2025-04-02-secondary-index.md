@@ -103,8 +103,7 @@ LOCATION 'file:///tmp/hudi_test_table';
 Now we can create a secondary index on the `city` field to optimize queries filtering on this column.
 
 ```sql
-CREATE INDEX idx_city 
-ON hudi_table USING secondary_index(city);
+CREATE INDEX idx_city ON hudi_table(city);
 ```
 
 Now, when executing a query such as:

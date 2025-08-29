@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[9573],{20051:a=>{a.exports=JSON.parse('{"tag":{"label":"aws","permalink":"/blog/tags/aws","allTagsPath":"/blog/tags","count":8,"unlisted":false},"listMetadata":{"permalink":"/blog/tags/aws","page":1,"postsPerPage":12,"totalPages":1,"totalCount":8,"blogDescription":"Blog","blogTitle":"Blogs List Page"}}')}}]);

@@ -323,8 +323,7 @@ single field. This issue was also present in version 0.14.1. When upgrading a ta
 it may silently ingest duplicate records.
 
 :::tip
-Avoid upgrading any existing table to 0.14.1 and 0.15.0 from any prior version if you are using ComplexKeyGenerator and 
-number of fields in record key is 1.
+Avoid upgrading any existing table to 0.14.1 and 0.15.0 from any prior version if you are using ComplexKeyGenerator with single field as record key and multiple partition fields.
 :::
 
 ## Raw Release Notes

@@ -17,6 +17,21 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+      - name: Check for files in content/
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "Changed files:"
+          git fetch origin ${{ github.base_ref }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD)
+
+          echo "$CHANGED_FILES"
+
+          if echo "$CHANGED_FILES" | grep -q '^content/'; then
+            echo "❌ PR should not change files under content/; change the files under website/ instead."
+            exit 1
+          else
+            echo "✅ No files under content/ directory."
+          fi
       - name: Prepare branch
         run: |
           git config --global user.name "CI BOT"
