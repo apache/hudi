@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -92,6 +93,7 @@ public class TestHoodieLogFile {
     boolean firstApproach = true; // toggle this to false if you want the other one
     int runs = 100;
     long totalTime = 0;
+    Random random = new Random();
 
     Pattern LOG_FILE_PATTERN_1 =
         Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
@@ -101,7 +103,7 @@ public class TestHoodieLogFile {
     for (int r = 0; r < runs; r++) {
       HoodieTimer timer = HoodieTimer.start();
       for (int i = 1; i < 1_000_000; i++) {
-        String logFileName = generateLogFileName();
+        String logFileName = generateLogFileName(random);
         if (firstApproach) {
           Matcher matcher = LOG_FILE_PATTERN_1.matcher(logFileName);
           assertTrue(matcher.find());
@@ -120,42 +122,40 @@ public class TestHoodieLogFile {
         + (totalTime / runs) + " ms");
   }
 
-  private String generateLogFileName() {
+  private String generateLogFileName(Random random) {
     // Part 1: random name before underscore
-    Random random = new Random();
-    String name1 = randomString(random, 3, 6);
+    String logFileId = randomString(random, 3, 6);
 
     // Part 2: random name after underscore
-    String name2 = randomString(random, 2, 5);
+    String instantId = String.valueOf(Math.abs(random.nextLong()));
 
     // Extension: log or archive
-    String extension = random.nextBoolean() ? "log" : "archive";
+    String fileExtension = random.nextBoolean() ? ".log" : ".archive";
 
     // Random number
-    long number = Math.abs(random.nextLong() & Long.MAX_VALUE) % 100000;
+    int logVersion = Math.abs(random.nextInt()) % 10;
 
     // Sometimes include date + optional .cdc
+
+    String logWriteToken = "";
+
     StringBuilder sb = new StringBuilder();
-    sb.append(".").append(name1).append("_").append(name2)
-        .append(".").append(extension)
-        .append(".").append(number);
 
-    if (random.nextBoolean()) { // optional date part
-      int year = 2000 + random.nextInt(30); // 2000–2029
-      int month = 1 + random.nextInt(12);
-      int day = 1 + random.nextInt(28); // keep safe
+    int token_1 = Math.abs(random.nextInt());
+    int token_2 = Math.abs(random.nextInt());
+    int token_3 = Math.abs(random.nextInt());
 
-      sb.append("_")
-          .append(year).append("-")
-          .append(String.format("%02d", month)).append("-")
-          .append(String.format("%02d", day));
+    sb.append(token_1).append("-")
+        .append(token_2).append("-")
+        .append(token_3);
 
-      if (random.nextBoolean()) { // optional .cdc
-        sb.append(".cdc");
-      }
+    if (random.nextBoolean()) {
+      sb.append(".cdc");
     }
 
-    return sb.toString();
+    logWriteToken = sb.toString();
+
+    return FSUtils.makeLogFileName(logFileId, fileExtension, instantId, logVersion, logWriteToken);
   }
 
   private String randomString(Random random, int minLen, int maxLen) {
