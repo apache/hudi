@@ -268,7 +268,21 @@ module.exports = {
         { to: "/blog", label: "Blog", position: "left" },
         { to: "/powered-by", label: "Who's Using", position: "left" },
         { to: "/roadmap", label: "Roadmap", position: "left" },
-        { to: "/releases/download", label: "Download", position: "left" },
+        { to: "/releases/download", label: "Releases", position: "left" },
+        {
+          label: 'FAQs',
+          position: 'left',
+          items: [
+            { label: 'Overview', to: '/faqs/faq' },
+            { label: 'General', to: '/faqs/faq_general' },
+            { label: 'Design and Concepts', to: '/faqs/faq_design_and_concepts' },
+            { label: 'Writing Tables', to: '/faqs/faq_writing_tables' },
+            { label: 'Reading Tables', to: '/faqs/faq_reading_tables' },
+            { label: 'Table Services', to: '/faqs/faq_table_services' },
+            { label: 'Storage', to: '/faqs/faq_storage' },
+            { label: 'Integrations', to: '/faqs/faq_integrations' },
+          ],
+        },
         // right
         {
           type: "docsVersionDropdown",

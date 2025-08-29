@@ -139,7 +139,7 @@ module.exports = {
                 },
             ],
         },
-        {
+        /*{
             type: 'category',
             label: 'Frequently Asked Questions(FAQs)',
             items: [
@@ -152,7 +152,7 @@ module.exports = {
                 'faq_storage',
                 'faq_integrations',
             ],
-        },
+        },*/
         'privacy',
     ],
     quick_links: [

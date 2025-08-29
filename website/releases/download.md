@@ -1,7 +1,7 @@
 ---
-title: Download
+title: Releases
 sidebar_position: 1
-keywords: [ hudi, download]
+keywords: [ hudi, download, releases]
 toc: true
 last_modified_at: 2022-12-27T15:59:57-04:00
 ---
