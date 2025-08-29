@@ -132,7 +132,6 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
                                          TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt);
     this.compactionOperation = Option.empty();
-    this.readerContext = hoodieTable.getReaderContextFactoryForWrite().getContext();
     TypedProperties properties = config.getProps();
     properties.putAll(hoodieTable.getMetaClient().getTableConfig().getProps());
     this.maxInstantTime = instantTime;

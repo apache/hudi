@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
@@ -146,13 +145,6 @@ public interface HoodieRecordMerger extends Serializable {
   @Deprecated
   default boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
     return true;
-  }
-
-  /**
-   * Merges two records with the same key in full outer merge fashion i.e. all fields from both records are included.
-   */
-  default List<Pair<HoodieRecord, Schema>> fullOuterMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    throw new UnsupportedOperationException("Full outer merging logic is not implemented by " + this.getClass().getName());
   }
 
   /**

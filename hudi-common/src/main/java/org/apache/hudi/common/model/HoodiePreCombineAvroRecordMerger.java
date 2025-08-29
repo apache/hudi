@@ -50,7 +50,7 @@ public class HoodiePreCombineAvroRecordMerger extends HoodieAvroRecordMerger {
     GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
     GenericRecord olderAvroRecord = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
     HoodieRecordPayload newerPayload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
-    HoodieRecordPayload olderPayload = HoodieRecordUtils.loadPayload(payloadClass, olderAvroRecord, newer.getOrderingValue());
+    HoodieRecordPayload olderPayload = HoodieRecordUtils.loadPayload(payloadClass, olderAvroRecord, older.getOrderingValue());
     HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema, props);
     try {
       if (payload == olderPayload) {
