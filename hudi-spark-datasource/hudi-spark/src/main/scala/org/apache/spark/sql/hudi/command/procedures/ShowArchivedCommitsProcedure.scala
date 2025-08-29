@@ -40,7 +40,8 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(2, "start_ts", DataTypes.StringType, ""),
-    ProcedureParameter.optional(3, "end_ts", DataTypes.StringType, "")
+    ProcedureParameter.optional(3, "end_ts", DataTypes.StringType, ""),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -86,6 +87,9 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
     var startTs = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[String]
     var endTs = getArgValueOrDefault(args, PARAMETERS(3)).get.asInstanceOf[String]
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
+
+    validateFilter(filter, outputType)
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
@@ -97,7 +101,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     if (StringUtils.isNullOrEmpty(endTs)) endTs = getTimeDaysAgo(1)
 
     val archivedTimeline = metaClient.getArchivedTimeline
-    try {
+    val results = try {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs)
       val timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs).asInstanceOf[HoodieTimeline]
       if (includeExtraMetadata) {
@@ -109,6 +113,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
       // clear the instant details from memory after printing to reduce usage
       archivedTimeline.clearInstantDetailsFromMemory(startTs, endTs)
     }
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowArchivedCommitsProcedure(includeExtraMetadata)

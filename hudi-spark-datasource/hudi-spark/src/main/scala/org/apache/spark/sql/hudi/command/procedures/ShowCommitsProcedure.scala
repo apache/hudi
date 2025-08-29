@@ -130,13 +130,7 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
     val startTime = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
     val endTime = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
@@ -160,11 +154,7 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
         activeResults.take(limit)
       }
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(finalResults, filter, outputType, sparkSession)
-    } else {
-      finalResults
-    }
+    applyFilter(finalResults, filter, outputType)
   }
 
   private def getCommitsWithPartitionMetadata(timeline: HoodieTimeline,
@@ -334,44 +324,6 @@ class ShowCommitsProcedure extends BaseProcedure with ProcedureBuilder with Logg
                 totalErrors,
                 totalFileSize,
                 avgRecordSize,
-                extraMetadata
-              )
-            }
-
-            if (commitMetadata.getPartitionToWriteStats.isEmpty) {
-              val totalFilesAdded = commitMetadata.fetchTotalFilesInsert
-              val totalFilesUpdated = commitMetadata.fetchTotalFilesUpdated
-              val totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten
-              val totalRecordsUpdated = commitMetadata.fetchTotalUpdateRecordsWritten
-              val totalBytesWritten = commitMetadata.fetchTotalBytesWritten
-              val totalErrors = commitMetadata.fetchTotalWriteErrors
-              val avgRecordSize = if (totalRecordsWritten > 0) totalBytesWritten / totalRecordsWritten else 0L
-
-              allRows += Row(
-                commitInstant.requestedTime(),
-                commitInstant.getCompletionTime,
-                commitInstant.getState.name(),
-                commitInstant.getAction,
-                "*", // partitionPath
-                "*", // fileId
-                "*", // prevCommit
-                totalRecordsWritten, // numWrites
-                totalFilesAdded, // numInserts
-                0L, // numDeletes
-                totalRecordsUpdated, // numUpdateWrites
-                0L, // totalLogBlocks
-                0L, // totalCorruptLogBlocks
-                0L, // totalRollbackBlocks
-                0L, // totalLogRecords
-                0L, // totalUpdatedRecordsCompacted
-                totalFilesAdded,
-                totalFilesUpdated,
-                totalRecordsWritten,
-                totalRecordsUpdated,
-                totalBytesWritten,
-                totalErrors,
-                0L, // fileSize
-                avgRecordSize, // avgRecordSize
                 extraMetadata
               )
             }

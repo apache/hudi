@@ -125,13 +125,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
     val startTime = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
     val endTime = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
 
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.validateFilterExpression(filter, outputType, sparkSession) match {
-        case Left(errorMessage) =>
-          throw new IllegalArgumentException(s"Invalid filter expression: $errorMessage")
-        case Right(_) => // Validation passed, continue
-      }
-    }
+    validateFilter(filter, outputType)
 
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
@@ -153,11 +147,7 @@ class ShowSavepointsProcedure extends BaseProcedure with ProcedureBuilder with L
         activeResults.take(limit)
       }
     }
-    if (filter != null && filter.trim.nonEmpty) {
-      HoodieProcedureFilterUtils.evaluateFilter(finalResults, filter, outputType, sparkSession)
-    } else {
-      finalResults
-    }
+    applyFilter(finalResults, filter, outputType)
   }
 
   private def getCombinedSavepointsWithPartitionMetadata(timeline: HoodieTimeline,

@@ -32,16 +32,13 @@ import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
 
-/**
- * @deprecated Use [[ShowCommitsProcedure]] instead which provides a comprehensive view of commit operations
- */
-@Deprecated
 class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 100),
     ProcedureParameter.optional(2, "instant_time", DataTypes.StringType),
-    ProcedureParameter.optional(3, "metadata_key", DataTypes.StringType)
+    ProcedureParameter.optional(3, "metadata_key", DataTypes.StringType),
+    ProcedureParameter.optional(4, "filter", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -62,6 +59,9 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
     val limit = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Int]
     val instantTime = getArgValueOrDefault(args, PARAMETERS(2))
     val metadataKey = getArgValueOrDefault(args, PARAMETERS(3))
+    val filter = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
+
+    validateFilter(filter, outputType)
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
@@ -96,7 +96,8 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
 
     val rows = new util.ArrayList[Row]
     metadatas.asScala.foreach(r => rows.add(Row(timestamp, action, r._1, r._2)))
-    rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    applyFilter(results, filter, outputType)
   }
 
   override def build: Procedure = new ShowCommitExtraMetadataProcedure()
