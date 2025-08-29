@@ -206,10 +206,11 @@ public interface HoodieRecordMerger extends Serializable {
     }
   }
 
-  static <T> boolean mergingCommitTimeOrderedDelete(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
-    if (newRecord.isCommitTimeOrderingDelete() || oldRecord.isCommitTimeOrderingDelete()) {
-      return true;
-    }
-    return false;
+  /**
+   * If the new record is a commit time ordered delete, it will always be used regardless of the ordering value of the old record.
+   * If the old record was a commit time ordered delete, the newer record will be returned because it occurred after that delete and ordering time comparison is not needed.
+   */
+  static <T> boolean isCommitTimeOrderingDelete(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
+    return newRecord.isCommitTimeOrderingDelete() || oldRecord.isCommitTimeOrderingDelete();
   }
 }
