@@ -22,6 +22,7 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.HoodieSparkRecordMerger;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 
@@ -36,7 +37,7 @@ public class HoodieSparkDeleteRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
-    return BufferedRecords.createDelete(newer.getRecordKey());
+    return BufferedRecords.createDelete(newer.getRecordKey(), HoodieRecordMerger.maxOrderingValue(older, newer));
   }
 
   @Override

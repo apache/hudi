@@ -41,6 +41,9 @@ public class HoodiePreCombineAvroRecordMerger extends HoodieAvroRecordMerger {
 
   @Override
   public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
+    if (HoodieRecordMerger.isCommitTimeOrderingDelete(older, newer)) {
+      return newer;
+    }
     init(props);
     return preCombine(older, newer, recordContext, recordContext.getSchemaFromBufferRecord(newer), props);
   }

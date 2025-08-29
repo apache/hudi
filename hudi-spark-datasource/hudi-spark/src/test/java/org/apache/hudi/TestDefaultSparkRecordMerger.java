@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.Row;
@@ -147,7 +148,7 @@ class TestDefaultSparkRecordMerger {
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
     BufferedRecord<InternalRow> oldRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(oldValue.toSeq()), avroSchema, recordContext, Collections.singletonList(INT_COLUMN_NAME), false);
-    BufferedRecord<InternalRow> newRecord = BufferedRecords.createDelete(key.getRecordKey());
+    BufferedRecord<InternalRow> newRecord = BufferedRecords.createDelete(key.getRecordKey(), OrderingValues.getDefault());
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
     TypedProperties props = new TypedProperties();
@@ -166,7 +167,7 @@ class TestDefaultSparkRecordMerger {
     Row newValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
     Schema avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
         SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
-    BufferedRecord<InternalRow> oldRecord = BufferedRecords.createDelete(key.getRecordKey());
+    BufferedRecord<InternalRow> oldRecord = BufferedRecords.createDelete(key.getRecordKey(), OrderingValues.getDefault());
     BufferedRecord<InternalRow> newRecord = BufferedRecords.fromEngineRecord(InternalRow.apply(newValue.toSeq()), avroSchema, recordContext, Collections.singletonList(INT_COLUMN_NAME), false);
 
     DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();

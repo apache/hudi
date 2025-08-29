@@ -212,4 +212,13 @@ public interface HoodieRecordMerger extends Serializable {
   static <T> boolean isCommitTimeOrderingDelete(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
     return newRecord.isCommitTimeOrderingDelete() || oldRecord.isCommitTimeOrderingDelete();
   }
+
+  /**
+   * Returns the max ordering value with the given two records.
+   */
+  static <T> Comparable maxOrderingValue(BufferedRecord<T> oldRecord, BufferedRecord<T> newRecord) {
+    Comparable oldOrderingVal = oldRecord.getOrderingValue();
+    Comparable newOrderingVal = newRecord.getOrderingValue();
+    return oldOrderingVal.compareTo(newOrderingVal) > 0 ? oldOrderingVal : newOrderingVal;
+  }
 }

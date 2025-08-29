@@ -80,8 +80,8 @@ public class BufferedRecords {
     return new BufferedRecord<>(deleteRecord.getRecordKey(), recordContext.getOrderingValue(deleteRecord), null, null, hoodieOperation);
   }
 
-  public static <T> BufferedRecord<T> createDelete(String recordKey) {
-    return new BufferedRecord<>(recordKey, null, null, null, HoodieOperation.DELETE);
+  public static <T> BufferedRecord<T> createDelete(String recordKey, Comparable orderingValue) {
+    return new BufferedRecord<>(recordKey, orderingValue, null, null, HoodieOperation.DELETE);
   }
 
   /**
