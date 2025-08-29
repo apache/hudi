@@ -122,6 +122,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.metadata.HoodieMetadataWriteUtils.createMetadataWriteConfig;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit;
@@ -575,10 +576,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     if (partitionIdToAllFilesMap.isEmpty()) {
       return Pair.of(Collections.emptyList(), Pair.of(fileGroupCount, engineContext.emptyHoodieData()));
     }
+    HoodieIndexVersion columnStatsIndexVersion = existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataMetaClient);
     // Find the columns to index
     final List<String> columnsToIndex = new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(dataMetaClient.getTableConfig(),
         dataWriteConfig.getMetadataConfig(), tableSchema, true,
-        Option.of(dataWriteConfig.getRecordMerger().getRecordType())).keySet());
+        Option.of(dataWriteConfig.getRecordMerger().getRecordType()), columnStatsIndexVersion).keySet());
 
     if (columnsToIndex.isEmpty()) {
       // this can only happen if meta fields are disabled and cols to index is not explicitly overridden.

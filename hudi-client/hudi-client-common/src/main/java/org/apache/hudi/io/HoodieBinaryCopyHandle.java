@@ -35,7 +35,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.avro.HoodieAvroSchemaConverter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
@@ -75,12 +75,12 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
         return fileSchema;
       } catch (Exception e) {
         LOG.error("Failed to read schema from input file", e);
-        throw new HoodieIOException("Failed to read schema from input file when schema evolution is disabled: " + inputFiles.get(0), 
+        throw new HoodieIOException("Failed to read schema from input file when schema evolution is disabled: " + inputFiles.get(0),
             e instanceof IOException ? (IOException) e : new IOException(e));
       }
     } else {
       // Default behavior: use the table's write schema for evolution
-      return new AvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
+      return new HoodieAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
     }
   }
 

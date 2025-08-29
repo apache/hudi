@@ -223,7 +223,7 @@ public class AvroSchemaUtils {
     return atomicTypeEqualityPredicate.apply(sourceSchema, targetSchema);
   }
 
-  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
+  public static Option<Schema> findNestedFieldSchema(Schema schema, String fieldName) {
     if (StringUtils.isNullOrEmpty(fieldName)) {
       return Option.empty();
     }
@@ -236,7 +236,11 @@ public class AvroSchemaUtils {
       }
       schema = foundField.schema();
     }
-    return Option.of(resolveNullableSchema(schema).getType());
+    return Option.of(resolveNullableSchema(schema));
+  }
+
+  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
+    return findNestedFieldSchema(schema, fieldName).map(Schema::getType);
   }
 
   /**

@@ -381,7 +381,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     List<String> expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     addNColumns(expected, HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue());
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(getTableSchema(expected))), false).keySet()));
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with table schema < default
     int tableSchemaSize = HoodieMetadataConfig.COLUMN_STATS_INDEX_MAX_COLUMNS.defaultValue() - 10;
@@ -391,7 +391,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     addNColumns(expected, tableSchemaSize);
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(getTableSchema(expected))), false).keySet()));
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with max val < tableSchema
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -403,7 +403,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     addNColumns(expected, 3);
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(getTableSchema(expected))), false).keySet()));
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with max val > tableSchema
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -415,7 +415,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
     addNColumns(expected, tableSchemaSize);
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(getTableSchema(expected))), false).keySet()));
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with list of cols and a nested field as well.
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -443,7 +443,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .endRecord();
 
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(schema)), false).keySet()));
+        Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
 
     //test with list of cols longer than config
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -458,7 +458,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_7");
     expected.add("col_11");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(getTableSchema(expected))), false).keySet()));
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with list of cols including meta cols than config
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -473,7 +473,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_11");
     expected.add("_hoodie_commit_seqno");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(getTableSchema(expected))), false).keySet()));
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with avro schema
     schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
@@ -486,7 +486,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("decimalField");
     expected.add("localTimestampMillisField");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(schema)), true).keySet()));
+        Lazy.eagerly(Option.of(schema)), true, V1).keySet()));
 
     //test with avro schema and nested fields and unsupported types
     schema = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_STR);
@@ -498,7 +498,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("firstname");
     expected.add("student.lastnameNested");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(schema)), false).keySet()));
+        Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
 
     //test with avro schema with max cols set
     schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
@@ -510,10 +510,10 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("booleanField");
     expected.add("intField");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(schema)), false).keySet()));
+        Lazy.eagerly(Option.of(schema)), false, V1).keySet()));
     //test with avro schema with meta cols
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(schema))), false).keySet()));
+        Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(schema))), false, V1).keySet()));
 
     //test with avro schema with type filter
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -537,11 +537,11 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("current_ts");
     expected.add("_hoodie_is_deleted");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA)), false).keySet()));
+        Lazy.eagerly(Option.of(HoodieTestDataGenerator.AVRO_SCHEMA)), false, V1).keySet()));
     //test with avro schema with meta cols
     assertListEquality(expected,
         new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-            Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA))), false).keySet()));
+            Lazy.eagerly(Option.of(HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA))), false, V1).keySet()));
 
     //test with meta cols disabled
     tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
@@ -553,7 +553,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected = new ArrayList<>();
     addNColumns(expected, tableSchemaSize);
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(getTableSchema(expected))), false).keySet()));
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with meta cols disabled with col list
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -567,7 +567,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("col_7");
     expected.add("col_11");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(getTableSchema(expected))), false).keySet()));
+        Lazy.eagerly(Option.of(getTableSchema(expected))), false, V1).keySet()));
 
     //test with meta cols disabled with avro schema
     metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -579,7 +579,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("decimalField");
     expected.add("localTimestampMillisField");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
-        Lazy.eagerly(Option.of(schema)), true).keySet()));
+        Lazy.eagerly(Option.of(schema)), true, V1).keySet()));
   }
 
   private void assertListEquality(List<String> expected, List<String> actual) {
@@ -623,19 +623,19 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .endRecord();
 
     // Test for primitive fields
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("stringField").schema(), Option.empty()));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("intField").schema(), Option.empty()));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("booleanField").schema(), Option.empty()));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("floatField").schema(), Option.empty()));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("doubleField").schema(), Option.empty()));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("longField").schema(), Option.empty()));
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("unionIntField").schema(), Option.empty()));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("stringField").schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("intField").schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("booleanField").schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("floatField").schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("doubleField").schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("longField").schema(), Option.empty(), V1));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("unionIntField").schema(), Option.empty(), V1));
 
     // Test for unsupported fields
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("arrayField").schema(), Option.empty()));
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("mapField").schema(), Option.empty()));
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("structField").schema(), Option.empty()));
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("bytesField").schema(), Option.of(HoodieRecord.HoodieRecordType.SPARK)));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("arrayField").schema(), Option.empty(), V1));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("mapField").schema(), Option.empty(), V1));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("structField").schema(), Option.empty(), V1));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("bytesField").schema(), Option.of(HoodieRecord.HoodieRecordType.SPARK), V1));
 
     // Test for logical types
     Schema dateFieldSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
@@ -643,28 +643,28 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         .fields()
         .name("dateField").type(dateFieldSchema).noDefault()
         .endRecord();
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("dateField").schema(), Option.empty()));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema.getField("dateField").schema(), Option.empty(), V1));
 
     // Test for logical decimal type with allowed precision and scale
     schema = Schema.create(Schema.Type.BYTES);
     LogicalTypes.Decimal decimalType = LogicalTypes.decimal(30, 15);
     decimalType.addToSchema(schema);
     // Expect the column to be supported.
-    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO)));
+    assertTrue(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO), V1));
 
     // Test for logical decimal type with precision and scale exceeding the limit
     schema = Schema.create(Schema.Type.BYTES);
     decimalType = LogicalTypes.decimal(35, 20);
     decimalType.addToSchema(schema);
     // Expect the column to be unsupported.
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO)));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO), V1));
 
     // Test for logical decimal type with precision exceeding limit after upscaling
     schema = Schema.create(Schema.Type.BYTES);
     decimalType = LogicalTypes.decimal(28, 10);
     decimalType.addToSchema(schema);
     // Expect the column to be unsupported.
-    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO)));
+    assertFalse(HoodieTableMetadataUtil.isColumnTypeSupported(schema, Option.of(HoodieRecord.HoodieRecordType.AVRO), V1));
   }
 
   @Test
