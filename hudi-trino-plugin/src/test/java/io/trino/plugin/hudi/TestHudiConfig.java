@@ -34,7 +34,7 @@ public class TestHudiConfig
         assertRecordedDefaults(recordDefaults(HudiConfig.class)
                 .setColumnsToHide(ImmutableList.of())
                 .setTableStatisticsEnabled(true)
-                .setMetadataEnabled(false)
+                .setMetadataEnabled(true)
                 .setUseParquetColumnNames(true)
                 .setUseParquetColumnIndex(false)
                 .setTableStatisticsExecutorParallelism(4)
@@ -43,8 +43,8 @@ public class TestHudiConfig
                 .setMinimumAssignedSplitWeight(0.05)
                 .setTargetSplitSize(DataSize.of(128, MEGABYTE))
                 .setMaxSplitsPerSecond(Integer.MAX_VALUE)
-                .setMaxOutstandingSplits(1000)
-                .setSplitLoaderParallelism(4)
+                .setMaxOutstandingSplits(10000)
+                .setSplitLoaderParallelism(10)
                 .setSplitGeneratorParallelism(4)
                 .setPerTransactionMetastoreCacheMaximumSize(2000)
                 .setQueryPartitionFilterRequired(false)
@@ -56,7 +56,10 @@ public class TestHudiConfig
                 .setDynamicFilteringWaitTimeout(Duration.valueOf("1s"))
                 .setColumnStatsWaitTimeout(Duration.valueOf("1s"))
                 .setRecordIndexWaitTimeout(Duration.valueOf("2s"))
-                .setSecondaryIndexWaitTimeout(Duration.valueOf("2s")));
+                .setSecondaryIndexWaitTimeout(Duration.valueOf("2s"))
+                .setMetadataPartitionListingEnabled(true)
+                .setMetadataCacheEnabled(true)
+                .setResolveColumnNameCasingEnabled(true));
     }
 
     @Test
@@ -65,7 +68,7 @@ public class TestHudiConfig
         Map<String, String> properties = ImmutableMap.<String, String>builder()
                 .put("hudi.columns-to-hide", "_hoodie_record_key")
                 .put("hudi.table-statistics-enabled", "false")
-                .put("hudi.metadata-enabled", "true")
+                .put("hudi.metadata-enabled", "false")
                 .put("hudi.parquet.use-column-names", "false")
                 .put("hudi.parquet.use-column-index", "true")
                 .put("hudi.table-statistics-executor-parallelism", "16")
@@ -88,12 +91,15 @@ public class TestHudiConfig
                 .put("hudi.index.column-stats.wait-timeout", "2s")
                 .put("hudi.index.record-index.wait-timeout", "1s")
                 .put("hudi.index.secondary-index.wait-timeout", "1s")
+                .put("hudi.metadata.cache.enabled", "false")
+                .put("hudi.metadata.partition-listing.enabled", "false")
+                .put("hudi.table.resolve-column-name-casing.enabled", "false")
                 .buildOrThrow();
 
         HudiConfig expected = new HudiConfig()
                 .setColumnsToHide(ImmutableList.of("_hoodie_record_key"))
                 .setTableStatisticsEnabled(false)
-                .setMetadataEnabled(true)
+                .setMetadataEnabled(false)
                 .setUseParquetColumnNames(false)
                 .setUseParquetColumnIndex(true)
                 .setTableStatisticsExecutorParallelism(16)
@@ -115,7 +121,10 @@ public class TestHudiConfig
                 .setDynamicFilteringWaitTimeout(Duration.valueOf("2s"))
                 .setColumnStatsWaitTimeout(Duration.valueOf("2s"))
                 .setRecordIndexWaitTimeout(Duration.valueOf("1s"))
-                .setSecondaryIndexWaitTimeout(Duration.valueOf("1s"));
+                .setSecondaryIndexWaitTimeout(Duration.valueOf("1s"))
+                .setMetadataPartitionListingEnabled(false)
+                .setMetadataCacheEnabled(false)
+                .setResolveColumnNameCasingEnabled(false);
 
         assertFullMapping(properties, expected);
     }

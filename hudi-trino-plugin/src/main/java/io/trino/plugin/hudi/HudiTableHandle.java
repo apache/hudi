@@ -17,20 +17,24 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableSet;
+import io.airlift.log.Logger;
 import io.trino.metastore.Table;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
+import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.util.Lazy;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
@@ -39,6 +43,7 @@ import static java.util.Objects.requireNonNull;
 public class HudiTableHandle
         implements ConnectorTableHandle
 {
+    private static final Logger log = Logger.get(HudiTableHandle.class);
     private final String schemaName;
     private final String tableName;
     private final String basePath;
@@ -48,10 +53,11 @@ public class HudiTableHandle
     private final Set<HiveColumnHandle> constraintColumns;
     private final TupleDomain<HiveColumnHandle> partitionPredicates;
     private final TupleDomain<HiveColumnHandle> regularPredicates;
+    private final Optional<Lazy<Schema>> hudiTableSchema;
     // Coordinator-only
     private final transient Optional<Table> table;
     private final transient Optional<Lazy<HoodieTableMetaClient>> lazyMetaClient;
-    private final transient Optional<Lazy<String>> lazyLatestCommitTime;
+    private final transient Lazy<String> lazyLatestCommitTime;
 
     @JsonCreator
     public HudiTableHandle(
@@ -61,12 +67,52 @@ public class HudiTableHandle
             @JsonProperty("tableType") HoodieTableType tableType,
             @JsonProperty("partitionColumns") List<HiveColumnHandle> partitionColumns,
             @JsonProperty("partitionPredicates") TupleDomain<HiveColumnHandle> partitionPredicates,
-            @JsonProperty("regularPredicates") TupleDomain<HiveColumnHandle> regularPredicates)
+            @JsonProperty("regularPredicates") TupleDomain<HiveColumnHandle> regularPredicates,
+            @JsonProperty("tableSchemaStr") String tableSchemaStr,
+            @JsonProperty("latestCommitTime") String latestCommitTime)
     {
-        this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, ImmutableSet.of(), partitionPredicates, regularPredicates);
+        this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, ImmutableSet.of(),
+                partitionPredicates, regularPredicates, buildTableSchema(tableSchemaStr), () -> latestCommitTime);
     }
 
     public HudiTableHandle(
+            Table table,
+            Lazy<HoodieTableMetaClient> lazyMetaClient,
+            String schemaName,
+            String tableName,
+            String basePath,
+            HoodieTableType tableType,
+            List<HiveColumnHandle> partitionColumns,
+            Set<HiveColumnHandle> constraintColumns,
+            TupleDomain<HiveColumnHandle> partitionPredicates,
+            TupleDomain<HiveColumnHandle> regularPredicates,
+            Optional<Lazy<Schema>> hudiTableSchema)
+    {
+        this(
+                Optional.of(table),
+                Optional.of(lazyMetaClient),
+                schemaName,
+                tableName,
+                basePath,
+                tableType,
+                partitionColumns,
+                constraintColumns,
+                partitionPredicates,
+                regularPredicates,
+                hudiTableSchema,
+                () -> lazyMetaClient
+                        .get()
+                        .getActiveTimeline()
+                        .getCommitsTimeline()
+                        .filterCompletedInstants()
+                        .lastInstant()
+                        .map(HoodieInstant::requestedTime)
+                        .orElseThrow(() -> new TrinoException(
+                                HudiErrorCode.HUDI_NO_VALID_COMMIT,
+                                "Table has no valid commits")));
+    }
+
+    HudiTableHandle(
             Optional<Table> table,
             Optional<Lazy<HoodieTableMetaClient>> lazyMetaClient,
             String schemaName,
@@ -76,17 +122,12 @@ public class HudiTableHandle
             List<HiveColumnHandle> partitionColumns,
             Set<HiveColumnHandle> constraintColumns,
             TupleDomain<HiveColumnHandle> partitionPredicates,
-            TupleDomain<HiveColumnHandle> regularPredicates)
+            TupleDomain<HiveColumnHandle> regularPredicates,
+            Optional<Lazy<Schema>> hudiTableSchema,
+            Supplier<String> latestCommitTimeSupplier)
     {
         this.table = requireNonNull(table, "table is null");
         this.lazyMetaClient = requireNonNull(lazyMetaClient, "lazyMetaClient is null");
-        this.lazyLatestCommitTime = Optional.of(Lazy.lazily(() ->
-                getMetaClient().getActiveTimeline()
-                        .getCommitsTimeline()
-                        .filterCompletedInstants()
-                        .lastInstant()
-                        .map(HoodieInstant::requestedTime)
-                        .orElseThrow(() -> new TrinoException(HudiErrorCode.HUDI_NO_VALID_COMMIT, "Table has no valid commits"))));
         this.schemaName = requireNonNull(schemaName, "schemaName is null");
         this.tableName = requireNonNull(tableName, "tableName is null");
         this.basePath = requireNonNull(basePath, "basePath is null");
@@ -95,6 +136,30 @@ public class HudiTableHandle
         this.constraintColumns = requireNonNull(constraintColumns, "constraintColumns is null");
         this.partitionPredicates = requireNonNull(partitionPredicates, "partitionPredicates is null");
         this.regularPredicates = requireNonNull(regularPredicates, "regularPredicates is null");
+        this.hudiTableSchema = requireNonNull(hudiTableSchema, "hudiTableSchema is null");
+        this.lazyLatestCommitTime = Lazy.lazily(latestCommitTimeSupplier);
+    }
+
+    /**
+     * Builds a lazily-parsed Avro schema from the given schema string.
+     * <p>
+     * Returns {@code Optional.empty()} if the input string is null/empty
+     * or if parsing the schema fails.
+     */
+    private static Optional<Lazy<Schema>> buildTableSchema(String tableSchemaStr)
+    {
+        if (StringUtils.isNullOrEmpty(tableSchemaStr)) {
+            return Optional.empty();
+        }
+
+        try {
+            Lazy<Schema> lazySchema = Lazy.lazily(() -> new Schema.Parser().parse(tableSchemaStr));
+            return Optional.of(lazySchema);
+        }
+        catch (Exception e) {
+            log.warn(e, "Failed to parse table schema: %s", tableSchemaStr);
+            return Optional.empty();
+        }
     }
 
     public Table getTable()
@@ -113,12 +178,10 @@ public class HudiTableHandle
         return lazyMetaClient.get().get();
     }
 
+    @JsonProperty
     public String getLatestCommitTime()
     {
-        checkArgument(lazyLatestCommitTime.isPresent(),
-                "getLatestCommitTime() called on a table handle that has no Hudi meta-client; "
-                        + "this is likely because it is called on the worker.");
-        return lazyLatestCommitTime.get().get();
+        return lazyLatestCommitTime.get();
     }
 
     @JsonProperty
@@ -157,6 +220,21 @@ public class HudiTableHandle
         return partitionColumns;
     }
 
+    @JsonProperty
+    public String getTableSchemaStr()
+    {
+        return hudiTableSchema
+                .map(Lazy::get)
+                .map(Schema::toString)
+                .orElse("");
+    }
+
+    @JsonIgnore
+    public Schema getTableSchema()
+    {
+        return hudiTableSchema.map(Lazy::get).orElse(null);
+    }
+
     // do not serialize constraint columns as they are not needed on workers
     @JsonIgnore
     public Set<HiveColumnHandle> getConstraintColumns()
@@ -190,7 +268,9 @@ public class HudiTableHandle
                 partitionColumns,
                 constraintColumns,
                 partitionPredicates.intersect(partitionTupleDomain),
-                regularPredicates.intersect(regularTupleDomain));
+                regularPredicates.intersect(regularTupleDomain),
+                hudiTableSchema,
+                this::getLatestCommitTime);
     }
 
     @Override

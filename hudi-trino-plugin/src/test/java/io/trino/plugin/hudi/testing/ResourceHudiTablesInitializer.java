@@ -339,7 +339,12 @@ public class ResourceHudiTablesInitializer
     public enum TestingTable
     {
         HUDI_NON_PART_COW(nonPartitionRegularColumns()),
+        HUDI_NON_PART_MOR(simpleRegularColumns(), ImmutableList.of(), ImmutableMap.of(), true),
         HUDI_TRIPS_COW_V8(tripsRegularColumns()),
+        HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS(hudiTableWithFieldNamesInCapsRegularColumns()),
+        HUDI_COW_PT_TABLE_WITH_FIELD_NAMES_IN_CAPS(hudiTableWithFieldNamesInCapsRegularColumns(), hudiTableWithFieldNamesInCapsPartitionColumns(), hudiTableWithFieldNamesInCapsPartitions(), false), // delete
+        HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS(hudiTableWithFieldNamesInCapsRegularColumns()),
+        HUDI_MOR_TABLE_WITH_FIELD_NAMES_IN_CAPS(hudiTableWithFieldNamesInCapsRegularColumns(), ImmutableList.of(), ImmutableMap.of(), true),
         HUDI_COW_PT_TBL(multiPartitionRegularColumns(), multiPartitionColumns(), multiPartitions(), false),
         STOCK_TICKS_COW(stockTicksRegularColumns(), stockTicksPartitionColumns(), stockTicksPartitions(), false),
         STOCK_TICKS_MOR(stockTicksRegularColumns(), stockTicksPartitionColumns(), stockTicksPartitions(), false),
@@ -353,6 +358,7 @@ public class ResourceHudiTablesInitializer
         HUDI_TIMESTAMP_KEYGEN_PT_EPOCH_TO_YYYY_MM_DD_HH_V8_MOR(hudiTimestampKeygenColumns(), hudiTimestampKeygenPartitionColumns(), hudiTimestampKeygenPartitions("EPOCHMILLISECONDS"), true),
         HUDI_TIMESTAMP_KEYGEN_PT_SCALAR_TO_YYYY_MM_DD_HH_V8_MOR(hudiTimestampKeygenColumns(), hudiTimestampKeygenPartitionColumns(), hudiTimestampKeygenPartitions("SCALAR"), true),
         HUDI_CUSTOM_KEYGEN_PT_V8_MOR(hudiCustomKeyGenColumns(), hudiCustomKeyGenPartitionColumns(), hudiCustomKeyGenPartitions(), false),
+        HUDI_NON_EXTRACTABLE_PARTITION_PATH(multiPartitionRegularColumns(), multiPartitionColumns(), multiPartitionsWithNonExtractablePartitionPaths(), false),
         /**/;
 
         private static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
@@ -443,6 +449,40 @@ public class ResourceHudiTablesInitializer
                     column("hh", HIVE_STRING));
         }
 
+        // Table schema has capitalized column names, but the catalog returns them in lowercase.
+        // Using lowercase here to match the catalog for testing.
+        private static List<Column> hudiTableWithFieldNamesInCapsRegularColumns()
+        {
+            return ImmutableList.of(
+                    column("id", HIVE_STRING),
+                    column("name", HIVE_STRING),
+                    column("age", HIVE_INT));
+        }
+
+        // The actual Hudi table has "Country" as the partition field name, but the catalog provides it in lowercase.
+        // Using lowercase here to stay consistent with the catalog for testing.
+        private static Map<String, String> hudiTableWithFieldNamesInCapsPartitions()
+        {
+            return ImmutableMap.of(
+                    "country=IND", "IND",
+                    "country=US", "US");
+        }
+
+        // The actual Hudi table has "Country" as the partition field name, but the catalog provides it in lowercase.
+        // Using lowercase here to stay consistent with the catalog for testing.
+        private static List<Column> hudiTableWithFieldNamesInCapsPartitionColumns()
+        {
+            return ImmutableList.of(column("country", HIVE_STRING));
+        }
+
+        private static List<Column> simpleRegularColumns()
+        {
+            return ImmutableList.of(
+                    column("id", HIVE_STRING),
+                    column("name", HIVE_STRING),
+                    column("age", HIVE_INT));
+        }
+
         private static List<Column> tripsRegularColumns()
         {
             return ImmutableList.of(
@@ -531,6 +571,27 @@ public class ResourceHudiTablesInitializer
             return ImmutableMap.of(
                     "dt=2021-12-09/hh=10", "dt=2021-12-09/hh=10",
                     "dt=2021-12-09/hh=11", "dt=2021-12-09/hh=11");
+        }
+
+        /**
+         * Returns a sample map of partition specs containing multiple partition keys separated by slashes.
+         *
+         * Example:
+         *   "dt=2018-10-05/hh=10" -> "2018/10/05/10"
+         *
+         * Note:
+         *  - The partition spec has 2 partition keys (dt, hh).
+         *  - However, the corresponding value string has 4 segments when split by slashes
+         *    (year, month, day, hour).
+         *  - Standard Hudi partition extractors will not be able to correctly parse this mapping,
+         *    since they expect the number of slash-separated values to match the number of partition keys
+         *    if there's more than one partition field.
+         */
+        private static Map<String, String> multiPartitionsWithNonExtractablePartitionPaths()
+        {
+            return ImmutableMap.of(
+                    "dt=2018-10-05/hh=10", "2018/10/05/10",
+                    "dt=2018-10-06/hh=5", "2018/10/06/5");
         }
 
         private static List<Column> hudiMultiFgRegularColumns()

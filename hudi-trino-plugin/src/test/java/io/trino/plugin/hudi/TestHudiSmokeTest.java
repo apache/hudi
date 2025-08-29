@@ -14,6 +14,7 @@
 package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Resources;
 import io.trino.Session;
 import io.trino.filesystem.Location;
@@ -71,10 +72,15 @@ import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.createPageSource;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COMPREHENSIVE_TYPES_V6_MOR;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COMPREHENSIVE_TYPES_V8_MOR;
+import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_PT_TABLE_WITH_FIELD_NAMES_IN_CAPS;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_PT_TBL;
+import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS;
+import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_CUSTOM_KEYGEN_PT_V8_MOR;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_MULTI_PT_V8_MOR;
+import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_NON_EXTRACTABLE_PARTITION_PATH;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_NON_PART_COW;
+import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_NON_PART_MOR;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_STOCK_TICKS_COW;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_STOCK_TICKS_MOR;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_TIMESTAMP_KEYGEN_PT_EPOCH_TO_YYYY_MM_DD_HH_V8_MOR;
@@ -95,7 +101,13 @@ public class TestHudiSmokeTest
     {
         return HudiQueryRunner.builder()
                 .setDataLoader(new ResourceHudiTablesInitializer())
+                .addConnectorProperties(getAdditionalHudiProperties())
                 .build();
+    }
+
+    protected ImmutableMap<String, String> getAdditionalHudiProperties()
+    {
+        return ImmutableMap.of();
     }
 
     @Test
@@ -125,6 +137,20 @@ public class TestHudiSmokeTest
     }
 
     @Test
+    public void testReadNonExtractablePartitionPathTable()
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .build();
+        String res = getQueryRunner().execute(session, "SELECT * FROM " + HUDI_NON_EXTRACTABLE_PARTITION_PATH).toString();
+        System.out.println(res);
+        assertQuery(session, "SELECT name FROM " + HUDI_NON_EXTRACTABLE_PARTITION_PATH + " where dt='2018-10-05'",
+                "SELECT * FROM VALUES ('Alice'), ('Bob')");
+        assertQuery(session, "SELECT name FROM " + HUDI_NON_EXTRACTABLE_PARTITION_PATH + " where dt='2018-10-05' and hh='10'",
+                "SELECT * FROM VALUES ('Alice'), ('Bob')");
+    }
+
+    @Test
     public void testReadPartitionedCOWTableVer8()
     {
         String res = getQueryRunner().execute(getSession(), "SELECT * FROM " + HUDI_STOCK_TICKS_COW).toString();
@@ -135,6 +161,11 @@ public class TestHudiSmokeTest
                 "SELECT * FROM VALUES ('2018-08-31', '99')");
     }
 
+    // Verifies query results on a partitioned COW table (Ver8).
+    // Since the table defines only a single partition column, its partition
+    // values can be correctly parsed by Hudi's PartitionValueExtractor.
+    // This test asserts that grouping and aggregations on the partition column
+    // return the expected results.
     @Test
     public void testReadPartitionedMORTableVer8()
     {
@@ -654,6 +685,110 @@ public class TestHudiSmokeTest
         assertThat(prunedSplits).isEqualTo(1);
     }
 
+    @Test
+    public void testColStatsFileSkippingMORTable()
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .withColStatsIndexEnabled(true)
+                .withColumnStatsTimeout("1s")
+                .withRecordLevelIndexEnabled(false)
+                .withSecondaryIndexEnabled(false)
+                .withPartitionStatsIndexEnabled(false)
+                .build();
+        MaterializedResult roTableRes = getQueryRunner().execute(session, "SELECT id, name FROM " + HUDI_NON_PART_MOR + " where name = 'Alice'");
+        MaterializedResult rtTableRes = getQueryRunner().execute(session, "SELECT id, name FROM " + HUDI_NON_PART_MOR + "_rt where name = 'Cathy'");
+
+        // verify ro table returns results from base file
+        int roTableSplits = roTableRes.getStatementStats().get().getTotalSplits();
+        int roTableRows = roTableRes.getRowCount();
+        assertThat(roTableSplits).isEqualTo(1);
+        assertThat(roTableRows).isEqualTo(1);
+        assertThat(roTableRes.getMaterializedRows().getFirst().getField(1)).isEqualTo("Alice");
+
+        // verify rt table returns results from log file
+        int rtTableSplits = rtTableRes.getStatementStats().get().getTotalSplits();
+        int rtTableRows = rtTableRes.getRowCount();
+        assertThat(rtTableRows).isEqualTo(1);
+        assertThat(rtTableSplits).isEqualTo(1);
+        assertThat(rtTableRes.getMaterializedRows().getFirst().getField(1)).isEqualTo("Cathy");
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ResourceHudiTablesInitializer.TestingTable.class,
+            names = {"HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS", "HUDI_MOR_TABLE_WITH_FIELD_NAMES_IN_CAPS"})
+    public void testFileSkippingWithColumnNameUsingUppercaseLetters(ResourceHudiTablesInitializer.TestingTable table)
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .withColStatsIndexEnabled(true)
+                .withColumnStatsTimeout("5s")
+                .withRecordLevelIndexEnabled(false)
+                .withSecondaryIndexEnabled(false)
+                .withPartitionStatsIndexEnabled(false)
+                .build();
+        MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM  " + table + " WHERE name='Alice'");
+        MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + table);
+        int totalSplits = totalRes.getStatementStats().get().getTotalSplits();
+        int totalRows = totalRes.getRowCount();
+        int prunedSplits = prunedRes.getStatementStats().get().getTotalSplits();
+        int prunedRows = prunedRes.getRowCount();
+        assertThat(prunedSplits).isLessThan(totalSplits);
+        // With colstats file skipping, only 1 split should be returned
+        assertThat(prunedSplits).isEqualTo(1);
+        assertThat(totalRows).isEqualTo(2);
+        assertThat(prunedRows).isEqualTo(1);
+    }
+
+    @Test
+    public void testRLIWithColumnNameUsingUppercaseLetters()
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .withColStatsIndexEnabled(false)
+                .withRecordLevelIndexEnabled(true)
+                .withRecordIndexTimeout("1s")
+                .withSecondaryIndexEnabled(false)
+                .withPartitionStatsIndexEnabled(false)
+                .build();
+        MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS);
+        MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM  " + HUDI_COW_TABLE_WITH_FIELD_NAMES_IN_CAPS + " WHERE id='1'");
+        int totalSplits = totalRes.getStatementStats().get().getTotalSplits();
+        int totalRows = totalRes.getRowCount();
+        int prunedSplits = prunedRes.getStatementStats().get().getTotalSplits();
+        int prunedRows = prunedRes.getRowCount();
+        assertThat(prunedSplits).isLessThan(totalSplits);
+        // With record index file skipping, only 1 split should be returned
+        assertThat(prunedSplits).isEqualTo(1);
+        assertThat(totalRows).isEqualTo(2);
+        assertThat(prunedRows).isEqualTo(1);
+    }
+
+    @Test
+    public void testMultiKeyRLIWithColumnNameUsingUppercaseLetters()
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .withColStatsIndexEnabled(false)
+                .withRecordLevelIndexEnabled(true)
+                .withRecordIndexTimeout("1s")
+                .withSecondaryIndexEnabled(false)
+                .withPartitionStatsIndexEnabled(false)
+                .build();
+        MaterializedResult totalRes = getQueryRunner().execute(session, "SELECT * FROM " + HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS);
+        MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM  " + HUDI_COW_TABLE_WITH_MULTI_KEYS_AND_FIELD_NAMES_IN_CAPS + " WHERE id='1' and age=30");
+        int totalSplits = totalRes.getStatementStats().get().getTotalSplits();
+        int totalRows = totalRes.getRowCount();
+        int prunedSplits = prunedRes.getStatementStats().get().getTotalSplits();
+        int prunedRows = prunedRes.getRowCount();
+        assertThat(prunedSplits).isLessThan(totalSplits);
+        // With record index file skipping, only 1 split should be returned
+        assertThat(prunedSplits).isEqualTo(1);
+        assertThat(totalRows).isEqualTo(2);
+        assertThat(prunedRows).isEqualTo(1);
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = ResourceHudiTablesInitializer.TestingTable.class,
@@ -734,6 +869,23 @@ public class TestHudiSmokeTest
         int expectedSplits = table.getHoodieTableVersion()
                 .greaterThanOrEquals(HoodieTableVersion.EIGHT) ? 2 : 4;
         assertThat(prunedSplits).isEqualTo(expectedSplits);
+    }
+
+    @Test
+    public void testPartitionStatsIndexPartitionPruningWithColumnNameUsingUppercaseLetters()
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .withColStatsIndexEnabled(false)
+                .withRecordLevelIndexEnabled(false)
+                .withSecondaryIndexEnabled(false)
+                .withPartitionStatsIndexEnabled(true)
+                .build();
+        MaterializedResult prunedRes = getQueryRunner().execute(session, "SELECT * FROM " + HUDI_COW_PT_TABLE_WITH_FIELD_NAMES_IN_CAPS
+                + " WHERE country = 'US'");
+        int prunedSplits = prunedRes.getStatementStats().get().getTotalSplits();
+
+        assertThat(prunedSplits).isEqualTo(2);
     }
 
     @ParameterizedTest

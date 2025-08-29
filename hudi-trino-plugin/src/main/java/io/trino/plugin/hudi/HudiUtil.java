@@ -13,8 +13,12 @@
  */
 package io.trino.plugin.hudi;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.Weigher;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.airlift.log.Logger;
+import io.trino.cache.EvictableCacheBuilder;
 import io.trino.filesystem.FileIterator;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
@@ -22,11 +26,11 @@ import io.trino.metastore.HivePartition;
 import io.trino.metastore.HiveType;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HivePartitionKey;
-import io.trino.plugin.hive.HivePartitionManager;
 import io.trino.plugin.hive.avro.AvroHiveFileUtils;
 import io.trino.plugin.hudi.storage.HudiTrinoStorage;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.spi.TrinoException;
+import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
@@ -41,7 +45,9 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -51,24 +57,49 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static io.airlift.slice.SizeOf.estimatedSizeOf;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_INVALID_METADATA;
 import static io.trino.plugin.hive.util.HiveUtil.checkCondition;
+import static io.trino.plugin.hive.util.HiveUtil.parsePartitionValue;
 import static io.trino.plugin.hive.util.SerdeConstants.LIST_COLUMNS;
 import static io.trino.plugin.hive.util.SerdeConstants.LIST_COLUMN_TYPES;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_FILESYSTEM_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_META_CLIENT_ERROR;
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_UNSUPPORTED_FILE_FORMAT;
+import static java.lang.Math.toIntExact;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 
 public final class HudiUtil
 {
+    private static final Logger log = Logger.get(HudiUtil.class);
+    private static final Cache<Schema, Map<String, Schema.Field>> SCHEMA_FIELD_CACHE =
+            EvictableCacheBuilder.newBuilder()
+                    .maximumWeight(10L * 1000L * 1024L) // 10MB
+                    .weigher((Weigher<Schema, Map<String, Schema.Field>>) (schema, fieldMap) -> {
+                        // approximate size estimation of schema size
+                        long schemaSize = estimatedSizeOf(schema.toString());
+
+                        long fieldsSize = fieldMap.entrySet().stream()
+                                .mapToLong(e -> estimatedSizeOf(e.getKey()) + estimatedSizeOf(e.getValue().name()))
+                                .sum();
+
+                        return toIntExact(schemaSize + fieldsSize);
+                    })
+                    .expireAfterWrite(5, TimeUnit.MINUTES)
+                    .shareNothingWhenDisabled()
+                    .build();
+
     private HudiUtil() {}
 
     public static HoodieFileFormat getHudiFileFormat(String path)
@@ -113,12 +144,33 @@ public final class HudiUtil
             SchemaTableName tableName,
             String hivePartitionName,
             List<HiveColumnHandle> partitionColumnHandles,
+            List<String> partitionValues,
             TupleDomain<HiveColumnHandle> constraintSummary)
     {
-        HivePartition partition = HivePartitionManager.parsePartition(
-                tableName, hivePartitionName, partitionColumnHandles);
+        HivePartition partition = parsePartition(
+                tableName, hivePartitionName, partitionColumnHandles, partitionValues);
 
         return partitionMatches(partitionColumnHandles, constraintSummary, partition);
+    }
+
+    /**
+     * Copied from {@link io.trino.plugin.hive.HivePartitionManager#parsePartition}
+     * to keep partition parsing logic self-contained within {@code trino-hudi}.
+     */
+    private static HivePartition parsePartition(
+            SchemaTableName tableName,
+            String partitionName,
+            List<HiveColumnHandle> partitionColumns,
+            List<String> partitionValues)
+    {
+        ImmutableMap.Builder<ColumnHandle, NullableValue> builder = ImmutableMap.builderWithExpectedSize(partitionColumns.size());
+        for (int i = 0; i < partitionColumns.size(); i++) {
+            HiveColumnHandle column = partitionColumns.get(i);
+            NullableValue parsedValue = parsePartitionValue(partitionName, partitionValues.get(i), column.getType());
+            builder.put(column, parsedValue);
+        }
+        Map<ColumnHandle, NullableValue> values = builder.buildOrThrow();
+        return new HivePartition(tableName, partitionName, values);
     }
 
     public static boolean partitionMatches(List<HiveColumnHandle> partitionColumns, TupleDomain<HiveColumnHandle> constraintSummary, HivePartition partition)
@@ -202,7 +254,9 @@ public final class HudiUtil
         SchemaBuilder.RecordBuilder<Schema> schemaBuilder = SchemaBuilder.record("baseRecord");
         SchemaBuilder.FieldAssembler<Schema> fieldBuilder = schemaBuilder.fields();
         for (String columnName : columnNames) {
-            Schema originalFieldSchema = dataSchema.getField(columnName).schema();
+            Schema.Field field = getFieldFromSchema(columnName, dataSchema);
+            Schema originalFieldSchema = field.schema();
+
             Schema typeForNewField;
 
             // Check if the original field schema is already nullable (i.e., a UNION containing NULL)
@@ -214,11 +268,57 @@ public final class HudiUtil
             }
 
             fieldBuilder = fieldBuilder
-                    .name(columnName)
+                    .name(field.name())
                     .type(typeForNewField)
                     .withDefault(null);
         }
         return fieldBuilder.endRecord();
+    }
+
+    private static Map<String, Schema.Field> buildFieldLookup(Schema schema)
+    {
+        return schema.getFields().stream()
+                .collect(Collectors.toMap(
+                        f -> f.name().toLowerCase(Locale.ROOT),
+                        f -> f));
+    }
+
+    /**
+     * Retrieves a field from the given Avro schema by column name.
+     * <p>
+     * The lookup proceeds in two steps:
+     * <ul>
+     *   <li>First, attempts an exact match on the column name.</li>
+     *   <li>If not found, falls back to a case-insensitive match using a cached lookup table</li>
+     * </ul>
+     * <p>
+     *
+     * @param columnName Column name to search for.
+     * @param schema Avro {@link Schema} in which to search.
+     * @return The matching {@link Schema.Field}, if found.
+     * @throws TrinoException if no field matches the given column name.
+     */
+    public static Schema.Field getFieldFromSchema(String columnName, Schema schema)
+    {
+        Schema.Field field = schema.getField(columnName);
+        if (field != null) {
+            return field;
+        }
+
+        try {
+            field = SCHEMA_FIELD_CACHE
+                    .get(schema, () -> buildFieldLookup(schema)).get(columnName.toLowerCase(Locale.ROOT));
+            if (field != null) {
+                return field;
+            }
+        }
+        catch (ExecutionException e) {
+            throw new TrinoException(HUDI_SCHEMA_ERROR,
+                    "Failed to build field lookup for schema", e);
+        }
+
+        throw new TrinoException(HUDI_SCHEMA_ERROR,
+                "Failed to get column " + columnName + " from table schema");
     }
 
     public static List<HiveColumnHandle> prependHudiMetaColumns(List<HiveColumnHandle> dataColumns)
@@ -282,5 +382,19 @@ public final class HudiUtil
     {
         return new HoodieTableFileSystemView(
                 tableMetadata, metaClient, metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+    }
+
+    public static Schema getLatestTableSchema(HoodieTableMetaClient metaClient, String tableName)
+    {
+        try {
+            HoodieTimer timer = HoodieTimer.start();
+            Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+            log.info("Fetched table schema for table %s in %s ms", tableName, timer.endTimer());
+            return schema;
+        }
+        catch (Exception e) {
+            // failed to read schema
+            throw new TrinoException(HUDI_FILESYSTEM_ERROR, e);
+        }
     }
 }
