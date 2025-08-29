@@ -53,6 +53,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
@@ -256,7 +257,7 @@ public class UtilHelpers {
                                                       Path cfgPath,
                                                       List<String> overriddenProps) {
     StoragePath storagePath = convertToStoragePath(cfgPath);
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, storagePath);
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(new HadoopStorageConfiguration(hadoopConfig), storagePath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
