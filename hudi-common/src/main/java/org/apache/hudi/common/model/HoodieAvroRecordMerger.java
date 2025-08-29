@@ -55,9 +55,9 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
       return newer;
     }
     init(props);
-    IndexedRecord previousAvroData = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
+    IndexedRecord previousAvroData = older.getRecord() == null ? null : recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
     Schema newerSchema = recordContext.getSchemaFromBufferRecord(newer);
-    GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
+    GenericRecord newerAvroRecord = newer.getRecord() == null ? null : recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
     HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
 
     if (previousAvroData == null) {
