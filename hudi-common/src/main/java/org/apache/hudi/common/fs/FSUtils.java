@@ -79,11 +79,12 @@ public class FSUtils {
   // Archive log files are of this pattern - .commits_.archive.1_1-0-1
   public static final String PATH_SEPARATOR = "/";
   public static final Pattern LOG_FILE_PATTERN =
-      Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?$");
+      Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
   private static final Pattern BASE_FILE_PATTERN = Pattern.compile("[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_[0-9]+\\.[a-zA-Z0-9]+");
 
   private static final String LOG_FILE_EXTENSION = ".log";
+  private static final String LOG_FILE_START_WITH_CHARACTER = ".";
 
   private static final StoragePathFilter ALLOW_ALL_FILTER = file -> true;
 
@@ -446,7 +447,7 @@ public class FSUtils {
   }
 
   public static boolean isLogFile(String fileName) {
-    if (fileName.contains(LOG_FILE_EXTENSION)) {
+    if (fileName.startsWith(LOG_FILE_START_WITH_CHARACTER) && fileName.contains(LOG_FILE_EXTENSION)) {
       Matcher matcher = LOG_FILE_PATTERN.matcher(fileName);
       return matcher.matches();
     }

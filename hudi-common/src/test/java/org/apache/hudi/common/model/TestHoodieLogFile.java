@@ -92,14 +92,14 @@ public class TestHoodieLogFile {
   @Test
   void testLogPatternMatch() {
     boolean firstApproach = true; // toggle this to false if you want the other one
-    int runs = 100;
+    int runs = 10;
     long totalTime = 0;
     Random random = new Random();
 
     Pattern logFilePattern1 =
         Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
     Pattern logFilePattern2 =
-        Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?$");
+        Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
 
     for (int r = 0; r < runs; r++) {
       HoodieTimer timer = HoodieTimer.start();
@@ -119,21 +119,21 @@ public class TestHoodieLogFile {
     }
 
     System.out.println("===================================");
-    System.out.println("Average time (" + (firstApproach ? "find" : "matches") + ") = "
+    System.out.println("Average time (" + (firstApproach ? "previous" : "new") + ") = "
         + (totalTime / runs) + " ms");
   }
 
   @Test
-  void testLogPatternMatch_MisMatch() {
+  void testLogPatternMisMatch() {
     boolean firstApproach = true; // toggle this to false if you want the other one
-    int runs = 100;
+    int runs = 10;
     long totalTime = 0;
     Random random = new Random();
 
     Pattern logFilePattern1 =
         Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
     Pattern logFilePattern2 =
-        Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?$");
+        Pattern.compile("^\\.([^._]+)_([^.]*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(\\.cdc)?)?$");
 
     for (int r = 0; r < runs; r++) {
       HoodieTimer timer = HoodieTimer.start();
@@ -153,7 +153,7 @@ public class TestHoodieLogFile {
     }
 
     System.out.println("===================================");
-    System.out.println("Average time (" + (firstApproach ? "find" : "matches") + ") = "
+    System.out.println("Average time (" + (firstApproach ? "previous" : "new") + ") = "
         + (totalTime / runs) + " ms");
   }
 
