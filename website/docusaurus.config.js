@@ -202,10 +202,10 @@ module.exports = {
               label: "Tech Specs 1.0",
               href: "/tech-specs-1point0",
             },
-            {
+           /* {
               label: "Technical Wiki",
               href: "https://cwiki.apache.org/confluence/display/HUDI",
-            },
+            }, */
           ],
         },
         {
@@ -229,13 +229,13 @@ module.exports = {
               to: "/contribute/rfc-process",
             },
             {
-              label: "Report Security Issues",
+              label: "Report Issues",
               to: "/contribute/report-security-issues",
             },
-            {
+           /* {
               label: "Report Issues",
               href: "https://issues.apache.org/jira/projects/HUDI/summary",
-            },
+            }, */
           ],
         },
         {
@@ -294,7 +294,7 @@ module.exports = {
           "aria-label": "GitHub repository",
         },
         {
-          href: "https://twitter.com/ApacheHudi",
+          href: "https://x.com/ApacheHudi",
           position: "right",
           className: "header-twitter-link",
           "aria-label": "Hudi Twitter Handle",
@@ -425,8 +425,8 @@ module.exports = {
               href: "https://github.com/apache/hudi",
             },
             {
-              label: "Twitter",
-              href: "https://twitter.com/ApacheHudi",
+              label: "X",
+              href: "https://x.com/ApacheHudi",
             },
             {
               label: "YouTube",
