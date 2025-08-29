@@ -22,7 +22,10 @@ import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,6 +40,7 @@ public class TestConfigProperty extends HoodieConfig {
   public static ConfigProperty<String> FAKE_STRING_CONFIG = ConfigProperty
       .key("test.fake.string.config")
       .defaultValue("1")
+      .supportedVersions("a.b.c", "d.e.f")
       .withAlternatives("test.fake.string.alternative.config")
       .withDocumentation("Fake config only for testing");
 
@@ -194,5 +198,13 @@ public class TestConfigProperty extends HoodieConfig {
     assertEquals("    TEST_VAL_A: Test val a", lines[1]);
     assertEquals("    TEST_VAL_B(default): Test val b", lines[2]);
     assertEquals("    OTHER_VAL: Other val", lines[3]);
+  }
+
+  @Test
+  void testGetSupportedVersions() {
+    assertEquals(
+        Arrays.stream(new String[] {"a.b.c", "d.e.f"}).collect(Collectors.toList()),
+        FAKE_STRING_CONFIG.getSupportedVersions());
+    assertEquals(Collections.EMPTY_LIST, FAKE_INTEGER_CONFIG.getSupportedVersions());
   }
 }

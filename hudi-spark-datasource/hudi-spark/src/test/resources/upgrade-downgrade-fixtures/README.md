@@ -70,6 +70,7 @@ The `generate-fixtures.sh` script supports the following parameters:
 |-----------|-------------|----------|---------|
 | `--version <version_list>` | Comma-separated list of table versions to generate | No | `--version 4,5,6` |
 | `--hudi-bundle-path <path>` | Path to locally built Hudi bundle JAR (required for version 9) | Only for version 9 | `--hudi-bundle-path /path/to/bundle.jar` |
+| `--script-name <script>` | Scala script name from scala-templates folder | No | `--script-name generate-fixture-complex-keygen.scala` |
 
 #### Supported Versions
 - **4** - Hudi 0.11.1 (Spark 3.2.4, Scala 2.12)
@@ -95,7 +96,27 @@ The `generate-fixtures.sh` script supports the following parameters:
 
 # Generate multiple versions including version 9
 ./generate-fixtures.sh --version 4,6,9 --hudi-bundle-path /path/to/bundle.jar
+
+# Use custom script template (generates fixtures with -complex-keygen.zip suffix)
+./generate-fixtures.sh --script-name generate-fixture-complex-keygen.scala
+
+# Use custom script with specific versions
+./generate-fixtures.sh --version 8,9 --script-name generate-fixture-complex-keygen.scala --hudi-bundle-path /path/to/bundle.jar
 ```
+
+#### Available Script Templates
+
+The script supports different Scala templates located in the `scala-templates/` folder:
+
+| Script Name | Description | Output Zip Suffix |
+|-------------|-------------|-------------------|
+| `generate-fixture.scala` | Default fixture generator | `.zip` (no suffix) |
+| `generate-fixture-complex-keygen.scala` | Complex key generator fixtures | `-complex-keygen.zip` |
+
+**Note**: The zip file suffix is automatically determined by extracting the portion after "generate-fixture" from the script name. For example:
+- `generate-fixture.scala` → `hudi-v8-table.zip` 
+- `generate-fixture-complex-keygen.scala` → `hudi-v8-table-complex-keygen.zip`
+- `generate-fixture-custom.scala` → `hudi-v8-table-custom.zip`
 
 #### Version 9 Special Requirements
 
