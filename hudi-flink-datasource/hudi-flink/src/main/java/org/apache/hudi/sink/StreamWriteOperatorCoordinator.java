@@ -20,7 +20,6 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -571,29 +570,6 @@ public class StreamWriteOperatorCoordinator
     List<WriteStatus> writeResults = Arrays.stream(eventBuffer)
         .filter(Objects::nonNull)
         .map(WriteMetadataEvent::getWriteStatuses)
-        .map(writeStatuses ->
-            // for write status of COW table, rewrite the file name of all writeStats as the file name in the last writeStat
-            // for example, there are 3 writeStatus for fg1:
-            // > before rewritten:
-            // writeStat1: fileName = xxxx_0-1-0_xxxx.parquet
-            // writeStat2: fileName = xxxx_0-1-0-1_xxxx.parquet
-            // writeStat3: fileName = xxxx_0-1-0-2_xxxx.parquet
-            // > after rewritten:
-            // writeStat1: fileName = xxxx_0-1-0_2_xxxx.parquet
-            // writeStat2: fileName = xxxx_0-1-0-2_xxxx.parquet
-            // writeStat3: fileName = xxxx_0-1-0-2_xxxx.parquet
-            writeStatuses.stream().collect(Collectors.groupingBy(writeStatus -> writeStatus.getPartitionPath() + writeStatus.getFileId()))
-                .values().stream().map(
-                    statuses -> {
-                      if (statuses.isEmpty() || statuses.get(0).getStat() instanceof HoodieDeltaWriteStat) {
-                        return statuses;
-                      }
-                      // set file name correctly if there are multiple base files
-                      String fileName = statuses.get(statuses.size() - 1).getStat().getPath();
-                      statuses.forEach(writeStatus -> writeStatus.getStat().setPath(fileName));
-                      return statuses;
-                    })
-                .flatMap(Collection::stream).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
 

@@ -19,13 +19,17 @@
 package org.apache.hudi.sink.event;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -160,7 +164,10 @@ public class WriteMetadataEvent implements OperatorEvent {
     ValidationUtils.checkArgument(this.taskID == other.taskID);
     // the instant time could be monotonically increasing
     this.instantTime = other.instantTime;
-    this.lastBatch |= other.lastBatch; // true if one of the event lastBatch is true
+    // true if one of the event lastBatch is true
+    this.lastBatch |= other.lastBatch;
+    // update filePath in write status
+    updateFileNameInStat(this.writeStatuses, other);
     List<WriteStatus> statusList = new ArrayList<>();
     statusList.addAll(this.writeStatuses);
     statusList.addAll(other.writeStatuses);
@@ -205,6 +212,29 @@ public class WriteMetadataEvent implements OperatorEvent {
         .writeStatus(Collections.emptyList())
         .bootstrap(true)
         .build();
+  }
+
+  /**
+   * For eager flush during writing COW table, there would be multiple mini-batches written into separate
+   * files, and we will update file path in old write status with the file path in new write meta event to
+   * make sure the write stat is correct.
+   */
+  private static void updateFileNameInStat(List<WriteStatus> oldStatus, WriteMetadataEvent newEvent) {
+    if (!newEvent.isLastBatch() && !newEvent.isEndInput()) {
+      return;
+    }
+    Map<String, String> fgToFilePath = new HashMap<>();
+    newEvent.getWriteStatuses().forEach(writeStatus -> {
+      if (!(writeStatus.getStat() instanceof HoodieDeltaWriteStat)) {
+        fgToFilePath.put(writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getFileId(), writeStatus.getStat().getPath());
+      }
+    });
+    oldStatus.forEach(writeStatus -> {
+      if (!(writeStatus.getStat() instanceof HoodieDeltaWriteStat)) {
+        Option<String> filePathOpt = Option.ofNullable(fgToFilePath.get(writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getFileId()));
+        filePathOpt.ifPresent(filePath -> writeStatus.getStat().setPath(filePath));
+      }
+    });
   }
 
   // -------------------------------------------------------------------------
