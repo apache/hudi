@@ -51,7 +51,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
   @Override
   public <T> BufferedRecord<T> merge(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, TypedProperties props) throws IOException {
     // special case for handling commit time ordering deletes
-    if (newer.isCommitTimeOrderingDelete()) {
+    if (HoodieRecordMerger.isCommitTimeOrderingDelete(older, newer)) {
       return newer;
     }
     init(props);
@@ -88,7 +88,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
           return older;
         } else {
           // Edge case when neither input is a deletion but the output is a deletion
-          return BufferedRecords.createDelete(newer.getRecordKey());
+          return BufferedRecords.createDelete(newer.getRecordKey(), HoodieRecordMerger.maxOrderingValue(older, newer));
         }
       }
     }

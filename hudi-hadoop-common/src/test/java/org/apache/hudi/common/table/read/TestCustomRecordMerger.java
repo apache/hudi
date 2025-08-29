@@ -31,6 +31,7 @@ import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -265,7 +266,7 @@ public class TestCustomRecordMerger extends HoodieFileGroupReaderTestHarness {
           return older;
         }
       }
-      return BufferedRecords.createDelete(newer.getRecordKey());
+      return BufferedRecords.createDelete(newer.getRecordKey(), OrderingValues.getDefault());
     }
 
     @Override
