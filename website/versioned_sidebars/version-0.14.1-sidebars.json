@@ -112,22 +112,7 @@
         }
       ]
     },
-    {
-      "type": "category",
-      "label": "Frequently Asked Questions(FAQs)",
-      "items": [
-        "faq",
-        "faq_general",
-        "faq_design_and_concepts",
-        "faq_writing_tables",
-        "faq_querying_tables",
-        "faq_table_services",
-        "faq_storage",
-        "faq_integrations"
-      ]
-    },
     "use_cases",
-    "faq",
     "privacy"
   ],
   "quick_links": [
