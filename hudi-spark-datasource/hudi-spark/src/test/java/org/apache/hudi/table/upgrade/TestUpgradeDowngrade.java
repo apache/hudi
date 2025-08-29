@@ -56,6 +56,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgrade;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -88,7 +89,6 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         "Fixture table should be at expected version");
     
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
-    
     int initialPendingCommits = originalMetaClient.getCommitsTimeline().filterPendingExcludingCompaction().countInstants();
     int initialCompletedCommits = originalMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
     
@@ -98,10 +98,10 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     if (isRollbackAndCompactTransition(fromVersion, toVersion)) {
       validateLogFilesCount(originalMetaClient, operation, true);
     }
-    
+
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(toVersion, null);
-    
+
     HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf().newInstance())
         .setBasePath(originalMetaClient.getBasePath())
@@ -143,8 +143,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     // For versions below SIX with autoUpgrade disabled, expect exception
     HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
-            () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(targetVersion, null),
-            "Expected HoodieUpgradeDowngradeException for version " + originalVersion + " with autoUpgrade disabled"
+        () -> needsUpgrade(originalMetaClient, config, targetVersion),
+        "Expected HoodieUpgradeDowngradeException for version " + originalVersion + " with autoUpgrade disabled"
     );
     
     // Validate exception message
@@ -174,8 +174,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     // For versions SIX and above, the original behavior should work
     new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
         .run(targetVersion, null);
-    
-    // Create fresh meta client to validate that version remained unchanged 
+
+    // Create fresh meta client to validate that version remained unchanged
     HoodieTableMetaClient unchangedMetaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf().newInstance())
         .setBasePath(originalMetaClient.getBasePath())
@@ -263,8 +263,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     assertEquals(HoodieTableVersion.EIGHT, config.getWriteVersion(),
         "Initial write version should be EIGHT");
-    
-    boolean result = UpgradeDowngrade.needsUpgrade(metaClient, config, HoodieTableVersion.EIGHT);
+
+    boolean result = needsUpgrade(metaClient, config, HoodieTableVersion.EIGHT);
     assertFalse(result, "needsUpgrade should return false when auto-upgrade is disabled");
     assertEquals(HoodieTableVersion.SIX, config.getWriteVersion(),
         "Write version should be set to match table version when auto-upgrade is disabled");
@@ -296,8 +296,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     
     // Attempt downgrade to version below SIX - should throw exception
     HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
-            () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
-            "Expected HoodieUpgradeDowngradeException for downgrade from " + fromVersion + " to " + toVersion
+        () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
+        "Expected HoodieUpgradeDowngradeException for downgrade from " + fromVersion + " to " + toVersion
     );
     String expectedMessage = String.format("Hudi 1.x release only supports table version greater than version 6 or above. "
             + "Please downgrade table from version 6 to %s using a Hudi release prior to 1.0.0",

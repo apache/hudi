@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -51,7 +52,8 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREA
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
-import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgradeOrDowngrade;
+import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsDowngrade;
+import static org.apache.hudi.table.upgrade.UpgradeDowngrade.needsUpgrade;
 
 public class StreamerCheckpointUtils {
   private static final Logger LOG = LoggerFactory.getLogger(StreamerCheckpointUtils.class);
@@ -73,10 +75,11 @@ public class StreamerCheckpointUtils {
    */
   public static Option<Checkpoint> resolveCheckpointToResumeFrom(Option<HoodieTimeline> commitsTimelineOpt,
                                                                  HoodieStreamer.Config streamerConfig,
+                                                                 HoodieSparkEngineContext context,
                                                                  TypedProperties props,
                                                                  HoodieTableMetaClient metaClient) throws IOException {
     Option<Checkpoint> checkpoint = Option.empty();
-    assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
+    assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, context, props);
     // If we have both streamer config and commits specifying what checkpoint to use, go with the
     // checkpoint resolution logic to resolve conflicting configurations.
     if (commitsTimelineOpt.isPresent()) {
@@ -98,14 +101,17 @@ public class StreamerCheckpointUtils {
    * @throws HoodieUpgradeDowngradeException if checkpoint override options are used during upgrade/downgrade
    */
   @VisibleForTesting
-  static void assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(HoodieTableMetaClient metaClient, HoodieStreamer.Config streamerConfig, TypedProperties props) {
+  static void assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(HoodieTableMetaClient metaClient,
+                                                                        HoodieStreamer.Config streamerConfig,
+                                                                        HoodieSparkEngineContext context,
+                                                                        TypedProperties props) {
     boolean hasCheckpointOverride = !StringUtils.isNullOrEmpty(streamerConfig.checkpoint)
         || !StringUtils.isNullOrEmpty(streamerConfig.ignoreCheckpoint);
     boolean isHoodieIncSource = HOODIE_INCREMENTAL_SOURCES.contains(streamerConfig.sourceClassName);
     if (hasCheckpointOverride && isHoodieIncSource) {
       HoodieTableVersion writeTableVersion = HoodieTableVersion.fromVersionCode(ConfigUtils.getIntWithAltKeys(props, HoodieWriteConfig.WRITE_TABLE_VERSION));
       HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(streamerConfig.targetBasePath).withProps(props).build();
-      if (config.autoUpgrade() && needsUpgradeOrDowngrade(metaClient, config, writeTableVersion)) {
+      if (config.autoUpgrade() && (needsUpgrade(metaClient, config, writeTableVersion) || needsDowngrade(metaClient, writeTableVersion))) {
         throw new HoodieUpgradeDowngradeException(
             String.format("When upgrade/downgrade is happening, please avoid setting --checkpoint option and --ignore-checkpoint for your delta streamers."
                 + " Detected invalid streamer configuration:\n%s", streamerConfig));

@@ -1011,7 +1011,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   @VisibleForTesting
   String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
-    if (needsUpgrade(metaClient)) {
+    if (UpgradeDowngrade.needsUpgrade(metaClient, config, config.getWriteVersion())) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
@@ -1335,7 +1335,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       ownerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType,
           metaClient.getTableType()), instantTime.get()));
     }
-    boolean requiresInitTable = needsUpgrade(metaClient) || config.isMetadataTableEnabled();
+    boolean requiresInitTable = UpgradeDowngrade.needsUpgrade(metaClient, config, config.getWriteVersion()) || config.isMetadataTableEnabled();
     if (!requiresInitTable) {
       return;
     }
@@ -1502,10 +1502,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime instant time of interest if we have one.
    */
   protected void tryUpgrade(HoodieTableMetaClient metaClient, Option<String> instantTime) {
-    UpgradeDowngrade upgradeDowngrade =
-        new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
-
-    if (upgradeDowngrade.needsUpgrade(config.getWriteVersion())) {
+    if (UpgradeDowngrade.needsUpgrade(metaClient, config, config.getWriteVersion())) {
       // Ensure no inflight commits by setting EAGER policy and explicitly cleaning all failed commits
       List<String> instantsToRollback = tableServiceClient.getInstantsToRollback(metaClient, HoodieFailedWritesCleaningPolicy.EAGER, instantTime);
 
@@ -1522,11 +1519,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       metaClient.reloadTableConfig();
       metaClient.reloadActiveTimeline();
     }
-  }
-
-  private boolean needsUpgrade(HoodieTableMetaClient metaClient) {
-    UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
-    return upgradeDowngrade.needsUpgrade(config.getWriteVersion());
   }
 
   /**
