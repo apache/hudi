@@ -51,7 +51,7 @@ public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerge
     }
     Schema oldSchema = recordContext.getSchemaFromBufferRecord(older);
     Schema newSchema = recordContext.getSchemaFromBufferRecord(newer);
-    return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) newer, newSchema,
-        (BufferedRecord<InternalRow>) older, oldSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
+    return (BufferedRecord<T>) SparkRecordMergingUtils.mergePartialRecords((BufferedRecord<InternalRow>) older, oldSchema,
+        (BufferedRecord<InternalRow>) newer, newSchema, readerSchema, (RecordContext<InternalRow>) recordContext);
   }
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecord;
 
 import java.io.IOException;
@@ -41,6 +42,11 @@ public class EventTimeFlinkRecordMerger extends HoodieFlinkRecordMerger {
       BufferedRecord<T> newer,
       RecordContext<T> recordContext,
       TypedProperties props) throws IOException {
+    // If the new record is a commit time ordered delete, it will always be used regardless of the ordering value of the old record.
+    // If the old record was a commit time ordered delete, the newer record will be returned because it occurred after that delete and ordering time comparison is not needed.
+    if (HoodieRecordMerger.mergingCommitTimeOrderedDelete(older, newer)) {
+      return newer;
+    }
 
     if (older.getOrderingValue().compareTo(newer.getOrderingValue()) > 0) {
       return older;
