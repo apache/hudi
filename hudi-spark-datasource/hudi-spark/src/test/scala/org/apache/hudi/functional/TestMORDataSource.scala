@@ -27,7 +27,7 @@ import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -69,7 +69,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     "hoodie.upsert.shuffle.parallelism" -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
@@ -142,11 +142,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
     writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logType)
-    readOpts = readOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
+    readOpts = readOpts - HoodieTableConfig.ORDERING_FIELDS.key
     if (!hasPreCombineField) {
-      writeOpts = writeOpts - DataSourceWriteOptions.PRECOMBINE_FIELD.key
+      writeOpts = writeOpts - HoodieTableConfig.ORDERING_FIELDS.key
     } else {
-      writeOpts = writeOpts ++ Map(DataSourceWriteOptions.PRECOMBINE_FIELD.key ->
+      writeOpts = writeOpts ++ Map(HoodieTableConfig.ORDERING_FIELDS.key ->
         (if (isNullOrEmpty(precombineField)) "" else precombineField))
     }
     if (!isNullOrEmpty(recordMergeMode)) {
@@ -206,14 +206,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         Map(HoodieTableConfig.VERSION.key -> HoodieTableVersion.SIX.versionCode().toString)
       } ++
       (if (hasPreCombineField && !isNullOrEmpty(precombineField)) {
-        Map(HoodieTableConfig.PRECOMBINE_FIELDS.key -> precombineField)
+        Map(HoodieTableConfig.ORDERING_FIELDS.key -> precombineField)
       } else {
         Map()
       })).asJava
     val nonExistentConfigs: java.util.List[String] = (if (hasPreCombineField) {
       Seq[String]()
     } else {
-      Seq(HoodieTableConfig.PRECOMBINE_FIELDS.key)
+      Seq(HoodieTableConfig.ORDERING_FIELDS.key)
     }).asJava
     HoodieTestUtils.validateTableConfig(storage, basePath, expectedConfigs, nonExistentConfigs)
     val commit1CompletionTime = if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
@@ -772,7 +772,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(PAYLOAD_CLASS_NAME.key, classOf[DefaultHoodieRecordPayload].getCanonicalName)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       .option(RECORDKEY_FIELD.key, "id")
-      .option(PRECOMBINE_FIELD.key, "version")
+      .option(HoodieTableConfig.ORDERING_FIELDS.key, "version")
       .option(PARTITIONPATH_FIELD.key, "")
       .mode(SaveMode.Append)
       .save(basePath)
@@ -1143,7 +1143,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key()-> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
@@ -1185,7 +1185,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       DataSourceWriteOptions.OPERATION.key() -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       DataSourceWriteOptions.TABLE_TYPE.key() -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
@@ -1322,14 +1322,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @ValueSource(booleans = Array(true, false))
   def testReadOptimizedQueryAfterInflightCompactionAndCompletedDeltaCommit(enableFileIndex: Boolean): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_ro_read_test_table", s"${basePath}_mor_test_table")
-    val precombineField = "col3"
+    val orderingFields = "col3"
     val recordKeyField = "key"
     val dataField = "age"
 
     val options = Map[String, String](
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
       DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> precombineField,
+      HoodieTableConfig.ORDERING_FIELDS.key -> orderingFields,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
@@ -1345,7 +1345,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // fg1_dc1.parquet written to storage
     // For record key "0", the row is (0, 0, 1000)
     val firstDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 1000"))
 
     firstDf.write.format("hudi")
@@ -1358,7 +1358,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // .fg1_dc1.log (from DC2) written to storage
     // For record key "0", the row is (0, 0, 2000)
     val secondDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 2000"))
 
     secondDf.write.format("hudi")
@@ -1391,7 +1391,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // .fg1_c3.log (from DC4) is written to storage
     // For record key "0", the row is (0, 0, 3000)
     val thirdDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 3000"))
 
     thirdDf.write.format("hudi")
@@ -1420,14 +1420,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 //  @ValueSource(booleans = Array(true, false))
   def testSnapshotQueryAfterInflightDeltaCommit(enableFileIndex: Boolean, tableVersion: Int): Unit = {
     val (tableName, tablePath) = ("hoodie_mor_snapshot_read_test_table", s"${basePath}_mor_test_table")
-    val precombineField = "col3"
+    val orderingFields = "col3"
     val recordKeyField = "key"
     val dataField = "age"
 
     val options = Map[String, String](
       DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
       DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> precombineField,
+      HoodieTableConfig.ORDERING_FIELDS.key -> orderingFields,
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
@@ -1442,7 +1442,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.toString)
 
     val firstDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 1000"))
     firstDf.write.format("hudi")
       .options(writeOpts)
@@ -1450,7 +1450,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .save(tablePath)
 
     val secondDf = spark.range(0, 10).toDF(recordKeyField)
-      .withColumn(precombineField, expr(recordKeyField))
+      .withColumn(orderingFields, expr(recordKeyField))
       .withColumn(dataField, expr(recordKeyField + " + 2000"))
     secondDf.write.format("hudi")
       .options(writeOpts)
@@ -1742,7 +1742,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> "timestamp,rider",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "timestamp,rider",
       DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
     )
@@ -1788,7 +1788,9 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     "6,6,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=6, autoUpgrade=false → no upgrade
     "6,8,false,NO_UPGRADE", // Auto-upgrade disabled: table=6, write=8, autoUpgrade=false → no upgrade
     "4,8,true,EXCEPTION", // Auto-upgrade enabled: Should throw exception since table version is less than 6
-    "4,8,false,EXCEPTION" // Auto-upgrade disabled: Should throw exception since table version is less than 6
+    "4,8,false,EXCEPTION", // Auto-upgrade disabled: Should throw exception since table version is less than 6
+    "8,8,false,NO_UPGRADE", // Auto-upgrade disabled: Should not upgrade as auto-upgrade is disabled and same versions
+    "8,8,true,NO_UPGRADE" // Auto-upgrade enabled: Should not upgrade as auto-upgrade is enabled and same versions
   ))
   def testBaseHoodieWriteClientUpgradeDecisionLogic(
     tableVersionStr: String,
@@ -1935,7 +1937,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     Map(
       // Don't override table name - let fixture table configuration take precedence
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",         // Fixture uses 'id' as record key
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",        // Fixture uses 'ts' as precombine field
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",        // Fixture uses 'ts' as precombine field
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition", // Fixture uses 'partition' as partition field
       "hoodie.upsert.shuffle.parallelism" -> "2",
       "hoodie.insert.shuffle.parallelism" -> "2"

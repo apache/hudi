@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.File;
 import java.io.FileReader;
@@ -94,7 +95,9 @@ public class HoodiePayloadConfig extends HoodieConfig {
     }
 
     public Builder withPayloadOrderingFields(String payloadOrderingFields) {
-      payloadConfig.setValue(ORDERING_FIELDS, String.valueOf(payloadOrderingFields));
+      if (StringUtils.nonEmpty(payloadOrderingFields)) {
+        payloadConfig.setValue(ORDERING_FIELDS, payloadOrderingFields);
+      }
       return this;
     }
 

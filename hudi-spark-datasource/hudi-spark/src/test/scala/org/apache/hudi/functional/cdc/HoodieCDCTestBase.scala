@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.{DATA_B
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
 import org.apache.hudi.common.table.timeline.HoodieInstant
-import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -54,7 +53,7 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     RECORDKEY_FIELD.key -> "_row_key",
-    PRECOMBINE_FIELD.key -> "timestamp",
+    HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1",
     HoodieCleanConfig.AUTO_CLEAN.key -> "false",
@@ -157,9 +156,8 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
       if (op == HoodieCDCOperation.INSERT) {
         assertNull(cdcRecord.get("before"))
       } else {
-        val payload = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcRecord.get("record_key").toString).get
-          .getData.asInstanceOf[RawTripTestPayload]
-        val genericRecord = payload.getInsertValue(dataSchema).get.asInstanceOf[GenericRecord]
+        val genericRecord = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcRecord.get("record_key").toString).get
+          .getData.asInstanceOf[GenericRecord]
         val cdcBeforeValue = cdcRecord.get("before").asInstanceOf[GenericRecord]
         assertNotEquals(genericRecord.get("begin_lat"), cdcBeforeValue.get("begin_lat"))
       }
@@ -170,14 +168,12 @@ abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {
         // check before
         assertNull(cdcBeforeValue)
         // check after
-        val payload = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcAfterValue.get("_row_key").toString).get
-          .getData.asInstanceOf[RawTripTestPayload]
-        val genericRecord = payload.getInsertValue(dataSchema).get.asInstanceOf[GenericRecord]
+        val genericRecord = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcAfterValue.get("_row_key").toString).get
+          .getData.asInstanceOf[GenericRecord]
         assertEquals(genericRecord.get("begin_lat"), cdcAfterValue.get("begin_lat"))
       } else {
-        val payload = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcAfterValue.get("_row_key").toString).get
-          .getData.asInstanceOf[RawTripTestPayload]
-        val genericRecord = payload.getInsertValue(dataSchema).get.asInstanceOf[GenericRecord]
+        val genericRecord = newHoodieRecords.asScala.find(_.getKey.getRecordKey == cdcAfterValue.get("_row_key").toString).get
+          .getData.asInstanceOf[GenericRecord]
         // check before
         assertNotEquals(genericRecord.get("begin_lat"), cdcBeforeValue.get("begin_lat"))
         // check after

@@ -39,7 +39,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -134,7 +133,7 @@ public class HoodieAvroHFileWriter
     byte[] value = null;
     boolean isRecordSerialized = false;
     if (keyFieldSchema.isPresent()) {
-      GenericRecord keyExcludedRecord = (GenericRecord) record;
+      IndexedRecord keyExcludedRecord = record;
       int keyFieldPos = this.keyFieldSchema.get().pos();
       boolean isKeyAvailable = (record.get(keyFieldPos) != null
           && !(record.get(keyFieldPos).toString().isEmpty()));

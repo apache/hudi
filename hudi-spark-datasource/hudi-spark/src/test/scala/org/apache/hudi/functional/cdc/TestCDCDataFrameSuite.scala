@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplement
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 
@@ -649,7 +649,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     val options = Map(
       "hoodie.table.name" -> "test",
       "hoodie.datasource.write.recordkey.field" -> "id",
-      "hoodie.datasource.write.precombine.field" -> "replicadmstimestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "replicadmstimestamp",
       "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
       "hoodie.datasource.write.partitionpath.field" -> "",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
@@ -708,7 +708,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       "hoodie.bulkinsert.shuffle.parallelism" -> "2",
       "hoodie.delete.shuffle.parallelism" -> "1",
       "hoodie.datasource.write.recordkey.field" -> "_row_key",
-      "hoodie.datasource.write.precombine.field" -> "timestamp",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "timestamp",
       "hoodie.table.name" -> ("hoodie_test" + loggingMode.name()),
       "hoodie.clean.automatic" -> "true",
       "hoodie.clean.commits.retained" -> "1"
@@ -813,7 +813,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)
 
-    val metaClient = createMetaClient(spark, basePath)
+      val metaClient = createMetaClient(spark, basePath)
       val startTimeStamp = metaClient.reloadActiveTimeline().firstInstant().get.requestedTime
       val latestTimeStamp = metaClient.reloadActiveTimeline().lastInstant().get.requestedTime
 

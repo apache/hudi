@@ -28,6 +28,7 @@ import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -55,7 +56,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableBiFunction;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -77,11 +77,11 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
-import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
+import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -160,8 +160,8 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.projectSchema;
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
-import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -1046,7 +1046,7 @@ public class HoodieTableMetadataUtil {
       readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(readerContext, writerSchemaOpt.get(), writerSchemaOpt.get(), Option.empty(), properties, datasetMetaClient));
       HoodieReadStats readStats = new HoodieReadStats();
       KeyBasedFileGroupRecordBuffer<T> recordBuffer = new KeyBasedFileGroupRecordBuffer<>(readerContext, datasetMetaClient,
-          readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getPreCombineFields(),
+          readerContext.getMergeMode(), Option.empty(), properties, tableConfig.getOrderingFields(),
           UpdateProcessor.create(readStats, readerContext, true, Option.empty(), properties));
 
       // CRITICAL: Ensure allowInflightInstants is set to true
@@ -1098,16 +1098,16 @@ public class HoodieTableMetadataUtil {
     HoodiePairData<HoodieKey, HoodieRecord> recordIndexRecordsPair;
     if (isPartitionedRLI) {
       recordIndexRecordsPair = recordIndexRecords.mapToPair(r -> {
-        String recordPartitionPath = r.getData() instanceof EmptyHoodieRecordPayloadWithPartition
+        String recordPartitionPath = r.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps())
             ? ((EmptyHoodieRecordPayloadWithPartition) r.getData()).getPartitionPath() : ((HoodieMetadataPayload) r.getData()).getDataPartition();
-        return Pair.of(new HoodieKey(recordPartitionPath, r.getRecordKey()), r);
+        return Pair.of(new HoodieKey(r.getRecordKey(), recordPartitionPath), r);
       });
     } else {
       recordIndexRecordsPair = recordIndexRecords.mapToPair(r -> Pair.of(r.getKey(), r));
     }
     return recordIndexRecordsPair.reduceByKey((SerializableBiFunction<HoodieRecord, HoodieRecord, HoodieRecord>) (record1, record2) -> {
-      boolean isRecord1Deleted = record1.getData() instanceof EmptyHoodieRecordPayload;
-      boolean isRecord2Deleted = record2.getData() instanceof EmptyHoodieRecordPayload;
+      boolean isRecord1Deleted = record1.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps());
+      boolean isRecord2Deleted = record2.isDelete(HoodieMetadataRecord.getClassSchema(), CollectionUtils.emptyProps());
       if (isRecord1Deleted && !isRecord2Deleted) {
         return record2;
       } else if (!isRecord1Deleted && isRecord2Deleted) {
@@ -1117,7 +1117,7 @@ public class HoodieTableMetadataUtil {
         return record1;
       } else {
         throw new HoodieIOException("Two HoodieRecord updates to RLI is seen for same record key " + record2.getRecordKey() + ", record 1 : "
-            + record1.getData().toString() + ", record 2 : " + record2.getData().toString());
+            + record1 + ", record 2 : " + record2);
       }
     }, parallelism).values();
   }
@@ -2791,7 +2791,7 @@ public class HoodieTableMetadataUtil {
     if (!indexDefs.containsKey(metadataPartitionPath)) {
       return Option.empty();
     }
-    return Option.of(indexDefs.get(metadataPartitionPath).getVersion());
+    return Option.ofNullable(indexDefs.get(metadataPartitionPath).getVersion());
   }
 
   public static HoodieIndexVersion existingIndexVersionOrDefault(String metadataPartitionPath, HoodieTableMetaClient dataMetaClient) {

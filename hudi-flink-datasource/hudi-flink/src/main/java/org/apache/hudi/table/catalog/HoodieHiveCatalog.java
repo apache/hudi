@@ -528,7 +528,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
 
     List<String> fields = new ArrayList<>();
     catalogTable.getUnresolvedSchema().getColumns().forEach(column -> fields.add(column.getName()));
-    StreamerUtil.checkPreCombineKey(flinkConf, fields);
+    StreamerUtil.checkOrderingFields(flinkConf, fields);
 
     try {
       return StreamerUtil.initTableIfNotExists(flinkConf, hiveConf);

@@ -71,7 +71,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
              | partitioned by (name)
              | tblproperties (
              |   'primaryKey' = 'id',
-             |   'preCombineField' = 'ts',
+             |   'orderingFields' = 'ts',
              |   'hoodie.table.cdc.enabled' = 'true',
              |   'hoodie.table.cdc.supplemental.logging.mode' = '$DATA_BEFORE_AFTER',
              |   type = '$tableType'
@@ -125,7 +125,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | ) using hudi
                | tblproperties (
                |   'primaryKey' = 'id',
-               |   'preCombineField' = 'ts',
+               |   'orderingFields' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
                |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   $otherTableProperties
@@ -248,7 +248,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | partitioned by (pt)
                | tblproperties (
                |   'primaryKey' = 'id',
-               |   'preCombineField' = 'ts',
+               |   'orderingFields' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
                |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   'type' = '$tableType'
@@ -331,7 +331,7 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
                | partitioned by (pt)
                | tblproperties (
                |   'primaryKey' = 'id',
-               |   'preCombineField' = 'ts',
+               |   'orderingFields' = 'ts',
                |   'hoodie.table.cdc.enabled' = 'true',
                |   'hoodie.table.cdc.supplemental.logging.mode' = '${loggingMode.name()}',
                |   '${ENABLE_MERGE_INTO_PARTIAL_UPDATES.key}' = 'true',

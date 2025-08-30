@@ -260,14 +260,17 @@ public class ResourceHudiTablesInitializer
                 Location location = destinationDirectory.appendPath(sourceDirectory.relativize(path).toString());
                 fileSystem.createDirectory(location.parentDirectory());
                 try (OutputStream out = fileSystem.newOutputFile(location).create()) {
-                    Files.copy(path, out);
-                    // Flush all data before close() to ensure durability
-                    out.flush();
+                    if (srcHashAndSize.size > 0) {
+                        Files.copy(path, out);
+                        // Flush all data before close() to ensure durability
+                        out.flush();
+                    }
                 }
 
                 HashAndSizeResult dstHashAndSize;
                 try {
-                    dstHashAndSize = calculateHashAndSize(location, fileSystem);
+                    dstHashAndSize = srcHashAndSize.size > 0 ? calculateHashAndSize(location, fileSystem)
+                        : new HashAndSizeResult(new byte[0], 0);
                 }
                 catch (NoSuchAlgorithmException e) {
                     throw new IOException("Failed to calculate destination hash: Algorithm not found", e);
@@ -314,6 +317,9 @@ public class ResourceHudiTablesInitializer
     private static HashAndSizeResult calculateHashAndSize(Path path)
             throws IOException, NoSuchAlgorithmException
     {
+        if (Files.size(path) == 0) {
+            return new HashAndSizeResult(new byte[0], 0);
+        }
         try (InputStream is = Files.newInputStream(path)) {
             return calculateHashAndSize(is);
         }

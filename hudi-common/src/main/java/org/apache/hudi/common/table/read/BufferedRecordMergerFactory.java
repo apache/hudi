@@ -82,6 +82,8 @@ public class BufferedRecordMergerFactory {
       return new PartialUpdateBufferedRecordMerger<>(readerContext.getRecordContext(), recordMerger, deleteRecordMerger, orderingFieldNames, readerSchema, props);
     }
 
+    // might need to introduce a merge config for the factory in the future to get rid of this.
+    // props = readerContext.getMergeProps(props);
     switch (recordMergeMode) {
       case COMMIT_TIME_ORDERING:
         if (partialUpdateModeOpt.isEmpty()) {
@@ -148,12 +150,13 @@ public class BufferedRecordMergerFactory {
     public Option<BufferedRecord<T>> deltaMerge(BufferedRecord<T> newRecord,
                                                 BufferedRecord<T> existingRecord) {
       if (existingRecord != null) {
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
-            recordContext.getSchemaFromBufferRecord(newRecord),
+            newSchema,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            false);
+            newSchema);
       }
       return Option.of(newRecord);
     }
@@ -161,12 +164,13 @@ public class BufferedRecordMergerFactory {
     @Override
     public BufferedRecord<T> finalMerge(BufferedRecord<T> olderRecord,
                                      BufferedRecord<T> newerRecord) {
+      Schema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
-          recordContext.getSchemaFromBufferRecord(newerRecord),
+          newSchema,
           recordContext.getSchemaFromBufferRecord(olderRecord),
-          false);
+          newSchema);
       return newerRecord;
     }
   }
@@ -218,21 +222,23 @@ public class BufferedRecordMergerFactory {
       if (existingRecord == null) {
         return Option.of(newRecord);
       } else if (shouldKeepNewerRecord(existingRecord, newRecord)) {
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         newRecord = partialUpdateHandler.partialMerge(
             newRecord,
             existingRecord,
-            recordContext.getSchemaFromBufferRecord(newRecord),
+            newSchema,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            false);
+            newSchema);
         return Option.of(newRecord);
       } else {
         // Use existing record as the base record since existing record has higher ordering value.
+        Schema newSchema = recordContext.getSchemaFromBufferRecord(newRecord);
         existingRecord = partialUpdateHandler.partialMerge(
             existingRecord,
             newRecord,
             recordContext.getSchemaFromBufferRecord(existingRecord),
-            recordContext.getSchemaFromBufferRecord(newRecord),
-            true);
+            newSchema,
+            newSchema);
         return Option.of(existingRecord);
       }
     }
@@ -245,6 +251,7 @@ public class BufferedRecordMergerFactory {
 
       Comparable newOrderingValue = newerRecord.getOrderingValue();
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
+      Schema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       if (!olderRecord.isCommitTimeOrderingDelete()
           && oldOrderingValue.compareTo(newOrderingValue) > 0) {
         // Use old record as the base record since old record has higher ordering value.
@@ -252,17 +259,17 @@ public class BufferedRecordMergerFactory {
             olderRecord,
             newerRecord,
             recordContext.getSchemaFromBufferRecord(olderRecord),
-            recordContext.getSchemaFromBufferRecord(newerRecord),
-            true);
+            newSchema,
+            newSchema);
         return olderRecord;
       }
 
       newerRecord = partialUpdateHandler.partialMerge(
           newerRecord,
           olderRecord,
-          recordContext.getSchemaFromBufferRecord(newerRecord),
+          newSchema,
           recordContext.getSchemaFromBufferRecord(olderRecord),
-          false);
+          newSchema);
       return newerRecord;
     }
   }
@@ -397,10 +404,7 @@ public class BufferedRecordMergerFactory {
       if (mergedRecord.isPresent()
           && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
         HoodieRecord hoodieRecord = mergedRecord.get().getLeft();
-        if (!mergedRecord.get().getRight().equals(readerSchema)) {
-          hoodieRecord = hoodieRecord.rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema);
-        }
-        return BufferedRecords.fromHoodieRecord(hoodieRecord, readerSchema, recordContext, props, orderingFields, false);
+        return BufferedRecords.fromHoodieRecord(hoodieRecord, mergedRecord.get().getRight(), recordContext, props, orderingFields, false);
       }
       return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }
@@ -496,14 +500,9 @@ public class BufferedRecordMergerFactory {
         return olderRecord;
       }
       if (!mergedRecord.isDelete(mergeResultSchema, props)) {
-        IndexedRecord indexedRecord;
-        if (!mergeResultSchema.equals(readerSchema)) {
-          indexedRecord = (IndexedRecord) mergedRecord.rewriteRecordWithNewSchema(mergeResultSchema, null, readerSchema).getData();
-        } else {
-          indexedRecord = (IndexedRecord) mergedRecord.getData();
-        }
+        IndexedRecord indexedRecord = (IndexedRecord) mergedRecord.getData();
         return BufferedRecords.fromEngineRecord(
-            recordContext.convertAvroRecord(indexedRecord), readerSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
+            recordContext.convertAvroRecord(indexedRecord), mergeResultSchema, recordContext, orderingFieldNames, newerRecord.getRecordKey(), false);
       }
       return BufferedRecords.createDelete(newerRecord.getRecordKey());
     }

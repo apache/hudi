@@ -87,6 +87,11 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
+  public ArrayWritable constructEngineRecord(Schema recordSchema, Object[] fieldValues) {
+    return new ArrayWritable(Writable.class, (Writable[]) fieldValues);
+  }
+
+  @Override
   public ArrayWritable mergeWithEngineRecord(Schema schema,
                                              Map<Integer, Object> updateValues,
                                              BufferedRecord<ArrayWritable> baseRecord) {

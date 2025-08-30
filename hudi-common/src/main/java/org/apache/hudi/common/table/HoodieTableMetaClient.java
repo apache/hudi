@@ -170,7 +170,7 @@ public class HoodieTableMetaClient implements Serializable {
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
+  private Option<HoodieIndexMetadata> indexMetadataOpt;
   private HoodieTableFormat tableFormat;
 
   /**
@@ -189,7 +189,7 @@ public class HoodieTableMetaClient implements Serializable {
     this.basePath = new StoragePath(basePath);
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath);
-    this.indexMetadataOpt = getIndexMetadata();
+    this.indexMetadataOpt = readIndexDefFromStorage(this.storage, this.basePath, this.tableConfig);
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
@@ -272,6 +272,9 @@ public class HoodieTableMetaClient implements Serializable {
     checkState(indexMetadataOpt.isPresent(), "Index metadata is not present");
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
     writeIndexMetadataToStorage();
+    if (indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
+      indexMetadataOpt = Option.empty();
+    }
   }
 
   /**
@@ -320,20 +323,16 @@ public class HoodieTableMetaClient implements Serializable {
    * Returns Option of {@link HoodieIndexMetadata} from index definition file if present, else returns empty Option.
    */
   public Option<HoodieIndexMetadata> getIndexMetadata() {
-    if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
-      return indexMetadataOpt;
-    }
-    Option<HoodieIndexMetadata> indexDefOption = Option.empty();
-    if (tableConfig.getRelativeIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getRelativeIndexDefinitionPath().get())) {
-      indexDefOption = loadIndexDefFromStorage(basePath, tableConfig.getRelativeIndexDefinitionPath().get(), storage);
-    }
-    return indexDefOption;
+    return indexMetadataOpt;
   }
 
-  private static Option<HoodieIndexMetadata> loadIndexDefFromStorage(
-      StoragePath basePath, String relativeIndexDefinitionPath, HoodieStorage storage) {
-    StoragePath indexDefinitionPath =
-        new StoragePath(basePath, relativeIndexDefinitionPath);
+  private static Option<HoodieIndexMetadata> readIndexDefFromStorage(
+      HoodieStorage storage, StoragePath basePath, HoodieTableConfig tableConfig) {
+    Option<String> indexDefinitionPathOpt = tableConfig.getRelativeIndexDefinitionPath();
+    if (indexDefinitionPathOpt.isEmpty() || StringUtils.isNullOrEmpty(indexDefinitionPathOpt.get())) {
+      return Option.empty();
+    }
+    StoragePath indexDefinitionPath = new StoragePath(basePath, indexDefinitionPathOpt.get());
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
@@ -342,7 +341,7 @@ public class HoodieTableMetaClient implements Serializable {
         return Option.of(new HoodieIndexMetadata());
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not load index definition at path: " + relativeIndexDefinitionPath, e);
+      throw new HoodieIOException("Could not load index definition at path: " + indexDefinitionPath, e);
     }
   }
 
@@ -1047,7 +1046,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String timelinePath;
     private String timelineHistoryPath;
     private String baseFileFormat;
-    private String preCombineFields;
+    private String orderingFields;
     private String partitionFields;
     private Boolean cdcEnabled;
     private String cdcSupplementalLoggingMode;
@@ -1169,11 +1168,11 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     /**
-     * Sets preCombine fields as a comma separated string in the table
-     * @param preCombineFieldsAsString - Comma separated preCombine fields which need to be set for the table
+     * Sets ordering fields as a comma separated string in the table
+     * @param orderingFieldsAsString - Comma separated ordering fields which need to be set for the table
      */
-    public TableBuilder setPreCombineFields(String preCombineFieldsAsString) {
-      this.preCombineFields = preCombineFieldsAsString;
+    public TableBuilder setOrderingFields(String orderingFieldsAsString) {
+      this.orderingFields = orderingFieldsAsString;
       return this;
     }
 
@@ -1376,8 +1375,8 @@ public class HoodieTableMetaClient implements Serializable {
         setBootstrapIndexEnable(hoodieConfig.getBoolean(HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE));
       }
 
-      if (hoodieConfig.contains(HoodieTableConfig.PRECOMBINE_FIELDS)) {
-        setPreCombineFields(hoodieConfig.getString(HoodieTableConfig.PRECOMBINE_FIELDS));
+      if (hoodieConfig.contains(HoodieTableConfig.ORDERING_FIELDS)) {
+        setOrderingFields(hoodieConfig.getString(HoodieTableConfig.ORDERING_FIELDS));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PARTITION_FIELDS)) {
         setPartitionFields(
@@ -1462,14 +1461,14 @@ public class HoodieTableMetaClient implements Serializable {
       if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
         Triple<RecordMergeMode, String, String> mergeConfigs =
             inferMergingConfigsForPreV9Table(
-                recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields,
+                recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields,
                 tableVersion);
         tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
         tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
         tableConfig.setValue(RECORD_MERGE_STRATEGY_ID, mergeConfigs.getRight());
       } else { // For table version >= 9
         Map<String, String> mergeConfigs = inferMergingConfigsForV9TableCreation(
-            recordMergeMode, payloadClassName, recordMergerStrategyId, preCombineFields, tableVersion);
+            recordMergeMode, payloadClassName, recordMergerStrategyId, orderingFields, tableVersion);
         for (Map.Entry<String, String> config : mergeConfigs.entrySet()) {
           tableConfig.setValue(config.getKey(), config.getValue());
         }
@@ -1518,8 +1517,8 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(HoodieTableConfig.BOOTSTRAP_BASE_PATH, bootstrapBasePath);
       }
 
-      if (StringUtils.nonEmpty(preCombineFields)) {
-        tableConfig.setValue(HoodieTableConfig.PRECOMBINE_FIELDS, preCombineFields);
+      if (StringUtils.nonEmpty(orderingFields)) {
+        tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, orderingFields);
       }
 
       if (null != partitionFields) {
