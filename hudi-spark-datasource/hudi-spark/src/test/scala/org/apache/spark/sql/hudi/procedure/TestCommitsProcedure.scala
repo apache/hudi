@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.procedure
 
 class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
-  test("Test Call show_archived_commits Procedure") {
+  test("Test Call show_commits Procedure with showArchived=true") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -51,25 +51,33 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 7, 'a7', 70, 4000")
 
       // Check required fields
-      checkExceptionContain(s"""call show_archived_commits(limit => 10)""")(
-        s"Argument: table is required")
+      checkExceptionContain(s"""call show_commits(limit => 10, showArchived => true)""")(
+        s"Table name or table path must be given one")
 
-      // collect active commits for table
-      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      val activeCommits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
       assertResult(5) {
-        commits.length
+        activeCommits.length
       }
 
-      // collect archived commits for table
-      val endTs = commits(0).get(0).toString
-      val archivedCommits = spark.sql(s"""call show_archived_commits(table => '$tableName', end_ts => '$endTs')""").collect()
+      val endTs = activeCommits(0).get(0).toString
+      val allCommits = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  showArchived => true,
+           |  endTime => '$endTs'
+           |)""".stripMargin).collect()
+
+      assert(allCommits.length > activeCommits.length,
+        s"Should have more commits with showArchived=true (${allCommits.length}) than without (${activeCommits.length})")
+
+      val archivedCommitsCount = allCommits.length - activeCommits.length
       assertResult(2) {
-        archivedCommits.length
+        archivedCommitsCount
       }
     }
   }
 
-  test("Test Call show_archived_commits_metadata Procedure") {
+  test("Test Call show_commits Procedure with showArchived=true and file metadata") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -101,25 +109,136 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 7, 'a7', 70, 4000")
 
       // Check required fields
-      checkExceptionContain(s"""call show_archived_commits_metadata(limit => 10)""")(
-        s"Argument: table is required")
+      checkExceptionContain(s"""call show_commits(limit => 10, showArchived => true, showFiles => true)""")(
+        s"Table name or table path must be given one")
 
       // collect active commits for table
-      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      val activeCommits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
       assertResult(5) {
+        activeCommits.length
+      }
+
+      val endTs = activeCommits(0).get(0).toString
+      val archivedCommitsWithMetadata = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  showArchived => true,
+           |  showFiles => true,
+           |  endTime => '$endTs'
+           |)""".stripMargin).collect()
+
+      assert(archivedCommitsWithMetadata.length > 0, "Should have archived commits with file metadata")
+
+      val fileSpecificRows = archivedCommitsWithMetadata.filter(row =>
+        row.getString(6) != null && !row.getString(6).equals("*"))
+      assert(fileSpecificRows.length > 0, "Should have rows with file specific details")
+      fileSpecificRows.foreach { row =>
+        assert(row.getString(6) != null && row.getString(6).nonEmpty, "File ID should be populated")
+
+        val hasMetrics = row.getLong(8) > 0 || // num_writes
+          row.getLong(21) > 0 || // total_bytes_written
+          row.getLong(23) > 0 // file_size
+        assert(hasMetrics, "Should have some metrics populated for archived files")
+      }
+    }
+  }
+
+  test("Test Call show_commits Procedure") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+
+      // collect commits for table
+      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      assertResult(2) {
         commits.length
       }
 
-      // collect archived commits for table
-      val endTs = commits(0).get(0).toString
-      val archivedCommits = spark.sql(s"""call show_archived_commits_metadata(table => '$tableName', end_ts => '$endTs')""").collect()
+      val instant_time = commits(0).getString(0)
+      val commitFiles = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  filter => "commit_time = '$instant_time'"
+           |)""".stripMargin).collect()
+      assert(commitFiles.length == 1, "Should have one file for the commit")
+    }
+  }
+
+  test("Test Call show_commits Procedure for file specific details") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+
+      // insert data to table
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+
+      // collect commits for table
+      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
       assertResult(2) {
-        archivedCommits.length
+        commits.length
+      }
+
+      val instant_time = commits(0).getString(0)
+
+      val commitFiles = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  showFiles => true,
+           |  filter => "commit_time = '$instant_time'"
+           |)""".stripMargin).collect()
+
+      assert(commitFiles.length >= 1, s"Expected at least one file, got ${commitFiles.length}")
+
+      commitFiles.foreach { row =>
+        val fileId = row.getString(6)
+        assert(!fileId.equals("*"), "File ID should not be '*' for file-level details")
+        val numWrites = row.getLong(8)
+        val fileSize = row.getLong(23)
+        val avgRecordSize = row.getLong(24)
+        assert(numWrites > 0, s"Number of writes should be > 0, got $numWrites")
+        assert(fileSize > 0, s"File size should be > 0, got $fileSize")
+        val totalBytesWritten = row.getLong(21)
+        val calculatedAvgSize = if (numWrites > 0) totalBytesWritten / numWrites else 0
+        assert(avgRecordSize == calculatedAvgSize,
+          s"avg_record_size ($avgRecordSize) should equal totalBytesWritten/numWrites ($calculatedAvgSize)")
       }
     }
   }
 
-  test("Test Call show_commit_files Procedure") {
+  test("Test Call show_commits Procedure to test for some write stats") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -142,94 +261,21 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
-      // Check required fields
-      checkExceptionContain(s"""call show_commit_files(table => '$tableName')""")(
-        s"Argument: instant_time is required")
-
       // collect commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(2){commits.length}
+      assertResult(2) {
+        commits.length
+      }
+      val instant_time = commits(0).getString(0)
 
-      // collect commit files for table
-      val instant_time = commits(0).get(0).toString
-      val commitFiles = spark.sql(s"""call show_commit_files(table => '$tableName', instant_time => '$instant_time')""").collect()
-      assertResult(1){commitFiles.length}
-    }
-  }
-
-  test("Test Call show_commit_partitions Procedure") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  orderingFields = 'ts'
-           | )
-       """.stripMargin)
-
-      // insert data to table
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
-
-      // Check required fields
-      checkExceptionContain(s"""call show_commit_partitions(table => '$tableName')""")(
-        s"Argument: instant_time is required")
-
-      // collect commits for table
-      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(2){commits.length}
-
-      // collect commit partitions files for table
-      val instant_time = commits(0).get(0).toString
-      val commitPartitions = spark.sql(s"""call show_commit_partitions(table => '$tableName', instant_time => '$instant_time')""").collect()
-      assertResult(1){commitPartitions.length}
-    }
-  }
-
-  test("Test Call show_commit_write_stats Procedure") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // create table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  primaryKey = 'id',
-           |  orderingFields = 'ts'
-           | )
-       """.stripMargin)
-
-      // insert data to table
-      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
-      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
-
-      // Check required fields
-      checkExceptionContain(s"""call show_commit_write_stats(table => '$tableName')""")(
-        s"Argument: instant_time is required")
-
-      // collect commits for table
-      val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(2){commits.length}
-
-      // collect commit write stats for table
-      val instant_time = commits(0).get(0).toString
-      val commitPartitions = spark.sql(s"""call show_commit_write_stats(table => '$tableName', instant_time => '$instant_time')""").collect()
-      assertResult(1){commitPartitions.length}
+      val commitStats = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  filter => "commit_time = '$instant_time'"
+           |)""".stripMargin).collect()
+      commitStats.foreach { row =>
+        assert(row.get(16) != null, "total_files_added should be populated")
+      }
     }
   }
 
@@ -281,19 +327,25 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
 
       // collect commits for table1
       var commits1 = spark.sql(s"""call show_commits(table => '$tableName1', limit => 10)""").collect()
-      assertResult(2){commits1.length}
+      assertResult(2) {
+        commits1.length
+      }
 
       // collect commits for table2
       var commits2 = spark.sql(s"""call show_commits(table => '$tableName2', limit => 10)""").collect()
-      assertResult(2){commits2.length}
+      assertResult(2) {
+        commits2.length
+      }
 
       // collect commits compare for table1 and table2
       val result = spark.sql(s"""call commits_compare(table => '$tableName1', path => '${tmp.getCanonicalPath}/$tableName2')""").collect()
-      assertResult(1){result.length}
+      assertResult(1) {
+        result.length
+      }
     }
   }
 
-  test("Test Call show_commit_extra_metadata Procedure") {
+  test("Test Call show_commits Procedure for metadata") {
     withTempDir { tmp =>
       val tableName = generateTableName
       // create table
@@ -316,26 +368,83 @@ class TestCommitsProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
-      // Check required fields
-      checkExceptionContain(s"""call show_commit_extra_metadata()""")(
-        s"Argument: table is required")
-
       // collect commits for table
       val commits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
-      assertResult(2){commits.length}
+      assertResult(2) {
+        commits.length
+      }
 
-      val instant_time = commits(0).get(0).toString
-      // get specify instantTime's extraMetadatas
-      val metadatas1 = spark.sql(s"""call show_commit_extra_metadata(table => '$tableName', instant_time => '$instant_time')""").collect()
-      assertResult(true){metadatas1.length > 0}
+      val instant_time = commits(0).getString(0)
 
-      // get last instantTime's extraMetadatas
-      val metadatas2 = spark.sql(s"""call show_commit_extra_metadata(table => '$tableName')""").collect()
-      assertResult(true){metadatas2.length > 0}
+      val metadatas = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  filter => "commit_time = '$instant_time'"
+           |)""".stripMargin).collect()
 
-      // get last instantTime's extraMetadatas and filter extraMetadatas with metadata_key
-      val metadatas3 = spark.sql(s"""call show_commit_extra_metadata(table => '$tableName', metadata_key => 'schema')""").collect()
-      assertResult(1){metadatas3.length}
+      assert(metadatas.length == 1, "Should have at least one row with metadata for the commit")
+
+      metadatas.foreach { row =>
+        val extraMetadata = row.getString(25)
+        assert(extraMetadata != null, "extra_metadata should be populated")
+        assert(extraMetadata.contains("schema"), "extra_metadata should contain schema information")
+      }
+    }
+  }
+
+  test("Test Call show_commits Procedure - with bytes written filter") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
+      spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
+
+      val allCommits = spark.sql(s"""call show_commits(table => '$tableName', limit => 10)""").collect()
+      assertResult(3) {
+        allCommits.length
+      }
+
+      val filteredCommitsDf = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  limit => 10,
+           |  filter => "total_bytes_written > 0"
+           |)""".stripMargin)
+      filteredCommitsDf.show(false)
+      val filteredCommits = filteredCommitsDf.collect()
+
+      assert(filteredCommits.length >= 1, s"Should find at least 1 commit with bytes written > 0, got: ${filteredCommits.length}")
+      filteredCommits.foreach { row =>
+        assert(row.getLong(21) > 0, s"total_bytes_written should be > 0, got: ${row.getLong(21)}")
+      }
+
+      val complexFilterCommits = spark.sql(
+        s"""call show_commits(
+           |  table => '$tableName',
+           |  limit => 10,
+           |  filter => "total_bytes_written > 0 AND total_files_added >= 1"
+           |)""".stripMargin).collect()
+
+      assert(complexFilterCommits.length >= 1, s"Should find commits matching complex filter, got: ${complexFilterCommits.length}")
+      complexFilterCommits.foreach { row =>
+        assert(row.getLong(21) > 0, s"total_bytes_written should be > 0, got: ${row.getLong(21)}")
+        assert(row.getLong(17) >= 1, s"total_files_added should be >= 1, got: ${row.getLong(17)}")
+      }
     }
   }
 }

@@ -47,7 +47,9 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     ProcedureParameter.optional(5, "exclude_compaction", DataTypes.BooleanType, false),
     ProcedureParameter.optional(6, "limit", DataTypes.IntegerType, 10),
     ProcedureParameter.optional(7, "path_regex", DataTypes.StringType, ALL_PARTITIONS),
-    ProcedureParameter.optional(8, "filter", DataTypes.StringType, "")
+    ProcedureParameter.optional(8, "filter", DataTypes.StringType, ""),
+    ProcedureParameter.optional(9, "startTime", DataTypes.StringType, ""),
+    ProcedureParameter.optional(10, "endTime", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE_ALL: StructType = StructType(Array[StructField](
@@ -64,8 +66,8 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
   private val PARAMETERS_LATEST: Array[ProcedureParameter] =
     PARAMETERS_ALL ++ Array[ProcedureParameter](
       // Keep it for compatibility with older version, `path_regex` can replace it
-      ProcedureParameter.optional(9, "partition_path", DataTypes.StringType, ALL_PARTITIONS),
-      ProcedureParameter.optional(10, "merge", DataTypes.BooleanType, true)
+      ProcedureParameter.optional(11, "partition_path", DataTypes.StringType, ALL_PARTITIONS),
+      ProcedureParameter.optional(12, "merge", DataTypes.BooleanType, true)
   )
 
   private val OUTPUT_TYPE_LATEST: StructType = StructType(Array[StructField](
@@ -90,7 +92,9 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
                                   maxInstant: String,
                                   includeMaxInstant: Boolean,
                                   includeInflight: Boolean,
-                                  excludeCompaction: Boolean
+                                  excludeCompaction: Boolean,
+                                  startTime: String,
+                                  endTime: String
                                  ): HoodieTableFileSystemView = {
     val storage = metaClient.getStorage
     val statuses = if (globRegex == ALL_PARTITIONS) {
@@ -108,6 +112,16 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       timeline = timeline.filterCompletedInstants()
     }
     var instants = timeline.getInstants.iterator().asScala
+
+    if (startTime.nonEmpty && endTime.nonEmpty) {
+      instants = instants.filter { instant =>
+        val instantTime = instant.requestedTime()
+        val startMatches = startTime.isEmpty || instantTime >= startTime
+        val endMatches = endTime.isEmpty || instantTime <= endTime
+        startMatches && endMatches
+      }
+    }
+
     if (maxInstant.nonEmpty) {
       val predicate = if (includeMaxInstant) {
         InstantComparison.GREATER_THAN_OR_EQUALS
@@ -225,25 +239,27 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     val excludeCompaction = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[Boolean]
     val limit = getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[Int]
     val filter = getArgValueOrDefault(args, parameters(8)).get.asInstanceOf[String]
+    val startTime = getArgValueOrDefault(args, parameters(9)).get.asInstanceOf[String]
+    val endTime = getArgValueOrDefault(args, parameters(10)).get.asInstanceOf[String]
     val globRegex = if (showLatest) {
       val isPathRegexDefined = isArgDefined(args, parameters(7))
-      val isPartitionPathDefined = isArgDefined(args, parameters(9))
+      val isPartitionPathDefined = isArgDefined(args, parameters(11))
       if (isPathRegexDefined && isPartitionPathDefined) {
         throw new HoodieException("path_regex and partition_path cannot be used together")
       }
       if (isPathRegexDefined) {
         getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[String]
       } else {
-        getArgValueOrDefault(args, parameters(9)).get.asInstanceOf[String]
+        getArgValueOrDefault(args, parameters(11)).get.asInstanceOf[String]
       }
     } else {
       getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[String]
     }
     validateFilter(filter, outputType)
     val metaClient = createMetaClient(jsc, basePath)
-    val fsView = buildFileSystemView(basePath, metaClient, globRegex, maxInstant, includeMax, includeInflight, excludeCompaction)
+    val fsView = buildFileSystemView(basePath, metaClient, globRegex, maxInstant, includeMax, includeInflight, excludeCompaction, startTime, endTime)
     val rows = if (showLatest) {
-      val merge = getArgValueOrDefault(args, parameters(10)).get.asInstanceOf[Boolean]
+      val merge = getArgValueOrDefault(args, parameters(12)).get.asInstanceOf[Boolean]
       val maxInstantForMerge = if (merge && maxInstant.isEmpty) {
         val lastInstant = metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant()
         if (lastInstant.isPresent) {
@@ -260,7 +276,11 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     } else {
       showAllFileSlices(fsView)
     }
-    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    val results = if (startTime.nonEmpty && endTime.nonEmpty) {
+      rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList
+    } else {
+      rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
+    }
     applyFilter(results, filter, outputType)
   }
 

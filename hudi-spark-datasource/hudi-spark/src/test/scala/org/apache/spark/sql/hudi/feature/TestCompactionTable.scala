@@ -186,7 +186,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
         Seq(3, "a3", 10.0, 1000)
       )
       // show compaction
-      assertResult(1)(spark.sql(s"show compaction on $tableName").collect().length)
+      assertResult(2)(spark.sql(s"show compaction on $tableName").collect().length)
       // Try deleting non-existent row
       spark.sql(s"DELETE FROM $tableName WHERE id = 41")
       // Delete record identified by some field other than the primary-key
@@ -196,16 +196,16 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       // show compaction
       compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
       timestamps = compactionRows.map(_.getString(0)).sorted
-      assertResult(2)(timestamps.length)
+      assertResult(3)(timestamps.length)
       // run compaction
-      spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
+      spark.sql(s"run compaction on $tableName at ${timestamps(2)}")
       // check data, only 2 records should be present
       checkAnswer(s"select id, name, price, ts from $tableName order by id")(
         Seq(1, "a1", 11.0, 1000),
         Seq(3, "a3", 10.0, 1000)
       )
       // show compaction
-      assertResult(2)(spark.sql(s"show compaction on $tableName limit 10").collect().length)
+      assertResult(3)(spark.sql(s"show compaction on $tableName limit 10").collect().length)
     }
   }
 }
