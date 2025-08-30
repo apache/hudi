@@ -100,6 +100,7 @@ object HoodieProcedures {
       ,(ShowCleansProcedure.NAME, ShowCleansProcedure.builder)
       ,(ShowCleansPartitionMetadataProcedure.NAME, ShowCleansPartitionMetadataProcedure.builder)
       ,(ShowCleansPlanProcedure.NAME, ShowCleansPlanProcedure.builder)
+      ,(ShowMetadataTableHistoryProcedure.NAME, ShowMetadataTableHistoryProcedure.builder)
     )
   }
 }
