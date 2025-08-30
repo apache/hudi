@@ -550,7 +550,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
         assertResult(3)(showClusteringResults.length)
         showClusteringResults.foreach { row =>
           assertResult(HoodieInstant.State.REQUESTED.name())(row.getString(2))
-          assertResult(3)(row.getInt(4))
+          assertResult(3)(row.getInt(5))
         }
 
         val partition = "ts=1002"

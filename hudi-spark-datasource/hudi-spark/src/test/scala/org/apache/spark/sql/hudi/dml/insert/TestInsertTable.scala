@@ -2378,7 +2378,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           val showClusteringResultsPending = spark.sql(s"call show_clustering(table => '$tableName')").collect()
           showClusteringResultsPending.foreach { row =>
             assertResult(HoodieInstant.State.REQUESTED.name())(row.getString(2))
-            assertResult(10)(row.getInt(4))
+            assertResult(10)(row.getInt(5))
           }
 
           client.cluster(instant)
@@ -2386,7 +2386,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           val showClusteringResultsCompleted = spark.sql(s"call show_clustering(table => '$tableName')").collect()
           showClusteringResultsCompleted.foreach { row =>
             assertResult(HoodieInstant.State.COMPLETED.name())(row.getString(2))
-            assertResult(10)(row.getInt(4))
+            assertResult(10)(row.getInt(5))
           }
 
           spark.sql("set hoodie.datasource.write.operation = bulk_insert")

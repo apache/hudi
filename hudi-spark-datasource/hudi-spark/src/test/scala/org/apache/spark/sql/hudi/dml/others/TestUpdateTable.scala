@@ -361,7 +361,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         val showClusteringResults = spark.sql(s"call show_clustering(path => '$basePath')").collect()
         showClusteringResults.foreach { row =>
           assertResult(HoodieInstant.State.REQUESTED.name())(row.getString(2))
-          assertResult(3)(row.getInt(4))
+          assertResult(3)(row.getInt(5))
         }
         // Do clustering for all the clustering plan
         checkAnswer(s"call run_clustering(path => '$basePath', order => 'partition')")(
