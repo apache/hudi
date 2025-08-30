@@ -77,16 +77,19 @@ class ShowMetadataTableHistoryProcedure extends BaseProcedure with ProcedureBuil
 
     val metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(dataTableBasePath)
     val metadataMetaClient = try {
-      HoodieTableMetaClient.builder()
+      Some(HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
         .setBasePath(metadataTableBasePath)
         .setLoadActiveTimelineOnLoad(false)
-        .build()
+        .build())
     } catch {
       case _: Exception =>
-        return Seq.empty[Row]
+        None
     }
-    getTimelineEntries(metaClient, metadataMetaClient, limit, showArchived, filter, startTime, endTime)
+    metadataMetaClient match {
+      case Some(mdMetaClient) => getTimelineEntries(metaClient, mdMetaClient, limit, showArchived, filter, startTime, endTime)
+      case None => Seq.empty[Row]
+    }
   }
 
   override def build: Procedure = new ShowMetadataTableHistoryProcedure()
@@ -202,13 +205,11 @@ class ShowMetadataTableHistoryProcedure extends BaseProcedure with ProcedureBuil
     val activeInstant = activeTimeline.getInstants.iterator().asScala
       .find(_.requestedTime() == instantTime)
 
-    if (activeInstant.isDefined) {
-      return activeInstant
-    }
-
-    archivedTimeline.flatMap { archived =>
-      archived.getInstants.iterator().asScala
-        .find(_.requestedTime() == instantTime)
+    activeInstant.orElse {
+      archivedTimeline.flatMap { archived =>
+        archived.getInstants.iterator().asScala
+          .find(_.requestedTime() == instantTime)
+      }
     }
   }
 
