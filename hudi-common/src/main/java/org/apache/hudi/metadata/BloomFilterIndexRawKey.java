@@ -32,7 +32,7 @@ import java.util.Objects;
  * Each bloom filter helps avoid reading files that definitely don't contain a record.
  * <p>
  * Raw key format: base64(partition_identifier) + base64(file_name)
- * - partition_identifier: The partition path (or "__HIVE_DEFAULT_PARTITION__" for non-partitioned tables)
+ * - partition_identifier: The partition path (or "." for non-partitioned tables)
  * - file_name: Name of the data file (base file)
  * <p>
  * Examples:
@@ -41,7 +41,7 @@ import java.util.Objects;
  *   Example encoded: "MjAyMy8wMS8xNQ==" + "ZjEucGFycXVldA=="
  * <p>
  * - For file "base_001.parquet" in non-partitioned table:
- *   key = base64("__HIVE_DEFAULT_PARTITION__") + base64("base_001.parquet")
+ *   key = base64(".") + base64("base_001.parquet")
  *   Example encoded: "X19ISVZFX0RFRkFVTFRfUEFSVElUSU9OX18=" + "YmFzZV8wMDEucGFycXVldA=="
  * <p>
  * - For file "data.parquet" in partition "country=US/state=CA":

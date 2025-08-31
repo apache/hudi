@@ -34,7 +34,7 @@ import java.util.Objects;
  * <p>
  * Raw key format: base64(column_name) + base64(partition_identifier) + base64(file_name)
  * - column_name: The name of the column
- * - partition_identifier: The partition path (or "__HIVE_DEFAULT_PARTITION__" for non-partitioned tables)
+ * - partition_identifier: The partition path (or "." for non-partitioned tables)
  * - file_name: Name of the data file
  * <p>
  * Examples:
@@ -43,7 +43,7 @@ import java.util.Objects;
  *   Example encoded: "cHJpY2U=" + "MjAyMy8wMS8xNQ==" + "ZjEucGFycXVldA=="
  * <p>
  * - For column "user_id" in file "data.parquet" in non-partitioned table:
- *   key = base64("user_id") + base64("__HIVE_DEFAULT_PARTITION__") + base64("data.parquet")
+ *   key = base64("user_id") + base64(".") + base64("data.parquet")
  *   Example encoded: "dXNlcl9pZA==" + "X19ISVZFX0RFRkFVTFRfUEFSVElUSU9OX18=" + "ZGF0YS5wYXJxdWV0"
  * <p>
  * - For column "revenue" in file "sales.parquet" in partition "country=US/state=CA":
