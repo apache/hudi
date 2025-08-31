@@ -58,17 +58,17 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   /**
    * Helper class for log mode.
    */
-  private transient BulkInsertWriterHelper writerHelper;
+  protected transient BulkInsertWriterHelper writerHelper;
 
   /**
    * Table row type.
    */
-  private final RowType rowType;
+  protected final RowType rowType;
 
   /**
    * Metrics for flink stream write.
    */
-  private FlinkStreamWriteMetrics writeMetrics;
+  protected FlinkStreamWriteMetrics writeMetrics;
 
   /**
    * Constructs an AppendWriteFunction.
@@ -121,7 +121,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-  private void initWriterHelper() {
+  void initWriterHelper() {
     final String instant = instantToWrite(true);
     if (instant == null) {
       // in case there are empty checkpoints that has no input data
