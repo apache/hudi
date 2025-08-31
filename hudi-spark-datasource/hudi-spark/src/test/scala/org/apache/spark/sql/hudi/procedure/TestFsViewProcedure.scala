@@ -34,7 +34,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -43,7 +43,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_fsview_all(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect result for table
       val result = spark.sql(
@@ -76,7 +76,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -85,7 +85,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_fsview_all(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect result for table
       val result = spark.sql(
@@ -114,7 +114,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -123,7 +123,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_fsview_all(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // not specify partition
       val result = spark.sql(
@@ -163,7 +163,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            | tblproperties (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       // insert data to table
@@ -172,7 +172,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
 
       // Check required fields
       checkExceptionContain(s"""call show_fsview_latest(limit => 10)""")(
-        s"Argument: table is required")
+        s"Table name or table path must be given one")
 
       // collect result for table
       val result = spark.sql(
@@ -198,7 +198,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  'hoodie.parquet.small.file.limit' = '0'
            | )
        """.stripMargin)
@@ -230,7 +230,7 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  'hoodie.parquet.small.file.limit' = '0'
            | )
        """.stripMargin)

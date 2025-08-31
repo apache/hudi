@@ -24,7 +24,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.engine.EngineType
 import org.apache.hudi.common.model.HoodieRecordLocation
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -179,7 +179,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
       HoodieWriteConfig.TBL_NAME.key -> tableName,
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
     )

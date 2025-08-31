@@ -24,6 +24,8 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -40,6 +42,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -96,12 +99,13 @@ public class TestHoodieDefaultMergeHandle extends HoodieSparkClientTestHarness {
     Properties properties = new Properties();
     properties.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType.name());
     properties.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), String.valueOf(isCompressionEnabled));
+    properties.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteMergeHandle.class.getName());
 
     // Build a write config with bulkinsertparallelism set
     HoodieWriteConfig cfg = getConfigBuilder()
         .withProperties(properties)
         .build();
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
 
       /**
        * Write 1 (only inserts) This will do a bulk insert of 44 records of which there are 2 records repeated 21 times
@@ -198,7 +202,9 @@ public class TestHoodieDefaultMergeHandle extends HoodieSparkClientTestHarness {
       // This exists in 001 and should be updated
       HoodieRecord sameAsRecord2 = dataGen.generateUpdateRecord(record2.getKey(), newCommitTime);
       updateRecords.add(sameAsRecord2);
-      JavaRDD<HoodieRecord> updateRecordsRDD = jsc.parallelize(updateRecords, 1);
+      JavaRDD<HoodieRecord> updateRecordsRDD = jsc.parallelize(updateRecords.stream()
+          .map(record -> new HoodieAvroRecord<>(record.getKey(), new HoodieAvroPayload(Option.of((GenericRecord) record.getData()))))
+          .collect(Collectors.toList()), 1);
       statusList = client.upsert(updateRecordsRDD, newCommitTime).collect();
       client.commit(newCommitTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       assertNoWriteErrors(statusList);

@@ -99,7 +99,7 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     conf.set(FlinkOptions.CHANGELOG_ENABLED, false);
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 2);
     conf.set(FlinkOptions.PRE_COMBINE, true);
-    conf.set(FlinkOptions.PRECOMBINE_FIELD, "ts");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.PAYLOAD_CLASS_NAME, EventTimeAvroPayload.class.getName());
     HashMap<String, String> mergedExpected = new HashMap<>(EXPECTED1);
     mergedExpected.put("par1", "[id1,par1,id1,Danny,22,4,par1, id2,par1,id2,Stephen,33,2,par1]");

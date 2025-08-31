@@ -304,6 +304,16 @@ public class InternalSchema implements Serializable {
     return record.equals(that.record);
   }
 
+  public boolean equalsIgnoringVersion(Object o) {
+    if (this == o) {
+      return true;
+    } else if (!(o instanceof InternalSchema)) {
+      return false;
+    }
+    InternalSchema that = (InternalSchema) o;
+    return record.equals(that.record);
+  }
+
   @Override
   public int hashCode() {
     return record.hashCode();

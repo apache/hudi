@@ -20,6 +20,7 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -48,6 +49,7 @@ import java.util.function.UnaryOperator;
 
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.util.OrderingValues.isCommitTimeOrderingValue;
 
 /**
  * Record context provides the APIs for record related operations. Record context is associated with
@@ -136,6 +138,17 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
+   * Constructs a {@link HoodieRecord} that will be used as the record written out to storage.
+   * This allows customization of the record construction logic for each engine for any required optimizations.
+   * The implementation defaults to calling {@link #constructHoodieRecord(BufferedRecord)}.
+   * @param bufferedRecord the {@link BufferedRecord} object to transform
+   * @return a new instance of {@link HoodieRecord} that will be written out to storage
+   */
+  public HoodieRecord<T> constructFinalHoodieRecord(BufferedRecord<T> bufferedRecord) {
+    return constructHoodieRecord(bufferedRecord, partitionPath);
+  }
+
+  /**
    * Constructs a new Engine based record based on a given schema, base record and update values.
    *
    * @param schema           The schema of the new record.
@@ -146,6 +159,15 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract T mergeWithEngineRecord(Schema schema,
                                           Map<Integer, Object> updateValues,
                                           BufferedRecord<T> baseRecord);
+
+  /**
+   * Construct a new Engine record with given record schema and all field values.
+   *
+   * @param recordSchema the schema of the record
+   * @param fieldValues  the values of all fields
+   * @return A new instance of Engine record.
+   */
+  public abstract T constructEngineRecord(Schema recordSchema, Object[] fieldValues);
 
   public JavaTypeConverter getTypeConverter() {
     return typeConverter;
@@ -203,7 +225,7 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public final Comparable convertOrderingValueToEngineType(Comparable value) {
     return value instanceof ArrayComparable
-        ? ((ArrayComparable) value).apply(comparable -> convertValueToEngineType(comparable))
+        ? ((ArrayComparable) value).apply(this::convertValueToEngineType)
         : convertValueToEngineType(value);
   }
 
@@ -330,6 +352,20 @@ public abstract class RecordContext<T> implements Serializable {
       // API getDefaultOrderingValue is only used inside Comparables constructor
       return value != null ? convertValueToEngineType((Comparable) value) : OrderingValues.getDefault();
     });
+  }
+
+  /**
+   * Gets the ordering value from given delete record.
+   *
+   * @param deleteRecord The delete record
+   *
+   * @return The ordering value.
+   */
+  public Comparable getOrderingValue(DeleteRecord deleteRecord) {
+    Comparable orderingValue = deleteRecord.getOrderingValue();
+    return isCommitTimeOrderingValue(orderingValue)
+        ? OrderingValues.getDefault()
+        : convertOrderingValueToEngineType(orderingValue);
   }
 
   /**

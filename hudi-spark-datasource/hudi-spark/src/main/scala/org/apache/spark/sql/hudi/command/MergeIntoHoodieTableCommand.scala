@@ -24,9 +24,9 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys
-import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
 import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
@@ -60,6 +60,7 @@ import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 import java.util.Base64
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 /**
  * Exception thrown when field resolution fails during MERGE INTO validation
@@ -86,7 +87,7 @@ class MergeIntoFieldTypeMismatchException(message: String)
  *
  * <ol>
  *   <li>Incoming batch ([[sourceTable]]) is reshaped such that it bears correspondingly:
- *   a) (required) "primary-key" column as well as b) (optional) "precombine" column; this is
+ *   a) (required) "primary-key" column as well as b) (optional) "ordering" columns; this is
  *   required since MIT statements does not restrict [[sourceTable]]s schema to be aligned w/ the
  *   [[targetTable]]s one, while Hudi's upserting flow expects such columns to be present</li>
  *
@@ -152,7 +153,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
    *
    * To be able to leverage Hudi's engine to merge an incoming dataset against the existing table
    * we will have to make sure that both [[source]] and [[target]] tables have the *same*
-   * "primary-key" and "precombine" columns. Since actual MIT condition might be leveraging an arbitrary
+   * "primary-key" and "ordering" columns. Since actual MIT condition might be leveraging an arbitrary
    * expression involving [[source]] column(s), we will have to add "phony" column matching the
    * primary-key one of the target table.
    */
@@ -210,7 +211,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     resolvedCols
   }
 
-
   private def doCasting(conditions: Seq[Expression], pkTable: Boolean): Seq[(Attribute, Expression)] = {
     val targetAttrs = mergeInto.targetTable.outputSet
     val exprUtils = sparkAdapter.getCatalystExpressionUtils
@@ -263,13 +263,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
   /**
    * Please check description for [[primaryKeyAttributeToConditionExpression]]
    */
-  private lazy val preCombineAttributeAssociatedExpressions: Seq[(Attribute, Expression)] =
+  private lazy val orderingFieldsAssociatedExpressions: Seq[(Attribute, Expression)] =
     resolveFieldAssociationsBetweenSourceAndTarget(
       sparkSession.sessionState.conf.resolver,
       mergeInto.targetTable,
       mergeInto.sourceTable,
-      hoodieCatalogTable.preCombineKeys.asScala.toSeq,
-      "precombine field",
+      hoodieCatalogTable.orderingFields.asScala.toSeq,
+      "ordering fields",
       updatingActions.flatMap(_.assignments))
 
   override def run(sparkSession: SparkSession, inputPlan: SparkPlan): Seq[Row] = {
@@ -313,7 +313,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
    *
    * <ol>
    *   <li>Contains "primary-key" column (as defined by target table's config)</li>
-   *   <li>Contains "precombine" column (as defined by target table's config, if any)</li>
+   *   <li>Contains "ordering" columns (as defined by target table's config, if any)</li>
    * </ol>
    *
    * In cases when [[sourceTable]] doesn't contain aforementioned columns, following heuristic
@@ -326,12 +326,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
    * leveraging matching side of such conditional expression (containing [[sourceTable]] attribute)
    * interpreting it as a primary-key column in the [[sourceTable]]</li>
    *
-   * <li>Expression for the "precombine" column (optional) is extracted from the matching update
+   * <li>Expression for the "ordering" columns (optional) is extracted from the matching update
    * clause ({@code WHEN MATCHED ... THEN UPDATE ...}) as right-hand side of the expression referencing
-   * precombine attribute of the target column</li>
+   * ordering attribute of the target column</li>
    * <ul>
    *
-   * For example, w/ the following statement (primary-key column is [[id]], while precombine column is [[ts]])
+   * For example, w/ the following statement (primary-key column is [[id]], while ordering column is [[ts]])
    * <pre>
    * MERGE INTO target
    * USING (SELECT 1 AS sid, 'A1' AS sname, 1000 AS sts) source
@@ -366,7 +366,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
 
     val inputPlanAttributes = inputPlan.output
 
-    val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ preCombineAttributeAssociatedExpressions
+    val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ orderingFieldsAssociatedExpressions
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
       case (keyAttr, _) => inputPlanAttributes.exists(attr => resolver(keyAttr.name, attr.name))
@@ -374,7 +374,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
 
     // This is to handle the situation where condition is something like "s0.s_id = t0.id" so In the source table
     // we add an additional column that is an alias of "s0.s_id" named "id"
-    // NOTE: Record key attribute (required) as well as precombine one (optional) defined
+    // NOTE: Record key attribute (required) as well as ordering attributes (optional) defined
     //       in the [[targetTable]] schema has to be present in the incoming [[sourceTable]] dataset.
     //       In cases when [[sourceTable]] doesn't bear such attributes (which, for ex, could happen
     //       in case of it having different schema), we will be adding additional columns (while setting
@@ -519,11 +519,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       // After HUDI-9257 is done, we can remove this limitation.
       && !useGlobalIndex(parameters)
       // Partial update is disabled when custom merge mode is set.
-      && !useCustomMergeMode(parameters))
+      && !useCustomMergeMode(parameters)
+      // Partial update is disabled when partialUpdateMode is set.
+      && getPartialUpdateMode(parameters).isEmpty)
   }
 
   private def getOperationType(parameters: Map[String, String]) = {
-    if (StringUtils.isNullOrEmpty(parameters.getOrElse(PRECOMBINE_FIELD.key, "")) && updatingActions.isEmpty) {
+    if (StringUtils.isNullOrEmpty(ConfigUtils.getOrderingFieldsStrDuringWrite(parameters.asJava)) && updatingActions.isEmpty) {
       INSERT_OPERATION_OPT_VAL
     } else {
       UPSERT_OPERATION_OPT_VAL
@@ -725,11 +727,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
 
   /**
    * Output of the expected (left) join of the a) [[sourceTable]] dataset (potentially amended w/ primary-key,
-   * precombine columns) with b) existing [[targetTable]]
+   * ordering columns) with b) existing [[targetTable]]
    */
   private def joinedExpectedOutput: Seq[Attribute] = {
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
-    //       as it could be amended to add missing primary-key and/or precombine columns.
+    //       as it could be amended to add missing primary-key and/or ordering columns.
     //       Please check [[sourceDataset]] scala-doc for more details
     (query.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
   }
@@ -761,7 +763,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineFieldsAsString = String.join(",", hoodieCatalogTable.preCombineKeys)
+    val orderingFieldsAsString = String.join(",", hoodieCatalogTable.orderingFields)
     val hiveSyncConfig = buildHiveSyncConfig(sparkSession, hoodieCatalogTable, tableConfig)
     // for pkless tables, we need to enable optimized merge
     val isPrimaryKeylessTable = !hasPrimaryKey()
@@ -772,11 +774,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     }
 
     val mergeMode = if (tableConfig.getTableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
-      val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(
+      val inferredMergeConfigs = HoodieTableConfig.inferMergingConfigsForWrites(
         tableConfig.getRecordMergeMode,
         tableConfig.getPayloadClass,
         tableConfig.getRecordMergeStrategyId,
-        tableConfig.getPreCombineFieldsStr.orElse(null),
+        tableConfig.getOrderingFieldsStr.orElse(null),
         tableConfig.getTableVersion)
       inferredMergeConfigs.getLeft.name()
     } else {
@@ -785,7 +787,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     val overridingOpts = Map(
       "path" -> path,
       RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
-      PRECOMBINE_FIELD.key -> preCombineFieldsAsString,
+      HoodieTableConfig.ORDERING_FIELDS.key -> orderingFieldsAsString,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
       PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
         tableConfig.getKeyGeneratorClassName, tableConfig.getPartitionFieldProp, hoodieCatalogTable),
@@ -819,7 +821,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key -> "true",
       // Only primary keyless table requires prepped keys and upsert
       HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY -> isPrimaryKeylessTable.toString,
-      HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(preCombineFieldsAsString)).toString
+      HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> (!StringUtils.isNullOrEmpty(orderingFieldsAsString)).toString
     )
 
     combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sqlContext.conf,
@@ -843,7 +845,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
       assert(insert.assignments.length <= targetTableSchema.length,
         s"The number of insert assignments[${insert.assignments.length}] must be less than or equal to the " +
           s"targetTable field size[${targetTableSchema.length}]"))
-    // Precombine field and record key field must be present in the assignment clause of all insert actions for event time ordering mode.
+    // Ordering field and record key field must be present in the assignment clause of all insert actions for event time ordering mode.
     // Check has no effect if we don't have such fields in target table or we don't have insert actions
     // Please note we are relying on merge mode in the table config as writer merge mode is always "CUSTOM" for MIT.
     if (isEventTimeOrdering(props)) {
@@ -851,8 +853,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
         validateTargetTableAttrExistsInAssignments(
           sparkSession.sessionState.conf.resolver,
           mergeInto.targetTable,
-          hoodieCatalogTable.preCombineKeys.asScala.toSeq,
-          "precombine field",
+          hoodieCatalogTable.orderingFields.asScala.toSeq,
+          "ordering field",
           action.assignments)
       )
     }
@@ -879,7 +881,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
     * The merge into schema compatibility requires data type matching for the following fields:
     * 1. Partition key
     * 2. Primary key
-    * 3. Precombine key
+    * 3. Ordering Fields
     *
     * @param assignments the assignment clause of the insert/update statement for figuring out
     *                    the mapping between the target table and the source table.
@@ -921,10 +923,10 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
             sparkSession.sessionState.conf.resolver,
             mergeInto.targetTable,
             mergeInto.sourceTable,
-            hoodieCatalogTable.preCombineKeys.asScala.toSeq,
-            "precombine field",
+            hoodieCatalogTable.orderingFields.asScala.toSeq,
+            "ordering field",
             assignments)
-          associations.foreach(association => validateDataTypes(association._1, association._2, "Precombine field"))
+          associations.foreach(association => validateDataTypes(association._1, association._2, "Ordering field"))
         } catch {
           // Only catch AnalysisException from resolveFieldAssociationsBetweenSourceAndTarget
           case _: MergeIntoFieldResolutionException =>
@@ -934,7 +936,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable,
   }
 
   private def checkUpdatingActions(updateActions: Seq[UpdateAction], props: Map[String, String]): Unit = {
-    if (hoodieCatalogTable.preCombineKeys.isEmpty && updateActions.nonEmpty) {
+    if (hoodieCatalogTable.orderingFields.isEmpty && updateActions.nonEmpty) {
       logWarning(s"Updates without precombine can have nondeterministic behavior")
     }
     updateActions.foreach(update =>
@@ -1118,6 +1120,12 @@ object MergeIntoHoodieTableCommand {
       throw new HoodieException("Merge mode cannot be null here")
     }
     mergeModeOpt.get.equals(RecordMergeMode.CUSTOM.name)
+  }
+
+  def getPartialUpdateMode(parameters: Map[String, String]): Option[PartialUpdateMode] = {
+    parameters.get(HoodieTableConfig.PARTIAL_UPDATE_MODE.key).flatMap { value =>
+      Try(PartialUpdateMode.valueOf(value)).toOption
+    }
   }
 }
 

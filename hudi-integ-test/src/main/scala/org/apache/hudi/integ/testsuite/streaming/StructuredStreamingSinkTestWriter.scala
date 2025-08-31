@@ -89,7 +89,7 @@ object StructuredStreamingSinkTestWriter {
 
     val writer = parquetdf.writeStream.format("org.apache.hudi").
       option(TABLE_TYPE.key, tableType).
-      option(PRECOMBINE_FIELD.key, preCombineField).
+      option(ORDERING_FIELDS.key, preCombineField).
       option(RECORDKEY_FIELD.key, recordKeyField).
       option(PARTITIONPATH_FIELD.key, partitionPathField).
       option(FAIL_ON_TIMELINE_ARCHIVING_ENABLE.key, false).

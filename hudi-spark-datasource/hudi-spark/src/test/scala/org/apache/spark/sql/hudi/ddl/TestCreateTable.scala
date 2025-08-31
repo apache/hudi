@@ -58,7 +58,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |   hoodie.database.name = "databaseName",
          |   hoodie.table.name = "tableName",
          |   primaryKey = 'id',
-         |   preCombineField = 'ts',
+         |   orderingFields = 'ts',
          |   hoodie.datasource.write.operation = 'upsert'
          | )
        """.stripMargin)
@@ -109,14 +109,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |   hoodie.database.name = "databaseName",
          |   hoodie.table.name = "tableName",
          |   primaryKey = 'id',
-         |   preCombineField = 'ts',
+         |   orderingFields = 'ts',
          |   hoodie.datasource.write.operation = 'upsert'
          | )
        """.stripMargin)
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
     assertResult(table.properties("type"))("cow")
     assertResult(table.properties("primaryKey"))("id")
-    assertResult(table.properties("preCombineField"))("ts")
+    assertResult(table.properties("orderingFields"))("ts")
     assertResult(tableName)(table.identifier.table)
     assertResult("hudi")(table.provider.get)
     assertResult(CatalogTableType.MANAGED)(table.tableType)
@@ -139,7 +139,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     assertResult(true)(tableConfig.contains(HoodieTableConfig.CREATE_SCHEMA.key))
     assertResult("dt")(tableConfig(HoodieTableConfig.PARTITION_FIELDS.key))
     assertResult("id")(tableConfig(HoodieTableConfig.RECORDKEY_FIELDS.key))
-    assertResult("ts")(tableConfig(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+    assertResult("ts")(tableConfig(HoodieTableConfig.ORDERING_FIELDS.key))
     assertResult(KeyGeneratorType.SIMPLE.name())(tableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key))
     assertResult("default")(tableConfig(HoodieTableConfig.DATABASE_NAME.key()))
     assertResult(tableName)(tableConfig(HoodieTableConfig.NAME.key()))
@@ -259,7 +259,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |) using hudi
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts1',
+             |  orderingFields = 'ts1',
              |  type = 'cow'
              | )
              | location '${tmp.getCanonicalPath}'
@@ -277,7 +277,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              |) using hudi
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  type = 'cow1'
              | )
              | location '${tmp.getCanonicalPath}'
@@ -597,7 +597,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |) using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          |)
          |""".stripMargin)
     val tableLocation = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName1)).location
@@ -613,7 +613,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |) using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          |)
          |location '$tableLocation'
      """.stripMargin)
@@ -642,7 +642,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |) using hudi
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  type = 'mor'
            | )
            | location '$parentPath/$tableName1'
@@ -666,7 +666,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val roCatalogTable = spark.sessionState.catalog.getTableMetadata(TableIdentifier(roTableName1))
       assertResult(roCatalogTable.properties("type"))("mor")
       assertResult(roCatalogTable.properties("primaryKey"))("id")
-      assertResult(roCatalogTable.properties("preCombineField"))("ts")
+      assertResult(roCatalogTable.properties("orderingFields"))("ts")
       assertResult(roCatalogTable.storage.properties("hoodie.query.as.ro.table"))("true")
       checkAnswer(s"select id, name, ts from $roTableName1")(
         Seq(1, "a1", 1000)
@@ -685,7 +685,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val rtCatalogTable = spark.sessionState.catalog.getTableMetadata(TableIdentifier(rtTableName1))
       assertResult(rtCatalogTable.properties("type"))("mor")
       assertResult(rtCatalogTable.properties("primaryKey"))("id")
-      assertResult(rtCatalogTable.properties("preCombineField"))("ts")
+      assertResult(rtCatalogTable.properties("orderingFields"))("ts")
       assertResult(rtCatalogTable.storage.properties("hoodie.query.as.ro.table"))("false")
       checkAnswer(s"select id, name, ts from $rtTableName1")(
         Seq(1, "a2", 1100)
@@ -709,7 +709,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |) using hudi
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  type = 'cow'
            | )
            | location '$parentPath/$tableName1'
@@ -750,7 +750,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | create table $tableName3 using hudi
            | tblproperties(
            |    primaryKey = 'id',
-           |    preCombineField = 'ts',
+           |    orderingFields = 'ts',
            |    type = 'mor',
            |    'hoodie.query.as.ro.table' = 'true'
            | )
@@ -773,7 +773,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |    hoodie.database.name = "databaseName",
            |    hoodie.table.name = "tableName",
            |    primaryKey = 'id',
-           |    preCombineField = 'ts',
+           |    orderingFields = 'ts',
            |    hoodie.datasource.write.operation = 'upsert',
            |    type = '$tableType'
            | )
@@ -809,7 +809,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |    hoodie.database.name = "databaseName",
            |    hoodie.table.name = "tableName",
            |    primaryKey = 'id',
-           |    preCombineField = 'ts',
+           |    orderingFields = 'ts',
            |    hoodie.datasource.write.operation = 'upsert',
            |    type = '$tableType'
            | )
@@ -877,7 +877,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, s"original_$tableName")
           .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "dt")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -907,7 +907,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("dt")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
-        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+        assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
         assertResult("hudi_database")(metaClient.getTableConfig.getDatabaseName)
         assertResult(s"original_$tableName")(metaClient.getTableConfig.getTableName)
 
@@ -956,7 +956,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
           .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(PARTITIONPATH_FIELD.key, "day,hh")
           .option(URL_ENCODE_PARTITIONING.key, "true")
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -978,7 +978,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val properties = metaClient.getTableConfig.getProps.asScala.toMap
         assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
         assertResult("day,hh")(properties(HoodieTableConfig.PARTITION_FIELDS.key))
-        assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+        assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
 
         val escapedPathPart = escapePathName(day)
 
@@ -1025,7 +1025,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         .option(HoodieWriteConfig.TBL_NAME.key, tableName)
         .option(TABLE_TYPE.key, COW_TABLE_TYPE_OPT_VAL)
         .option(RECORDKEY_FIELD.key, "id")
-        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
         .option(PARTITIONPATH_FIELD.key, "")
         .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
         .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
@@ -1045,7 +1045,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
       val properties = metaClient.getTableConfig.getProps.asScala.toMap
       assertResult(true)(properties.contains(HoodieTableConfig.CREATE_SCHEMA.key))
-      assertResult("ts")(properties(HoodieTableConfig.PRECOMBINE_FIELDS.key))
+      assertResult("ts")(properties(HoodieTableConfig.ORDERING_FIELDS.key))
 
       // Test insert into
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
@@ -1120,7 +1120,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          | comment "This is a simple hudi table"
          | tblproperties (
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   orderingFields = 'ts'
          | )
        """.stripMargin)
     val shown = spark.sql(s"show create table $tableName").head.getString(0)
@@ -1198,7 +1198,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          | comment "This is a simple hudi table"
          | tblproperties (
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   orderingFields = 'ts'
          | )
        """.stripMargin)
     checkKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator", tableName)
@@ -1217,7 +1217,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          | partitioned by (ts)
          | tblproperties (
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   orderingFields = 'ts'
          | )
        """.stripMargin)
     checkKeyGenerator("org.apache.hudi.keygen.SimpleKeyGenerator", tableName)
@@ -1236,7 +1236,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          | partitioned by (ts)
          | tblproperties (
          |   primaryKey = 'id,name',
-         |   preCombineField = 'ts'
+         |   orderingFields = 'ts'
          | )
        """.stripMargin)
     checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
@@ -1253,7 +1253,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | LOCATION '${tmp.getCanonicalPath}/$tableName'
              | TBLPROPERTIES (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | AS SELECT * FROM (
              |  SELECT 1 as id, 'a1' as name, 10 as price, 1000 as ts
@@ -1299,7 +1299,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          | ) using hudi
          | tblproperties (
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   orderingFields = 'ts'
          | )
        """.stripMargin)
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
@@ -1324,14 +1324,14 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |   hoodie.database.name = "databaseName",
          |   hoodie.table.name = "tableName",
          |   PRIMARYKEY = 'id',
-         |   precombineField = 'ts',
+         |   orderingFields = 'ts',
          |   hoodie.datasource.write.operation = 'upsert'
          | )
        """.stripMargin)
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
     assertResult(table.properties("type"))("cow")
     assertResult(table.properties("primaryKey"))("id")
-    assertResult(table.properties("preCombineField"))("ts")
+    assertResult(table.properties("orderingFields"))("ts")
   }
 
   test("Test Create Hoodie Table with existing hoodie.properties") {
@@ -1350,7 +1350,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -1372,7 +1372,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
 
@@ -1397,7 +1397,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.table.base.file.format = 'PARQUET'
              | )
        """.stripMargin)
@@ -1423,7 +1423,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.table.base.file.format = 'ORC'
            | )
        """.stripMargin)
@@ -1448,13 +1448,13 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  hoodie.table.recordkey.fields ='id',
              |  hoodie.table.type = '$tableType',
-             |  hoodie.table.precombine.field = 'ts'
+             |  hoodie.table.ordering.fields = 'ts'
              | )
        """.stripMargin)
         val hoodieCatalogTable = HoodieCatalogTable(spark, TableIdentifier(tableName))
         assertResult(Array("id"))(hoodieCatalogTable.primaryKeys)
         assertResult(tableType)(hoodieCatalogTable.tableTypeName)
-        assertResult(java.util.Collections.singletonList[String]("ts"))(hoodieCatalogTable.preCombineKeys)
+        assertResult(java.util.Collections.singletonList[String]("ts"))(hoodieCatalogTable.orderingFields)
       }
     }
   }
@@ -1524,7 +1524,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |) using hudi
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  type = 'cow'
            | )
            | location '$parentPath/$tableName1'
@@ -1542,7 +1542,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |) using hudi
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  type = 'cow'
            | )
            | location '$parentPath/$tableName1'
@@ -1569,7 +1569,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                | options (
                |  primaryKey ='id',
                |  type = '$tableType',
-               |  preCombineField = 'ts'
+               |  orderingFields = 'ts'
                | )
                | partitioned by(ts)
                | location '$basePath'
@@ -1598,7 +1598,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                | options (
                |  primaryKey ='id',
                |  type = '$tableType',
-               |  preCombineField = 'ts',
+               |  orderingFields = 'ts',
                |  'hoodie.datasource.write.partitionpath.field' = 'segment:simple,ts:timestamp',
                |  'hoodie.datasource.write.keygenerator.class' = 'org.apache.hudi.keygen.CustomKeyGenerator',
                |  'hoodie.keygen.timebased.timestamp.type' = 'SCALAR',
@@ -1632,7 +1632,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
                | options (
                |  primaryKey ='id',
                |  type = '$tableType',
-               |  preCombineField = 'segment',
+               |  orderingFields = 'segment',
                |  'hoodie.datasource.write.partitionpath.field' = 'segment:simple,ts:timestamp',
                |  'hoodie.datasource.write.keygenerator.class' = 'org.apache.hudi.keygen.CustomKeyGenerator',
                |  'hoodie.keygen.timebased.timestamp.type' = 'SCALAR',

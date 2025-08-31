@@ -71,12 +71,12 @@ class TestHoodieRecordUtils {
 
     // Assert table config precombine fields are returned when props are not set with event time merge mode
     HoodieTableConfig tableConfig = new HoodieTableConfig();
-    tableConfig.setValue(HoodieTableConfig.PRECOMBINE_FIELDS, "tbl");
+    tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "tbl");
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
     assertEquals(Collections.singletonList("tbl"), HoodieRecordUtils.getOrderingFieldNames(RecordMergeMode.EVENT_TIME_ORDERING, props, metaClient));
 
     // Assert props value is returned for precombine field configuration when it is set with event time merge mode
-    props.setProperty("hoodie.datasource.write.precombine.field", "props");
+    props.setProperty("hoodie.table.ordering.fields", "props");
     assertEquals(Collections.singletonList("props"), HoodieRecordUtils.getOrderingFieldNames(RecordMergeMode.EVENT_TIME_ORDERING, props, metaClient));
   }
 }

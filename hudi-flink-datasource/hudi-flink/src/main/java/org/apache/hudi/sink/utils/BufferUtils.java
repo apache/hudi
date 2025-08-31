@@ -36,13 +36,14 @@ public class BufferUtils {
   private static final int MIN_REQUIRED_BUFFERS = 3;
 
   public static BinaryInMemorySortBuffer createBuffer(RowType rowType, MemorySegmentPool memorySegmentPool) {
+    return createBuffer(rowType, memorySegmentPool,  new NaturalOrderKeyComputer(), new NaturalOrderRecordComparator());
+  }
+
+  public static BinaryInMemorySortBuffer createBuffer(RowType rowType, MemorySegmentPool memorySegmentPool, NormalizedKeyComputer keyComputer, RecordComparator recordComparator) {
     if (memorySegmentPool.freePages() < MIN_REQUIRED_BUFFERS) {
       // there is no enough free pages to create a binary buffer, may need flush first.
       throw new MemoryPagesExhaustedException("Free pages are not enough to create a BinaryInMemorySortBuffer.");
     }
-    // currently do not need to sort records in the binary buffer.
-    NormalizedKeyComputer keyComputer = new NaturalOrderKeyComputer();
-    RecordComparator recordComparator = new NaturalOrderRecordComparator();
     return BinaryInMemorySortBuffer.createBuffer(
         keyComputer,
         new RowDataSerializer(rowType),

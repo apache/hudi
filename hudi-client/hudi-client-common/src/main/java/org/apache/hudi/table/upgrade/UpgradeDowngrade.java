@@ -42,13 +42,13 @@ import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Hashtable;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Helper class to assist in upgrading/downgrading Hoodie when there is a version change.
@@ -101,8 +101,12 @@ public class UpgradeDowngrade {
 
   public static boolean needsUpgrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieTableVersion toWriteVersion) {
     HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
-    if (fromTableVersion.greaterThanOrEquals(toWriteVersion)) {
-      LOG.warn("Table version {} is greater than or equal to write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
+    if (fromTableVersion.greaterThan(toWriteVersion)) {
+      LOG.warn("Table version {} is greater than write version {}. No upgrade needed", fromTableVersion, toWriteVersion);
+      return false;
+    }
+    if (fromTableVersion.equals(toWriteVersion)) {
+      // table version is same as write version, no upgrade needed
       return false;
     }
     if (fromTableVersion.lesserThan(HoodieTableVersion.SIX)) {
@@ -152,11 +156,12 @@ public class UpgradeDowngrade {
    * Hudi release -> table version
    * pre 0.6.0 -> v0
    * 0.6.0 to 0.8.0 -> v1
-   * 0.9.0 -> v2
-   * 0.10.0 -> v3
-   * 0.11.0 -> v4
+   * .
+   * .
    * 0.12.0 to 0.13.0 -> v5
-   * 0.14.0 to current -> v6
+   * 0.14.0 to 0.x -> v6
+   * 1.0.0 to 1.0.2 -> v8
+   * 1.1.0 to current -> v9
    * <p>
    * On a high level, these are the steps performed
    * <p>
@@ -207,21 +212,24 @@ public class UpgradeDowngrade {
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
     Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
-    List<ConfigProperty> tablePropsToRemove = new ArrayList<>();
+    Set<ConfigProperty> tablePropsToRemove = new HashSet<>();
     if (isUpgrade) {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
-        tablePropsToAdd.putAll(upgrade(fromVersion, nextVersion, instantTime));
+        UpgradeDowngrade.TableConfigChangeSet tableConfigChangeSet =
+            upgrade(fromVersion, nextVersion, instantTime);
+        tablePropsToAdd.putAll(tableConfigChangeSet.propertiesToUpdate());
+        tablePropsToRemove.addAll(tableConfigChangeSet.propertiesToDelete());
         fromVersion = nextVersion;
       }
     } else {
       // downgrade
       while (fromVersion.versionCode() > toVersion.versionCode()) {
         HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() - 1);
-        Pair<Map<ConfigProperty, String>, List<ConfigProperty>> tablePropsToAddAndRemove = downgrade(fromVersion, prevVersion, instantTime);
-        tablePropsToAdd.putAll(tablePropsToAddAndRemove.getLeft());
-        tablePropsToRemove.addAll(tablePropsToAddAndRemove.getRight());
+        UpgradeDowngrade.TableConfigChangeSet tableConfigChangeSet = downgrade(fromVersion, prevVersion, instantTime);
+        tablePropsToAdd.putAll(tableConfigChangeSet.propertiesToUpdate());
+        tablePropsToRemove.addAll(tableConfigChangeSet.propertiesToDelete());
         fromVersion = prevVersion;
       }
     }
@@ -229,7 +237,10 @@ public class UpgradeDowngrade {
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       metaClient = HoodieTableMetaClient.reload(metaClient);
     }
-    // Write out the current version in hoodie.properties.updated file
+
+    for (ConfigProperty configProperty : tablePropsToRemove) {
+      metaClient.getTableConfig().clearValue(configProperty);
+    }
     for (Map.Entry<ConfigProperty, String> entry : tablePropsToAdd.entrySet()) {
       // add alternate keys.
       metaClient.getTableConfig().setValue(entry.getKey(), entry.getValue());
@@ -237,13 +248,14 @@ public class UpgradeDowngrade {
         metaClient.getTableConfig().setValue((String) alternateKey, entry.getValue());
       });
     }
-    for (ConfigProperty configProperty : tablePropsToRemove) {
-      metaClient.getTableConfig().clearValue(configProperty);
-    }
 
+    // Write out the current version in hoodie.properties.updated file
     metaClient.getTableConfig().setTableVersion(toVersion);
-    HoodieTableConfig.update(metaClient.getStorage(),
-        metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+    // Update modified properties.
+    Set<String> propertiesToRemove =
+        tablePropsToRemove.stream().map(ConfigProperty::key).collect(Collectors.toSet());
+    HoodieTableConfig.updateAndDeleteProps(
+        metaClient.getStorage(), metaClient.getMetaPath(), metaClient.getTableConfig().getProps(), propertiesToRemove);
 
     if (metaClient.getTableConfig().isMetadataTableAvailable() && toVersion.equals(HoodieTableVersion.SIX) && !isUpgrade) {
       // NOTE: Add empty deltacommit to metadata table. The compaction instant format has changed in version 8.
@@ -271,7 +283,9 @@ public class UpgradeDowngrade {
     }
   }
 
-  protected Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
+  protected UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieTableVersion fromVersion,
+                                                                            HoodieTableVersion toVersion,
+                                                                            String instantTime) {
     if (fromVersion == HoodieTableVersion.ZERO && toVersion == HoodieTableVersion.ONE) {
       return new ZeroToOneUpgradeHandler().upgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.TWO) {
@@ -295,7 +309,7 @@ public class UpgradeDowngrade {
     }
   }
 
-  protected Pair<Map<ConfigProperty, String>, List<ConfigProperty>> downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
+  protected TableConfigChangeSet downgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {
     if (fromVersion == HoodieTableVersion.ONE && toVersion == HoodieTableVersion.ZERO) {
       return new OneToZeroDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else if (fromVersion == HoodieTableVersion.TWO && toVersion == HoodieTableVersion.ONE) {
@@ -316,6 +330,32 @@ public class UpgradeDowngrade {
       return new NineToEightDowngradeHandler().downgrade(config, context, instantTime, upgradeDowngradeHelper);
     } else {
       throw new HoodieUpgradeDowngradeException(fromVersion.versionCode(), toVersion.versionCode(), false);
+    }
+  }
+
+  /**
+   * Class to hold the change set required to update or delete from table config properties.
+   */
+  static class TableConfigChangeSet {
+    private final Map<ConfigProperty, String> propertiesToUpdate;
+    private final Set<ConfigProperty> propertiesToDelete;
+
+    public TableConfigChangeSet() {
+      this.propertiesToUpdate = Collections.emptyMap();
+      this.propertiesToDelete = Collections.emptySet();
+    }
+
+    public TableConfigChangeSet(Map<ConfigProperty, String> propertiesToUpdate, Set<ConfigProperty> propertiesToDelete) {
+      this.propertiesToUpdate = propertiesToUpdate;
+      this.propertiesToDelete = propertiesToDelete;
+    }
+
+    public Map<ConfigProperty, String> propertiesToUpdate() {
+      return propertiesToUpdate;
+    }
+
+    public Set<ConfigProperty> propertiesToDelete() {
+      return propertiesToDelete;
     }
   }
 

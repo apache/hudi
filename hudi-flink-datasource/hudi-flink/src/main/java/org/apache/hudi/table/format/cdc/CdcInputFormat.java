@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
@@ -420,7 +421,8 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
             return true;
           } else {
             // an existed record is updated, assuming new record and existing record share the same hoodie key
-            HoodieRecord<RowData> historyRecord = new HoodieFlinkRecord(record.getKey(), existed);
+            HoodieOperation operation = HoodieOperation.fromValue(existed.getRowKind().toByteValue());
+            HoodieRecord<RowData> historyRecord = new HoodieFlinkRecord(record.getKey(), operation, existed);
             HoodieRecord<RowData> merged = mergeRowWithLog(historyRecord, record).get();
             if (merged.getData() != existed) {
               // update happens

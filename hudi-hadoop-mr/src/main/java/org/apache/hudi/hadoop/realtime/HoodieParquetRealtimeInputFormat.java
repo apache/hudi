@@ -76,7 +76,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
       return super.getRecordReader(realtimeSplit, jobConf, reporter);
     }
 
-    // add preCombineKey
+    // add orderingFields
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(getStorageConf(jobConf)).setBasePath(realtimeSplit.getBasePath()).build();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     addProjectionToJobConf(realtimeSplit, jobConf, tableConfig);
@@ -114,7 +114,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
           List<String> fieldsToAdd = new ArrayList<>();
           if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
             HoodieRealtimeInputFormatUtils.addVirtualKeysProjection(jobConf, realtimeSplit.getVirtualKeyInfo());
-            fieldsToAdd.addAll(tableConfig.getPreCombineFields());
+            fieldsToAdd.addAll(tableConfig.getOrderingFields());
           }
 
           Option<String[]> partitions = tableConfig.getPartitionFields();

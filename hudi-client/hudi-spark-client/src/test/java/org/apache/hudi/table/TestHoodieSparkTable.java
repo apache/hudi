@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -84,6 +85,7 @@ public class TestHoodieSparkTable extends HoodieCommonTestHarness {
     when(metaClient.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
     HoodieStorage storage = mock(HoodieStorage.class);
     when(metaClient.getStorage()).thenReturn(storage);
+    when(metaClient.getTableConfig()).thenReturn(new HoodieTableConfig());
 
     additionalFiles.forEach(fileName -> {
       try {

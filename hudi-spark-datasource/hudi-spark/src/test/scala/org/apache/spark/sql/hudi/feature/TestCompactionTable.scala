@@ -38,7 +38,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       spark.sql("set hoodie.parquet.max.file.size = 10000")
@@ -93,7 +93,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       spark.sql("set hoodie.parquet.max.file.size = 10000")
@@ -154,7 +154,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts'
+           |  orderingFields = 'ts'
            | )
        """.stripMargin)
       spark.sql("set hoodie.parquet.max.file.size = 10000")

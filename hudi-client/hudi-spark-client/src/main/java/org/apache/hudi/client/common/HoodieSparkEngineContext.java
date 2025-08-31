@@ -262,11 +262,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     if (metaClient.isMetadataTable()) {
       return new AvroReaderContextFactory(metaClient);
     }
-    return getDefaultContextFactory(metaClient);
+    return getEngineReaderContextFactory(metaClient);
   }
 
   @Override
-  public ReaderContextFactory<InternalRow> getDefaultContextFactory(HoodieTableMetaClient metaClient) {
+  public ReaderContextFactory<InternalRow> getEngineReaderContextFactory(HoodieTableMetaClient metaClient) {
     return new SparkReaderContextFactory(this, metaClient);
   }
 

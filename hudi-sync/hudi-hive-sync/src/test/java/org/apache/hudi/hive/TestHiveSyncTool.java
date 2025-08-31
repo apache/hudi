@@ -116,6 +116,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1465,6 +1466,129 @@ public class TestHiveSyncTool {
 
   @ParameterizedTest
   @MethodSource("syncModeAndEnablePushDown")
+  void testGetPartitionEvents_droppedStoragePartitionNotPresentInMetastore(
+      String syncMode, String enablePushDown) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
+    // Create a table with 1 partition
+    String instantTime1 = "100";
+    HiveTestUtil.createCOWTable(instantTime1, 1, true);
+
+    reInitHiveSyncClient();
+    // Sync the table to metastore
+    reSyncHiveTable();
+    
+    List<Partition> partitionsInMetastore = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(1, partitionsInMetastore.size(), "Should have 1 partition in metastore");
+
+    // Add a partition to storage but don't sync it to metastore
+    String instantTime2 = "101";
+    String newPartition = "2010/02/01";
+    HiveTestUtil.addCOWPartition(newPartition, true, true, instantTime2);
+    
+    // Verify the partition is not in metastore yet
+    partitionsInMetastore = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(1, partitionsInMetastore.size(), "Should have 1 partition in metastore");
+
+    // Delete the partition that was never synced to metastore
+    String instantTime3 = "102";
+    HiveTestUtil.createReplaceCommit(instantTime3, newPartition, WriteOperationType.DELETE_PARTITION, true, true);
+    
+    // Add another partition to storage but don't sync to metastore
+    String instantTime4 = "103";
+    String addPartition = "2010/04/01";
+    HiveTestUtil.addCOWPartition(addPartition, true, true, instantTime4);
+
+    reInitHiveSyncClient();
+
+    Set<String> droppedPartitionsOnStorage = hiveClient.getDroppedPartitionsSince(Option.of(instantTime1), Option.of(instantTime1));
+    List<String> writtenPartitionsOnStorage = hiveClient.getWrittenPartitionsSince(Option.of(instantTime1), Option.of(instantTime1));
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(
+        partitionsInMetastore, writtenPartitionsOnStorage, droppedPartitionsOnStorage);
+    
+    // Verify no DROP event is generated for partition that was never in metastore
+    long dropEvents = partitionEvents.stream()
+        .filter(e -> e.eventType == PartitionEventType.DROP)
+        .count();
+    assertEquals(0, dropEvents,
+        "No DROP partition event should be generated for partition that was never in metastore");
+    
+    // Verify ADD event is generated for the new partition that was added to storage
+    List<PartitionEvent> addEvents = partitionEvents.stream()
+        .filter(e -> e.eventType == PartitionEventType.ADD)
+        .collect(Collectors.toList());
+    assertEquals(1, addEvents.size(),
+        "ADD partition event should be generated for new partition added to storage");
+    assertEquals(addPartition, addEvents.get(0).storagePartition);
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncModeAndEnablePushDown")
+  void testGetPartitionEvents_droppedStoragePartitionPresentInMetastore(
+      String syncMode, String enablePushDown) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
+
+    // Create a table with 1 partition
+    String instantTime1 = "100";
+    HiveTestUtil.createCOWTable(instantTime1, 1, true);
+
+    reInitHiveSyncClient();
+    // Sync the table to metastore
+    reSyncHiveTable();
+    
+    List<Partition> partitionsInMetastore = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(1, partitionsInMetastore.size(), "Should have 1 partition in metastore");
+
+    // Add a partition and sync it to metastore
+    String instantTime2 = "101";
+    String newPartition = "2010/02/01";
+    HiveTestUtil.addCOWPartition(newPartition, true, true, instantTime2);
+
+    reInitHiveSyncClient();
+    // Sync the table to metastore
+    reSyncHiveTable();
+    
+    partitionsInMetastore = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    assertEquals(2, partitionsInMetastore.size(), "Should have 2 partitions in metastore");
+    
+    // Now delete the partition that exists in metastore
+    String instantTime3 = "102";
+    HiveTestUtil.createReplaceCommit(instantTime3, newPartition, WriteOperationType.DELETE_PARTITION, true, true);
+    
+    // Add another partition to storage but don't sync to metastore
+    String instantTime4 = "103";
+    String addPartition = "2010/04/01";
+    HiveTestUtil.addCOWPartition(addPartition, true, true, instantTime4);
+    
+    reInitHiveSyncClient();
+    
+    // Get partition events
+    Set<String> droppedPartitionsOnStorage = hiveClient.getDroppedPartitionsSince(Option.of(instantTime2), Option.of(instantTime2));
+    List<String> writtenPartitionsOnStorage = hiveClient.getWrittenPartitionsSince(Option.of(instantTime2), Option.of(instantTime2));
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(
+        partitionsInMetastore, writtenPartitionsOnStorage, droppedPartitionsOnStorage);
+    
+    // Verify DROP event is generated for partition that exists in metastore
+    List<PartitionEvent> dropEvents = partitionEvents.stream()
+        .filter(e -> e.eventType == PartitionEventType.DROP)
+        .collect(Collectors.toList());
+    assertEquals(1, dropEvents.size(),
+        "DROP partition event should be generated for partition that exists in metastore");
+    assertEquals(newPartition, dropEvents.get(0).storagePartition);
+    
+    // Verify ADD event is generated for the new partition that was added to storage
+    List<PartitionEvent> addEvents = partitionEvents.stream()
+        .filter(e -> e.eventType == PartitionEventType.ADD)
+        .collect(Collectors.toList());
+    assertEquals(1, addEvents.size(),
+        "ADD partition event should be generated for new partition added to storage");
+    assertEquals(addPartition, addEvents.get(0).storagePartition);
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncModeAndEnablePushDown")
   public void testNonPartitionedSync(String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
@@ -2017,6 +2141,28 @@ public class TestHiveSyncTool {
     assertEquals(getLastCommitCompletionTimeSynced(), hiveClient.getLastCommitCompletionTimeSynced(tableName).get());
     assertEquals(commitTime5, hiveClient.getLastCommitTimeSynced(tableName).get());
     assertEquals(3, hiveClient.getAllPartitions(tableName).size());
+  }
+
+  @Test
+  public void testDatabaseAndTableName() {
+    reInitHiveSyncClient();
+
+    assertEquals(HiveTestUtil.DB_NAME, hiveSyncTool.getDatabaseName());
+    assertEquals(HiveTestUtil.TABLE_NAME, hiveSyncTool.getTableName());
+
+    String updatedDb = "updated_db";
+    String updatedTable = "updated_table";
+
+    hiveSyncProps.setProperty(META_SYNC_DATABASE_NAME.key(), updatedDb);
+    hiveSyncProps.setProperty(META_SYNC_TABLE_NAME.key(), updatedTable);
+
+    reInitHiveSyncClient();
+
+    assertEquals(updatedDb, hiveSyncTool.getDatabaseName(), "Database name should match the updated value");
+    assertEquals(updatedTable, hiveSyncTool.getTableName(), "Table name should match the updated value");
+
+    assertEquals(updatedDb, hiveClient.getDatabaseName(), "Database name in sync client should match");
+    assertEquals(updatedTable, hiveClient.getTableName(), "Table name in sync client should match");
   }
 
   private void reSyncHiveTable() {

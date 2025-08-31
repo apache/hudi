@@ -17,6 +17,7 @@
  */
 package org.apache.hudi
 
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
@@ -35,7 +36,7 @@ class TestGenericRecordAndRowConsistency extends HoodieSparkClientTestBase {
     "hoodie.upsert.shuffle.parallelism" -> "1",
     DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "str,eventTime",
-    DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "typeId",
+    HoodieTableConfig.ORDERING_FIELDS.key() -> "typeId",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "typeId",
     DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.ComplexKeyGenerator",
     DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key -> "true"

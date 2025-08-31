@@ -32,6 +32,8 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.TestData;
@@ -348,10 +350,14 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
-  @Test
-  public void testInsertWithMiniBatches() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testInsertWithMiniBatches(boolean useFileGroupReaderBasedMergeHandle) throws Exception {
     // reset the config option
     conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    String mergeHandleClass = useFileGroupReaderBasedMergeHandle
+        ? FileGroupReaderBasedMergeHandle.class.getName() : HoodieWriteMergeHandle.class.getName();
+    conf.setString(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), mergeHandleClass);
 
     Map<String, String> expected = getMiniBatchExpected();
 

@@ -38,7 +38,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
          |) using hudi
          |tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          )
        """.stripMargin)
     // Insert data
@@ -65,7 +65,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
          | partitioned by (dt)
          | tblproperties (
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   orderingFields = 'ts'
          | )
        """.stripMargin)
     // Empty partitions
@@ -116,7 +116,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
          | partitioned by (year, month, day)
          | tblproperties (
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   orderingFields = 'ts'
          | )
        """.stripMargin)
     // Empty partitions
@@ -185,7 +185,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
                | partitioned by (year, month, day)
                | tblproperties (
                |   primaryKey = 'id',
-               |   preCombineField = 'ts'
+               |   orderingFields = 'ts'
                | )
              """.stripMargin)
           spark.sql(s"alter table $tableName add partition(year='2023', month='06', day='06')")
@@ -221,7 +221,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
            | partitioned by (year, month, day)
            | tblproperties (
            |   primaryKey = 'id',
-           |   preCombineField = 'ts'
+           |   orderingFields = 'ts'
            | )
          """.stripMargin)
 
@@ -270,7 +270,7 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
              | partitioned by (dt)
              | tblproperties (
              |   primaryKey = 'id',
-             |   preCombineField = 'ts'
+             |   orderingFields = 'ts'
              | )
          """.stripMargin)
 

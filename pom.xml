@@ -133,7 +133,7 @@
     <roaringbitmap.version>0.9.47</roaringbitmap.version>
     <airlift.version>0.27</airlift.version>
     <tally.version>0.13.0</tally.version>
-    <prometheus.version>0.8.0</prometheus.version>
+    <prometheus.version>0.16.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
     <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
     <httpcore.version>4.4.16</httpcore.version>

@@ -366,8 +366,6 @@ public class StreamSync implements Serializable, Closeable {
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
             .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
-            .setPayloadClassName(cfg.payloadClassName)
-            .setRecordMergerStrategy(null)
             .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
             .build();
         if (refreshTimeline) {
@@ -444,7 +442,7 @@ public class StreamSync implements Serializable, Closeable {
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
         .setKeyGeneratorClassProp(keyGenClassName)
-        .setPreCombineFields(cfg.sourceOrderingFields)
+        .setOrderingFields(cfg.sourceOrderingFields)
         .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
         .setCDCEnabled(props.getBoolean(HoodieTableConfig.CDC_ENABLED.key(),

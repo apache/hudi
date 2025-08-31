@@ -158,7 +158,7 @@ public interface HoodieRecordMerger extends Serializable {
   }
 
   /**
-   * Returns a list of fields required for mor merging. The default implementation will return the recordkey field and the precombine
+   * Returns a list of fields required for mor merging. The default implementation will return the recordKey field and the ordering fields.
    */
   default String[] getMandatoryFieldsForMerging(Schema dataSchema, HoodieTableConfig cfg, TypedProperties properties) {
     ArrayList<String> requiredFields = new ArrayList<>();
@@ -172,8 +172,8 @@ public interface HoodieRecordMerger extends Serializable {
       }
     }
 
-    List<String> preCombineFields = cfg.getPreCombineFields();
-    requiredFields.addAll(preCombineFields);
+    List<String> orderingFields = cfg.getOrderingFields();
+    requiredFields.addAll(orderingFields);
     return requiredFields.toArray(new String[0]);
   }
 

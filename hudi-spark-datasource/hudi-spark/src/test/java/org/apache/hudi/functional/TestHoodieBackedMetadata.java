@@ -34,7 +34,6 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -42,7 +41,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
@@ -56,7 +54,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
@@ -88,7 +85,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -169,7 +165,7 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroWrapperUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
@@ -434,13 +430,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
 
     assertTrue(metadataWriter.isPresent());
-    Triple<RecordMergeMode, String, String> inferredMergeConfs =
-        HoodieTableConfig.inferCorrectMergingBehavior(
-            writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(),
-            writeConfig.getRecordMergeStrategyId(), String.join(",", writeConfig.getPreCombineFields()),
-            metaClient.getTableConfig().getTableVersion());
-    HoodieTableConfig hoodieTableConfig =
-        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), inferredMergeConfs.getLeft(), inferredMergeConfs.getMiddle(), inferredMergeConfs.getRight());
+    HoodieTableConfig hoodieTableConfig = new HoodieTableConfig(this.storage, metaClient.getMetaPath());
     assertFalse(hoodieTableConfig.getMetadataPartitions().isEmpty());
 
     // Turn off metadata table
@@ -457,16 +447,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Option metadataWriter2 = table2.getMetadataWriter(instant2);
     assertFalse(metadataWriter2.isPresent());
 
-    Triple<RecordMergeMode, String, String> inferredMergeConfs2 =
-        HoodieTableConfig.inferCorrectMergingBehavior(
-            writeConfig2.getRecordMergeMode(), writeConfig2.getPayloadClass(),
-            writeConfig2.getRecordMergeStrategyId(), String.join(",", writeConfig2.getPreCombineFields()),
-            metaClient.getTableConfig().getTableVersion());
     HoodieTableConfig hoodieTableConfig2 =
-        new HoodieTableConfig(this.storage, metaClient.getMetaPath(),
-            inferredMergeConfs2.getLeft(),
-            inferredMergeConfs2.getMiddle(),
-            inferredMergeConfs2.getRight());
+        new HoodieTableConfig(this.storage, metaClient.getMetaPath());
     assertEquals(Collections.emptySet(), hoodieTableConfig2.getMetadataPartitions());
     // Assert metadata table folder is deleted
     assertFalse(metaClient.getStorage().exists(
@@ -488,7 +470,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
     assertTrue(metadataWriter3.isPresent());
     HoodieTableConfig hoodieTableConfig3 =
-        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), null, null, null);
+        new HoodieTableConfig(this.storage, metaClient.getMetaPath());
     assertFalse(hoodieTableConfig3.getMetadataPartitions().isEmpty());
   }
 
@@ -1965,7 +1947,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       AtomicInteger counter = new AtomicInteger();
       List<HoodieRecord> processedRecords = records.stream().map(entry ->
-              new HoodieAvroRecord(new HoodieKey("key1_" + counter.getAndIncrement(), entry.getPartitionPath()), (HoodieRecordPayload) entry.getData()))
+             entry.newInstance(new HoodieKey("key1_" + counter.getAndIncrement(), entry.getPartitionPath())))
           .collect(Collectors.toList());
 
       WriteClientTestUtils.startCommitWithTime(client, firstCommit);
@@ -1979,7 +1961,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       records = dataGen.generateInserts(secondCommit, 20);
       AtomicInteger counter1 = new AtomicInteger();
       processedRecords = records.stream().map(entry ->
-              new HoodieAvroRecord(new HoodieKey("key2_" + counter1.getAndIncrement(), entry.getPartitionPath()), (HoodieRecordPayload) entry.getData()))
+              entry.newInstance(new HoodieKey("key2_" + counter1.getAndIncrement(), entry.getPartitionPath())))
           .collect(Collectors.toList());
       writeStatuses = client.insert(jsc.parallelize(processedRecords, 1), secondCommit).collect();
       assertNoWriteErrors(writeStatuses);

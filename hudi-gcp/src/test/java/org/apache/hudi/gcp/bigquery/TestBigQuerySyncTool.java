@@ -44,6 +44,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PATH_KEY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -188,7 +189,7 @@ public class TestBigQuerySyncTool extends HoodieCommonTestHarness {
     TypedProperties typedProperties = new TypedProperties();
     String location = "us-central1";
     typedProperties.setProperty("hoodie.gcp.bigquery.sync.dataset_location", location);
-    typedProperties.setProperty("hoodie.datasource.meta.sync.base.path", metaClient.getBasePath().toString());
+    typedProperties.setProperty(META_SYNC_BASE_PATH_KEY, metaClient.getBasePath().toString());
     try (MockedStatic<BigQueryOptions> mockedStatic = mockStatic(BigQueryOptions.class)) {
       BigQueryOptions.Builder builder = mock(BigQueryOptions.Builder.class);
       BigQueryOptions.Builder builderWithLocation = mock(BigQueryOptions.Builder.class);

@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.ddl
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils}
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption, PartitionPathEncodeUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
@@ -66,7 +67,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          | )
          |""".stripMargin)
     // insert data
@@ -93,7 +94,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts',
+         |  orderingFields = 'ts',
          |  hoodie.clean.commits.retained= '1'
          | )
          |""".stripMargin)
@@ -121,7 +122,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
           .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -140,7 +141,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
           .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
@@ -199,7 +200,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "dt")
           .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), urlencode)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -214,7 +215,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.clean.commits.retained= '1'
              | )
              |""".stripMargin)
@@ -258,7 +259,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
          | using hudi
          | tblproperties (
          |  primaryKey = 'id',
-         |  preCombineField = 'ts'
+         |  orderingFields = 'ts'
          | )
          | partitioned by (dt)
          |""".stripMargin)
@@ -305,7 +306,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -329,7 +330,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
@@ -385,7 +386,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
@@ -400,7 +401,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              |location '$tablePath'
              | tblproperties (
              |  primaryKey = 'id',
-             |  preCombineField = 'ts',
+             |  orderingFields = 'ts',
              |  hoodie.clean.commits.retained= '1'
              | )
              |""".stripMargin)
@@ -409,7 +410,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.TBL_NAME.key, tableName)
           .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
           .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "id")
-          .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "ts")
+          .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
           .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "year,month,day")
           .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, hiveStyle)
           .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[ComplexKeyGenerator].getName)
@@ -477,7 +478,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  type = '$tableType',
              |  primaryKey = 'id',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by (dt)
        """.stripMargin)
@@ -532,7 +533,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | options (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | )
              | partitioned by(ts)
              | location '$basePath'
@@ -573,7 +574,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | options (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.index.type = 'INMEMORY'
            | )
            | partitioned by(ts)
@@ -621,7 +622,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
            | options (
            |  primaryKey ='id',
            |  type = 'mor',
-           |  preCombineField = 'ts',
+           |  orderingFields = 'ts',
            |  hoodie.index.type = 'INMEMORY'
            | )
            | partitioned by(ts)
@@ -666,7 +667,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
              | tblproperties (
              |  primaryKey ='id',
              |  type = '$tableType',
-             |  preCombineField = 'ts'
+             |  orderingFields = 'ts'
              | ) partitioned by (partition_date_col)
          """.stripMargin)
         spark.sql(s"insert into $tableName values " +

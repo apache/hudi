@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
@@ -40,6 +39,7 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 
@@ -121,11 +121,11 @@ public class BaseTestFileGroupRecordBuffer {
     readerContext.setRecordMerger(Option.ofNullable(recordMerger));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
     when(mockMetaClient.getTableConfig()).thenReturn(tableConfig);
-    UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty());
+    UpdateProcessor<IndexedRecord> updateProcessor = UpdateProcessor.create(readStats, readerContext, false, Option.empty(), props);
 
     if (fileGroupRecordBufferItrOpt.isEmpty()) {
       return new KeyBasedFileGroupRecordBuffer<>(
-          readerContext, mockMetaClient, recordMergeMode, PartialUpdateMode.NONE, props, orderingFieldNames, updateProcessor);
+          readerContext, mockMetaClient, recordMergeMode, Option.empty(), props, orderingFieldNames, updateProcessor);
     } else {
       FileGroupRecordBufferLoader recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
       InputSplit inputSplit = mock(InputSplit.class);
@@ -157,6 +157,11 @@ public class BaseTestFileGroupRecordBuffer {
     public CustomPayload(GenericRecord record, Comparable orderingVal) {
       super(record, orderingVal);
       this.payloadRecord = record;
+    }
+
+    public CustomPayload(Option<GenericRecord> record) {
+      super(record.orElse(null), OrderingValues.getDefault());
+      this.payloadRecord = record.orElse(null);
     }
 
     @Override
@@ -198,8 +203,8 @@ public class BaseTestFileGroupRecordBuffer {
 
     @Override
     public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-      GenericRecord olderData = (GenericRecord) older.getData();
-      GenericRecord newerData = (GenericRecord) newer.getData();
+      GenericRecord olderData = (GenericRecord) older.toIndexedRecord(oldSchema, props).get().getData();
+      GenericRecord newerData = (GenericRecord) newer.toIndexedRecord(newSchema, props).get().getData();
       if (olderData.get(2).equals(newerData.get(2))) {
         // If the timestamps are the same, we do not update
         return Option.of(Pair.of(older, oldSchema));

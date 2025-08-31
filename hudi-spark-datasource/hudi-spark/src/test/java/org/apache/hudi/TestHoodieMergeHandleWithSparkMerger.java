@@ -22,6 +22,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -59,21 +60,23 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED;
 import static org.apache.hudi.common.config.HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT;
-import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY;
 import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES;
+import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_RECORD_POSITIONS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalTestHarness {
   private static final Schema SCHEMA = getAvroSchema("AvroSchema", "AvroSchemaNS");
+  private final Map<String, String> properties = new HashMap<>();
   private HoodieTableMetaClient metaClient;
 
   public static String getPartitionPath() {
@@ -82,41 +85,30 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
 
   @BeforeEach
   public void setUp() throws IOException {
-    Properties properties = new Properties();
-    properties.setProperty(
+    properties.put(
         HoodieTableConfig.BASE_FILE_FORMAT.key(),
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
-    properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELDS.key(), "record_key");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
-    properties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
-    metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, properties);
+    properties.put(HoodieTableConfig.ORDERING_FIELDS.key(), "record_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
+    properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
   }
 
   @Test
   public void testDefaultMerger() throws Exception {
     HoodieWriteConfig writeConfig = buildDefaultWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
-    assertTrue(merger instanceof DefaultMerger);
+    assertInstanceOf(DefaultMerger.class, merger);
     assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
     insertAndUpdate(writeConfig, 114);
-  }
-
-  @Test
-  public void testNoFlushMerger() throws Exception {
-    HoodieWriteConfig writeConfig = buildNoFlushWriteConfig(SCHEMA);
-    HoodieRecordMerger merger = writeConfig.getRecordMerger();
-    assertTrue(merger instanceof NoFlushMerger);
-    assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
-    insertAndUpdate(writeConfig, 64);
   }
 
   @Test
   public void testCustomMerger() throws Exception {
     HoodieWriteConfig writeConfig = buildCustomWriteConfig(SCHEMA);
     HoodieRecordMerger merger = writeConfig.getRecordMerger();
-    assertTrue(merger instanceof CustomMerger);
+    assertInstanceOf(CustomMerger.class, merger);
     assertTrue(writeConfig.getBooleanOrDefault(FILE_GROUP_READER_ENABLED.key(), false));
-    insertAndUpdate(writeConfig, 95);
+    insertAndUpdate(writeConfig, 114);
   }
 
   public List<HoodieRecord> generateRecords(int numOfRecords, String commitTime) throws Exception {
@@ -157,44 +149,44 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     return AvroConversionUtils.convertStructTypeToAvroSchema(SparkDatasetTestUtils.STRUCT_TYPE, schemaName, schemaNameSpace);
   }
 
-  public HoodieWriteConfig getWriteConfig(Schema avroSchema) {
-    Properties extraProperties = new Properties();
-    extraProperties.setProperty(
+  public HoodieWriteConfig getWriteConfig(Schema avroSchema, String recordMergerImplClass, String mergeStrategyId, RecordMergeMode recordMergeMode) {
+    properties.put(RECORD_MERGE_STRATEGY_ID.key(), mergeStrategyId);
+    properties.put(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key(), mergeStrategyId);
+    properties.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+    properties.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), recordMergeMode.name());
+    properties.put(
         RECORD_MERGE_IMPL_CLASSES.key(),
-        "org.apache.hudi.DefaultSparkRecordMerger");
-    extraProperties.setProperty(
+        recordMergerImplClass);
+    properties.put(
         LOGFILE_DATA_BLOCK_FORMAT.key(),
         "parquet");
-    extraProperties.setProperty(
+    properties.put(
         HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "record_key");
-    extraProperties.setProperty(
+    properties.put(
         FILE_GROUP_READER_ENABLED.key(),
         "true");
-    extraProperties.setProperty(
+    properties.put(
         WRITE_RECORD_POSITIONS.key(),
         "true");
-    extraProperties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
 
     return getConfigBuilder(true)
         .withPath(basePath())
         .withSchema(avroSchema.toString())
-        .withProperties(extraProperties)
+        .withProps(properties)
         .build();
   }
 
-  public DefaultWriteConfig buildDefaultWriteConfig(Schema avroSchema) {
-    HoodieWriteConfig config = getWriteConfig(avroSchema);
-    return new DefaultWriteConfig(config);
+  public HoodieWriteConfig buildDefaultWriteConfig(Schema avroSchema) {
+    HoodieWriteConfig writeConfig = getWriteConfig(avroSchema, DefaultMerger.class.getName(), HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID, RecordMergeMode.EVENT_TIME_ORDERING);
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
+    return writeConfig;
   }
 
-  public NoFlushWriteConfig buildNoFlushWriteConfig(Schema avroSchema) {
-    HoodieWriteConfig config = getWriteConfig(avroSchema);
-    return new NoFlushWriteConfig(config);
-  }
-
-  public CustomWriteConfig buildCustomWriteConfig(Schema avroSchema) {
-    HoodieWriteConfig config = getWriteConfig(avroSchema);
-    return new CustomWriteConfig(config);
+  public HoodieWriteConfig buildCustomWriteConfig(Schema avroSchema) {
+    HoodieWriteConfig writeConfig = getWriteConfig(avroSchema, CustomMerger.class.getName(), HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID, RecordMergeMode.CUSTOM);
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, writeConfig.getProps());
+    return writeConfig;
   }
 
   public HoodieTableFileSystemView getFileSystemView() {
@@ -227,22 +219,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   }
 
   public void checkDataEquality(int numRecords) {
-    Map<String, String> properties = new HashMap<>();
-    properties.put(
-        RECORD_MERGE_IMPL_CLASSES.key(),
-        "org.apache.hudi.DefaultSparkRecordMerger");
-    properties.put(
-        LOGFILE_DATA_BLOCK_FORMAT.key(),
-        "parquet");
-    properties.put(
-        PAYLOAD_ORDERING_FIELD_PROP_KEY,
-        HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName());
-    properties.put(
-        FILE_GROUP_READER_ENABLED.key(),
-        "true");
-    properties.put(
-        WRITE_RECORD_POSITIONS.key(),
-        "true");
     Dataset<Row> rows = spark()
         .read()
         .options(properties)
@@ -269,7 +245,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
       assertTrue(baseFileStream.findAny().isPresent());
 
       // Check metadata files.
-      Option<HoodieInstant> deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+      Option<HoodieInstant> deltaCommit = reloadedMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().lastInstant();
       assertTrue(deltaCommit.isPresent());
       assertEquals(instantTime, deltaCommit.get().requestedTime(), "Delta commit should be specified value");
 
@@ -297,7 +273,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
       updateRecordsInMORTable(reloadedMetaClient, records2, writeClient, writeConfig, instantTime, false);
 
       // Check metadata files.
-      deltaCommit = reloadedMetaClient.getActiveTimeline().getDeltaCommitTimeline().lastInstant();
+      deltaCommit = reloadedMetaClient.reloadActiveTimeline().getDeltaCommitTimeline().lastInstant();
       assertTrue(deltaCommit.isPresent());
 
       // Check data files.
@@ -323,45 +299,6 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     }
   }
 
-  public static class TestHoodieWriteConfig extends HoodieWriteConfig {
-    TestHoodieWriteConfig(HoodieWriteConfig writeConfig) {
-      super(writeConfig.getEngineType(), writeConfig.getProps());
-    }
-  }
-
-  public static class DefaultWriteConfig extends TestHoodieWriteConfig {
-    DefaultWriteConfig(HoodieWriteConfig writeConfig) {
-      super(writeConfig);
-    }
-
-    @Override
-    public HoodieRecordMerger getRecordMerger() {
-      return new DefaultMerger();
-    }
-  }
-
-  public static class NoFlushWriteConfig extends TestHoodieWriteConfig {
-    NoFlushWriteConfig(HoodieWriteConfig writeConfig) {
-      super(writeConfig);
-    }
-
-    @Override
-    public HoodieRecordMerger getRecordMerger() {
-      return new NoFlushMerger();
-    }
-  }
-
-  public static class CustomWriteConfig extends TestHoodieWriteConfig {
-    CustomWriteConfig(HoodieWriteConfig writeConfig) {
-      super(writeConfig);
-    }
-
-    @Override
-    public HoodieRecordMerger getRecordMerger() {
-      return new CustomMerger();
-    }
-  }
-
   public static class DefaultMerger extends DefaultSparkRecordMerger {
     @Override
     public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
@@ -374,12 +311,18 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
       return false;
     }
+
+    @Override
+    public String getMergingStrategy() {
+      return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
+    }
   }
 
   public static class CustomMerger extends DefaultSparkRecordMerger {
+
     @Override
-    public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
-      return !((HoodieSparkRecord) record).getData().getString(0).equals("001");
+    public String getMergingStrategy() {
+      return HoodieRecordMerger.CUSTOM_MERGE_STRATEGY_UUID;
     }
   }
 }

@@ -100,7 +100,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.storage = storage;
     this.readerParameters = readerParameters;
     this.inputSplit = inputSplit;
-    readerContext.setHasLogFiles(!this.inputSplit.getLogFiles().isEmpty());
+    readerContext.setHasLogFiles(this.inputSplit.hasLogFiles());
     readerContext.getRecordContext().setPartitionPath(inputSplit.getPartitionPath());
     if (readerContext.getHasLogFiles() && inputSplit.getStart() != 0) {
       throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
@@ -270,6 +270,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return validBlockInstants;
   }
 
+  /**
+   * Notifies a write failure with the given record key.
+   */
+  public void onWriteFailure(String recordKey) {
+    this.fileGroupUpdateCallback.ifPresent(callback -> callback.onFailure(recordKey));
+  }
+
   @Override
   public void close() throws IOException {
     if (baseFileIterator != null) {
@@ -299,7 +306,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    */
   public ClosableIterator<HoodieRecord<T>> getClosableHoodieRecordIterator() throws IOException {
     return new CloseableMappingIterator<>(getBufferedRecordIterator(IteratorMode.HOODIE_RECORD),
-        bufferedRecord -> readerContext.getRecordContext().constructHoodieRecord(bufferedRecord));
+        bufferedRecord -> readerContext.getRecordContext().constructFinalHoodieRecord(bufferedRecord));
   }
 
   /**
@@ -404,8 +411,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withRecordIterator(Iterator<HoodieRecord> recordIterator) {
-      this.recordIterator = recordIterator;
+    public Builder<T> withRecordIterator(Iterator<? extends HoodieRecord> recordIterator) {
+      this.recordIterator = (Iterator<HoodieRecord>) recordIterator;
       this.recordBufferLoader = FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
       return this;
     }

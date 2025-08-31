@@ -23,7 +23,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers, ScalaAs
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.exception.ExceptionUtil.getRootCause

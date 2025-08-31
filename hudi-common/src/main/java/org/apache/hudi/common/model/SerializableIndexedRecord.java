@@ -32,6 +32,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
@@ -39,7 +42,9 @@ import java.util.Objects;
  * After deserialization, the schema can be set using {@link #decodeRecord(Schema)} and that will also trigger deserialization of the record.
  * This allows the record to stay in the serialized form until the data needs to be accessed, which allows deserialization to be avoided if data is not read.
  */
-public class SerializableIndexedRecord implements GenericRecord, KryoSerializable {
+public class SerializableIndexedRecord implements GenericRecord, KryoSerializable, Serializable {
+  private static final long serialVersionUID = 1L;
+
   private IndexedRecord record;
   private byte[] recordBytes;
 
@@ -96,6 +101,19 @@ public class SerializableIndexedRecord implements GenericRecord, KryoSerializabl
   public void read(Kryo kryo, Input input) {
     int length = input.readInt(true);
     this.recordBytes = input.readBytes(length);
+  }
+
+  private void writeObject(ObjectOutputStream out) throws IOException {
+    byte[] bytes = encodeRecord();
+    out.writeInt(bytes.length);
+    out.write(bytes);
+  }
+
+  private void readObject(ObjectInputStream ois)
+      throws ClassNotFoundException, IOException {
+    int length = ois.readInt();
+    this.recordBytes = new byte[length];
+    ois.read(recordBytes, 0, length);
   }
 
   @Override

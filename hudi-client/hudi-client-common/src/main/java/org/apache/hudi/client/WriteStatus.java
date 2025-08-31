@@ -73,7 +73,7 @@ public class WriteStatus implements Serializable {
   private long totalErrorRecords = 0;
 
   private final double failureFraction;
-  private final boolean trackSuccessRecords;
+  private boolean trackSuccessRecords;
   private final transient Random random;
   private IndexStats indexStats = new IndexStats();
 
@@ -107,6 +107,17 @@ public class WriteStatus implements Serializable {
       indexStats.addHoodieRecordDelegate(HoodieRecordDelegate.fromHoodieRecord(record));
     }
     updateStatsForSuccess(optionalRecordMetadata);
+  }
+
+  /**
+   * Allows the writer to manually add record delegates to the index stats.
+   */
+  public void manuallyTrackSuccess() {
+    this.trackSuccessRecords = false;
+  }
+
+  public void addRecordDelegate(HoodieRecordDelegate recordDelegate) {
+    indexStats.addHoodieRecordDelegate(recordDelegate);
   }
 
   /**
