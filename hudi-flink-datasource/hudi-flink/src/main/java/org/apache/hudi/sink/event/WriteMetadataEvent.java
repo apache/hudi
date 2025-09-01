@@ -19,18 +19,16 @@
 package org.apache.hudi.sink.event;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieDeltaWriteStat;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.util.WriteStatusMerger;
 
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * An operator event to mark successful checkpoint batch write.
@@ -209,31 +207,17 @@ public class WriteMetadataEvent implements OperatorEvent {
         .build();
   }
 
-  /**
-   * Merge old write status with new write status.
-   */
   private static List<WriteStatus> mergeWriteStatuses(List<WriteStatus> oldStatuses, List<WriteStatus> newStatuses) {
-    Map<String, String> fgToFilePath = new HashMap<>();
-    // For eager flush during writing COW table, there may be multiple mini-batches written into separate
-    // files with the same file group id, and we will update file path in old write status with the file
-    // path in new write status for each file group to make sure the write statistic is correct.
-    newStatuses.forEach(writeStatus -> {
-      if (!(writeStatus.getStat() instanceof HoodieDeltaWriteStat)) {
-        fgToFilePath.put(writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getFileId(), writeStatus.getStat().getPath());
-      }
-    });
-    if (!fgToFilePath.isEmpty()) {
-      oldStatuses.forEach(writeStatus -> {
-        if (!(writeStatus.getStat() instanceof HoodieDeltaWriteStat)) {
-          Option<String> filePathOpt = Option.ofNullable(fgToFilePath.get(writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getFileId()));
-          filePathOpt.ifPresent(filePath -> writeStatus.getStat().setPath(filePath));
-        }
-      });
-    }
-    List<WriteStatus> statusList = new ArrayList<>();
-    statusList.addAll(oldStatuses);
-    statusList.addAll(newStatuses);
-    return statusList;
+    List<WriteStatus> mergedStatuses = new ArrayList<>();
+    mergedStatuses.addAll(oldStatuses);
+    mergedStatuses.addAll(newStatuses);
+    return mergedStatuses
+        .stream()
+        .collect(Collectors.groupingBy(writeStatus -> writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getFileId()))
+        .values()
+        .stream()
+        .map(duplicates -> duplicates.stream().reduce(WriteStatusMerger::merge).get())
+        .collect(Collectors.toList());
   }
 
   // -------------------------------------------------------------------------
