@@ -214,9 +214,10 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
           hoodieTable.getPartitionMetafileFormat());
       partitionMetadata.trySave();
 
-      String newFileName = FSUtils.makeBaseFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
-      makeOldAndNewFilePaths(partitionPath,
-          latestValidFilePath.isPresent() ? latestValidFilePath.get() : null, newFileName);
+      String oldFileName = latestValidFilePath.isPresent() ? latestValidFilePath.get() : null;
+      String newFileName = createNewFileName(oldFileName);
+      oldFilePath = makeNewFilePath(partitionPath, oldFileName);
+      newFilePath = makeNewFilePath(partitionPath, newFileName);
 
       LOG.info("Merging data from file group {}, to a new base file {}", fileId, newFilePath);
       // file name is same for all records, in this bunch

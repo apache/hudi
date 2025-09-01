@@ -59,11 +59,6 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
 
   private boolean isClosed = false;
 
-  /**
-   * Flag saying whether we should replace the old file with new.
-   */
-  private boolean shouldReplace = true;
-
   public FlinkMergeAndReplaceHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                     Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                     TaskContextSupplier taskContextSupplier, StoragePath basePath) {
@@ -111,29 +106,9 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
   }
 
   @Override
-  protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
-    // old and new file name expects to be the same.
-    if (!FSUtils.getCommitTime(oldFileName).equals(instantTime)) {
-      LOG.warn(
-          "MERGE and REPLACE handle expect the same name for old and new files, "
-              +  "while got new file: {} with old file: {}, this rarely happens when "
-              + "the checkpoint success event was not received yet but the write task "
-              + "flush with new instant time, which does not break the UPSERT semantics",
-          newFileName, oldFileName);
-      shouldReplace = false;
-    }
-    super.makeOldAndNewFilePaths(partitionPath, oldFileName, newFileName);
-    try {
-      int rollNumber = 0;
-      while (storage.exists(newFilePath)) {
-        StoragePath oldPath = newFilePath;
-        newFileName = newFileNameWithRollover(rollNumber++);
-        newFilePath = makeNewFilePath(partitionPath, newFileName);
-        LOG.warn("Duplicate write for MERGE and REPLACE handle with path: {}, rolls over to new path: {}", oldPath, newFilePath);
-      }
-    } catch (IOException e) {
-      throw new HoodieException("Checking existing path for merge and replace handle error: " + newFilePath, e);
-    }
+  protected String createNewFileName(String oldFileName) {
+    int rollNumber = MergeHandleUtils.calcRollNumberForBaseFile(oldFileName, writeToken);
+    return newFileNameWithRollover(rollNumber);
   }
 
   @Override
@@ -160,10 +135,6 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
   }
 
   public void finalizeWrite() {
-    // Behaves like the normal merge handle if the write instant time changes.
-    if (!shouldReplace) {
-      return;
-    }
     // The file visibility should be kept by the configured ConsistencyGuard instance.
     try {
       storage.deleteFile(oldFilePath);
@@ -197,10 +168,10 @@ public class FlinkMergeAndReplaceHandle<T, I, K, O>
       LOG.warn("Error while trying to dispose the MERGE handle", throwable);
       try {
         storage.deleteFile(newFilePath);
-        LOG.info("Deleting the intermediate MERGE and REPLACE data file: " + newFilePath + " success!");
+        LOG.info("Deleting the intermediate MERGE and REPLACE data file: {} success!", newFilePath);
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Deleting the intermediate MERGE and REPLACE data file: " + newFilePath + " failed", e);
+        LOG.warn("Deleting the intermediate MERGE and REPLACE data file: {} failed", newFilePath, e);
       }
     }
   }
