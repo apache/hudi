@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.event;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.util.WriteStatusMerger;
 
@@ -213,9 +214,14 @@ public class WriteMetadataEvent implements OperatorEvent {
     mergedStatuses.addAll(newStatuses);
     return mergedStatuses
         .stream()
-        .collect(Collectors.groupingBy(writeStatus -> writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getFileId()))
-        .values()
-        .stream()
+        .collect(Collectors.groupingBy(writeStatus -> {
+          if (writeStatus.getStat() instanceof HoodieDeltaWriteStat) {
+            return writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getPath();
+          } else {
+            return writeStatus.getStat().getPartitionPath() + writeStatus.getStat().getFileId();
+          }
+        }))
+        .values().stream()
         .map(duplicates -> duplicates.stream().reduce(WriteStatusMerger::merge).get())
         .collect(Collectors.toList());
   }

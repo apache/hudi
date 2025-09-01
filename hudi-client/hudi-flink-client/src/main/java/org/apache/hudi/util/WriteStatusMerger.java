@@ -22,6 +22,9 @@ import org.apache.hudi.client.IndexStats;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieWriteStat;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 /**
  * Helper clazz to merge {@link WriteStatus} that belong to one file group during multiple mini-batches writing.
  *
@@ -55,7 +58,9 @@ public class WriteStatusMerger {
     // index statistics
     IndexStats mergedIndexStats = mergedStatus.getIndexStats();
     mergedIndexStats.getSecondaryIndexStats().putAll(writeStatus1.getIndexStats().getSecondaryIndexStats());
-    mergedIndexStats.getSecondaryIndexStats().putAll(writeStatus2.getIndexStats().getSecondaryIndexStats());
+    writeStatus2.getIndexStats().getSecondaryIndexStats().forEach(
+        (k,v) -> mergedIndexStats.getSecondaryIndexStats().merge(k, v,
+            (list1, list2) -> Stream.concat(list1.stream(), list2.stream()).collect(Collectors.toList())));
     mergedIndexStats.getWrittenRecordDelegates().addAll(writeStatus1.getIndexStats().getWrittenRecordDelegates());
     mergedIndexStats.getWrittenRecordDelegates().addAll(writeStatus2.getIndexStats().getWrittenRecordDelegates());
     return mergedStatus;
