@@ -43,9 +43,7 @@ import java.util.Iterator;
  *
  * <p>For a new data buffer, it initializes and sets up the next file path to write, and closes
  * the file path when the data buffer writes finish. When next data buffer write starts,
- * {@link FlinkFileGroupReaderBasedMergeAndReplaceHandle} will be used to write records into a
- * rollover file and rename it to the old file name, behaves like the new data are appended to
- * the old file.
+ * {@link FlinkFileGroupReaderBasedMergeAndReplaceHandle} will be used to write records into a rollover file.
  */
 public class FlinkFileGroupReaderBasedMergeHandle<T, I, K, O>
     extends FileGroupReaderBasedMergeHandle<T, I, K, O>

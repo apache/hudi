@@ -45,8 +45,10 @@ import java.util.List;
  * <P>This handle is needed from the second mini-batch write for COW data bucket
  * when the data bucket is written using multiple mini-batches.
  *
- * <p>For the incremental data buffer, it initializes and sets up the next file path to write, then closes
- * the file and rename to the old file name, which behaves like the new data buffer are appended to the old file.
+ * <p>For the incremental data buffer, it initializes and sets up the next file path to write,
+ * then closes the file and remove the old file. Finally, the file path field in the write status
+ * for the previous mini-batch ingestion will be rewritten as the last file path before committing,
+ * which behaves like all the data are written into the last file.
  */
 public class FlinkFileGroupReaderBasedMergeAndReplaceHandle<T, I, K, O>
     extends FileGroupReaderBasedMergeHandle<T, I, K, O>

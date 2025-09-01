@@ -47,8 +47,9 @@ import java.util.List;
  * when the data bucket is written using multiple mini-batches.
  *
  * <p>For the incremental data buffer, it initializes and sets up the next file path to write,
- * then closes the file and rename to the old file name, behaves like the new data buffer is
- * appended to the old file.
+ * then closes the file and remove the old file. Finally, the file path field in the write status
+ * for the previous mini-batch ingestion will be rewritten as the final file path before committing,
+ * which behaves like all the data are written into the last file.
  */
 public class FlinkMergeAndReplaceHandle<T, I, K, O>
     extends HoodieWriteMergeHandle<T, I, K, O>
