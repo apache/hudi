@@ -130,8 +130,7 @@ public class HFileReaderFactory {
       ValidationUtils.checkArgument(storage != null, "Storage cannot be null");
       ValidationUtils.checkArgument(fileSource != null, "HFile source cannot be null");
       TypedProperties props = properties.isPresent() ? properties.get() : new TypedProperties();
-      Option<Long> newFileSizeOpt = fileSizeOpt == null ? Option.empty() : fileSizeOpt;
-      return new HFileReaderFactory(storage, props, fileSource, newFileSizeOpt);
+      return new HFileReaderFactory(storage, props, fileSource, fileSizeOpt == null ? Option.empty() : fileSizeOpt);
     }
   }
 }
