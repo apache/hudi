@@ -29,6 +29,7 @@ import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieDataUtils;
@@ -201,9 +202,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
     HoodiePairData<String, HoodieMetadataPayload> recordsData =
         readIndexPayloadWithKeys(HoodieListData.eager(bloomFilterKeys), metadataPartitionName);
-    Map<String, HoodieMetadataPayload> hoodieRecords;
+    List<Pair<Option<String>, HoodieMetadataPayload>> hoodieRecords;
     try {
-      hoodieRecords = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
+      hoodieRecords = HoodieDataUtils.dedupeAndCollectAsList(recordsData);
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
       metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR, bloomFilterKeys.size()));
     } finally {
@@ -211,12 +212,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     }
 
     Map<Pair<String, String>, BloomFilter> partitionFileToBloomFilterMap = new HashMap<>(hoodieRecords.size());
-    for (final Map.Entry<String, HoodieMetadataPayload> entry : hoodieRecords.entrySet()) {
+    for (final Pair<Option<String>, HoodieMetadataPayload> entry : hoodieRecords) {
       final Option<HoodieMetadataBloomFilter> bloomFilterMetadata =
           entry.getValue().getBloomFilterMetadata();
       if (bloomFilterMetadata.isPresent()) {
         if (!bloomFilterMetadata.get().getIsDeleted()) {
-          ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getKey()));
+          ValidationUtils.checkState(fileToKeyMap.containsKey(entry.getKey().orElse(null)));
           // NOTE: We have to duplicate the [[ByteBuffer]] object here since:
           //        - Reading out [[ByteBuffer]] mutates its state
           //        - [[BloomFilterMetadata]] could be re-used, and hence have to stay immutable
@@ -327,9 +328,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     HoodiePairData<String, HoodieMetadataPayload> recordsData =
         readIndexPayloadWithKeys(HoodieListData.eager(filesKeys),
             MetadataPartitionType.FILES.getPartitionPath());
-    Map<String, HoodieMetadataPayload> partitionIdRecordPairs;
+    List<Pair<Option<String>, HoodieMetadataPayload>> partitionIdRecordPairs;
     try {
-      partitionIdRecordPairs = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
+      partitionIdRecordPairs = HoodieDataUtils.dedupeAndCollectAsList(recordsData);
     } finally {
       recordsData.unpersistWithDependencies();
     }
@@ -337,9 +338,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
         m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
     Map<String, List<StoragePathInfo>> partitionPathToFilesMap =
-        partitionIdRecordPairs.entrySet().stream()
+        partitionIdRecordPairs.stream()
             .map(e -> {
-              final String partitionId = e.getKey();
+              final String partitionId = e.getKey().orElse(null);
               StoragePath partitionPath = partitionIdToPathMap.get(partitionId);
 
               HoodieMetadataPayload metadataPayload = e.getValue();
@@ -393,20 +394,20 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     HoodiePairData<String, HoodieMetadataPayload> recordsData =
         readIndexPayloadWithKeys(
             HoodieListData.eager(rawKeys), MetadataPartitionType.COLUMN_STATS.getPartitionPath());
-    Map<String, HoodieMetadataPayload> hoodieRecords;
+    List<Pair<Option<String>, HoodieMetadataPayload>> hoodieRecords;
     try {
-      hoodieRecords = HoodieDataUtils.dedupeAndCollectAsMap(recordsData);
+      hoodieRecords = HoodieDataUtils.dedupeAndCollectAsList(recordsData);
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
     } finally {
       recordsData.unpersistWithDependencies();
     }
     Map<Pair<String, String>, List<HoodieMetadataColumnStats>> fileToColumnStatMap = new HashMap<>();
-    for (final Map.Entry<String, HoodieMetadataPayload> entry : hoodieRecords.entrySet()) {
+    for (final Pair<Option<String>, HoodieMetadataPayload> entry : hoodieRecords) {
       final Option<HoodieMetadataColumnStats> columnStatMetadata =
           entry.getValue().getColumnStatMetadata();
       if (columnStatMetadata.isPresent() && !columnStatMetadata.get().getIsDeleted()) {
-        ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getKey()));
-        final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey());
+        ValidationUtils.checkState(columnStatKeyToFileNameMap.containsKey(entry.getKey().orElse(null)));
+        final Pair<String, String> partitionFileNamePair = columnStatKeyToFileNameMap.get(entry.getKey().orElse(null));
         fileToColumnStatMap.computeIfAbsent(partitionFileNamePair, k -> new ArrayList<>()).add(columnStatMetadata.get());
       } else {
         LOG.error("Meta index column stats missing for {}", entry.getKey());

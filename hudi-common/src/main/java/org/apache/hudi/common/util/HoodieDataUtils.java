@@ -19,13 +19,16 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Utility class for HoodieData operations.
@@ -61,6 +64,31 @@ public class HoodieDataUtils {
               map.put(key, pair.getValue());
             },
             HashMap::putAll);
+  }
+
+  /**
+   * Collects results of the pair data into a {@link List<Pair<Option<K>, V>>}
+   *
+   * If there are multiple pairs sharing the same key, the resulting map will end up with nondeterministically
+   * pick one pair from them.
+   *
+   * This is a terminal operation
+   *
+   * @param pairData the HoodiePairData to collect
+   * @param <K> type of the key
+   * @param <V> type of the value
+   * @return a List containing the de-duplicated key-value pairs
+   */
+  public static <K, V> List<Pair<Option<K>, V>> dedupeAndCollectAsList(HoodiePairData<K, V> pairData) {
+    // Map each pair to (Option<Pair.key>, V) to handle null keys uniformly
+    // If there are multiple entries sharing the same key, use the incoming one
+    return pairData.mapToPair(pair ->
+            Pair.of(
+                Option.ofNullable(pair.getKey()),
+                pair.getValue()
+            ))
+        .reduceByKey((existing, incoming) -> incoming, pairData.deduceNumPartitions())
+        .collectAsList();
   }
 
   /**
