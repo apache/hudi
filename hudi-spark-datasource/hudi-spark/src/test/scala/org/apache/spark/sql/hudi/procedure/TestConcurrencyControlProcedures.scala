@@ -95,7 +95,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
         val schedule2Task: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
           latch.await(3, TimeUnit.SECONDS)
-          Thread.sleep(100)
+          Thread.sleep(1000)
           Try {
             spark.sql(
               s"""CALL run_clustering(
@@ -109,7 +109,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
         val schedule3Task: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
           latch.await(3, TimeUnit.SECONDS)
-          Thread.sleep(200)
+          Thread.sleep(2000)
           Try {
             spark.sql(
               s"""CALL run_clustering(
@@ -123,7 +123,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
         val showEarlyTask: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
           latch.await(3, TimeUnit.SECONDS)
-          Thread.sleep(150)
+          Thread.sleep(500)
           Try {
             val early = spark.sql(s"call show_clustering(table => '$tableName')")
             early.show(false)
@@ -134,7 +134,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
         val showMiddleTask: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
           latch.await(3, TimeUnit.SECONDS)
-          Thread.sleep(250)
+          Thread.sleep(1500)
           Try {
             val mid = spark.sql(s"call show_clustering(table => '$tableName')")
             mid.show(false)
@@ -145,7 +145,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
         val executeTask: Future[Try[Array[Row]]] = executor.submit(() => {
           latch.countDown()
           latch.await(3, TimeUnit.SECONDS)
-          Thread.sleep(300)
+          Thread.sleep(2500)
           Try {
             spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')").collect()
           }
@@ -169,7 +169,7 @@ class TestConcurrencyControlProcedures extends HoodieSparkProcedureTestBase {
         val earlyCount = showEarlyResult.get.length
         val middleCount = showMiddleResult.get.length
 
-        Thread.sleep(400)
+        Thread.sleep(3000)
         val finalShowResultDf = spark.sql(s"call show_clustering(table => '$tableName')")
         finalShowResultDf.show(false)
         val finalShowResult = finalShowResultDf.collect()
