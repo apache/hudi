@@ -27,8 +27,12 @@ import org.junit.jupiter.api.Test;
 import java.net.URISyntaxException;
 import java.util.Properties;
 
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATABASE_NAME;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS;
 import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS;
+import static org.apache.hudi.sync.datahub.config.DataHubSyncConfig.META_SYNC_DATAHUB_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -40,6 +44,40 @@ class TestDataHubSyncConfig {
     props.setProperty(META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS.key(), DummySupplier.class.getName());
     DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
     assertNotNull(syncConfig.getRestEmitter());
+  }
+
+  @Test
+  void testDatabaseNameAndTableNameWithProps() {
+    String db = "db";
+    String table = "table";
+
+    Properties props = new Properties();
+    props.setProperty(META_SYNC_DATAHUB_DATABASE_NAME.key(), db);
+    props.setProperty(META_SYNC_DATAHUB_TABLE_NAME.key(), table);
+
+    DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
+    DatasetUrn datasetUrn = syncConfig.getDatasetIdentifier().getDatasetUrn();
+
+    assertEquals(String.format("%s.%s", db, table), datasetUrn.getDatasetNameEntity());
+
+    DataHubSyncConfig.DataHubSyncConfigParams params = new DataHubSyncConfig.DataHubSyncConfigParams();
+    params.databaseName = db;
+    params.tableName = table;
+
+    assertEquals(db, params.toProps().get(META_SYNC_DATAHUB_DATABASE_NAME.key()));
+    assertEquals(table, params.toProps().get(META_SYNC_DATAHUB_TABLE_NAME.key()));
+  }
+
+  @Test
+  void testDatabaseNameAndTableNameBackwardConfigurationCompatibility() {
+    Properties props = new Properties();
+    props.setProperty(META_SYNC_DATABASE_NAME.key(), "db");
+    props.setProperty(META_SYNC_TABLE_NAME.key(), "table");
+
+    DataHubSyncConfig syncConfig = new DataHubSyncConfig(props);
+    DatasetUrn datasetUrn = syncConfig.getDatasetIdentifier().getDatasetUrn();
+
+    assertEquals("db.table", datasetUrn.getDatasetNameEntity());
   }
 
   @Test

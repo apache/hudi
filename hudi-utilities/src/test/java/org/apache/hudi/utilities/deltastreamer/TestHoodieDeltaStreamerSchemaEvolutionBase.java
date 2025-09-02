@@ -28,7 +28,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -374,7 +374,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option commitedInstantTime) {
+    public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option commitedInstantTime) {
       if (errorEvents.size() > 0) {
         JavaRDD errorsCombined = errorEvents.get(0);
         for (int i = 1; i < errorEvents.size(); i++) {
@@ -418,7 +418,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+    public Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
       return Option.empty();
     }
   }

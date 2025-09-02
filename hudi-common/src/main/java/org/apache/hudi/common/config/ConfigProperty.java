@@ -115,7 +115,7 @@ public class ConfigProperty<T> implements Serializable {
     return getInferFunction().isPresent();
   }
 
-  Option<Function<HoodieConfig, Option<T>>> getInferFunction() {
+  public Option<Function<HoodieConfig, Option<T>>> getInferFunction() {
     return inferFunction;
   }
 
