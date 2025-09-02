@@ -45,7 +45,7 @@ import java.util.List;
  * the new file would then rename to this file name,
  * behaves like each mini-batch data are appended to the same file.
  *
- * @see FlinkMergeAndReplaceHandle
+ * @see FlinkIncrementalMergeHandle
  */
 public class FlinkCreateHandle<T, I, K, O>
     extends HoodieCreateHandle<T, I, K, O> implements MiniBatchHandle {

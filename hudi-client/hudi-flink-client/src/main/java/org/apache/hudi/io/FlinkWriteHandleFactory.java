@@ -174,10 +174,10 @@ public class FlinkWriteHandleFactory {
         String fileId,
         StoragePath basePath) {
       if (isFileGroupReaderBasedHandle(config)) {
-        return new FlinkFileGroupReaderBasedMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+        return new FlinkFileGroupReaderBasedIncrementalMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
             table.getTaskContextSupplier(), basePath);
       } else {
-        return new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+        return new FlinkIncrementalMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
             table.getTaskContextSupplier(), basePath);
       }
     }
@@ -221,7 +221,7 @@ public class FlinkWriteHandleFactory {
         String partitionPath,
         String fileId,
         StoragePath basePath) {
-      return new FlinkConcatAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+      return new FlinkIncrementalConcatHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
           table.getTaskContextSupplier(), basePath);
     }
 
@@ -260,10 +260,10 @@ public class FlinkWriteHandleFactory {
         String fileId,
         StoragePath basePath) {
       if (isFileGroupReaderBasedHandle(config)) {
-        return new FlinkFileGroupReaderBasedMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
+        return new FlinkFileGroupReaderBasedIncrementalMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
             table.getTaskContextSupplier(), basePath);
       } else {
-        return new FlinkMergeAndReplaceHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath, fileId,
+        return new FlinkIncrementalMergeHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath, fileId,
             table.getTaskContextSupplier(), basePath);
       }
     }
