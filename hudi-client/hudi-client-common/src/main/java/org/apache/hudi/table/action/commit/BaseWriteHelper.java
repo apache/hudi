@@ -25,7 +25,6 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -121,7 +120,6 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger().map(HoodieRecordUtils::mergerToPreCombineMode),
-        orderingFieldNames,
         Option.ofNullable(table.getConfig().getPayloadClass()),
         recordSchema,
         mergedProperties,
@@ -161,8 +159,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
       HoodieRecord<T> reducedRecord = merged.map(bufferedRecord -> recordContext.constructHoodieRecord(bufferedRecord, next.getPartitionPath())).orElse(previous);
       boolean choosePrevious = merged.isEmpty();
       HoodieKey reducedKey = choosePrevious ? previous.getKey() : next.getKey();
-      HoodieOperation operation = choosePrevious ? previous.getOperation() : next.getOperation();
-      return reducedRecord.newInstance(reducedKey, operation);
+      return reducedRecord.newInstance(reducedKey);
     } catch (IOException e) {
       throw new HoodieException(String.format("Error to merge two records, %s, %s", previous, next), e);
     }

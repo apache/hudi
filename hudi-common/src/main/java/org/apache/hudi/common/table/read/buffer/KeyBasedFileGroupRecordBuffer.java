@@ -83,7 +83,6 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           recordMergeMode,
           true,
           recordMerger,
-          orderingFieldNames,
           readerSchema,
           payloadClasses,
           props,

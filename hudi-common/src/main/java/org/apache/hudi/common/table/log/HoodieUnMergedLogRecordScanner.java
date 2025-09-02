@@ -128,7 +128,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     private LogRecordScannerCallback callback;
     private RecordDeletionCallback recordDeletionCallback;
     private boolean enableOptimizedLogBlocksScan;
-    private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
+    private HoodieRecordMerger recordMerger = new HoodiePreCombineAvroRecordMerger();
     private HoodieTableMetaClient hoodieTableMetaClient;
 
     public Builder withStorage(HoodieStorage storage) {

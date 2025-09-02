@@ -19,11 +19,12 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkRecordMerger}
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordMerger, OperationModeAwareness}
-import org.apache.hudi.common.util.{collection, HoodieRecordUtils, Option => HOption}
+import org.apache.hudi.common.engine.RecordContext
+import org.apache.hudi.common.model.{HoodieRecordMerger, OperationModeAwareness}
+import org.apache.hudi.common.table.read.BufferedRecord
+import org.apache.hudi.common.util.HoodieRecordUtils
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 
-import org.apache.avro.Schema
 import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMerger.STRATEGY_ID
 
 /**
@@ -33,8 +34,8 @@ import org.apache.spark.sql.hudi.command.HoodieSparkValidateDuplicateKeyRecordMe
  */
 class HoodieSparkValidateDuplicateKeyRecordMerger extends HoodieSparkRecordMerger with OperationModeAwareness {
 
-  override def merge(older: HoodieRecord[_], oldSchema: Schema, newer: HoodieRecord[_], newSchema: Schema, props: TypedProperties): HOption[collection.Pair[HoodieRecord[_], Schema]] = {
-    val key = older.getRecordKey(oldSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)
+  override def merge[T](older: BufferedRecord[T], newer: BufferedRecord[T], recordContext: RecordContext[T], props: TypedProperties): BufferedRecord[_] = {
+    val key = older.getRecordKey
     throw new HoodieDuplicateKeyException(key)
   }
 

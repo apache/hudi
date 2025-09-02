@@ -74,11 +74,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
-    if (recordBytes.length == 0) {
-      return Option.empty();
-    }
-
-    GenericRecord incomingRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    Option<IndexedRecord> incomingRecord = recordBytes.length == 0 ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
@@ -87,12 +83,12 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     }
 
     if (!isDeleteComputed.getAndSet(true)) {
-      isDefaultRecordPayloadDeleted = isDeleteRecord(incomingRecord, properties);
+      isDefaultRecordPayloadDeleted = incomingRecord.map(record -> isDeleteRecord((GenericRecord) record, properties)).orElse(true);
     }
     /*
      * Now check if the incoming record is a delete record.
      */
-    return isDefaultRecordPayloadDeleted ? Option.empty() : Option.of(incomingRecord);
+    return isDefaultRecordPayloadDeleted ? Option.empty() : incomingRecord;
   }
 
   @Override
@@ -152,7 +148,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
-                                                IndexedRecord incomingRecord, Properties properties) {
+                                                Option<IndexedRecord> incomingRecord, Properties properties) {
     /*
      * Combining strategy here returns currentValue on disk if incoming record is older.
      * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
@@ -172,10 +168,14 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     Comparable persistedOrderingVal = OrderingValues.create(
         orderingFields,
         field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue, field, true, consistentLogicalTimestampEnabled));
-    Comparable incomingOrderingVal = OrderingValues.create(
-        orderingFields,
-        field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord, field, true, consistentLogicalTimestampEnabled));
+    Comparable incomingOrderingVal = incomingRecord.map(record -> OrderingValues.create(
+            orderingFields,
+            field -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, field, true, consistentLogicalTimestampEnabled)))
+        .orElse(orderingVal);
+    // If the incoming record is a delete record without an ordering value, it is processed as "commit time" ordering.
+    if (incomingRecord.isEmpty() && OrderingValues.isDefault(incomingOrderingVal)) {
+      return true;
+    }
     return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
   }
-
 }
