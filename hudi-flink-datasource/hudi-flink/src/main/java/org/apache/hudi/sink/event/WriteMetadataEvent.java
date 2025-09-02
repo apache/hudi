@@ -208,11 +208,13 @@ public class WriteMetadataEvent implements OperatorEvent {
         .build();
   }
 
-  private static List<WriteStatus> mergeWriteStatuses(List<WriteStatus> oldStatuses, List<WriteStatus> newStatuses) {
-    List<WriteStatus> mergedStatuses = new ArrayList<>();
-    mergedStatuses.addAll(oldStatuses);
-    mergedStatuses.addAll(newStatuses);
-    return mergedStatuses
+  private static List<WriteStatus> mergeWriteStatuses(List<WriteStatus> curStatuses, List<WriteStatus> newStatuses) {
+    List<WriteStatus> merged = new ArrayList<>();
+    // put the new write statuses behind and use single parallelism #stream
+    // so that the new write status is merged as the second param.
+    merged.addAll(curStatuses);
+    merged.addAll(newStatuses);
+    return merged
         .stream()
         .collect(Collectors.groupingBy(writeStatus -> {
           if (writeStatus.getStat() instanceof HoodieDeltaWriteStat) {
