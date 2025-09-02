@@ -63,7 +63,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
                                    String savepointToRestoreTimestamp) {
     super(context, config, table, instantTime);
     this.savepointToRestoreTimestamp = savepointToRestoreTimestamp;
-    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.txnManager = table.getTxnManager();
   }
 
   @Override
@@ -126,8 +126,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
     HoodieInstant restoreInflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.RESTORE_ACTION, instantTime);
-    writeToMetadata(restoreMetadata, restoreInflightInstant);
-    table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata));
+    writeToMetadataAndCompleteCommit(restoreMetadata, restoreInflightInstant);
     // get all pending rollbacks instants after restore instant time and delete them.
     // if not, rollbacks will be considered not completed and might hinder metadata table compaction.
     List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getRollbackTimeline()
@@ -141,19 +140,22 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
       table.getActiveTimeline().deletePending(instantGenerator.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, entry.requestedTime()));
     });
-    LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + savepointToRestoreTimestamp);
+    LOG.info("Commits {} rollback is complete. Restored table to {}", instantsRolledBack, savepointToRestoreTimestamp);
     return restoreMetadata;
   }
 
   /**
    * Update metadata table if available. Any update to metadata table happens within data table lock.
+   * After metadata table is updated, the data table commit is marked as complete.
    *
    * @param restoreMetadata instance of {@link HoodieRestoreMetadata} to be applied to metadata.
+   * @param restoreInflightInstant the inflight instant to be saved as complete.
    */
-  private void writeToMetadata(HoodieRestoreMetadata restoreMetadata, HoodieInstant restoreInflightInstant) {
+  private void writeToMetadataAndCompleteCommit(HoodieRestoreMetadata restoreMetadata, HoodieInstant restoreInflightInstant) {
     try {
       this.txnManager.beginStateChange(Option.of(restoreInflightInstant), Option.empty());
       writeTableMetadata(restoreMetadata);
+      table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata), txnManager.generateInstantTime());
     } finally {
       this.txnManager.endStateChange(Option.of(restoreInflightInstant));
     }

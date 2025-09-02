@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -63,6 +64,8 @@ public final class ArchiveExecutorUtils {
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
+    // FIXME-vc: this is hacky
+    table.setTxnManager(new TransactionManager(config, table.getStorage()));
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
     try {
       HoodieTimelineArchiver<HoodieAvroPayload, HoodieData<HoodieRecord<HoodieAvroPayload>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> archiver =

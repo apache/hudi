@@ -34,6 +34,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -315,6 +316,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
       assertEquals(earliestInstantToRetain, cleanPlan.getEarliestInstantToRetain().getTimestamp(),
           "clean until " + earliestInstantToRetain);
       HoodieTable table = HoodieSparkTable.create(writeConfig, context);
+      // FIXME-vc: hacky
+      table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
       table.clean(context, instantTime);
 
       instantTime = client.startCommit();
@@ -388,6 +391,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
       String filePathToClean = cleanPlan.getFilePathsToBeDeletedPerPartition().get(HoodieTestDataGenerator.NO_PARTITION_PATH).get(0).getFilePath();
       // clean
       HoodieTable table = HoodieSparkTable.create(writeConfig, context);
+      // FIXME-vc: hacky
+      table.setTxnManager(new TransactionManager(writeConfig, metaClient.getStorage()));
       HoodieCleanMetadata cleanMetadata = table.clean(context, instantTime);
       // check the cleaned file
       assertEquals(cleanMetadata.getPartitionMetadata().get(HoodieTestDataGenerator.NO_PARTITION_PATH).getSuccessDeleteFiles().size(), 1);
@@ -882,6 +887,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .withPath(basePath).build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    // FIXME-vc: hacky
+    table.setTxnManager(new TransactionManager(config, metaClient.getStorage()));
     table.getActiveTimeline().transitionRequestedToInflight(
         INSTANT_GENERATOR.createNewInstant(State.REQUESTED, COMMIT_ACTION, "001"), Option.empty());
     metaClient.reloadActiveTimeline();
@@ -1136,8 +1143,10 @@ public class TestCleaner extends HoodieCleanerTestBase {
       testTable = tearDownTestTableAndReinit(testTable, config);
 
       // archive commit 1, 2
-      new TimelineArchiverV2<>(config, HoodieSparkTable.create(config, context, metaClient))
-          .archiveIfRequired(context, false);
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      // FIXME-vc: hacky
+      table.setTxnManager(new TransactionManager(config, metaClient.getStorage()));
+      new TimelineArchiverV2<>(config, table).archiveIfRequired(context, false);
       metaClient = HoodieTableMetaClient.reload(metaClient);
       assertFalse(metaClient.getActiveTimeline().containsInstant("10"));
       assertFalse(metaClient.getActiveTimeline().containsInstant("20"));

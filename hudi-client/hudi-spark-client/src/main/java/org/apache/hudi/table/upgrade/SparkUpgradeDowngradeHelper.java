@@ -44,7 +44,7 @@ public class SparkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   @Override
   public HoodieTable getTable(HoodieWriteConfig config, HoodieEngineContext context) {
-    return HoodieSparkTable.create(config, context);
+    return addTxnManager(HoodieSparkTable.create(config, context));
   }
 
   @Override
